@@ -15,6 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
+#include <sys/types.h>
 #include <map>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
@@ -33,7 +34,6 @@
 #include "slitd_commands.h"
 #include "tcsd_commands.h"
 #include "sequencerd_commands.h"
-#include "message_keys.h"
 
 #include "tcs_constants.h"
 #include "acam_interface_shared.h"
@@ -154,6 +154,7 @@ namespace Sequencer {
     SEQ_WAIT_TCS,            ///< set when waiting for tcs
     // states
     SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_GUIDE,          ///< set when waiting for guiding state
     SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
     SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
     SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
@@ -174,6 +175,7 @@ namespace Sequencer {
     {SEQ_WAIT_TCS,      "TCS"},
     // states
     {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
+    {SEQ_WAIT_GUIDE,    "GUIDE"},
     {SEQ_WAIT_EXPOSE,   "EXPOSE"},
     {SEQ_WAIT_READOUT,  "READOUT"},
     {SEQ_WAIT_TCSOP,    "TCSOP"},
@@ -281,13 +283,13 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
-      std::atomic<bool> can_expose;
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<pid_t> fine_tune_pid{0};       ///< fine tune process pid (process group leader)
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -309,12 +311,15 @@ namespace Sequencer {
       Sequence() :
           context(),
           ready_to_start(false),
-          can_expose(false),
           is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
           acquisition_timeout(0),
           acquisition_max_retrys(-1),
+          acq_automatic_mode(1),
+          acq_fine_tune_cmd("ngps_acq"),
+          acq_fine_tune_xterm(false),
+          acq_offset_settle(0),
           tcs_offsetrate_ra(45),
           tcs_offsetrate_dec(45),
           tcs_settle_timeout(10),
@@ -337,10 +342,8 @@ namespace Sequencer {
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
 
             topic_handlers = {
-              { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-              { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
+              { "_snapshot", std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
             };
           }
 
@@ -374,6 +377,10 @@ namespace Sequencer {
 
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
+      int acq_automatic_mode;     ///< acquisition automation mode (1=legacy, 2=semi-auto, 3=auto)
+      std::string acq_fine_tune_cmd; ///< fine-tune command to run after guiding
+      bool acq_fine_tune_xterm;   ///< run fine-tune command in its own xterm
+      double acq_offset_settle;   ///< seconds to wait after automatic offset
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
       double tcs_settle_timeout;  ///< timeout for telescope to settle (in sec) set by configuration parameter TCS_SETTLE_TIMEOUT
@@ -384,8 +391,6 @@ namespace Sequencer {
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
 
-      std::mutex camerad_mtx;
-      std::condition_variable camerad_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -455,7 +460,6 @@ namespace Sequencer {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
-      void handletopic_camerad( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();

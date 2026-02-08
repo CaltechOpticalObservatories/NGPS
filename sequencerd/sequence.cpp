@@ -12,7 +12,11 @@
  */
 
 #include "sequence.h"
-#include "message_keys.h"
+
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace Sequencer {
 
@@ -39,23 +43,6 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
-
-
-  /***** Sequencer::Sequence::handletopic_camerad ****************************/
-  /**
-   * @brief      handles camerad telemetry
-   * @param[in]  jmessage  subscribed-received JSON message
-   *
-   */
-  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
-    if (jmessage.contains(Key::Camerad::READY)) {
-      int isready = jmessage[Key::Camerad::READY].get<bool>();
-      this->can_expose.store(isready, std::memory_order_relaxed);
-      std::lock_guard<std::mutex> lock(camerad_mtx);
-      this->camerad_cv.notify_all();
-    }
-  }
-  /***** Sequencer::Sequence::handletopic_camerad ****************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -578,40 +565,188 @@ namespace Sequencer {
  *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
  ***/
 
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target then handle acquisition automation
       //
       if ( !this->target.iscal ) {
-
-        // waiting for user signal (or cancel)
-        //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
         {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
-
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        std::stringstream mode_msg;
+        mode_msg << "NOTICE: acquisition automation mode " << this->acq_automatic_mode;
+        this->async.enqueue_and_log( function, mode_msg.str() );
         }
 
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
+        auto wait_for_user = [&](const std::string &notice) -> bool {
+          this->is_usercontinue.store(false);
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+          this->async.enqueue_and_log( function, "NOTICE: "+notice );
+          while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+            std::unique_lock<std::mutex> lock(cv_mutex);
+            this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+          }
+          this->async.enqueue_and_log( function, "NOTICE: received "
+                                                 +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                                 +" signal!" );
+          if ( this->cancel_flag.load() ) return false;
+          this->is_usercontinue.store(false);
+          return true;
+        };
 
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-          return;
+        auto wait_for_guiding = [&]() -> long {
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_GUIDE );
+          this->async.enqueue_and_log( function, "NOTICE: waiting for ACAM guiding" );
+          auto start_time = std::chrono::steady_clock::now();
+          const bool use_timeout = ( this->acquisition_timeout > 0 );
+          const auto timeout = std::chrono::duration<double>( this->acquisition_timeout );
+          while ( !this->cancel_flag.load() ) {
+            std::string reply;
+            if ( this->acamd.command( ACAMD_ACQUIRE, reply ) != NO_ERROR ) {
+              logwrite( function, "ERROR reading ACAM acquire state" );
+              return ERROR;
+            }
+            if ( reply.find( "guiding" ) != std::string::npos ) return NO_ERROR;
+            if ( reply.find( "stopped" ) != std::string::npos ) return ERROR;
+            if ( use_timeout && std::chrono::steady_clock::now() > ( start_time + timeout ) ) return TIMEOUT;
+            std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+          }
+          return ERROR;
+        };
+
+        auto run_fine_tune = [&]() -> long {
+          if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
+          this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
+
+          if ( this->acq_fine_tune_xterm ) {
+            this->async.enqueue_and_log( function, "NOTICE: launching fine tune in xterm" );
+          }
+
+          pid_t pid = fork();
+          if ( pid == 0 ) {
+            // make a dedicated process group so we can signal the whole tree
+            setpgid( 0, 0 );
+            if ( this->acq_fine_tune_xterm ) {
+              execlp( "xterm", "xterm", "-T", "NGPS Fine Tune", "-e",
+                      "sh", "-lc", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
+              // fall through if xterm is missing
+            }
+            execl( "/bin/sh", "sh", "-c", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
+            _exit(127);
+          }
+          if ( pid < 0 ) {
+            logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
+            return ERROR;
+          }
+          // Ensure the child is its own process group (best effort).
+          setpgid( pid, pid );
+          this->fine_tune_pid.store( pid );
+
+          int status = 0;
+          while ( true ) {
+            pid_t result = waitpid( pid, &status, WNOHANG );
+            if ( result == pid ) break;
+            if ( result < 0 ) {
+              logwrite( function, "ERROR waiting on fine tune command" );
+              return ERROR;
+            }
+            if ( this->cancel_flag.load() ) {
+              this->async.enqueue_and_log( function, "NOTICE: abort requested; terminating fine tune" );
+              // terminate the whole fine-tune process group
+              kill( -pid, SIGTERM );
+              auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+              while ( std::chrono::steady_clock::now() < deadline ) {
+                result = waitpid( pid, &status, WNOHANG );
+                if ( result == pid ) break;
+                std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+              }
+              if ( result != pid ) {
+                kill( -pid, SIGKILL );
+                waitpid( pid, &status, 0 );
+              }
+              this->fine_tune_pid.store( 0 );
+              return ERROR;
+            }
+            std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+          }
+
+          this->fine_tune_pid.store( 0 );
+          if ( WIFEXITED( status ) && WEXITSTATUS( status ) == 0 ) {
+            this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+            return NO_ERROR;
+          }
+
+          logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
+          return ERROR;
+        };
+
+        if ( this->acq_automatic_mode == 1 ) {
+          if ( !wait_for_user( "waiting for USER to send \"continue\" signal" ) ) {
+            this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+            return;
+          }
         }
+        else {
+          // Check if target coordinates match the last target (same logic as in move_to_target)
+          // If so, skip acquisition for repeat target
+          //
+          bool is_repeat_target = ( this->target.ra_hms == this->last_ra_hms &&
+                                    this->target.dec_dms == this->last_dec_dms );
 
-        this->is_usercontinue.store(false);
+          if ( is_repeat_target ) {
+            this->async.enqueue_and_log( function, "NOTICE: skipping acquisition for repeat target" );
+          }
+          else {
+            if ( this->acq_automatic_mode == 2 ) {
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition" ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
+              }
+            }
 
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+            this->async.enqueue_and_log( function, "NOTICE: starting acquisition" );
+            std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+
+            long acqerr = wait_for_guiding();
+            if ( acqerr != NO_ERROR ) {
+              std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
+              this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (guiding failed)" ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
+              }
+            }
+            else {
+              bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
+              if ( !fine_tune_ok ) {
+                this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
+                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
+                  this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                  return;
+                }
+              }
+
+              if ( fine_tune_ok ) {
+                if ( this->acq_automatic_mode == 2 ) {
+                  if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose" ) ) {
+                    this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                    return;
+                  }
+                }
+                else if ( this->acq_automatic_mode == 3 ) {
+                  if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+                    this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
+                    error |= this->target_offset();
+                    if ( error != NO_ERROR ) {
+                      this->thread_error_manager.set( THR_ACQUISITION );
+                      return;
+                    }
+                    if ( this->acq_offset_settle > 0 ) {
+                      this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                      std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
 
         // Ensure slit offset is in "expose" position
         //
@@ -741,58 +876,12 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
-    // wait until camera is ready to expose
-    //
-    std::unique_lock<std::mutex> lock(this->camerad_mtx);
-    if (!this->can_expose.load()) {
-
-      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
-
-      this->camerad_cv.wait( lock, [this]() {
-        return( this->can_expose.load() || this->cancel_flag.load() );
-      } );
-
-      if (this->cancel_flag.load()) {
-        logwrite(function, "sequence cancelled");
-        return NO_ERROR;
-      }
-    }
-
     logwrite( function, "setting camera parameters");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
-
-    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
-    // indexed by name. Calibration targets use target.name for the index, or
-    // use "SCIENCE" index for all science targets.
-    //
-    std::ostringstream activechans, deactivechans;
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
-    const auto &calinfo = this->caltarget.get_info(calname);
-
-    // build up lists of (de)activate chans
-    for (const auto &[chan,active] : calinfo.channel_active) {
-      (active ? activechans : deactivechans) << " " << chan;
-    }
-
-    // send two commands, one for each
-    if (!activechans.str().empty()) {
-      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
-        throw std::runtime_error("camera returned "+reply);
-      }
-    }
-    if (!deactivechans.str().empty()) {
-      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
-        throw std::runtime_error("camera returned "+reply);
-      }
-    }
 
     // send the EXPTIME command to camerad
     //
@@ -2175,21 +2264,34 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    // name will index the caltarget map
+    //
+    std::string name(this->target.name);
+
+    if ( this->target.iscal ) {
+      name = this->target.name;
+      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
+    }
+    else {
+      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
+      name="SCIENCE";  // override for indexing the map
+    }
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
     //
-    const auto &calinfo = this->caltarget.get_info(calname);
-
-    this->async.enqueue_and_log(function, "NOTICE: configuring calibrator for "+calname);
+    auto calinfo = this->caltarget.get_info(name);
+    if (!calinfo) {
+      logwrite( function, "ERROR unrecognized calibration target: "+name );
+      throw std::runtime_error("unrecognized calibration target: "+name);
+    }
 
     // set the calib door and cover
     //
     std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
+                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
     if ( !this->cancel_flag.load() &&
@@ -2200,7 +2302,7 @@ namespace Sequencer {
 
     // set the internal calibration lamps
     //
-    for ( const auto &[lamp,state] : calinfo.lamp ) {
+    for ( const auto &[lamp,state] : calinfo->lamp ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
@@ -2216,7 +2318,7 @@ namespace Sequencer {
 //
 //  // set the dome lamps
 //  //
-//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
+//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
 //    if ( this->cancel_flag.load() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
@@ -2227,7 +2329,7 @@ namespace Sequencer {
 
     // set the lamp modulators
     //
-    for ( const auto &[mod,state] : calinfo.lampmod ) {
+    for ( const auto &[mod,state] : calinfo->lampmod ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
@@ -2272,6 +2374,26 @@ namespace Sequencer {
     //
     this->cancel_flag.store(true);
     this->cv.notify_all();
+
+    // terminate fine tune process if running
+    //
+    pid_t ftpid = this->fine_tune_pid.load();
+    if ( ftpid > 0 ) {
+      logwrite( function, "NOTICE: terminating fine tune process" );
+      kill( -ftpid, SIGTERM );
+      auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      int status = 0;
+      while ( std::chrono::steady_clock::now() < deadline ) {
+        pid_t result = waitpid( ftpid, &status, WNOHANG );
+        if ( result == ftpid ) break;
+        std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+      }
+      if ( waitpid( ftpid, &status, WNOHANG ) == 0 ) {
+        kill( -ftpid, SIGKILL );
+        waitpid( ftpid, &status, 0 );
+      }
+      this->fine_tune_pid.store( 0 );
+    }
 
     // drop into do-one to prevent auto increment to next target
     //
@@ -4026,10 +4148,6 @@ namespace Sequencer {
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
-      this->async.enqueue_and_log( function, message.str() );
-      retstring.append( message.str() ); retstring.append( "\n" );
-
-      message.str(""); message << "NOTICE: camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 
