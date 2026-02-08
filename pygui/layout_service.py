@@ -151,26 +151,16 @@ class LayoutService:
         return third_column_layout
 
     def initialize_database_tab(self):
-        """Initialize the database tab after DB connection is established."""
-        try:
-            # Create the database tab widget (parented to container, main window ref passed separately)
-            self.database_tab_widget = DatabaseTab(
-                self.database_tab_container, self.parent.connection, main_window=self.parent
-            )
+        """Initialize the database tab after DB connection is established.
 
-            # Add to the main center column container
-            layout = self.database_tab_container.layout()
-            if layout:
-                layout.addWidget(self.database_tab_widget)
-
-            # Show the database tab, hide the login prompt
-            self.database_tab_container.setVisible(True)
-            self.load_target_button.setVisible(False)
-
-        except Exception as exc:
-            print(f"Failed to initialize database tab: {exc}")
-            import traceback
-            traceback.print_exc()
+        Note: DatabaseTab is now created directly in create_target_list_group()
+        with its own DB connection. This method is kept for compatibility.
+        """
+        # DatabaseTab already created in create_target_list_group()
+        if self.database_tab_widget:
+            print("Database tab already initialized")
+        else:
+            print("Warning: Database tab widget not found")
 
     def create_top_section(self):
         top_section_layout = QHBoxLayout()
@@ -600,37 +590,28 @@ class LayoutService:
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(2, 2, 2, 2)
 
-        # ── Login prompt (shown before DB connection, hidden after) ──
-        self.load_target_button = QPushButton("Please login or load your target list to start")
-        self.load_target_button.setStyleSheet("""
-            QPushButton {
-                background-color: #FFCC40;
-                border: none;
-                color: black;
-                font-weight: bold;
-                padding: 10px;
-            }
-            QPushButton:hover { background-color: #FF9900; }
-            QPushButton:pressed { background-color: #FF6600; }
-        """)
-        self.load_target_button.clicked.connect(self.parent.on_login)
-        main_layout.addWidget(self.load_target_button)
+        # ── Create DatabaseTab directly (it manages its own DB connection) ──
+        try:
+            self.database_tab_widget = DatabaseTab(target_list_group, None, main_window=self.parent)
+            main_layout.addWidget(self.database_tab_widget, 1)
+            print("Database tab created successfully")
+        except Exception as exc:
+            print(f"Failed to create database tab: {exc}")
+            import traceback
+            traceback.print_exc()
+            # Fallback: show error label
+            error_label = QLabel(f"Database tab failed to load: {exc}")
+            main_layout.addWidget(error_label)
 
-        # ── DatabaseTab container (fills entire panel) ──
-        self.database_tab_widget = None
+        # ── Legacy attributes (kept for backward compatibility, never shown) ──
         self.database_tab_container = QWidget()
-        db_layout = QVBoxLayout()
-        db_layout.setContentsMargins(0, 0, 0, 0)
-        self.database_tab_container.setLayout(db_layout)
-        self.database_tab_container.setVisible(False)  # Hidden until DB connects
-        main_layout.addWidget(self.database_tab_container, 1)
-
-        # ── Legacy target_list_display (kept for backward compatibility, never shown) ──
+        self.database_tab_container.setVisible(False)
         self.target_list_display = QTableWidget()
         self.target_list_display.setRowCount(0)
         self.target_list_display.setColumnCount(0)
         self.target_list_display.setVisible(False)
-        # Keep add_row_button and column_toggle_button as no-op attributes for legacy code
+        self.load_target_button = QPushButton()
+        self.load_target_button.setVisible(False)
         self.add_row_button = QPushButton()
         self.add_row_button.setVisible(False)
         self.column_toggle_button = QPushButton()
