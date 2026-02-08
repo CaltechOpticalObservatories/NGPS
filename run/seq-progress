@@ -3,8 +3,7 @@
 # Launch the sequencer progress popup GUI
 #
 
-SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
-NGPS_ROOT="${NGPS_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
+NGPS_ROOT=/home/developer/Software
 
 CONFIG="${NGPS_ROOT}/Config/sequencerd.cfg"
 exec "${NGPS_ROOT}/bin/seq_progress_gui" --config "${CONFIG}" --group NONE --msgport 0 --poll-ms 10000
