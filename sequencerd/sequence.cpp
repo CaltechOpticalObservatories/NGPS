@@ -656,7 +656,7 @@ namespace Sequencer {
 
           // Build command with optional logging redirection
           std::string cmd_to_run = this->acq_fine_tune_cmd;
-          if ( this->acq_fine_tune_xterm ) {
+          if ( this->acq_fine_tune_log ) {
             cmd_to_run += " >> /tmp/ngps_acq.log 2>&1";
             this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to /tmp/ngps_acq.log" );
           }
