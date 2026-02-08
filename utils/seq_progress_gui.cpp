@@ -915,6 +915,17 @@ class SeqProgressGui {
             }
           }
         }
+        if (jmessage.contains("exptime_percent") && jmessage["exptime_percent"].is_number()) {
+          int percent = jmessage["exptime_percent"].get<int>();
+          double new_progress = std::min(1.0, percent / 100.0);
+          // Smooth the percentage (exponential moving average)
+          if (state_.exposure_progress > 0.0) {
+            state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
+          } else {
+            state_.exposure_progress = new_progress;
+          }
+          set_phase(PHASE_EXPOSE);
+        }
       } else if (topic == "acamd") {
         if (jmessage.contains("ACAM_GUIDING") && jmessage["ACAM_GUIDING"].is_boolean()) {
           state_.guiding_on = jmessage["ACAM_GUIDING"].get<bool>();
