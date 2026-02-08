@@ -2327,19 +2327,16 @@ namespace Sequencer {
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
+    // get_info() throws exception if not found, so no need to check for null.
     //
-    auto calinfo = this->caltarget.get_info(name);
-    if (!calinfo) {
-      logwrite( function, "ERROR unrecognized calibration target: "+name );
-      throw std::runtime_error("unrecognized calibration target: "+name);
-    }
+    const auto &calinfo = this->caltarget.get_info(name);
 
     // set the calib door and cover
     //
     std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
+                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
     if ( !this->cancel_flag.load() &&
@@ -2350,7 +2347,7 @@ namespace Sequencer {
 
     // set the internal calibration lamps
     //
-    for ( const auto &[lamp,state] : calinfo->lamp ) {
+    for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
@@ -2377,7 +2374,7 @@ namespace Sequencer {
 
     // set the lamp modulators
     //
-    for ( const auto &[mod,state] : calinfo->lampmod ) {
+    for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
