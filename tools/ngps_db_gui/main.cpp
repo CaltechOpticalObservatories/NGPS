@@ -1324,7 +1324,7 @@ public:
                  const QString &searchColumn,
                  const QString &searchValue,
                  const QString &orderByColumn,
-                 QVector<QVector<QVariant>> &rows,
+                 QList<QList<QVariant>> &rows,
                  QString *error) {
     rows.clear();
     if (!isOpen()) {
@@ -1365,7 +1365,7 @@ public:
       }
       mysqlx::SqlResult result = stmt.execute();
       for (mysqlx::Row row : result) {
-        QVector<QVariant> rowValues;
+        QList<QVariant> rowValues;
         rowValues.reserve(static_cast<int>(row.colCount()));
         for (mysqlx::col_count_t i = 0; i < row.colCount(); ++i) {
           rowValues.append(mysqlValueToVariant(row[i]));
@@ -3532,7 +3532,7 @@ private:
       statusLabel_->setText(error.isEmpty() ? "Failed to read columns" : error);
       return;
     }
-    QVector<QVector<QVariant>> rows;
+    QList<QList<QVariant>> rows;
     const QString searchValue = searchEdit_->text().trimmed();
     if (!db_->fetchRows(tableName_, columns_,
                         fixedFilterColumn_, fixedFilterValue_,
@@ -3568,7 +3568,7 @@ private:
     const QColor textColor = view_->palette().color(QPalette::Text);
     const QColor nullColor = view_->palette().color(QPalette::Disabled, QPalette::Text);
 
-    for (const QVector<QVariant> &rowValues : rows) {
+    for (const QList<QVariant> &rowValues : rows) {
       QList<QStandardItem *> items;
       items.reserve(columns_.size());
       for (int col = 0; col < columns_.size(); ++col) {
@@ -4263,8 +4263,8 @@ private:
     const int insertIdx = std::min(toIdx + 1, static_cast<int>(infos.size()));
     infos.insert(insertIdx, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     obsIds.reserve(infos.size());
     orderValues.reserve(infos.size());
     for (int i = 0; i < infos.size(); ++i) {
@@ -4331,8 +4331,8 @@ private:
     if (insertIdx > infos.size()) insertIdx = infos.size();
     infos.insert(insertIdx, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     obsIds.reserve(infos.size());
     orderValues.reserve(infos.size());
     for (int i = 0; i < infos.size(); ++i) {
@@ -4393,8 +4393,8 @@ private:
     RowInfo moving = infos.takeAt(fromIdx);
     infos.insert(0, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     obsIds.reserve(infos.size());
     orderValues.reserve(infos.size());
     for (int i = 0; i < infos.size(); ++i) {
@@ -4485,8 +4485,8 @@ private:
     const int insertIdx = std::min(toIdx + 1, static_cast<int>(order.size()));
     order.insert(insertIdx, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     int counter = 1;
     for (const GroupBlock &block : order) {
       for (const RowInfo &member : block.members) {
@@ -4581,8 +4581,8 @@ private:
     if (insertIdx > order.size()) insertIdx = order.size();
     order.insert(insertIdx, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     int counter = 1;
     for (const GroupBlock &block : order) {
       for (const RowInfo &member : block.members) {
@@ -4671,8 +4671,8 @@ private:
     GroupBlock moving = order.takeAt(fromIdx);
     order.insert(0, moving);
 
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     int counter = 1;
     for (const GroupBlock &block : order) {
       for (const RowInfo &member : block.members) {
@@ -4738,7 +4738,7 @@ private:
     if (!db_->loadColumns(tableName_, cols, error)) {
       return false;
     }
-    QVector<QVector<QVariant>> rows;
+    QList<QList<QVariant>> rows;
     if (!db_->fetchRows(tableName_, cols, "SET_ID", QString::number(setId),
                         "", "", "OBS_ORDER", rows, error)) {
       return false;
@@ -4751,8 +4751,8 @@ private:
       }
     }
     if (obsIdCol < 0) return true;
-    QVector<QVariant> obsIds;
-    QVector<QVariant> orderValues;
+    QList<QVariant> obsIds;
+    QList<QVariant> orderValues;
     obsIds.reserve(rows.size());
     orderValues.reserve(rows.size());
     for (int i = 0; i < rows.size(); ++i) {
@@ -6756,7 +6756,7 @@ private slots:
       return;
     }
 
-    QVector<QVector<QVariant>> rows;
+    QList<QList<QVariant>> rows;
     if (!dbClient_.fetchRows(config_.tableTargets, targetColumns,
                              "SET_ID", QString::number(setId),
                              "", "", "OBS_ORDER",
@@ -6828,7 +6828,7 @@ private slots:
     QHash<QString, GroupInfo> groups;
 
     int rowIndex = 0;
-    for (const QVector<QVariant> &row : rows) {
+    for (const QList<QVariant> &row : rows) {
       ++rowIndex;
       QVariantMap values;
       QSet<QString> nullColumns;
