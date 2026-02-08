@@ -681,7 +681,17 @@ namespace Sequencer {
             pid_t result = waitpid( pid, &status, WNOHANG );
             if ( result == pid ) break;
             if ( result < 0 ) {
-              logwrite( function, "ERROR waiting on fine tune command" );
+              std::stringstream errmsg;
+              errmsg << "ERROR waiting on fine tune command: waitpid returned " << result
+                     << " errno=" << errno << " (" << strerror(errno) << ")";
+              logwrite( function, errmsg.str() );
+              if ( this->acq_fine_tune_log ) {
+                std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+                if ( logfile.is_open() ) {
+                  logfile << "=== SEQUENCER: " << errmsg.str() << " ===" << std::endl;
+                  logfile.close();
+                }
+              }
               return ERROR;
             }
             if ( this->cancel_flag.load() ) {
