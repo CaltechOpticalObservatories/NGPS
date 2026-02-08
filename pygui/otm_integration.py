@@ -192,11 +192,13 @@ class OtmRunner(QObject):
                 text=True
             )
 
-            # Stream output
+            # Capture all stdout for error reporting
+            stdout_lines = []
             while True:
                 line = self._process.stdout.readline()
                 if not line:
                     break
+                stdout_lines.append(line.strip())
                 self.progress.emit(line.strip())
 
             # Wait for completion
@@ -208,7 +210,12 @@ class OtmRunner(QObject):
                 self.finished.emit(True, "OTM scheduler completed")
             else:
                 stderr = self._process.stderr.read()
-                error_msg = f"OTM scheduler failed with exit code {self._process.returncode}\n{stderr}"
+                stdout_tail = "\n".join(stdout_lines[-20:]) if stdout_lines else "(no stdout)"
+                error_msg = (
+                    f"OTM scheduler failed with exit code {self._process.returncode}\n\n"
+                    f"--- stdout (last 20 lines) ---\n{stdout_tail}\n\n"
+                    f"--- stderr ---\n{stderr}"
+                )
                 self.progress.emit(error_msg)
                 self.finished.emit(False, error_msg)
 
