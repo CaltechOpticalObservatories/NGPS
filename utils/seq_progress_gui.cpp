@@ -89,6 +89,9 @@ struct SequenceState {
   std::string current_target_state;
   double offset_ra = 0.0;
   double offset_dec = 0.0;
+  int nexp = 1;
+  int current_frame = 0;
+  int max_frame_seen = 0;
 
   void reset() {
     for (int i = 0; i < kPhaseCount; ++i) {
@@ -111,6 +114,9 @@ struct SequenceState {
     waitstate.clear();
     current_obsid = -1;
     current_target_state.clear();
+    nexp = 1;
+    current_frame = 0;
+    max_frame_seen = 0;
   }
 
   void reset_progress_only() {
@@ -620,7 +626,15 @@ class SeqProgressGui {
       status = "APPLYING OFFSET";
     } else if (state_.phase_active[PHASE_EXPOSE]) {
       std::ostringstream oss;
-      if (state_.exposure_total > 0.0) {
+      // Show frame count if NEXP > 1
+      if (state_.nexp > 1) {
+        oss << "EXPOSURE " << state_.current_frame << " / " << state_.nexp;
+        if (state_.exposure_total > 0.0) {
+          oss.setf(std::ios::fixed);
+          oss.precision(1);
+          oss << " (" << state_.exposure_elapsed << " / " << state_.exposure_total << " s)";
+        }
+      } else if (state_.exposure_total > 0.0) {
         oss.setf(std::ios::fixed);
         oss.precision(1);
         oss << "EXPOSURE " << state_.exposure_elapsed << " / " << state_.exposure_total << " s";
@@ -846,6 +860,30 @@ class SeqProgressGui {
         }
         if (jmessage.contains("offset_dec") && jmessage["offset_dec"].is_number()) {
           state_.offset_dec = jmessage["offset_dec"].get<double>();
+        }
+        if (jmessage.contains("nexp") && jmessage["nexp"].is_number()) {
+          int new_nexp = jmessage["nexp"].get<int>();
+          if (new_nexp != state_.nexp) {
+            state_.nexp = new_nexp;
+            // Reset frame tracking when nexp changes
+            state_.current_frame = 0;
+            state_.max_frame_seen = 0;
+          }
+        }
+        if (jmessage.contains("current_frame") && jmessage["current_frame"].is_number()) {
+          int frame = jmessage["current_frame"].get<int>();
+          if (frame > state_.max_frame_seen) {
+            state_.max_frame_seen = frame;
+            state_.current_frame = frame;
+            // Keep EXPOSE phase active if more frames expected
+            if (state_.current_frame < state_.nexp) {
+              set_phase(PHASE_EXPOSE);
+            } else if (state_.current_frame >= state_.nexp) {
+              // All frames complete
+              state_.phase_complete[PHASE_EXPOSE] = true;
+              clear_phase_active(PHASE_EXPOSE);
+            }
+          }
         }
       } else if (topic == "acamd") {
         if (jmessage.contains("ACAM_GUIDING") && jmessage["ACAM_GUIDING"].is_boolean()) {
