@@ -634,12 +634,16 @@ class SeqProgressGui {
           oss.precision(1);
           oss << " (" << state_.exposure_elapsed << " / " << state_.exposure_total << " s)";
         }
-      } else if (state_.exposure_total > 0.0) {
-        oss.setf(std::ios::fixed);
-        oss.precision(1);
-        oss << "EXPOSURE " << state_.exposure_elapsed << " / " << state_.exposure_total << " s";
       } else {
-        oss << "EXPOSURE " << static_cast<int>(state_.exposure_progress * 100.0) << "%";
+        oss << "EXPOSURE";
+        if (state_.exposure_total > 0.0) {
+          oss.setf(std::ios::fixed);
+          oss.precision(1);
+          oss << " " << state_.exposure_elapsed << " / " << state_.exposure_total << " s";
+        }
+        if (state_.exposure_progress > 0.0) {
+          oss << " " << static_cast<int>(state_.exposure_progress * 100.0) << "%";
+        }
       }
       status = oss.str();
     }
@@ -678,7 +682,7 @@ class SeqProgressGui {
   void draw_offset_values() {
     // Display offset values above the guiding indicator box
     char label[64];
-    snprintf(label, sizeof(label), "Offset: dRA=%.2f\" dDEC=%.2f\"",
+    snprintf(label, sizeof(label), "Offset: RA=%.2f\" DEC=%.2f\"",
              state_.offset_ra, state_.offset_dec);
     XSetForeground(display_, gc_, color_text_);
     XDrawString(display_, window_, gc_, guiding_box_.x, guiding_box_.y - 8, label, std::strlen(label));
