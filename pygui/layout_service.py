@@ -153,14 +153,10 @@ class LayoutService:
     def initialize_database_tab(self):
         """Initialize the database tab after DB connection is established.
 
-        Note: DatabaseTab is now created directly in create_target_list_group()
-        with its own DB connection. This method is kept for compatibility.
+        Note: DatabaseTab is now created in create_target_list_group() and
+        shown after login via show_database_tab(). This is kept for compatibility.
         """
-        # DatabaseTab already created in create_target_list_group()
-        if self.database_tab_widget:
-            print("Database tab already initialized")
-        else:
-            print("Warning: Database tab widget not found")
+        pass
 
     def create_top_section(self):
         top_section_layout = QHBoxLayout()
@@ -590,28 +586,39 @@ class LayoutService:
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(2, 2, 2, 2)
 
-        # ── Create DatabaseTab directly (it manages its own DB connection) ──
+        # ── Login prompt (shown before login, hidden after) ──
+        self.load_target_button = QPushButton("Please login or load your target list to start")
+        self.load_target_button.setStyleSheet("""
+            QPushButton {
+                background-color: #FFCC40;
+                border: none;
+                color: black;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QPushButton:hover { background-color: #FF9900; }
+            QPushButton:pressed { background-color: #FF6600; }
+        """)
+        self.load_target_button.clicked.connect(self.parent.on_login)
+        main_layout.addWidget(self.load_target_button)
+
+        # ── Create DatabaseTab (hidden until login) ──
+        self.database_tab_widget = None
         try:
             self.database_tab_widget = DatabaseTab(target_list_group, None, main_window=self.parent)
+            self.database_tab_widget.setVisible(False)
             main_layout.addWidget(self.database_tab_widget, 1)
             print("Database tab created successfully")
         except Exception as exc:
             print(f"Failed to create database tab: {exc}")
             import traceback
             traceback.print_exc()
-            # Fallback: show error label
-            error_label = QLabel(f"Database tab failed to load: {exc}")
-            main_layout.addWidget(error_label)
 
-        # ── Legacy attributes (kept for backward compatibility, never shown) ──
-        self.database_tab_container = QWidget()
-        self.database_tab_container.setVisible(False)
+        # ── Legacy attributes (kept for backward compatibility) ──
         self.target_list_display = QTableWidget()
         self.target_list_display.setRowCount(0)
         self.target_list_display.setColumnCount(0)
         self.target_list_display.setVisible(False)
-        self.load_target_button = QPushButton()
-        self.load_target_button.setVisible(False)
         self.add_row_button = QPushButton()
         self.add_row_button.setVisible(False)
         self.column_toggle_button = QPushButton()
@@ -619,6 +626,21 @@ class LayoutService:
 
         target_list_group.setLayout(main_layout)
         return target_list_group
+
+    def show_database_tab(self, owner: str = None):
+        """Show the database tab after successful login, filtered by owner."""
+        if not self.database_tab_widget:
+            print("Warning: Database tab widget not available")
+            return
+
+        # Hide login prompt, show database tab
+        self.load_target_button.setVisible(False)
+        self.database_tab_widget.setVisible(True)
+
+        # Filter target sets by owner if provided
+        if owner and hasattr(self.database_tab_widget, 'sets_table'):
+            self.database_tab_widget.sets_table.set_fixed_filter("OWNER", owner)
+            self.database_tab_widget.sets_table.refresh()
 
     def show_column_toggle_dialog(self):
         table = self.target_list_display
