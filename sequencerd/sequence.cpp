@@ -680,11 +680,17 @@ namespace Sequencer {
           if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
           this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
 
+          // Construct log filename using same pattern as daemon logs: /data/{datedir}/logs/ngps_acq_{datedir}.log
+          std::string datedir = get_latest_datedir( "/data" );
+          std::stringstream logfilename;
+          logfilename << "/data/" << datedir << "/logs/ngps_acq_" << datedir << ".log";
+          std::string acq_logfile = logfilename.str();
+
           // Build command with optional logging redirection
           std::string cmd_to_run = this->acq_fine_tune_cmd;
           if ( this->acq_fine_tune_log ) {
-            cmd_to_run += " >> /tmp/ngps_acq.log 2>&1";
-            this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to /tmp/ngps_acq.log" );
+            cmd_to_run += " >> " + acq_logfile + " 2>&1";
+            this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to "+acq_logfile );
           }
 
           // Temporarily restore default SIGCHLD handling so we can waitpid() on this child.
@@ -722,7 +728,7 @@ namespace Sequencer {
                      << " errno=" << errno << " (" << strerror(errno) << ")";
               logwrite( function, errmsg.str() );
               if ( this->acq_fine_tune_log ) {
-                std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+                std::ofstream logfile(acq_logfile, std::ios::app);
                 if ( logfile.is_open() ) {
                   logfile << "=== SEQUENCER: " << errmsg.str() << " ===" << std::endl;
                   logfile.close();
@@ -767,8 +773,7 @@ namespace Sequencer {
             logwrite( function, status_msg.str() );
 
             if ( this->acq_fine_tune_log ) {
-              // Also log to /tmp/ngps_acq.log for easy debugging
-              std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+              std::ofstream logfile(acq_logfile, std::ios::app);
               if ( logfile.is_open() ) {
                 logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
                 logfile.close();
@@ -793,7 +798,7 @@ namespace Sequencer {
             logwrite( function, status_msg.str() );
 
             if ( this->acq_fine_tune_log ) {
-              std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+              std::ofstream logfile(acq_logfile, std::ios::app);
               if ( logfile.is_open() ) {
                 logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
                 logfile.close();
