@@ -661,6 +661,14 @@ namespace Sequencer {
             this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to /tmp/ngps_acq.log" );
           }
 
+          // Temporarily restore default SIGCHLD handling so we can waitpid() on this child.
+          // The daemon has SIGCHLD=SIG_IGN which causes kernel to auto-reap children.
+          struct sigaction old_action, new_action;
+          memset(&new_action, 0, sizeof(new_action));
+          new_action.sa_handler = SIG_DFL;
+          sigemptyset(&new_action.sa_mask);
+          sigaction(SIGCHLD, &new_action, &old_action);
+
           pid_t pid = fork();
           if ( pid == 0 ) {
             // make a dedicated process group so we can signal the whole tree
@@ -670,6 +678,7 @@ namespace Sequencer {
           }
           if ( pid < 0 ) {
             logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
+            sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
             return ERROR;
           }
           // Ensure the child is its own process group (best effort).
@@ -692,6 +701,7 @@ namespace Sequencer {
                   logfile.close();
                 }
               }
+              sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
               return ERROR;
             }
             if ( this->cancel_flag.load() ) {
@@ -709,12 +719,16 @@ namespace Sequencer {
                 waitpid( pid, &status, 0 );
               }
               this->fine_tune_pid.store( 0 );
+              sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
               return ERROR;
             }
             std::this_thread::sleep_for( std::chrono::milliseconds(100) );
           }
 
           this->fine_tune_pid.store( 0 );
+
+          // Restore old SIGCHLD handler now that we've reaped the child
+          sigaction(SIGCHLD, &old_action, nullptr);
 
           // Log detailed exit status information
           std::stringstream status_msg;
