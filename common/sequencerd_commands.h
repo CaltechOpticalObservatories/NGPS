@@ -8,6 +8,7 @@
 #ifndef SEQEUNCERD_COMMANDS_H
 #define SEQEUNCERD_COMMANDS_H
 const std::string SEQUENCERD_ABORT      = "abort";
+const std::string SEQUENCERD_ACQMODE    = "acqmode";
 const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
 const std::string SEQUENCERD_EXIT       = "exit";
@@ -47,6 +48,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_TCS+" ...",
                                                      "",
                                                      SEQUENCERD_ABORT,
+                                                     SEQUENCERD_ACQMODE+" [ ? | <mode> ]",
                                                      SEQUENCERD_CONFIG,
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
                                                      SEQUENCERD_EXIT,
