@@ -107,7 +107,7 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITW_ACQUIRE=0.4   # slit width during acquire
 VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
 VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
