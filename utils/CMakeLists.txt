@@ -78,6 +78,7 @@ if (X11_FOUND)
   target_include_directories(seq_progress_gui PRIVATE
           ${X11_INCLUDE_DIR}
           ${PROJECT_BASE_DIR}/common
+          ${PROJECT_UTILS_DIR}
           )
   target_link_libraries(seq_progress_gui PRIVATE
           ${STDCXXFS_LIB}
