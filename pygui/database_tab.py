@@ -1991,9 +1991,36 @@ class DatabaseTab(QWidget):
         # and selecting it in the targets_table
 
     def _activate_set(self) -> None:
-        """Activate selected target set."""
-        # This will be connected to sequencer commands
-        QMessageBox.information(self, "Activate Set", "Sequencer integration coming soon.")
+        """Activate selected target set by sending seq targetset command."""
+        # Get selected set from the sets table
+        set_selection = self.sets_table._current_row_values(self.sets_table.table.currentRow())
+        if not set_selection or not set_selection.get("SET_ID"):
+            QMessageBox.warning(
+                self,
+                "No Selection",
+                "Please select a target set from the Target Sets tab first."
+            )
+            return
+
+        set_id = set_selection.get("SET_ID")
+        set_name = set_selection.get("SET_NAME", f"Set {set_id}")
+
+        # Send sequencer command
+        main_window = self._parent_window
+        if hasattr(main_window, 'sequencer_service') and main_window.sequencer_service:
+            try:
+                command = f"seq targetset {set_id}"
+                main_window.sequencer_service.send_command(command)
+                if hasattr(main_window, 'statusBar'):
+                    main_window.statusBar().showMessage(f"Activated target set: {set_name} (ID={set_id})", 5000)
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to activate target set:\n{e}")
+        else:
+            QMessageBox.warning(
+                self,
+                "Sequencer Not Connected",
+                "Sequencer service is not available. Please check the connection."
+            )
 
     def _show_otm_settings(self) -> None:
         """Show OTM settings dialog."""
