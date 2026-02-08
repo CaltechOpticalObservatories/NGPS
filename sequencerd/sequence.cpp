@@ -723,75 +723,61 @@ namespace Sequencer {
           }
         }
         else {
-          // Check if target coordinates match the last target (same logic as in move_to_target)
-          // If so, skip acquisition for repeat target
-          // Only skip if we have valid last coordinates (not empty)
-          //
-          bool is_repeat_target = ( !this->last_ra_hms.empty() &&
-                                    !this->last_dec_dms.empty() &&
-                                    this->target.ra_hms == this->last_ra_hms &&
-                                    this->target.dec_dms == this->last_dec_dms );
+          if ( this->acq_automatic_mode == 2 ) {
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition" ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
+          }
 
-          if ( is_repeat_target ) {
-            this->async.enqueue_and_log( function, "NOTICE: skipping acquisition for repeat target" );
+          this->async.enqueue_and_log( function, "NOTICE: starting acquisition" );
+          std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+
+          long acqerr = wait_for_guiding();
+          if ( acqerr != NO_ERROR ) {
+            std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
+            this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (guiding failed)" ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
           }
           else {
-            if ( this->acq_automatic_mode == 2 ) {
-              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition" ) ) {
+            this->publish_progress();  // Publish before fine-tune (fine_tune_pid will be set inside run_fine_tune)
+            bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
+            this->publish_progress();  // Publish after fine-tune completes (fine_tune_pid will be 0)
+            if ( !fine_tune_ok ) {
+              this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
                 this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                 return;
               }
             }
 
-            this->async.enqueue_and_log( function, "NOTICE: starting acquisition" );
-            std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
-
-            long acqerr = wait_for_guiding();
-            if ( acqerr != NO_ERROR ) {
-              std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
-              this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
-              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (guiding failed)" ) ) {
-                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-                return;
-              }
-            }
-            else {
-              this->publish_progress();  // Publish before fine-tune (fine_tune_pid will be set inside run_fine_tune)
-              bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
-              this->publish_progress();  // Publish after fine-tune completes (fine_tune_pid will be 0)
-              if ( !fine_tune_ok ) {
-                this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
-                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
+            if ( fine_tune_ok ) {
+              if ( this->acq_automatic_mode == 2 ) {
+                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose" ) ) {
                   this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                   return;
                 }
               }
-
-              if ( fine_tune_ok ) {
-                if ( this->acq_automatic_mode == 2 ) {
-                  if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose" ) ) {
-                    this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              else if ( this->acq_automatic_mode == 3 ) {
+                if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+                  this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
+                  this->offset_active.store(true);
+                  this->publish_progress();  // Publish offset_active=true
+                  error |= this->target_offset();
+                  this->offset_active.store(false);
+                  if ( error != NO_ERROR ) {
+                    this->thread_error_manager.set( THR_ACQUISITION );
+                    this->publish_progress();  // Publish with offset error state
                     return;
                   }
-                }
-                else if ( this->acq_automatic_mode == 3 ) {
-                  if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
-                    this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
-                    this->offset_active.store(true);
-                    this->publish_progress();  // Publish offset_active=true
-                    error |= this->target_offset();
-                    this->offset_active.store(false);
-                    if ( error != NO_ERROR ) {
-                      this->thread_error_manager.set( THR_ACQUISITION );
-                      this->publish_progress();  // Publish with offset error state
-                      return;
-                    }
-                    if ( this->acq_offset_settle > 0 ) {
-                      this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
-                      std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
-                    }
-                    this->publish_progress();  // Publish offset complete
+                  if ( this->acq_offset_settle > 0 ) {
+                    this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                    std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
                   }
+                  this->publish_progress();  // Publish offset complete
                 }
               }
             }
@@ -995,14 +981,7 @@ namespace Sequencer {
         modestr = "EXPOSE";
         break;
       case Sequencer::VSM_ACQUIRE:
-        // uses virtual-mode width and offset for acquire,
-        // but only for new targets (skip if repeat target with valid last coords)
-        if ( !this->last_ra_hms.empty() &&
-             !this->last_dec_dms.empty() &&
-             this->target.ra_hms == this->last_ra_hms &&
-             this->target.dec_dms == this->last_dec_dms ) {
-          return NO_ERROR;
-        }
+        // uses virtual-mode width and offset for acquire
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
