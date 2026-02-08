@@ -654,20 +654,18 @@ namespace Sequencer {
           if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
           this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
 
+          // Build command with optional logging redirection
+          std::string cmd_to_run = this->acq_fine_tune_cmd;
           if ( this->acq_fine_tune_xterm ) {
-            this->async.enqueue_and_log( function, "NOTICE: launching fine tune in xterm" );
+            cmd_to_run += " >> /tmp/ngps_acq.log 2>&1";
+            this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to /tmp/ngps_acq.log" );
           }
 
           pid_t pid = fork();
           if ( pid == 0 ) {
             // make a dedicated process group so we can signal the whole tree
             setpgid( 0, 0 );
-            if ( this->acq_fine_tune_xterm ) {
-              execlp( "xterm", "xterm", "-T", "NGPS Fine Tune", "-e",
-                      "sh", "-lc", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
-              // fall through if xterm is missing
-            }
-            execl( "/bin/sh", "sh", "-c", this->acq_fine_tune_cmd.c_str(), (char*)nullptr );
+            execl( "/bin/sh", "sh", "-c", cmd_to_run.c_str(), (char*)nullptr );
             _exit(127);
           }
           if ( pid < 0 ) {
