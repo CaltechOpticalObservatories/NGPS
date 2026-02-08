@@ -376,6 +376,9 @@ class SeqProgressGui {
         if (ufd >= 0 && FD_ISSET(ufd, &fds)) {
           std::string msg;
           udp_.Receive(msg);
+          if (msg.find("EXPTIME:") != std::string::npos) {
+            std::cerr << "DEBUG UDP received: " << msg.substr(0, 80) << "\n";
+          }
           handle_message(msg);
           need_redraw = true;
         }
@@ -605,11 +608,21 @@ class SeqProgressGui {
     int label_y = bar_.y + bar_.h + 16;
     for (int i = 0; i < kPhaseCount; ++i) {
       int tx = segments_[i].x + 6;
-      // Add frame count to EXPOSURE label when active and NEXP > 1
-      if (i == PHASE_EXPOSE && state_.phase_active[PHASE_EXPOSE] && state_.nexp > 1) {
+      // Add info to EXPOSURE label when active
+      if (i == PHASE_EXPOSE && state_.phase_active[PHASE_EXPOSE]) {
         char exp_label[64];
-        snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d/%d",
-                 state_.current_frame, state_.nexp);
+        int percent = static_cast<int>(state_.exposure_progress * 100.0);
+        if (state_.nexp > 1) {
+          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d/%d %d%%",
+                   state_.current_frame, state_.nexp, percent);
+        } else {
+          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d%%", percent);
+        }
+        static int debug_counter = 0;
+        if (++debug_counter % 10 == 0) {  // Print every 10th frame to avoid spam
+          std::cerr << "DEBUG drawing label: " << exp_label
+                    << " (exposure_progress=" << state_.exposure_progress << ")\n";
+        }
         XDrawString(display_, window_, gc_, tx, label_y, exp_label, std::strlen(exp_label));
       } else {
         XDrawString(display_, window_, gc_, tx, label_y, labels[i], std::strlen(labels[i]));
@@ -1107,13 +1120,16 @@ class SeqProgressGui {
     } else if (starts_with_local(msg, "WAITSTATE:")) {
       handle_waitstate(trim_copy(msg.substr(10)));
     } else if (starts_with_local(msg, "EXPTIME:")) {
-      // Parse EXPTIME:remaining total percent (for future use)
+      // Parse EXPTIME:remaining total percent
       auto parts = split_ws(msg.substr(8)); // Skip "EXPTIME:"
+      std::cerr << "DEBUG EXPTIME parsing, parts.size=" << parts.size() << "\n";
       if (parts.size() >= 3) {
         try {
           int remaining_ms = std::stoi(parts[0]);
           int total_ms = std::stoi(parts[1]);
           int percent = std::stoi(parts[2]);
+          std::cerr << "DEBUG EXPTIME parsed: remaining=" << remaining_ms
+                    << " total=" << total_ms << " percent=" << percent << "\n";
           if (total_ms > 0) {
             int elapsed_ms = total_ms - remaining_ms;
             state_.exposure_elapsed = elapsed_ms / 1000.0;
@@ -1125,10 +1141,12 @@ class SeqProgressGui {
             } else {
               state_.exposure_progress = new_progress;
             }
+            std::cerr << "DEBUG exposure_progress now: " << state_.exposure_progress
+                      << " (from percent=" << percent << ")\n";
             set_phase(PHASE_EXPOSE);
           }
-        } catch (...) {
-          // Ignore parse errors
+        } catch (const std::exception &e) {
+          std::cerr << "DEBUG EXPTIME parse exception: " << e.what() << "\n";
         }
       }
     } else if (starts_with_local(msg, "ELAPSEDTIME")) {
