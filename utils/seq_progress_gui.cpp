@@ -1099,17 +1099,19 @@ class SeqProgressGui {
     } else if (starts_with_local(msg, "WAITSTATE:")) {
       handle_waitstate(trim_copy(msg.substr(10)));
     } else if (starts_with_local(msg, "EXPTIME:")) {
-      // Parse EXPTIME:remaining total frame
+      // Parse EXPTIME:remaining total percent
       auto parts = split_ws(msg.substr(8)); // Skip "EXPTIME:"
-      if (parts.size() >= 2) {
+      if (parts.size() >= 3) {
         try {
           int remaining_ms = std::stoi(parts[0]);
           int total_ms = std::stoi(parts[1]);
+          int percent = std::stoi(parts[2]);
           if (total_ms > 0) {
             int elapsed_ms = total_ms - remaining_ms;
             state_.exposure_elapsed = elapsed_ms / 1000.0;
             state_.exposure_total = total_ms / 1000.0;
-            state_.exposure_progress = std::min(1.0, static_cast<double>(elapsed_ms) / static_cast<double>(total_ms));
+            // Use the percentage directly from camerad (already averaged across cameras)
+            state_.exposure_progress = std::min(1.0, percent / 100.0);
             set_phase(PHASE_EXPOSE);
           }
         } catch (...) {
