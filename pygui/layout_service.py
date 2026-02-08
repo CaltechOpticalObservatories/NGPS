@@ -581,10 +581,10 @@ class LayoutService:
             self.parent.message_log.setTextCursor(cursor)
 
     def create_target_list_group(self):
-        target_list_group = QGroupBox()
-        main_layout = QVBoxLayout()
-        main_layout.setSpacing(0)
-        main_layout.setContentsMargins(2, 2, 2, 2)
+        self._target_list_group = QGroupBox()
+        self._target_list_layout = QVBoxLayout()
+        self._target_list_layout.setSpacing(0)
+        self._target_list_layout.setContentsMargins(2, 2, 2, 2)
 
         # ── Login prompt (shown before login, hidden after) ──
         self.load_target_button = QPushButton("Please login or load your target list to start")
@@ -600,19 +600,10 @@ class LayoutService:
             QPushButton:pressed { background-color: #FF6600; }
         """)
         self.load_target_button.clicked.connect(self.parent.on_login)
-        main_layout.addWidget(self.load_target_button)
+        self._target_list_layout.addWidget(self.load_target_button)
 
-        # ── Create DatabaseTab (hidden until login) ──
+        # DatabaseTab will be created on login (not before, to avoid setCentralWidget conflicts)
         self.database_tab_widget = None
-        try:
-            self.database_tab_widget = DatabaseTab(target_list_group, None, main_window=self.parent)
-            self.database_tab_widget.setVisible(False)
-            main_layout.addWidget(self.database_tab_widget, 1)
-            print("Database tab created successfully")
-        except Exception as exc:
-            print(f"Failed to create database tab: {exc}")
-            import traceback
-            traceback.print_exc()
 
         # ── Legacy attributes (kept for backward compatibility) ──
         self.target_list_display = QTableWidget()
@@ -624,14 +615,24 @@ class LayoutService:
         self.column_toggle_button = QPushButton()
         self.column_toggle_button.setVisible(False)
 
-        target_list_group.setLayout(main_layout)
-        return target_list_group
+        self._target_list_group.setLayout(self._target_list_layout)
+        return self._target_list_group
 
     def show_database_tab(self, owner: str = None):
-        """Show the database tab after successful login, filtered by owner."""
+        """Create and show the database tab after successful login, filtered by owner."""
+        # Only create once
         if not self.database_tab_widget:
-            print("Warning: Database tab widget not available")
-            return
+            try:
+                self.database_tab_widget = DatabaseTab(
+                    self._target_list_group, None, main_window=self.parent
+                )
+                self._target_list_layout.addWidget(self.database_tab_widget, 1)
+                print("Database tab created successfully")
+            except Exception as exc:
+                print(f"Failed to create database tab: {exc}")
+                import traceback
+                traceback.print_exc()
+                return
 
         # Hide login prompt, show database tab
         self.load_target_button.setVisible(False)
