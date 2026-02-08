@@ -182,6 +182,45 @@ namespace Sequencer {
   /***** Sequencer::Sequence::publish_threadstate *****************************/
 
 
+  /***** Sequencer::Sequence::publish_progress ********************************/
+  /**
+   * @brief      publishes progress information with topic "seq_progress"
+   * @details    publishes fine-grained progress tracking for seq-progress GUI
+   *
+   */
+  void Sequence::publish_progress() {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = Sequencer::DAEMON_NAME;
+
+    // Track fine-tune status via fine_tune_pid
+    jmessage_out["fine_tune_active"] = (this->fine_tune_pid.load() != 0);
+
+    // Track offset status
+    jmessage_out["offset_active"] = this->offset_active.load();
+
+    // offset_settle is true when we're waiting after applying offset
+    // (determined by caller context - set before calling publish_progress)
+    jmessage_out["offset_settle"] = this->offset_active.load();  // same as offset_active for simplicity
+
+    // ontarget status
+    jmessage_out["ontarget"] = this->is_ontarget.load();
+
+    // Current target info
+    jmessage_out["obsid"] = this->target.obsid;
+    jmessage_out["target_state"] = this->target.state;
+
+    try {
+      this->publisher->publish( jmessage_out, "seq_progress" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Sequencer::Sequence::publish_progress",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Sequencer::Sequence::publish_progress ********************************/
+
+
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
   /**
    * @brief      publishes daemonstate and can control seqstate
@@ -468,6 +507,7 @@ namespace Sequencer {
         //
         message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
         this->async.enqueue( message.str() );
+        this->publish_progress();  // Publish new target info (obsid, target_state)
 #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] target found, starting threads" );
 #endif
@@ -713,7 +753,9 @@ namespace Sequencer {
               }
             }
             else {
+              this->publish_progress();  // Publish before fine-tune (fine_tune_pid will be set inside run_fine_tune)
               bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
+              this->publish_progress();  // Publish after fine-tune completes (fine_tune_pid will be 0)
               if ( !fine_tune_ok ) {
                 this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
                 if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
@@ -732,15 +774,20 @@ namespace Sequencer {
                 else if ( this->acq_automatic_mode == 3 ) {
                   if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
                     this->async.enqueue_and_log( function, "NOTICE: applying target offset automatically" );
+                    this->offset_active.store(true);
+                    this->publish_progress();  // Publish offset_active=true
                     error |= this->target_offset();
+                    this->offset_active.store(false);
                     if ( error != NO_ERROR ) {
                       this->thread_error_manager.set( THR_ACQUISITION );
+                      this->publish_progress();  // Publish with offset error state
                       return;
                     }
                     if ( this->acq_offset_settle > 0 ) {
                       this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
                       std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
                     }
+                    this->publish_progress();  // Publish offset complete
                   }
                 }
               }
@@ -835,6 +882,7 @@ namespace Sequencer {
       //
       message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
       this->async.enqueue( message.str() );
+      this->publish_progress();  // Publish target completion state
 
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
