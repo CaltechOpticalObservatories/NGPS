@@ -705,13 +705,58 @@ namespace Sequencer {
           }
 
           this->fine_tune_pid.store( 0 );
-          if ( WIFEXITED( status ) && WEXITSTATUS( status ) == 0 ) {
-            this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
-            return NO_ERROR;
-          }
 
-          logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
-          return ERROR;
+          // Log detailed exit status information
+          std::stringstream status_msg;
+          status_msg << "fine tune process exit status: raw=" << status;
+
+          if ( WIFEXITED( status ) ) {
+            int exit_code = WEXITSTATUS( status );
+            status_msg << " exited_normally=true exit_code=" << exit_code;
+            logwrite( function, status_msg.str() );
+
+            if ( this->acq_fine_tune_log ) {
+              // Also log to /tmp/ngps_acq.log for easy debugging
+              std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+              if ( logfile.is_open() ) {
+                logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
+                logfile.close();
+              }
+            }
+
+            if ( exit_code == 0 ) {
+              this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+              return NO_ERROR;
+            }
+            else {
+              message.str(""); message << "ERROR: fine tune command exited with code " << exit_code;
+              this->async.enqueue_and_log( function, message.str() );
+              return ERROR;
+            }
+          }
+          else if ( WIFSIGNALED( status ) ) {
+            int signal = WTERMSIG( status );
+            status_msg << " exited_normally=false terminated_by_signal=" << signal;
+            logwrite( function, status_msg.str() );
+
+            if ( this->acq_fine_tune_log ) {
+              std::ofstream logfile("/tmp/ngps_acq.log", std::ios::app);
+              if ( logfile.is_open() ) {
+                logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
+                logfile.close();
+              }
+            }
+
+            message.str(""); message << "ERROR: fine tune command terminated by signal " << signal;
+            this->async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+          else {
+            status_msg << " unknown_exit_condition";
+            logwrite( function, status_msg.str() );
+            logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
+            return ERROR;
+          }
         };
 
         if ( this->acq_automatic_mode == 1 ) {
