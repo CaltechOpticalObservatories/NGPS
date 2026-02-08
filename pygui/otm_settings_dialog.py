@@ -103,12 +103,21 @@ class OtmSettingsDialog(QDialog):
         paths_group = QGroupBox("Script Paths")
         paths_layout = QVBoxLayout()
 
-        # Python command
+        # Python command (venv path or system python)
         python_layout = QHBoxLayout()
         python_layout.addWidget(QLabel("Python Command:"))
         self.python_cmd_edit = QLineEdit()
-        self.python_cmd_edit.setPlaceholderText("python3")
+        self.python_cmd_edit.setPlaceholderText("python3 (or /path/to/venv/bin/python)")
+        self.python_cmd_edit.setToolTip(
+            "Path to the Python interpreter for running OTM.\n"
+            "Use a virtualenv python if OTM dependencies (astropy, etc.)\n"
+            "are installed in a specific environment.\n"
+            "Default: python3"
+        )
         python_layout.addWidget(self.python_cmd_edit, 1)
+        self.python_browse_button = QPushButton("Browse...")
+        self.python_browse_button.clicked.connect(self._browse_python_cmd)
+        python_layout.addWidget(self.python_browse_button)
         paths_layout.addLayout(python_layout)
 
         # OTM script path
@@ -170,6 +179,22 @@ class OtmSettingsDialog(QDialog):
         self.settings.python_cmd = self.python_cmd_edit.text()
         self.settings.otm_script_path = self.otm_script_edit.text()
         self.settings.timeline_script_path = self.timeline_script_edit.text()
+
+    def _browse_python_cmd(self):
+        """Browse for Python interpreter."""
+        current_path = self.python_cmd_edit.text()
+        if not current_path:
+            current_path = os.path.expanduser("~")
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Python Interpreter",
+            current_path,
+            "All Files (*)"
+        )
+
+        if path:
+            self.python_cmd_edit.setText(path)
 
     def _browse_otm_script(self):
         """Browse for OTM script."""
