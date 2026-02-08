@@ -559,7 +559,6 @@ class SeqProgressGui {
     draw_title();
     draw_bar();
     draw_labels();
-    draw_status();
     draw_buttons();
     draw_ontarget_indicator();
     draw_offset_values();
@@ -1099,6 +1098,24 @@ class SeqProgressGui {
       }
     } else if (starts_with_local(msg, "WAITSTATE:")) {
       handle_waitstate(trim_copy(msg.substr(10)));
+    } else if (starts_with_local(msg, "EXPTIME:")) {
+      // Parse EXPTIME:remaining total frame
+      auto parts = split_ws(msg.substr(8)); // Skip "EXPTIME:"
+      if (parts.size() >= 2) {
+        try {
+          int remaining_ms = std::stoi(parts[0]);
+          int total_ms = std::stoi(parts[1]);
+          if (total_ms > 0) {
+            int elapsed_ms = total_ms - remaining_ms;
+            state_.exposure_elapsed = elapsed_ms / 1000.0;
+            state_.exposure_total = total_ms / 1000.0;
+            state_.exposure_progress = std::min(1.0, static_cast<double>(elapsed_ms) / static_cast<double>(total_ms));
+            set_phase(PHASE_EXPOSE);
+          }
+        } catch (...) {
+          // Ignore parse errors
+        }
+      }
     } else if (starts_with_local(msg, "ELAPSEDTIME")) {
       auto parts = split_ws(msg);
       if (parts.size() >= 2) {
