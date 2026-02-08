@@ -357,6 +357,36 @@ namespace Sequencer {
           }
         }
 
+        // --------------------------------------------------------------
+        // Republish EXPTIME messages to ZMQ for seq-progress GUI
+        // Parse EXPTIME:remaining total percent and publish to seq_progress
+        // Rate-limited: only publish when percent changes to reduce message spam
+        // --------------------------------------------------------------
+        //
+        if ( statstr.compare( 0, 8, "EXPTIME:" ) == 0 ) {                           // async message tag EXPTIME:
+          // Parse "EXPTIME:remaining total percent"
+          std::string vals = statstr.substr(8);  // Skip "EXPTIME:"
+          std::istringstream iss(vals);
+          int remaining, total, percent;
+          if (iss >> remaining >> total >> percent) {
+            static int last_published_percent = -1;
+            // Only publish when percentage changes (rate limiting)
+            if (percent != last_published_percent) {
+              nlohmann::json jmessage;
+              jmessage["source"] = Sequencer::DAEMON_NAME;
+              jmessage["exptime_remaining_ms"] = remaining;
+              jmessage["exptime_total_ms"] = total;
+              jmessage["exptime_percent"] = percent;
+              try {
+                seq.publisher->publish( jmessage, "seq_progress" );
+                last_published_percent = percent;
+              } catch (...) {
+                // Ignore publish errors
+              }
+            }
+          }
+        }
+
         // ------------------------------------------------------------------
         // Set READOUT flag and clear EXPOSE flag when pixels start coming in
         // ------------------------------------------------------------------
