@@ -63,6 +63,30 @@ target_link_libraries( listener PRIVATE utilities )
 
 # -- ZeroMQ --------------------------------------------------------------------
 #
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
+
+# -- X11 GUI tools ------------------------------------------------------------
+#
+find_package(X11)
+if (X11_FOUND)
+  add_executable(seq_progress_gui
+          ${PROJECT_UTILS_DIR}/seq_progress_gui.cpp
+          )
+  target_include_directories(seq_progress_gui PRIVATE
+          ${X11_INCLUDE_DIR}
+          ${PROJECT_BASE_DIR}/common
+          )
+  target_link_libraries(seq_progress_gui PRIVATE
+          ${STDCXXFS_LIB}
+          utilities
+          logentry
+          network
+          ${ZMQPP_LIB}
+          ${ZMQ_LIB}
+          ${X11_LIBRARIES}
+          )
+endif()
 
