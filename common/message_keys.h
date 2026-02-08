@@ -30,6 +30,8 @@ namespace Key {
     inline const std::string FINE_TUNE_ACTIVE = "fine_tune_active";
     inline const std::string OFFSET_ACTIVE = "offset_active";
     inline const std::string OFFSET_SETTLE = "offset_settle";
+    inline const std::string OFFSET_RA = "offset_ra";
+    inline const std::string OFFSET_DEC = "offset_dec";
     inline const std::string OBSID = "obsid";
     inline const std::string TARGET_STATE = "target_state";
     inline const std::string EVENT = "event";

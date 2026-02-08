@@ -87,6 +87,8 @@ struct SequenceState {
   std::chrono::steady_clock::time_point last_ontarget;
   int current_obsid = -1;
   std::string current_target_state;
+  double offset_ra = 0.0;
+  double offset_dec = 0.0;
 
   void reset() {
     for (int i = 0; i < kPhaseCount; ++i) {
@@ -554,6 +556,7 @@ class SeqProgressGui {
     draw_status();
     draw_buttons();
     draw_ontarget_indicator();
+    draw_offset_values();
     draw_guiding_indicator();
     draw_seqstatus_indicator();
 
@@ -656,6 +659,15 @@ class SeqProgressGui {
     XFillArc(display_, window_, gc_, 370, 150, 18, 18, 0, 360 * 64);
     XSetForeground(display_, gc_, color_text_);
     XDrawString(display_, window_, gc_, 394, 164, label, std::strlen(label));
+  }
+
+  void draw_offset_values() {
+    // Display offset values above the guiding indicator box
+    char label[64];
+    snprintf(label, sizeof(label), "Offset: dRA=%.2f\" dDEC=%.2f\"",
+             state_.offset_ra, state_.offset_dec);
+    XSetForeground(display_, gc_, color_text_);
+    XDrawString(display_, window_, gc_, guiding_box_.x, guiding_box_.y - 8, label, std::strlen(label));
   }
 
   void draw_guiding_indicator() {
@@ -828,6 +840,12 @@ class SeqProgressGui {
         } else if (state_.phase_active[PHASE_OFFSET]) {
           state_.phase_complete[PHASE_OFFSET] = true;
           clear_phase_active(PHASE_OFFSET);
+        }
+        if (jmessage.contains("offset_ra") && jmessage["offset_ra"].is_number()) {
+          state_.offset_ra = jmessage["offset_ra"].get<double>();
+        }
+        if (jmessage.contains("offset_dec") && jmessage["offset_dec"].is_number()) {
+          state_.offset_dec = jmessage["offset_dec"].get<double>();
         }
       } else if (topic == "acamd") {
         if (jmessage.contains("ACAM_GUIDING") && jmessage["ACAM_GUIDING"].is_boolean()) {

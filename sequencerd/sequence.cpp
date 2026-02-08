@@ -209,6 +209,10 @@ namespace Sequencer {
     jmessage_out["obsid"] = this->target.obsid;
     jmessage_out["target_state"] = this->target.state;
 
+    // Target offset values (arcsec)
+    jmessage_out["offset_ra"] = this->target.offset_ra;
+    jmessage_out["offset_dec"] = this->target.offset_dec;
+
     try {
       this->publisher->publish( jmessage_out, "seq_progress" );
     }
