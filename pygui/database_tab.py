@@ -2239,19 +2239,12 @@ class DatabaseTab(QWidget):
             return []
 
         try:
-            schema = self._db.get_schema(self._config.schema)
-            table = schema.get_table(self._config.table_targets)
-
-            # Query targets for this set, ordered by OBS_ORDER
-            results = table.select().where(f"SET_ID = :sid").bind("sid", set_id).order_by("OBS_ORDER").execute()
-
-            targets = []
-            for row in results:
-                target = {}
-                for col in row.keys():
-                    target[col] = row[col]
-                targets.append(target)
-
+            targets = self._db.fetch_rows(
+                self._config.table_targets,
+                where="`SET_ID`=%s",
+                params=(set_id,),
+                order_by="OBS_ORDER"
+            )
             return targets
 
         except Exception as e:
