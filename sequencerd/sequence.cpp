@@ -684,6 +684,7 @@ namespace Sequencer {
           // Ensure the child is its own process group (best effort).
           setpgid( pid, pid );
           this->fine_tune_pid.store( pid );
+          this->publish_progress();  // Publish fine_tune_active=true
 
           int status = 0;
           while ( true ) {
@@ -750,11 +751,13 @@ namespace Sequencer {
 
             if ( exit_code == 0 ) {
               this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+              this->publish_progress();  // Publish fine_tune_active=false (success)
               return NO_ERROR;
             }
             else {
               message.str(""); message << "ERROR: fine tune command exited with code " << exit_code;
               this->async.enqueue_and_log( function, message.str() );
+              this->publish_progress();  // Publish fine_tune_active=false (failure)
               return ERROR;
             }
           }
@@ -773,12 +776,14 @@ namespace Sequencer {
 
             message.str(""); message << "ERROR: fine tune command terminated by signal " << signal;
             this->async.enqueue_and_log( function, message.str() );
+            this->publish_progress();  // Publish fine_tune_active=false (terminated)
             return ERROR;
           }
           else {
             status_msg << " unknown_exit_condition";
             logwrite( function, status_msg.str() );
             logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
+            this->publish_progress();  // Publish fine_tune_active=false (unknown)
             return ERROR;
           }
         };
@@ -810,9 +815,7 @@ namespace Sequencer {
             }
           }
           else {
-            this->publish_progress();  // Publish before fine-tune (fine_tune_pid will be set inside run_fine_tune)
             bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
-            this->publish_progress();  // Publish after fine-tune completes (fine_tune_pid will be 0)
             if ( !fine_tune_ok ) {
               this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
               if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
