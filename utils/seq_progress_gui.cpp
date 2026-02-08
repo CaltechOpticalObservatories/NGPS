@@ -1119,6 +1119,8 @@ class SeqProgressGui {
           int remaining_ms = std::stoi(parts[0]);
           int total_ms = std::stoi(parts[1]);
           int percent = std::stoi(parts[2]);
+          std::cerr << "DEBUG EXPTIME: remaining=" << remaining_ms << " total=" << total_ms
+                    << " percent=" << percent << "\n";
           if (total_ms > 0) {
             int elapsed_ms = total_ms - remaining_ms;
             state_.exposure_elapsed = elapsed_ms / 1000.0;
@@ -1131,11 +1133,15 @@ class SeqProgressGui {
             } else {
               state_.exposure_progress = new_progress;
             }
+            std::cerr << "DEBUG exposure_progress=" << state_.exposure_progress
+                      << " new_progress=" << new_progress << "\n";
             set_phase(PHASE_EXPOSE);
           }
-        } catch (...) {
-          // Ignore parse errors
+        } catch (const std::exception &e) {
+          std::cerr << "DEBUG EXPTIME parse error: " << e.what() << "\n";
         }
+      } else {
+        std::cerr << "DEBUG EXPTIME: Not enough parts, size=" << parts.size() << "\n";
       }
     } else if (starts_with_local(msg, "ELAPSEDTIME")) {
       auto parts = split_ws(msg);
