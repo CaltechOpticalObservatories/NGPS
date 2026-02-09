@@ -9,7 +9,6 @@
 #pragma once
 
 const std::string CAMERAD_ABORT = "abort";
-const std::string CAMERAD_ACTIVATE = "activate";
 const std::string CAMERAD_AUTODIR = "autodir";
 const std::string CAMERAD_BASENAME = "basename";
 const std::string CAMERAD_BIAS = "bias";
@@ -18,7 +17,6 @@ const std::string CAMERAD_BOI = "boi";
 const std::string CAMERAD_BUFFER = "buffer";
 const std::string CAMERAD_CLOSE = "close";
 const std::string CAMERAD_CONFIG = "config";
-const std::string CAMERAD_DEACTIVATE = "deactivate";
 const std::string CAMERAD_ECHO = "echo";
 const std::string CAMERAD_EXPOSE = "expose";
 const std::string CAMERAD_EXPTIME = "exptime";
@@ -30,7 +28,6 @@ const std::string CAMERAD_IMDIR = "imdir";
 const std::string CAMERAD_IMNUM = "imnum";
 const std::string CAMERAD_IMSIZE = "imsize";
 const std::string CAMERAD_INTERFACE = "interface";
-const std::string CAMERAD_ISACTIVE = "isactive";
 const std::string CAMERAD_ISOPEN = "isopen";
 const std::string CAMERAD_KEY = "key";
 const std::string CAMERAD_LOAD = "load";
@@ -51,7 +48,6 @@ const std::string CAMERAD_USEFRAMES = "useframes";
 const std::string CAMERAD_WRITEKEYS = "writekeys";
 const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_ABORT,
-                                                  CAMERAD_ACTIVATE,
                                                   CAMERAD_AUTODIR,
                                                   CAMERAD_BASENAME,
                                                   CAMERAD_BIAS,
@@ -60,7 +56,6 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_BUFFER+" ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]",
                                                   CAMERAD_CLOSE,
                                                   CAMERAD_CONFIG,
-                                                  CAMERAD_DEACTIVATE,
                                                   CAMERAD_ECHO,
                                                   CAMERAD_EXPOSE,
                                                   CAMERAD_EXPTIME+" [ <exptime in msec> ]",
@@ -72,7 +67,6 @@ const std::vector<std::string> CAMERAD_SYNTAX = {
                                                   CAMERAD_IMNUM,
                                                   CAMERAD_IMSIZE+" ? | <dev#>|<chan> [ <cols> <rows> <oscols> <osrows> ]",
                                                   CAMERAD_INTERFACE,
-                                                  CAMERAD_ISACTIVE,
                                                   CAMERAD_ISOPEN,
                                                   CAMERAD_KEY,
                                                   CAMERAD_LOAD,

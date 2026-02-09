@@ -18,18 +18,17 @@ endif()
 
 set(MYSQL_DIR "/usr/local/mysql/connector")
 find_path(MYSQL_API "mysqlx/xdevapi.h"
-          PATHS ${MYSQL_DIR}/include
-                /usr/local/opt/mysql-connector-c++/include
-                /opt/homebrew/opt/mysql-connector-c++/include)
+          PATHS ${MYSQL_DIR} /usr/local/opt/mysql-connector-c++ /opt/homebrew/opt/mysql-connector-c++)
 if (NOT MYSQL_API)
   message(FATAL_ERROR "mysqlx/xdevapi.h not found. Install MySQL Connector/C++")
 endif()
 
-find_library(MYSQL_LIB NAMES mysqlcppconn8 mysqlcppconnx mysqlcppconn
-             PATHS ${MYSQL_DIR}/lib64
-                   ${MYSQL_DIR}/lib
+find_library(MYSQL_LIB NAMES mysqlcppconnx mysqlcppconn8 mysqlcppconn
+             PATHS ${MYSQL_DIR}
                    /usr/local/opt/mysql-connector-c++/lib
-                   /opt/homebrew/opt/mysql-connector-c++/lib)
+                   /opt/homebrew/opt/mysql-connector-c++/lib
+                   /usr/local/opt/mysql-connector-c++
+                   /opt/homebrew/opt/mysql-connector-c++)
 if (NOT MYSQL_LIB)
   message(FATAL_ERROR "MySQL Connector/C++ library not found")
 endif()

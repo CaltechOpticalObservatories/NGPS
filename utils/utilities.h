@@ -372,7 +372,7 @@ class BoolState {
  */
 class PreciseTimer {
   private:
-    static inline constexpr long max_short_sleep = 3000000;         // units are microseconds
+    static const long max_short_sleep = 3000000;         // units are microseconds
 
     std::atomic<bool> should_hold;
     std::atomic<bool> on_hold;

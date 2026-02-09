@@ -15,13 +15,6 @@ ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=no                        # run as a daemon? {yes,no}
 PUBLISHER_PORT="tcp://127.0.0.1:@CAMERAD_PUB_PORT@"  # my zeromq pub port
 
-# Message pub/sub
-# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
-# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
-#
-PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
-SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
-
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
 ARCSIM_NUMDEV=4
@@ -142,17 +135,6 @@ CONSTKEY_EXT=(SPECTPART WHOLE)  # fixed only because we're writing single-channe
 # USERKEYS_PERSIST=yes|no
 #
 USERKEYS_PERSIST=yes
-
-# ACTIVATE_COMMANDS=(CHAN CMD [, CMD, CMD ...])
-# commands sent to activate channel after de-activation
-# CHAN is space-delimited from a comma-delimited list of one or more commands
-# and must have been first configured by CONTROLER=
-# commands that contain a space must be enclosed by double quotes
-#
-ACTIVATE_COMMANDS=(I PON, ERS 1000 1000, EPG 500, CLR)
-ACTIVATE_COMMANDS=(R PON, ERS 1000 1000, EPG 500, CLR)
-ACTIVATE_COMMANDS=(G PON, ERS 1000 1000, EPG 500, CLR)
-ACTIVATE_COMMANDS=(U PON, CLR)
 
 # -----------------------------------------------------------------------------
 # TELEM_PROVIDER=( <name> <port> )

@@ -73,8 +73,6 @@ struct SequenceState {
   bool offset_applicable = false;
   bool waiting_for_user = false;
   bool waiting_for_tcsop = false;
-  bool user_wait_after_failure = false;
-  bool continue_will_expose = false;
   bool ontarget = false;
   bool guiding_on = false;
   bool guiding_failed = false;
@@ -89,12 +87,6 @@ struct SequenceState {
   std::chrono::steady_clock::time_point last_ontarget;
   int current_obsid = -1;
   std::string current_target_state;
-  double offset_ra = 0.0;
-  double offset_dec = 0.0;
-  int nexp = 1;
-  int acqmode = 1;
-  int current_frame = 0;
-  int max_frame_seen = 0;
 
   void reset() {
     for (int i = 0; i < kPhaseCount; ++i) {
@@ -104,8 +96,6 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
-    user_wait_after_failure = false;
-    continue_will_expose = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -119,9 +109,6 @@ struct SequenceState {
     waitstate.clear();
     current_obsid = -1;
     current_target_state.clear();
-    nexp = 1;
-    current_frame = 0;
-    max_frame_seen = 0;
   }
 
   void reset_progress_only() {
@@ -132,8 +119,6 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
-    user_wait_after_failure = false;
-    continue_will_expose = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -166,25 +151,6 @@ static std::vector<std::string> split_ws(const std::string &s) {
 
 static bool has_token(const std::vector<std::string> &tokens, const std::string &needle) {
   return std::find(tokens.begin(), tokens.end(), needle) != tokens.end();
-}
-
-static std::string to_upper_copy(std::string s);
-
-static std::string strip_token_edges(std::string s) {
-  while (!s.empty() && !std::isalnum(static_cast<unsigned char>(s.front()))) s.erase(s.begin());
-  while (!s.empty() && !std::isalnum(static_cast<unsigned char>(s.back()))) s.pop_back();
-  return s;
-}
-
-static std::vector<std::string> split_state_tokens(const std::string &s) {
-  std::vector<std::string> out;
-  auto tokens = split_ws(to_upper_copy(s));
-  out.reserve(tokens.size());
-  for (auto &tok : tokens) {
-    std::string cleaned = strip_token_edges(tok);
-    if (!cleaned.empty()) out.push_back(cleaned);
-  }
-  return out;
 }
 
 static int parse_int_after_colon(const std::string &s) {
@@ -333,18 +299,12 @@ class SeqProgressGui {
     compute_layout();
 
     bool use_udp = options_.sub_endpoint.empty();
-    std::cerr << "DEBUG: use_udp=" << use_udp << " msgport=" << options_.msgport
-              << " msggroup=" << options_.msggroup << "\n";
     if (use_udp && options_.msgport > 0 && !options_.msggroup.empty() && to_upper_copy(options_.msggroup) != "NONE") {
       udp_fd_ = udp_.Listener();
       if (udp_fd_ < 0) {
         std::cerr << "ERROR starting UDP listener\n";
         return false;
       }
-      std::cerr << "DEBUG: UDP listener started on port " << options_.msgport
-                << " group " << options_.msggroup << " fd=" << udp_fd_ << "\n";
-    } else {
-      std::cerr << "DEBUG: UDP listener NOT started\n";
     }
 
     init_zmq();
@@ -389,9 +349,6 @@ class SeqProgressGui {
         if (ufd >= 0 && FD_ISSET(ufd, &fds)) {
           std::string msg;
           udp_.Receive(msg);
-          if (msg.find("EXPTIME:") != std::string::npos) {
-            std::cerr << "DEBUG UDP received: " << msg.substr(0, 80) << "\n";
-          }
           handle_message(msg);
           need_redraw = true;
         }
@@ -573,13 +530,11 @@ class SeqProgressGui {
     XFillRectangle(display_, window_, gc_, 0, 0, kWinW, kWinH);
 
     draw_title();
-    draw_acqmode_indicator();
     draw_bar();
     draw_labels();
-    draw_user_instruction();
+    draw_status();
     draw_buttons();
     draw_ontarget_indicator();
-    draw_offset_values();
     draw_guiding_indicator();
     draw_seqstatus_indicator();
 
@@ -590,19 +545,6 @@ class SeqProgressGui {
     XSetForeground(display_, gc_, color_text_);
     const char *title = "Observation Sequence Progress";
     XDrawString(display_, window_, gc_, 16, 24, title, std::strlen(title));
-  }
-
-  void draw_acqmode_indicator() {
-    const char *label;
-    switch (state_.acqmode) {
-      case 2:  label = "ACQMODE: 2 SEMI-AUTO"; break;
-      case 3:  label = "ACQMODE: 3 AUTO";      break;
-      default: label = "ACQMODE: 1 MANUAL";    break;
-    }
-    int len = std::strlen(label);
-    int text_width = XTextWidth(XQueryFont(display_, XGContextFromGC(gc_)), label, len);
-    XSetForeground(display_, gc_, color_text_);
-    XDrawString(display_, window_, gc_, kWinW - text_width - 16, 24, label, len);
   }
 
   void draw_bar() {
@@ -636,25 +578,7 @@ class SeqProgressGui {
     int label_y = bar_.y + bar_.h + 16;
     for (int i = 0; i < kPhaseCount; ++i) {
       int tx = segments_[i].x + 6;
-      // Add info to EXPOSURE label when active
-      if (i == PHASE_EXPOSE && state_.phase_active[PHASE_EXPOSE]) {
-        char exp_label[64];
-        int percent = static_cast<int>(state_.exposure_progress * 100.0);
-        if (state_.nexp > 1) {
-          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d/%d %d%%",
-                   state_.current_frame, state_.nexp, percent);
-        } else {
-          snprintf(exp_label, sizeof(exp_label), "EXPOSURE %d%%", percent);
-        }
-        static int debug_counter = 0;
-        if (++debug_counter % 10 == 0) {  // Print every 10th frame to avoid spam
-          std::cerr << "DEBUG drawing label: " << exp_label
-                    << " (exposure_progress=" << state_.exposure_progress << ")\n";
-        }
-        XDrawString(display_, window_, gc_, tx, label_y, exp_label, std::strlen(exp_label));
-      } else {
-        XDrawString(display_, window_, gc_, tx, label_y, labels[i], std::strlen(labels[i]));
-      }
+      XDrawString(display_, window_, gc_, tx, label_y, labels[i], std::strlen(labels[i]));
     }
   }
 
@@ -674,24 +598,12 @@ class SeqProgressGui {
       status = "APPLYING OFFSET";
     } else if (state_.phase_active[PHASE_EXPOSE]) {
       std::ostringstream oss;
-      // Show frame count if NEXP > 1
-      if (state_.nexp > 1) {
-        oss << "EXPOSURE " << state_.current_frame << " / " << state_.nexp;
-        if (state_.exposure_total > 0.0) {
-          oss.setf(std::ios::fixed);
-          oss.precision(1);
-          oss << " (" << state_.exposure_elapsed << " / " << state_.exposure_total << " s)";
-        }
+      if (state_.exposure_total > 0.0) {
+        oss.setf(std::ios::fixed);
+        oss.precision(1);
+        oss << "EXPOSURE " << state_.exposure_elapsed << " / " << state_.exposure_total << " s";
       } else {
-        oss << "EXPOSURE";
-        if (state_.exposure_total > 0.0) {
-          oss.setf(std::ios::fixed);
-          oss.precision(1);
-          oss << " " << state_.exposure_elapsed << " / " << state_.exposure_total << " s";
-        }
-        if (state_.exposure_progress > 0.0) {
-          oss << " " << static_cast<int>(state_.exposure_progress * 100.0) << "%";
-        }
+        oss << "EXPOSURE " << static_cast<int>(state_.exposure_progress * 100.0) << "%";
       }
       status = oss.str();
     }
@@ -713,33 +625,9 @@ class SeqProgressGui {
     XDrawString(display_, window_, gc_, tx, ty, label, std::strlen(label));
   }
 
-  void draw_user_instruction() {
-    if (!state_.waiting_for_user || !state_.continue_will_expose) return;
-    if (!blink_on_) return;  // blink the instruction for visibility
-
-    bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
-    char instruction[256];
-    if (has_offset) {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click OFFSET & EXPOSE to apply offset (RA=%.2f\" DEC=%.2f\") then expose <<<",
-               state_.offset_ra, state_.offset_dec);
-    } else {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click EXPOSE to begin exposure (no target offset) <<<");
-    }
-
-    XSetForeground(display_, gc_, color_wait_);  // red bold
-    XDrawString(display_, window_, gc_, 16, 118, instruction, std::strlen(instruction));
-  }
-
   void draw_buttons() {
     draw_button(ontarget_btn_, "ONTARGET", state_.waiting_for_tcsop);
-    const char *continue_label = "CONTINUE";
-    if (state_.waiting_for_user && state_.continue_will_expose) {
-      bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
-      continue_label = has_offset ? "OFFSET & EXPOSE" : "EXPOSE";
-    }
-    draw_button(continue_btn_, continue_label, state_.waiting_for_user);
+    draw_button(continue_btn_, "CONTINUE", state_.waiting_for_user);
   }
 
   void draw_ontarget_indicator() {
@@ -749,15 +637,6 @@ class SeqProgressGui {
     XFillArc(display_, window_, gc_, 370, 150, 18, 18, 0, 360 * 64);
     XSetForeground(display_, gc_, color_text_);
     XDrawString(display_, window_, gc_, 394, 164, label, std::strlen(label));
-  }
-
-  void draw_offset_values() {
-    // Display offset values above the guiding indicator box
-    char label[64];
-    snprintf(label, sizeof(label), "Offset: RA=%.2f\" DEC=%.2f\"",
-             state_.offset_ra, state_.offset_dec);
-    XSetForeground(display_, gc_, color_text_);
-    XDrawString(display_, window_, gc_, guiding_box_.x, guiding_box_.y - 8, label, std::strlen(label));
   }
 
   void draw_guiding_indicator() {
@@ -776,13 +655,7 @@ class SeqProgressGui {
   void draw_seqstatus_indicator() {
     std::string label;
     unsigned long fill = color_pending_;
-    auto seq_tokens = split_state_tokens(state_.seqstate);
-    const bool has_ready = has_token(seq_tokens, "READY");
-    const bool has_notready = has_token(seq_tokens, "NOTREADY") || (has_token(seq_tokens, "NOT") && has_ready);
-    const bool has_running = has_token(seq_tokens, "RUNNING");
-    const bool has_paused = has_token(seq_tokens, "PAUSED");
-    const bool has_starting = has_token(seq_tokens, "STARTING");
-    const bool has_stopping = has_token(seq_tokens, "STOPPING");
+    std::string seq = to_upper_copy(state_.seqstate);
     const bool have_zmq = (zmq_sub_ != nullptr);
     const int stale_ms = have_zmq ? 5000 : (options_.poll_ms > 0 ? options_.poll_ms * 2 : 5000);
     const bool seq_stale = is_stale(last_seqstate_update_, stale_ms);
@@ -800,24 +673,24 @@ class SeqProgressGui {
     } else if (!state_.waitstate.empty()) {
       label = "WAITING";
       fill = color_wait_;
-    } else if (has_stopping) {
+    } else if (seq.find("STOPPING") != std::string::npos) {
       label = "STOPPING";
       fill = color_active_;
-    } else if (has_starting) {
+    } else if (seq.find("STARTING") != std::string::npos) {
       label = "STARTING";
       fill = color_active_;
-    } else if (has_paused) {
+    } else if (seq.find("PAUSED") != std::string::npos) {
       label = "PAUSED";
       fill = color_wait_;
-    } else if (has_running) {
+    } else if (seq.find("RUNNING") != std::string::npos) {
       label = "RUNNING";
       fill = color_active_;
-    } else if (has_notready) {
-      label = "NOTREADY";
-      fill = color_disabled_;
-    } else if (has_ready) {
+    } else if (seq.find("READY") != std::string::npos) {
       label = "READY";
       fill = color_complete_;
+    } else if (seq.find("NOTREADY") != std::string::npos) {
+      label = "NOTREADY";
+      fill = color_disabled_;
     } else {
       label = "UNKNOWN";
       fill = color_pending_;
@@ -931,50 +804,6 @@ class SeqProgressGui {
           state_.phase_complete[PHASE_OFFSET] = true;
           clear_phase_active(PHASE_OFFSET);
         }
-        if (jmessage.contains("offset_ra") && jmessage["offset_ra"].is_number()) {
-          state_.offset_ra = jmessage["offset_ra"].get<double>();
-        }
-        if (jmessage.contains("offset_dec") && jmessage["offset_dec"].is_number()) {
-          state_.offset_dec = jmessage["offset_dec"].get<double>();
-        }
-        if (jmessage.contains("acqmode") && jmessage["acqmode"].is_number()) {
-          state_.acqmode = jmessage["acqmode"].get<int>();
-        }
-        if (jmessage.contains("nexp") && jmessage["nexp"].is_number()) {
-          int new_nexp = jmessage["nexp"].get<int>();
-          if (new_nexp != state_.nexp) {
-            state_.nexp = new_nexp;
-            // Reset frame tracking when nexp changes
-            state_.current_frame = 0;
-            state_.max_frame_seen = 0;
-          }
-        }
-        if (jmessage.contains("current_frame") && jmessage["current_frame"].is_number()) {
-          int frame = jmessage["current_frame"].get<int>();
-          if (frame > state_.max_frame_seen) {
-            state_.max_frame_seen = frame;
-            state_.current_frame = frame;
-            // Keep EXPOSE phase active if more frames expected
-            if (state_.current_frame < state_.nexp) {
-              set_phase(PHASE_EXPOSE);
-            } else if (state_.current_frame >= state_.nexp) {
-              // All frames complete
-              state_.phase_complete[PHASE_EXPOSE] = true;
-              clear_phase_active(PHASE_EXPOSE);
-            }
-          }
-        }
-        if (jmessage.contains("exptime_percent") && jmessage["exptime_percent"].is_number()) {
-          int percent = jmessage["exptime_percent"].get<int>();
-          double new_progress = std::min(1.0, percent / 100.0);
-          // Smooth the percentage (exponential moving average)
-          if (state_.exposure_progress > 0.0) {
-            state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
-          } else {
-            state_.exposure_progress = new_progress;
-          }
-          set_phase(PHASE_EXPOSE);
-        }
       } else if (topic == "acamd") {
         if (jmessage.contains("ACAM_GUIDING") && jmessage["ACAM_GUIDING"].is_boolean()) {
           state_.guiding_on = jmessage["ACAM_GUIDING"].get<bool>();
@@ -1077,15 +906,6 @@ class SeqProgressGui {
       cmd_iface_.reconnect();
       return;
     }
-
-    // Poll acqmode — the no-arg response includes "current mode = N"
-    reply.clear();
-    if (cmd_iface_.send_command("acqmode", reply, 200) == 0 && !reply.empty()) {
-      auto pos = reply.find("current mode = ");
-      if (pos != std::string::npos) {
-        try { state_.acqmode = std::stoi(reply.substr(pos + 15)); } catch (...) {}
-      }
-    }
   }
 
   void poll_acam() {
@@ -1177,15 +997,7 @@ class SeqProgressGui {
       state_.seqstate = trim_copy(msg.substr(9));
       last_seqstate_update_ = std::chrono::steady_clock::now();
       auto is_ready_only = [](const std::string &s) {
-        auto tokens = split_state_tokens(s);
-        const bool has_ready = has_token(tokens, "READY");
-        const bool has_notready = has_token(tokens, "NOTREADY") || (has_token(tokens, "NOT") && has_ready);
-        if (!has_ready || has_notready) return false;
-        if (has_token(tokens, "RUNNING")) return false;
-        if (has_token(tokens, "STARTING")) return false;
-        if (has_token(tokens, "STOPPING")) return false;
-        if (has_token(tokens, "PAUSED")) return false;
-        return true;
+        return s.find("READY") != std::string::npos && s.find("RUNNING") == std::string::npos;
       };
       if (is_ready_only(state_.seqstate) && !is_ready_only(prev_state)) {
         std::string keep_state = state_.seqstate;
@@ -1194,36 +1006,6 @@ class SeqProgressGui {
       }
     } else if (starts_with_local(msg, "WAITSTATE:")) {
       handle_waitstate(trim_copy(msg.substr(10)));
-    } else if (starts_with_local(msg, "EXPTIME:")) {
-      // Parse EXPTIME:remaining total percent
-      auto parts = split_ws(msg.substr(8)); // Skip "EXPTIME:"
-      std::cerr << "DEBUG EXPTIME parsing, parts.size=" << parts.size() << "\n";
-      if (parts.size() >= 3) {
-        try {
-          int remaining_ms = std::stoi(parts[0]);
-          int total_ms = std::stoi(parts[1]);
-          int percent = std::stoi(parts[2]);
-          std::cerr << "DEBUG EXPTIME parsed: remaining=" << remaining_ms
-                    << " total=" << total_ms << " percent=" << percent << "\n";
-          if (total_ms > 0) {
-            int elapsed_ms = total_ms - remaining_ms;
-            state_.exposure_elapsed = elapsed_ms / 1000.0;
-            state_.exposure_total = total_ms / 1000.0;
-            // Smooth the percentage (exponential moving average to handle multiple cameras)
-            double new_progress = std::min(1.0, percent / 100.0);
-            if (state_.exposure_progress > 0.0) {
-              state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
-            } else {
-              state_.exposure_progress = new_progress;
-            }
-            std::cerr << "DEBUG exposure_progress now: " << state_.exposure_progress
-                      << " (from percent=" << percent << ")\n";
-            set_phase(PHASE_EXPOSE);
-          }
-        } catch (const std::exception &e) {
-          std::cerr << "DEBUG EXPTIME parse exception: " << e.what() << "\n";
-        }
-      }
     } else if (starts_with_local(msg, "ELAPSEDTIME")) {
       auto parts = split_ws(msg);
       if (parts.size() >= 2) {
@@ -1279,22 +1061,9 @@ class SeqProgressGui {
     }
     if (msg.find("NOTICE: waiting for USER") != std::string::npos) {
       state_.waiting_for_user = true;
-      // Determine what "continue" will do based on the wait message
-      if (msg.find("start acquisition") != std::string::npos) {
-        state_.continue_will_expose = false;
-      } else {
-        state_.continue_will_expose = true;
-      }
-      // Detect if this is a failure-based user wait
-      if (msg.find("guiding failed") != std::string::npos ||
-          msg.find("fine tune failed") != std::string::npos) {
-        state_.user_wait_after_failure = true;
-      }
     }
     if (msg.find("NOTICE: received continue") != std::string::npos) {
       state_.waiting_for_user = false;
-      state_.user_wait_after_failure = false;
-      state_.continue_will_expose = false;
     }
     if (msg.find("NOTICE: waiting for ACAM guiding") != std::string::npos) {
       state_.guiding_on = false;

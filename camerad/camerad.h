@@ -223,23 +223,6 @@ namespace Camera {
             applied++;
           }
 
-          // PUB_ENDPOINT
-          //
-          if (config.param[entry]=="PUB_ENDPOINT") {
-            this->publisher_address=config.arg[entry];
-            this->publisher_topic=DAEMON_NAME;
-            this->camera.async.enqueue_and_log("CAMERAD", function, "CAMERAD:config:"+config.param[entry]+"="+config.arg[entry]);
-              applied++;
-          }
-
-          // SUB_ENDPOINT
-          //
-          if (config.param[entry]=="SUB_ENDPOINT") {
-            this->subscriber_address=config.arg[entry];
-            this->camera.async.enqueue_and_log("CAMERAD", function, "CAMERAD:config:"+config.param[entry]+"="+config.arg[entry]);
-              applied++;
-          }
-
           // USERKEYS_PERSIST: should userkeys persist or be cleared after each exposure
           //
           if ( config.param[entry] == "USERKEYS_PERSIST" ) {
