@@ -876,6 +876,9 @@ namespace Sequencer {
             }
             // Apply offset if target has one, even though guiding failed
             if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              // Zero TCS offsets first so observer sees only the target offset
+              this->async.enqueue_and_log( function, "NOTICE: zeroing TCS offsets before applying target offset" );
+              error |= this->tcsd.command( TCSD_NATIVE + " z" );
               this->async.enqueue_and_log( function, "NOTICE: applying target offset" );
               this->offset_active.store(true);
               this->publish_progress();
@@ -914,6 +917,9 @@ namespace Sequencer {
             // Apply offset for both acqmode 2 and 3, regardless of fine-tune success
             // If target has offset defined, apply it before exposing
             if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              // Zero TCS offsets first so observer sees only the target offset
+              this->async.enqueue_and_log( function, "NOTICE: zeroing TCS offsets before applying target offset" );
+              error |= this->tcsd.command( TCSD_NATIVE + " z" );
               std::string mode_str = (this->acq_automatic_mode == 3 && fine_tune_ok) ? "automatically " : "";
               this->async.enqueue_and_log( function, "NOTICE: applying target offset " + mode_str );
               this->offset_active.store(true);
