@@ -1534,6 +1534,7 @@ namespace Sequencer {
                         this->sequence.acq_automatic_mode = mode;
                         message.str(""); message << "NOTICE: acqmode set to " << mode;
                         this->sequence.async.enqueue_and_log( function, message.str() );
+                        this->sequence.publish_progress();  // push updated acqmode to seq-progress GUI
                         retstring = std::to_string( mode );
                         ret = NO_ERROR;
                       }
