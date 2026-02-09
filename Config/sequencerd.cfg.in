@@ -36,7 +36,7 @@ FITERD_PORT=@FILTERD_BLK_PORT@
 # Since sequencerd is run as user=dataowner, the script entered here
 # needs to be the actual script run as dataowner, not the wrapper.
 #
-DAEMON_CONTROL_SCRIPT=/Users/cfremling/Projects/NGPS_codebase/NGPS/run/_ngps
+DAEMON_CONTROL_SCRIPT=/home/developer/Software/run/_ngps
 
 # Camera prologue
 #
@@ -107,7 +107,7 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITW_ACQUIRE=0.4   # slit width during acquire
 VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
 VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
@@ -145,7 +145,7 @@ DB_SETS=target_sets                  # table of target sets
 
 # TCS-related configuration
 #
-TCS_WHICH=sim                        # override which TCS to connect to {real sim} - defaults to real
+TCS_WHICH=real                       # override which TCS to connect to {real sim} - defaults to real
 TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcsec per second
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
 TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
@@ -155,43 +155,40 @@ TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify 
 
 # ACAM Target acquisition
 #
-ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
+ACQUIRE_TIMEOUT=120                  # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
 ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 ACQ_AUTOMATIC_MODE=1                 # 1=legacy, 2=semi-auto, 3=auto
 ACQ_FINE_TUNE_CMD=ngps_acq           # command to run after guiding for final fine tune
-ACQ_FINE_TUNE_XTERM=0                # run fine tune in xterm (0/1)
-ACQ_OFFSET_SETTLE=0                  # seconds to wait after automatic offset
-SIM_TARGET_PERTURB_ARCSEC=30         # random RA/DEC perturbation max applied when reading target coords (arcsec)
-SIM_TARGET_PERTURB_MIN_ARCSEC=0      # optional minimum perturbation radius (arcsec)
-# SIM_TARGET_PERTURB_SEED=12345      # optional seed for deterministic perturbations (0=random)
-SIM_POST_SLEW_TARGET_ARCSEC=3        # random RA/DEC perturbation max applied after ontarget (arcsec)
-SIM_POST_SLEW_TARGET_MIN_ARCSEC=0    # optional minimum perturbation radius (arcsec)
-# SIM_POST_SLEW_TARGET_SEED=12345    # optional seed for deterministic perturbations (0=random)
+ACQ_FINE_TUNE_LOG=1                  # log fine tune output to /data/<datedir>/logs/ngps_acq_<datedir>.log (0/1)
+ACQ_OFFSET_SETTLE=3                  # seconds to wait after automatic offset
 
 # Calibration Settings
-# CAL_TARGET=(name caldoor calcover lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
+# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
 #
 # where name must be "DEFAULT" or start with "CAL_"
 #       caldoor  = open | close
 #       calcover = open | close
-#       lamp* = on | off
-#       mod*  = on | off
-# for a total of 15 required parameters
+#       U,G,R,I = on | off        # indicates which channels to enable/disable
+#       lamp* = on | off          # lamp power
+#       mod*  = on | off          # lamp modulator
+# for a total of 19 required parameters
 # name=SCIENCE defines science target operation
 #
-#           name        door  cover thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6
-CAL_TARGET=(CAL_THAR    open  close on   off  off  off  off  off  off  off  off  off  off  on )
-CAL_TARGET=(CAL_FEAR    open  close off  on   off  off  off  off  on   off  off  off  off  off)
-CAL_TARGET=(CAL_REDCONT open  close off  off  off  on   off  off  off  off  off  on   off  off)
-CAL_TARGET=(CAL_BLUCONT open  close off  off  on   off  off  off  off  off  off  off  on   off)
-CAL_TARGET=(CAL_ETALON  open  close off  off  off  on   off  off  off  off  on   off  off  off)
-CAL_TARGET=(CAL_DOME    close open  off  off  off  off  off  on   off  off  off  off  off  off)
-CAL_TARGET=(CAL_BIAS    close close off  off  off  off  off  off  off  off  off  off  off  off)
-CAL_TARGET=(CAL_DARK    close close off  off  off  off  off  off  off  off  off  off  off  off)
-CAL_TARGET=(SCIENCE     close open  off  off  off  off  off  off  off  off  off  off  off  off)
+#           name        door  cover U   G   R   I   thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6
+CAL_TARGET=(CAL_THAR    open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on )
+CAL_TARGET=(CAL_FEAR    open  close on  on  on  on  on   on   on   on   off  off  on   off  off  off  off  off)
+CAL_TARGET=(CAL_THAR_UG open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  on )
+CAL_TARGET=(CAL_FEAR_UG open  close on  on  off off on   on   on   on   off  off  on   off  off  off  off  off)
+CAL_TARGET=(CAL_CONTR   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  on   off  off)
+CAL_TARGET=(CAL_CONTB   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  on   off)
+CAL_TARGET=(CAL_DOME    close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off)
+CAL_TARGET=(CAL_DOME_UG close open  on  on  off off off  off  off  off  off  on   off  off  off  off  off  off)
+CAL_TARGET=(CAL_BIAS    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
+CAL_TARGET=(CAL_DARK    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
+CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
 
 # miscellaneous
 #

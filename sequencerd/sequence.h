@@ -15,7 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
-#include <cstdint>
+#include <sys/types.h>
 #include <map>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
@@ -290,10 +290,7 @@ namespace Sequencer {
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
       std::atomic<pid_t> fine_tune_pid{0};       ///< fine tune process pid (process group leader)
-      std::atomic<bool> progress_ontarget{false};
-      std::atomic<bool> progress_fine_tune{false};
-      std::atomic<bool> progress_offset{false};
-      std::atomic<bool> progress_offset_settle{false};
+      std::atomic<bool> offset_active{false};    ///< tracks offset operation in progress
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -322,7 +319,7 @@ namespace Sequencer {
           acquisition_max_retrys(-1),
           acq_automatic_mode(1),
           acq_fine_tune_cmd("ngps_acq"),
-          acq_fine_tune_xterm(false),
+          acq_fine_tune_log(false),
           acq_offset_settle(0),
           tcs_offsetrate_ra(45),
           tcs_offsetrate_dec(45),
@@ -357,8 +354,6 @@ namespace Sequencer {
       inline void ontarget() {
         this->cancel_flag.store(false);
         this->is_ontarget.store(true);
-        this->progress_ontarget.store(true);
-        this->publish_progress("ontarget");
         this->cv.notify_all();
       }
       void reset_ontarget() {
@@ -385,7 +380,7 @@ namespace Sequencer {
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       int acq_automatic_mode;     ///< acquisition automation mode (1=legacy, 2=semi-auto, 3=auto)
       std::string acq_fine_tune_cmd; ///< fine-tune command to run after guiding
-      bool acq_fine_tune_xterm;   ///< run fine-tune command in its own xterm
+      bool acq_fine_tune_log;     ///< log fine-tune output to /tmp/ngps_acq.log
       double acq_offset_settle;   ///< seconds to wait after automatic offset
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
@@ -472,7 +467,7 @@ namespace Sequencer {
       void publish_waitstate();
       void publish_daemonstate();
       void publish_threadstate();
-      void publish_progress(const std::string &event="");
+      void publish_progress();
 
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint

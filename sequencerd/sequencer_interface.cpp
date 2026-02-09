@@ -7,12 +7,6 @@
 
 #include "sequencer_interface.h"
 
-#include <cmath>
-#include <iomanip>
-#include <random>
-
-#include "utilities.h"
-
 namespace Sequencer {
 
 
@@ -60,10 +54,6 @@ namespace Sequencer {
     this->name.clear();
     this->ra_hms.clear();
     this->dec_dms.clear();
-    this->sim_target_ra_hms_true.clear();
-    this->sim_target_dec_dms_true.clear();
-    this->sim_target_has_true = false;
-    this->sim_post_slew_applied = false;
     this->slitangle=NAN;
     this->casangle=NAN;
     this->pointmode.clear();
@@ -615,7 +605,6 @@ namespace Sequencer {
    *
    */
   long TargetInfo::parse_target_from_row( const mysqlx::Row &row ) {
-    const std::string function = "Sequencer::TargetInfo::parse_target_from_row";
     try {
       // To get the value of a field, call extract_column_from_row<T>( FIELD, row, [default] )
       // Call it with the explicit template instantiation type <T> to match the data type of
@@ -645,66 +634,8 @@ namespace Sequencer {
       this->sequencenum    = extract_column_from_row<long>( "SEQUENCE_NUMBER", row );
       this->ra_hms         = extract_column_from_row<mysqlx::string>( "RA", row );
       this->dec_dms        = extract_column_from_row<mysqlx::string>( "DECL", row );
-      this->sim_target_ra_hms_true = this->ra_hms;
-      this->sim_target_dec_dms_true = this->dec_dms;
-      this->sim_target_has_true = (!this->ra_hms.empty() && !this->dec_dms.empty());
-      this->sim_post_slew_applied = false;
       this->offset_ra      = extract_column_from_row<double>( "OFFSET_RA", row );
       this->offset_dec     = extract_column_from_row<double>( "OFFSET_DEC", row );
-
-      if ( this->sim_target_perturb_arcsec > 0.0 && !this->ra_hms.empty() && !this->dec_dms.empty() ) {
-        double ra_h = radec_to_decimal( this->ra_hms );
-        double dec_d = radec_to_decimal( this->dec_dms );
-
-        if ( !std::isnan( ra_h ) && !std::isnan( dec_d ) ) {
-          std::uint64_t seq = this->sim_target_perturb_counter.fetch_add(1) + 1;
-          std::mt19937_64 rng;
-          if ( this->sim_target_perturb_seed != 0 ) {
-            rng.seed( this->sim_target_perturb_seed + seq );
-          }
-          else {
-            std::random_device rd;
-            rng.seed( (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd()) );
-          }
-
-          std::uniform_real_distribution<double> angdist( 0.0, 2.0 * std::acos(-1.0) );
-          double rmin = std::max( 0.0, this->sim_target_perturb_min_arcsec );
-          double rmax = this->sim_target_perturb_arcsec;
-          if ( rmax < rmin ) rmin = 0.0;
-          std::uniform_real_distribution<double> rdist( rmin, rmax );
-          double radius = rdist( rng );
-          double theta = angdist( rng );
-          double dra_arcsec = radius * std::cos( theta );
-          double ddec_arcsec = radius * std::sin( theta );
-          double cosdec = std::cos( dec_d * std::acos(-1.0) / 180.0 );
-          if ( std::abs( cosdec ) < 1e-6 ) cosdec = 1e-6;
-
-          double ra_deg = ra_h * 15.0;
-          ra_deg += ( dra_arcsec / 3600.0 ) / cosdec;
-          double dec_deg = dec_d + ( ddec_arcsec / 3600.0 );
-
-          ra_deg = std::fmod( ra_deg, 360.0 );
-          if ( ra_deg < 0.0 ) ra_deg += 360.0;
-          double ra_h_new = ra_deg / 15.0;
-
-          std::string ra_hms_new;
-          std::string dec_dms_new;
-          decimal_to_sexa( ra_h_new, ra_hms_new );
-          decimal_to_sexa( dec_deg, dec_dms_new );
-          if ( !ra_hms_new.empty() && ra_hms_new[0] == '+' ) ra_hms_new.erase(0, 1);
-
-          this->ra_hms = ra_hms_new;
-          this->dec_dms = dec_dms_new;
-
-          std::stringstream message;
-          message << "NOTICE: sim target perturb (pre-slew) dRA=" << std::fixed << std::setprecision(3) << dra_arcsec
-                  << " dDEC=" << ddec_arcsec << " arcsec";
-          logwrite( function, message.str() );
-        }
-        else {
-          logwrite( function, "WARNING: sim target perturb skipped due to NaN RA/DEC" );
-        }
-      }
 
       this->casangle       = extract_column_from_row<double>( "OTMcass", row );
       this->slitangle      = extract_column_from_row<double>( "OTMslitangle", row );
@@ -732,80 +663,13 @@ namespace Sequencer {
 //    this->airmasslimit = extract_column_from_row<double>( "AIRMASS_MAX", row, 99.0 );
     }
     catch ( const std::runtime_error &e ) {
-      logwrite( function, "ERROR: "+std::string(e.what()) );
+      logwrite( "Sequencer::TargetInfo::parse_target_from_row", "ERROR: "+std::string(e.what()) );
       return ERROR;
     }
 
     return NO_ERROR;
   }
   /***** Sequencer::TargetInfo::parse_target_from_row *************************/
-
-
-  /***** Sequencer::TargetInfo::apply_sim_post_slew_adjust ********************/
-  /**
-   * @brief      adjust target coords after ontarget to true coords plus a small perturbation
-   */
-  void TargetInfo::apply_sim_post_slew_adjust() {
-    const std::string function = "Sequencer::TargetInfo::apply_sim_post_slew_adjust";
-
-    if ( this->sim_post_slew_applied ) return;
-    if ( this->sim_post_slew_target_arcsec <= 0.0 ) return;
-    if ( !this->sim_target_has_true ) return;
-
-    double ra_h = radec_to_decimal( this->sim_target_ra_hms_true );
-    double dec_d = radec_to_decimal( this->sim_target_dec_dms_true );
-
-    if ( std::isnan( ra_h ) || std::isnan( dec_d ) ) {
-      logwrite( function, "WARNING: post-slew adjust skipped due to NaN RA/DEC" );
-      return;
-    }
-
-    std::uint64_t seq = this->sim_post_slew_target_counter.fetch_add(1) + 1;
-    std::mt19937_64 rng;
-    if ( this->sim_post_slew_target_seed != 0 ) {
-      rng.seed( this->sim_post_slew_target_seed + seq );
-    }
-    else {
-      std::random_device rd;
-      rng.seed( (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd()) );
-    }
-
-    std::uniform_real_distribution<double> angdist( 0.0, 2.0 * std::acos(-1.0) );
-    double rmin = std::max( 0.0, this->sim_post_slew_target_min_arcsec );
-    double rmax = this->sim_post_slew_target_arcsec;
-    if ( rmax < rmin ) rmin = 0.0;
-    std::uniform_real_distribution<double> rdist( rmin, rmax );
-    double radius = rdist( rng );
-    double theta = angdist( rng );
-    double dra_arcsec = radius * std::cos( theta );
-    double ddec_arcsec = radius * std::sin( theta );
-    double cosdec = std::cos( dec_d * std::acos(-1.0) / 180.0 );
-    if ( std::abs( cosdec ) < 1e-6 ) cosdec = 1e-6;
-
-    double ra_deg = ra_h * 15.0;
-    ra_deg += ( dra_arcsec / 3600.0 ) / cosdec;
-    double dec_deg = dec_d + ( ddec_arcsec / 3600.0 );
-
-    ra_deg = std::fmod( ra_deg, 360.0 );
-    if ( ra_deg < 0.0 ) ra_deg += 360.0;
-    double ra_h_new = ra_deg / 15.0;
-
-    std::string ra_hms_new;
-    std::string dec_dms_new;
-    decimal_to_sexa( ra_h_new, ra_hms_new );
-    decimal_to_sexa( dec_deg, dec_dms_new );
-    if ( !ra_hms_new.empty() && ra_hms_new[0] == '+' ) ra_hms_new.erase(0, 1);
-
-    this->ra_hms = ra_hms_new;
-    this->dec_dms = dec_dms_new;
-    this->sim_post_slew_applied = true;
-
-    std::stringstream message;
-    message << "NOTICE: sim target adjust (post-slew) dRA=" << std::fixed << std::setprecision(3) << dra_arcsec
-            << " dDEC=" << ddec_arcsec << " arcsec";
-    logwrite( function, message.str() );
-  }
-  /***** Sequencer::TargetInfo::apply_sim_post_slew_adjust ********************/
 
 
   /***** Sequencer::TargetInfo::target_qc_check *******************************/
@@ -825,7 +689,7 @@ namespace Sequencer {
     //
     if ( (   this->ra_hms.empty() && ! this->dec_dms.empty() ) ||
          ( ! this->ra_hms.empty() &&   this->dec_dms.empty() ) ) {
-      message.str(""); message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
+      message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
       status = message.str();
       logwrite( function, message.str() );
       return ERROR;
@@ -836,7 +700,7 @@ namespace Sequencer {
     if ( ! this->ra_hms.empty() ) {
       double _rah = radec_to_decimal( this->ra_hms );  // convert RA from HH:MM:SS.s to decimal hours
       if ( _rah < 0 ) {
-        message.str(""); message << "ERROR cannot have negative RA " << this->ra_hms;
+        message << "ERROR cannot have negative RA " << this->ra_hms;
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -848,7 +712,7 @@ namespace Sequencer {
     if ( ! this->dec_dms.empty() ) {
       double _dec = radec_to_decimal( this->dec_dms );  // convert DEC from DD:MM:SS.s to decimal degrees
       if ( _dec < -90.0 || _dec > 90.0 ) {
-        message.str(""); message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
+        message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -863,13 +727,17 @@ namespace Sequencer {
     else {
       if ( ! caseCompareString( this->pointmode, Acam::POINTMODE_ACAM ) &&
            ! caseCompareString( this->pointmode, Acam::POINTMODE_SLIT ) ) {
-        message.str(""); message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
-                                 << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
+        message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
+                << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
       }
     }
+
+    // number of exposures must be >= 1
+    //
+    if (this->nexp <= 0) this->nexp=1;
 
     return NO_ERROR;
   }
@@ -1075,15 +943,26 @@ namespace Sequencer {
    */
   long CalibrationTarget::configure( const std::string &args ) {
     const std::string function("Sequencer::CalibrationTarget::configure");
-    std::stringstream message;
     std::vector<std::string> tokens;
+
+    // helpers
+    auto on_off = [](const std::string &s) {
+      if (s=="on")  return true;
+      if (s=="off") return false;
+      throw std::runtime_error("expected on|off but got '"+s+"'");
+    };
+    auto open_close = [](const std::string &s) {
+      if (s=="open")  return true;
+      if (s=="close") return false;
+      throw std::runtime_error("expected open|close but got '"+s+"'");
+    };
 
     auto size = Tokenize( args, tokens, " \t" );
 
-    // there must be 15 args. see cfg file for complete description
-    if ( size != 15 ) {
-      message << "ERROR expected 15 but received " << size << " parameters";
-      logwrite( function, message.str() );
+    // there must be 19 args. see cfg file for complete description
+    if ( size != 19 ) {
+      logwrite(function, "ERROR bad config file. expected 19 but received "
+                         +std::to_string(size)+" parameters");
       return ERROR;
     }
 
@@ -1092,64 +971,43 @@ namespace Sequencer {
     std::string name(tokens[0]);
     if ( name.empty() || ( name != "SCIENCE" &&
                            name.compare(0, 4, "CAL_") !=0 ) ) {
-      message << "ERROR invalid calibration target name \"" << name << "\": must be \"SCIENCE\" or start with \"CAL_\" ";
+      logwrite(function, "ERROR invalid calibration target name '"+name
+                         +"': must be 'SCIENCE' or start with 'CAL_' ");
       return ERROR;
     }
-    this->calmap[name].name = name;
 
-    // token[1] = caldoor
-    if ( tokens[1].empty() ||
-         ( tokens[1].find("open")==std::string::npos && tokens[1].find("close") ) ) {
-      message << "ERROR invalid caldoor \"" << tokens[1] << "\": expected {open|close}";
+    // create map and get a reference to use for the remaining values
+    calinfo_t &info = this->calmap[name];
+    info.name = name;
+
+    try {
+      // tokens 1-2 are caldoor and calcover
+      info.caldoor = open_close(tokens.at(1));
+      info.calcover = open_close(tokens.at(2));
+
+      // tokens 3-6 are the channel active states, indexed by channel name
+      for (size_t i=0; i < 4; i++) {
+        info.channel_active[chans.at(i)] = on_off(tokens.at(3+i));
+      }
+
+      // tokens 7-10 are lamp states LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
+      for (size_t i=0; i < 4; i++) {
+        info.lamp[lampnames.at(i)] = on_off(tokens.at(7+i));
+      }
+
+      // tokens 11-12 are dome lamps
+      for (size_t i=0; i < 2; i++) {
+        info.domelamp[i] = on_off(tokens.at(11+i));
+      }
+
+      // tokens 13-19
+      for (size_t i=0; i<6; i++) {
+        info.lampmod[i] = on_off(tokens.at(13+i));
+      }
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
       return ERROR;
-    }
-    this->calmap[name].caldoor = (tokens.at(1).find("open")==0);
-
-    // token[2] = calcover
-    if ( tokens[2].empty() ||
-         ( tokens[2].find("open")==std::string::npos && tokens[2].find("close") ) ) {
-      message << "ERROR invalid calcover \"" << tokens[2] << "\": expected {open|close}";
-      return ERROR;
-    }
-    this->calmap[name].calcover = (tokens.at(2).find("open")==0);
-
-    // tokens[3:6] = LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
-    int n=3;  // incremental token counter used for the following groups
-    for ( const auto &lamp : this->lampnames ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for " << lamp << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].lamp[lamp] = (tokens[n].find("on")==0);
-      n++;
-    }
-
-    // tokens[7:8] = domelamps
-    // i indexes domelampnames vector {0,1}
-    // j indexes domelamp map {1,2}
-    for ( int i=0,j=1; j<=2; i++,j++ ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for " << domelampnames[i] << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].domelamp[j] = (tokens[n].find("on")==0);
-      n++;
-    }
-
-    // tokens[0:14] = lampmod{1:6}
-    for ( int i=1; i<=6; i++ ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for lampmod" << n << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].lampmod[i] = (tokens[n].find("on")==0);
-      n++;
     }
 
     return NO_ERROR;

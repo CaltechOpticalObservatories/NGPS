@@ -10,8 +10,6 @@
 #include <map>
 #include <string>
 #include <atomic>
-#include <cstdint>
-#include <type_traits>
 #include "skyinfo.h"
 
 #include "network.h"
@@ -134,12 +132,14 @@ namespace Sequencer {
   class CalibrationTarget {
     public:
       CalibrationTarget() :
+        chans { "U", "G", "R", "I" },
         lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
         domelampnames { "LOLAMP", "HILAMP" } { }
 
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
         std::string name;                  // calibration target name
+        std::map<std::string, bool> channel_active;  // true=on
         bool caldoor;                      // true=open
         bool calcover;                     // true=open
         std::map<std::string, bool> lamp;  // true=on
@@ -154,14 +154,17 @@ namespace Sequencer {
       const std::unordered_map<std::string, calinfo_t> &getmap() const { return calmap; };
 
       ///< returns just the map contents for specified targetname key
-      const calinfo_t* get_info( const std::string &_name ) const {
+      const calinfo_t &get_info( const std::string &_name ) const {
         auto it = calmap.find(_name);
-        if ( it != calmap.end() ) return &it->second;
-        return nullptr;
+        if ( it == calmap.end() ) {
+          throw std::runtime_error("calinfo not found for: "+_name);
+        }
+        return it->second;
       }
 
     private:
       std::unordered_map<std::string, calinfo_t> calmap;
+      std::vector<std::string> chans;
       std::vector<std::string> lampnames;
       std::vector<std::string> domelampnames;
   };
@@ -218,35 +221,11 @@ namespace Sequencer {
                                        "AIRMASS_MAX" },
                      targetset_cols  { "SET_ID",
                                        "SET_NAME" },
-                     offset_threshold(0), max_tcs_offset(0),
-                     sim_target_has_true(false),
-                     sim_target_perturb_arcsec(0.0),
-                     sim_target_perturb_min_arcsec(0.0),
-                     sim_target_perturb_seed(0),
-                     sim_target_perturb_counter(0),
-                     sim_post_slew_target_arcsec(0.0),
-                     sim_post_slew_target_min_arcsec(0.0),
-                     sim_post_slew_target_seed(0),
-                     sim_post_slew_target_counter(0),
-                     sim_post_slew_applied(false) { init_record(); }
+                     offset_threshold(0), max_tcs_offset(0) { init_record(); }
 
       std::unique_ptr<Database::Database> database;
 
       SkyInfo::FPOffsets fpoffsets;       ///< for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
-      std::string sim_target_ra_hms_true;  ///< unperturbed target RA (from DB)
-      std::string sim_target_dec_dms_true; ///< unperturbed target DEC (from DB)
-      bool sim_target_has_true;            ///< true if unperturbed coords are available
-      double sim_target_perturb_arcsec;    ///< random RA/DEC perturbation max applied when targets are read (arcsec)
-      double sim_target_perturb_min_arcsec; ///< optional minimum perturbation radius (arcsec)
-      std::uint64_t sim_target_perturb_seed; ///< optional seed for perturbations (0=random)
-      std::atomic<std::uint64_t> sim_target_perturb_counter; ///< sequence counter for deterministic seeds
-      double sim_post_slew_target_arcsec;   ///< random RA/DEC perturbation max applied after ontarget (arcsec)
-      double sim_post_slew_target_min_arcsec; ///< optional minimum perturbation radius (arcsec)
-      std::uint64_t sim_post_slew_target_seed; ///< optional seed for post-slew perturbations (0=random)
-      std::atomic<std::uint64_t> sim_post_slew_target_counter; ///< sequence counter for post-slew seeds
-      bool sim_post_slew_applied;          ///< true once post-slew adjust applied for current target
-
-      void apply_sim_post_slew_adjust();
 
       /***** Sequencer::TargetInfo::extract_column_from_row *******************/
       /**
@@ -271,9 +250,7 @@ namespace Sequencer {
           // field is not empty
           //
           if ( !row[col].isNull() ) {
-            using DbT = std::conditional_t<std::is_same_v<T, long>, int64_t,
-                         std::conditional_t<std::is_same_v<T, unsigned long>, uint64_t, T>>;
-            DbT value = row.get(col).get<DbT>();                          // extract the value from the field
+            T value = row.get(col).get<T>();                              // extract the value from the field
 
             // if this is a string, find and replace emdash with minus sign
             if constexpr (std::is_same_v<T,std::string> || std::is_same_v<T,mysqlx::string>) {
@@ -282,7 +259,7 @@ namespace Sequencer {
               if (pos != std::string::npos) svalue.replace(pos, 3, "-");  // replace with ASCII minus sign
               return static_cast<T>(svalue);
             }
-            return static_cast<T>(value);
+            return value;
           }
 
           // If the field is empty and a default value was specified,
