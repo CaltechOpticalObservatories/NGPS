@@ -563,6 +563,10 @@ namespace Network {
       return(-1);
     }
 
+    // prevent child processes from inheriting the listening socket
+    //
+    fcntl(this->listenfd, F_SETFD, FD_CLOEXEC);
+
     // allow re-binding to port while previous connection is in TIME_WAIT
     //
     int on=1;
