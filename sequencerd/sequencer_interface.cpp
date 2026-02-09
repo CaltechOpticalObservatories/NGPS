@@ -825,7 +825,7 @@ namespace Sequencer {
     //
     if ( (   this->ra_hms.empty() && ! this->dec_dms.empty() ) ||
          ( ! this->ra_hms.empty() &&   this->dec_dms.empty() ) ) {
-      message.str(""); message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
+      message << "ERROR cannot have only RA or only DEC empty. both must be empty or filled";
       status = message.str();
       logwrite( function, message.str() );
       return ERROR;
@@ -836,7 +836,7 @@ namespace Sequencer {
     if ( ! this->ra_hms.empty() ) {
       double _rah = radec_to_decimal( this->ra_hms );  // convert RA from HH:MM:SS.s to decimal hours
       if ( _rah < 0 ) {
-        message.str(""); message << "ERROR cannot have negative RA " << this->ra_hms;
+        message << "ERROR cannot have negative RA " << this->ra_hms;
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -848,7 +848,7 @@ namespace Sequencer {
     if ( ! this->dec_dms.empty() ) {
       double _dec = radec_to_decimal( this->dec_dms );  // convert DEC from DD:MM:SS.s to decimal degrees
       if ( _dec < -90.0 || _dec > 90.0 ) {
-        message.str(""); message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
+        message << "ERROR declination " << this->dec_dms << " outside range {-90:+90}";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
@@ -863,13 +863,17 @@ namespace Sequencer {
     else {
       if ( ! caseCompareString( this->pointmode, Acam::POINTMODE_ACAM ) &&
            ! caseCompareString( this->pointmode, Acam::POINTMODE_SLIT ) ) {
-        message.str(""); message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
-                                 << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
+        message << "ERROR invalid pointmode \"" << this->pointmode << "\": must be { <empty> "
+                << Acam::POINTMODE_ACAM << " " << Acam::POINTMODE_SLIT << " }";
         status = message.str();
         logwrite( function, message.str() );
         return ERROR;
       }
     }
+
+    // number of exposures must be >= 1
+    //
+    if (this->nexp <= 0) this->nexp=1;
 
     return NO_ERROR;
   }
@@ -1075,15 +1079,26 @@ namespace Sequencer {
    */
   long CalibrationTarget::configure( const std::string &args ) {
     const std::string function("Sequencer::CalibrationTarget::configure");
-    std::stringstream message;
     std::vector<std::string> tokens;
+
+    // helpers
+    auto on_off = [](const std::string &s) {
+      if (s=="on")  return true;
+      if (s=="off") return false;
+      throw std::runtime_error("expected on|off but got '"+s+"'");
+    };
+    auto open_close = [](const std::string &s) {
+      if (s=="open")  return true;
+      if (s=="close") return false;
+      throw std::runtime_error("expected open|close but got '"+s+"'");
+    };
 
     auto size = Tokenize( args, tokens, " \t" );
 
-    // there must be 15 args. see cfg file for complete description
-    if ( size != 15 ) {
-      message << "ERROR expected 15 but received " << size << " parameters";
-      logwrite( function, message.str() );
+    // there must be 19 args. see cfg file for complete description
+    if ( size != 19 ) {
+      logwrite(function, "ERROR bad config file. expected 19 but received "
+                         +std::to_string(size)+" parameters");
       return ERROR;
     }
 
@@ -1092,64 +1107,43 @@ namespace Sequencer {
     std::string name(tokens[0]);
     if ( name.empty() || ( name != "SCIENCE" &&
                            name.compare(0, 4, "CAL_") !=0 ) ) {
-      message << "ERROR invalid calibration target name \"" << name << "\": must be \"SCIENCE\" or start with \"CAL_\" ";
+      logwrite(function, "ERROR invalid calibration target name '"+name
+                         +"': must be 'SCIENCE' or start with 'CAL_' ");
       return ERROR;
     }
-    this->calmap[name].name = name;
 
-    // token[1] = caldoor
-    if ( tokens[1].empty() ||
-         ( tokens[1].find("open")==std::string::npos && tokens[1].find("close") ) ) {
-      message << "ERROR invalid caldoor \"" << tokens[1] << "\": expected {open|close}";
+    // create map and get a reference to use for the remaining values
+    calinfo_t &info = this->calmap[name];
+    info.name = name;
+
+    try {
+      // tokens 1-2 are caldoor and calcover
+      info.caldoor = open_close(tokens.at(1));
+      info.calcover = open_close(tokens.at(2));
+
+      // tokens 3-6 are the channel active states, indexed by channel name
+      for (size_t i=0; i < 4; i++) {
+        info.channel_active[chans.at(i)] = on_off(tokens.at(3+i));
+      }
+
+      // tokens 7-10 are lamp states LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
+      for (size_t i=0; i < 4; i++) {
+        info.lamp[lampnames.at(i)] = on_off(tokens.at(7+i));
+      }
+
+      // tokens 11-12 are dome lamps
+      for (size_t i=0; i < 2; i++) {
+        info.domelamp[i] = on_off(tokens.at(11+i));
+      }
+
+      // tokens 13-19
+      for (size_t i=0; i<6; i++) {
+        info.lampmod[i] = on_off(tokens.at(13+i));
+      }
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
       return ERROR;
-    }
-    this->calmap[name].caldoor = (tokens.at(1).find("open")==0);
-
-    // token[2] = calcover
-    if ( tokens[2].empty() ||
-         ( tokens[2].find("open")==std::string::npos && tokens[2].find("close") ) ) {
-      message << "ERROR invalid calcover \"" << tokens[2] << "\": expected {open|close}";
-      return ERROR;
-    }
-    this->calmap[name].calcover = (tokens.at(2).find("open")==0);
-
-    // tokens[3:6] = LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
-    int n=3;  // incremental token counter used for the following groups
-    for ( const auto &lamp : this->lampnames ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for " << lamp << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].lamp[lamp] = (tokens[n].find("on")==0);
-      n++;
-    }
-
-    // tokens[7:8] = domelamps
-    // i indexes domelampnames vector {0,1}
-    // j indexes domelamp map {1,2}
-    for ( int i=0,j=1; j<=2; i++,j++ ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for " << domelampnames[i] << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].domelamp[j] = (tokens[n].find("on")==0);
-      n++;
-    }
-
-    // tokens[0:14] = lampmod{1:6}
-    for ( int i=1; i<=6; i++ ) {
-      if ( tokens[n].empty() ||
-           ( tokens[n].find("on")==std::string::npos && tokens[n].find("off")==std::string::npos ) ) {
-        message << "ERROR invalid state \"" << tokens[n] << "\" for lampmod" << n << ": expected {on|off}";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-      this->calmap[name].lampmod[i] = (tokens[n].find("on")==0);
-      n++;
     }
 
     return NO_ERROR;

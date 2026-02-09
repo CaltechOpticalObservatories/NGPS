@@ -178,6 +178,14 @@ int main(int argc, char **argv) {
     server.exit_cleanly();
   }
 
+  if (server.init_pubsub()==ERROR) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    server.exit_cleanly();
+  }
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  server.publish_snapshot();
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.
@@ -598,6 +606,18 @@ void doit(Network::TcpSocket &sock) {
                     }
 #ifdef ASTROCAM
     else
+    if ( cmd == CAMERAD_ACTIVATE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::Activate);
+                    }
+    else
+    if ( cmd == CAMERAD_DEACTIVATE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::DeActivate);
+                    }
+    else
+    if ( cmd == CAMERAD_ISACTIVE ) {
+                    ret=server.camera_active_state(args, retstring, AstroCam::ActiveState::Query);
+                    }
+    else
     if ( cmd == CAMERAD_MODEXPTIME ) {
                     ret = server.modify_exptime(args, retstring);
                     }
@@ -769,6 +789,21 @@ void doit(Network::TcpSocket &sock) {
     if ( cmd == CAMERAD_TEST ) {
                     ret = server.test(args, retstring);
                     }
+    else
+    if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
+                    if ( args=="?" || args=="help" ) {
+                      retstring=TELEMREQUEST+"\n";
+                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
+                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
+                      ret=HELP;
+                    }
+                    else {
+                      server.publish_snapshot( &retstring );
+                      if (retstring.empty()) retstring="(empty)";
+                      ret = JSON;
+                    }
+    }
+
     // Unknown commands generate an error
     //
     else {
