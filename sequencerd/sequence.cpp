@@ -216,6 +216,9 @@ namespace Sequencer {
     // Number of exposures for this target
     jmessage_out["nexp"] = this->target.nexp;
 
+    // Current acquisition mode
+    jmessage_out["acqmode"] = this->acq_automatic_mode;
+
     try {
       this->publisher->publish( jmessage_out, "seq_progress" );
     }

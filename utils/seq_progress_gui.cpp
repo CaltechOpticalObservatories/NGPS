@@ -92,6 +92,7 @@ struct SequenceState {
   double offset_ra = 0.0;
   double offset_dec = 0.0;
   int nexp = 1;
+  int acqmode = 1;
   int current_frame = 0;
   int max_frame_seen = 0;
 
@@ -572,6 +573,7 @@ class SeqProgressGui {
     XFillRectangle(display_, window_, gc_, 0, 0, kWinW, kWinH);
 
     draw_title();
+    draw_acqmode_indicator();
     draw_bar();
     draw_labels();
     draw_user_instruction();
@@ -588,6 +590,19 @@ class SeqProgressGui {
     XSetForeground(display_, gc_, color_text_);
     const char *title = "Observation Sequence Progress";
     XDrawString(display_, window_, gc_, 16, 24, title, std::strlen(title));
+  }
+
+  void draw_acqmode_indicator() {
+    const char *label;
+    switch (state_.acqmode) {
+      case 2:  label = "ACQMODE: 2 SEMI-AUTO"; break;
+      case 3:  label = "ACQMODE: 3 AUTO";      break;
+      default: label = "ACQMODE: 1 MANUAL";    break;
+    }
+    int len = std::strlen(label);
+    int text_width = XTextWidth(XQueryFont(display_, XGContextFromGC(gc_)), label, len);
+    XSetForeground(display_, gc_, color_text_);
+    XDrawString(display_, window_, gc_, kWinW - text_width - 16, 24, label, len);
   }
 
   void draw_bar() {
@@ -922,6 +937,9 @@ class SeqProgressGui {
         if (jmessage.contains("offset_dec") && jmessage["offset_dec"].is_number()) {
           state_.offset_dec = jmessage["offset_dec"].get<double>();
         }
+        if (jmessage.contains("acqmode") && jmessage["acqmode"].is_number()) {
+          state_.acqmode = jmessage["acqmode"].get<int>();
+        }
         if (jmessage.contains("nexp") && jmessage["nexp"].is_number()) {
           int new_nexp = jmessage["nexp"].get<int>();
           if (new_nexp != state_.nexp) {
@@ -1058,6 +1076,15 @@ class SeqProgressGui {
     if (cmd_iface_.send_command("wstate") != 0 && !cmd_iface_.isopen()) {
       cmd_iface_.reconnect();
       return;
+    }
+
+    // Poll acqmode — the no-arg response includes "current mode = N"
+    reply.clear();
+    if (cmd_iface_.send_command("acqmode", reply, 200) == 0 && !reply.empty()) {
+      auto pos = reply.find("current mode = ");
+      if (pos != std::string::npos) {
+        try { state_.acqmode = std::stoi(reply.substr(pos + 15)); } catch (...) {}
+      }
     }
   }
 
