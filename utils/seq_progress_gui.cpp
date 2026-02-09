@@ -73,6 +73,8 @@ struct SequenceState {
   bool offset_applicable = false;
   bool waiting_for_user = false;
   bool waiting_for_tcsop = false;
+  bool user_wait_after_failure = false;
+  bool continue_will_expose = false;
   bool ontarget = false;
   bool guiding_on = false;
   bool guiding_failed = false;
@@ -101,6 +103,8 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
+    user_wait_after_failure = false;
+    continue_will_expose = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -127,6 +131,8 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
+    user_wait_after_failure = false;
+    continue_will_expose = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -568,6 +574,7 @@ class SeqProgressGui {
     draw_title();
     draw_bar();
     draw_labels();
+    draw_user_instruction();
     draw_buttons();
     draw_ontarget_indicator();
     draw_offset_values();
@@ -691,9 +698,33 @@ class SeqProgressGui {
     XDrawString(display_, window_, gc_, tx, ty, label, std::strlen(label));
   }
 
+  void draw_user_instruction() {
+    if (!state_.waiting_for_user || !state_.continue_will_expose) return;
+    if (!blink_on_) return;  // blink the instruction for visibility
+
+    bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
+    char instruction[256];
+    if (has_offset) {
+      snprintf(instruction, sizeof(instruction),
+               ">>> Click OFFSET & EXPOSE to apply offset (RA=%.2f\" DEC=%.2f\") then expose <<<",
+               state_.offset_ra, state_.offset_dec);
+    } else {
+      snprintf(instruction, sizeof(instruction),
+               ">>> Click EXPOSE to begin exposure (no target offset) <<<");
+    }
+
+    XSetForeground(display_, gc_, color_wait_);  // red bold
+    XDrawString(display_, window_, gc_, 16, 118, instruction, std::strlen(instruction));
+  }
+
   void draw_buttons() {
     draw_button(ontarget_btn_, "ONTARGET", state_.waiting_for_tcsop);
-    draw_button(continue_btn_, "CONTINUE", state_.waiting_for_user);
+    const char *continue_label = "CONTINUE";
+    if (state_.waiting_for_user && state_.continue_will_expose) {
+      bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
+      continue_label = has_offset ? "OFFSET & EXPOSE" : "EXPOSE";
+    }
+    draw_button(continue_btn_, continue_label, state_.waiting_for_user);
   }
 
   void draw_ontarget_indicator() {
@@ -1221,9 +1252,22 @@ class SeqProgressGui {
     }
     if (msg.find("NOTICE: waiting for USER") != std::string::npos) {
       state_.waiting_for_user = true;
+      // Determine what "continue" will do based on the wait message
+      if (msg.find("start acquisition") != std::string::npos) {
+        state_.continue_will_expose = false;
+      } else {
+        state_.continue_will_expose = true;
+      }
+      // Detect if this is a failure-based user wait
+      if (msg.find("guiding failed") != std::string::npos ||
+          msg.find("fine tune failed") != std::string::npos) {
+        state_.user_wait_after_failure = true;
+      }
     }
     if (msg.find("NOTICE: received continue") != std::string::npos) {
       state_.waiting_for_user = false;
+      state_.user_wait_after_failure = false;
+      state_.continue_will_expose = false;
     }
     if (msg.find("NOTICE: waiting for ACAM guiding") != std::string::npos) {
       state_.guiding_on = false;

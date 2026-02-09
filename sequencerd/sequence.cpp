@@ -870,49 +870,66 @@ namespace Sequencer {
           if ( acqerr != NO_ERROR ) {
             std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
             this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
-            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (guiding failed)" ) ) {
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (guiding failed)" ) ) {
               this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
               return;
+            }
+            // Apply offset if target has one, even though guiding failed
+            if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              this->async.enqueue_and_log( function, "NOTICE: applying target offset" );
+              this->offset_active.store(true);
+              this->publish_progress();
+              error |= this->target_offset();
+              this->offset_active.store(false);
+              if ( error != NO_ERROR ) {
+                this->thread_error_manager.set( THR_ACQUISITION );
+                this->publish_progress();
+                return;
+              }
+              if ( this->acq_offset_settle > 0 ) {
+                this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+              }
+              this->publish_progress();
             }
           }
           else {
             bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
             if ( !fine_tune_ok ) {
-              this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to expose" );
-              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to expose (fine tune failed)" ) ) {
+              this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to apply offset and expose" );
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (fine tune failed)" ) ) {
                 this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                 return;
               }
             }
 
-            if ( fine_tune_ok ) {
-              // acqmode 2: wait for user before offset
-              if ( this->acq_automatic_mode == 2 ) {
-                if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose" ) ) {
-                  this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-                  return;
-                }
+            // acqmode 2: wait for user before offset (only if fine-tune succeeded)
+            if ( fine_tune_ok && this->acq_automatic_mode == 2 ) {
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose" ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
               }
+            }
 
-              // Apply offset for both acqmode 2 and 3
-              if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
-                std::string mode_str = (this->acq_automatic_mode == 3 ? "automatically " : "");
-                this->async.enqueue_and_log( function, "NOTICE: applying target offset " + mode_str );
-                this->offset_active.store(true);
-                this->publish_progress();  // Publish offset_active=true
-                error |= this->target_offset();
-                this->offset_active.store(false);
-                if ( error != NO_ERROR ) {
-                  this->thread_error_manager.set( THR_ACQUISITION );
-                  this->publish_progress();  // Publish with offset error state
-                  return;
-                }
-                if ( this->acq_offset_settle > 0 ) {
-                  this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
-                  std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
-                }
-                this->publish_progress();  // Publish offset complete
+            // Apply offset for both acqmode 2 and 3, regardless of fine-tune success
+            // If target has offset defined, apply it before exposing
+            if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              std::string mode_str = (this->acq_automatic_mode == 3 && fine_tune_ok) ? "automatically " : "";
+              this->async.enqueue_and_log( function, "NOTICE: applying target offset " + mode_str );
+              this->offset_active.store(true);
+              this->publish_progress();  // Publish offset_active=true
+              error |= this->target_offset();
+              this->offset_active.store(false);
+              if ( error != NO_ERROR ) {
+                this->thread_error_manager.set( THR_ACQUISITION );
+                this->publish_progress();  // Publish with offset error state
+                return;
               }
+              if ( this->acq_offset_settle > 0 ) {
+                this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+              }
+              this->publish_progress();  // Publish offset complete
             }
           }
         }
