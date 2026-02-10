@@ -25,8 +25,9 @@ EMULATOR=@CALIBD_EMULATOR@
 # MOTION CONTROL
 #
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
+# MOTOR_CONTROLLER="<name> <type> <host> <port> <addr> <axes>"
 #   <name>  name of controller
+#   <type>  PI or GALIL
 #   <host>  hostname of controller
 #   <port>  port on hostname
 #   <addr>  address is DIP-switch assigned PI address.
@@ -34,10 +35,10 @@ EMULATOR=@CALIBD_EMULATOR@
 #
 # For calibd, one controller must be named "cover" and the other must be "door"
 #
-MOTOR_CONTROLLER="cover @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
-MOTOR_CONTROLLER="door  @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
-#MOTOR_CONTROLLER="cover localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
-#MOTOR_CONTROLLER="door  localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
+MOTOR_CONTROLLER="cover PI @IP_ETS8P@ @ETS8P_CALIB@ 1 1"
+MOTOR_CONTROLLER="door  PI @IP_ETS8P@ @ETS8P_CALIB@ 2 1"
+#MOTOR_CONTROLLER="cover PI localhost @CALIBD_EMULATOR@ 1 1"  # emualtor
+#MOTOR_CONTROLLER="door  PI localhost @CALIBD_EMULATOR@ 2 1"  # emualtor
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"
