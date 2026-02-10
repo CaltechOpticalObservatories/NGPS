@@ -73,6 +73,10 @@ namespace Calib {
     int applied=0;
     long error;
 
+    // Clear the motormap map before loading new information from the config file
+    //
+    this->interface.motion.pi_interface->clear_motormap();
+
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
@@ -174,7 +178,34 @@ namespace Calib {
       //                     Each controller is stored in STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        if ( this->interface.motion.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, type, host;
+        int port, addr, axes;
+        long ret=NO_ERROR;
+
+        if (!(iss >> name >> type >> host >> port >> addr >> axes)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <type> <host> <port> <addr> <axes> }");
+          error=ERROR;
+          continue;
+        }
+
+        // call the load_controller_config for the appropriate vendor
+        if (type=="PI") {
+          if (!this->interface.motion.pi_interface) {
+            // initialize a pointer if it doesn't already exist
+            this->interface.motion.pi_interface = std::make_unique<
+            Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo>>();
+          }
+          this->interface.motion.motors.emplace(name, MotionController::Name(this->interface.motion.pi_interface.get(), name));
+          ret = this->interface.motion.pi_interface->load_controller_config(config.arg[entry]);
+        }
+        else {
+          logwrite(function, "ERROR: unknown type. Expected { PI | GALIL }");
+          error=ERROR;
+          continue;
+        }
+
+        if (ret==NO_ERROR) {
           message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
           this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
@@ -184,68 +215,71 @@ namespace Calib {
       // MOTOR_AXIS -- axis infor for specified MOTOR_CONTROLLER
       //
       if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, ref;
+        int axis;
+        double min, max, zero, def;
 
-        Physik_Instrumente::AxisInfo AXIS;
-
-        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+        if (!(iss >> name >> axis >> min >> max >> zero >> ref)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <axis> <min> <max> <zero> <ref> }");
+          error=ERROR;
+          continue;
+        }
+        if (!(iss >> def)) def=NAN;
 
         // Each AXIS is associated with a CONTROLLER by name, so a controller
         // of this name must have already been configured.
         //
-        // loc checks if the motorname for this AXIS is found in the motormap
-        //
-        auto _motormap = this->interface.motion.motorinterface.get_motormap();
-        auto loc = _motormap.find( AXIS.motorname );
-        if ( loc != _motormap.end() ) {
-          this->interface.motion.motorinterface.add_axis( AXIS );
-          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+        if (this->interface.motion.motors.find(name) == this->interface.motion.motors.end()) {
+          logwrite(function, "ERROR bad config: motor name '"+name+"' has no match in MOTOR_CONTROLLER");
+          error=ERROR;
+          continue;
         }
-        else {
-          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
-                                   << "has no matching name defined by MOTOR_CONTROLLER";
-          logwrite( function, message.str() );
-          message.str(""); message << "valid names are:";
-          for ( const auto &mot : _motormap ) { message << " " << mot.first; }
-          logwrite( function, message.str() );
-          error = ERROR;
-          break;
-        }
+
+        // parse the axis info into an object
+        Physik_Instrumente::AxisInfo AXIS;
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // add that object to this motor
+        if ( (error=this->interface.motion.motors.at(name).add_axis(AXIS)) != NO_ERROR ) continue;
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
       }
 
       // MOTOR_POS -- detailed position info for each named motor controller
       //
       if ( config.param[entry].find( "MOTOR_POS" ) == 0 ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, posname;
+        int axis, id;
+        double pos;
 
-        // Create temporary local PosInfo object to load and parse config line
+        if (!(iss >> name >> axis >> id >> pos >> posname)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <axis> <ID> <pos> <posname> }");
+          error=ERROR;
+          continue;
+        }
+
+        // Each POS is associated with a CONTROLLER by name, so a controller
+        // of this name must have already been configured.
+        //
+        if (this->interface.motion.motors.find(name) == this->interface.motion.motors.end()) {
+          logwrite(function, "ERROR bad config: motor name '"+name+"' has no match in MOTOR_CONTROLLER");
+          error=ERROR;
+          continue;
+        }
+
+        // parse into a local PosInfo object
         //
         Physik_Instrumente::PosInfo POS;
-
         if ( POS.load_pos_info( config.arg[entry] ) == ERROR ) break;
 
-        // Check that motorname associated with position has already been defined
-        // in the motormap and if so, add PosInfo to the motorinterface.
-        //
-        auto _motormap = this->interface.motion.motorinterface.get_motormap();
-        auto loc = _motormap.find( POS.motorname );
-
-        if ( loc != _motormap.end() ) {
-          this->interface.motion.motorinterface.add_posmap( POS );  // add the PosInfo to the class herre
-          message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
-        }
-        else {
-          message.str(""); message << "ERROR: MOTOR_POS name \"" << POS.posname << "\" "
-                                   << "has no matching name defined by MOTOR_CONTROLLER";
-          logwrite( function, message.str() );
-          message.str(""); message << "valid names are:";
-          for ( const auto &mot : _motormap ) { message << " " << mot.first; }
-          logwrite( function, message.str() );
-          error = ERROR;
-          break;
-        }
+        // add that object to this motor
+        if ( (error=this->interface.motion.motors.at(name).add_posmap(POS)) != NO_ERROR ) continue;
+        message.str(""); message << "CALIBD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
       }
 
       // LAMPMOD_HOST -- lamp modulator host info ( host port )

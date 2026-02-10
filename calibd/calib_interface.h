@@ -93,14 +93,13 @@ namespace Calib {
   class Motion {
     private:
       bool class_initialized;
-      size_t numdev;
 
     public:
       std::string name;
       std::string host;
       int port;
 
-      Motion();
+      Motion() : port(-1) { };
       ~Motion() { };
 
       long configure_class();
@@ -119,7 +118,12 @@ namespace Calib {
 
       // PI Interface class of the Servo type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
+      std::unique_ptr<Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo>> pi_interface;
+
+
+      // Container to hold all controllers indexed by name
+      //
+      std::map<std::string, MotionController::Name> motors;
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller
 

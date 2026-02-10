@@ -10,18 +10,6 @@
 namespace Calib {
 
 
-  /***** Calib::Motion::Motion ************************************************/
-  /**
-   * @brief      Motion class constructor
-   *
-   */
-  Motion::Motion() {
-    this->port=-1;
-    this->numdev=0;
-  }
-  /***** Calib::Motion::Motion ************************************************/
-
-
   /***** Calib::Motion::configure_class ***************************************/
   /**
    * @brief      configures the class from configure_calibd()
@@ -36,34 +24,34 @@ namespace Calib {
     std::stringstream message;
     long error = ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto numdev = this->motors.size();
 
-    this->numdev = _motormap.size();
-
-    if ( this->numdev == 2 ) {
+    if ( numdev == 2 ) {
       logwrite( function, "motion interface configured ok" );
       error = NO_ERROR;
     }
-    else if ( this->numdev > 2 ) {
-      message.str(""); message << "ERROR: too many motor controllers: " << this->numdev << ". expected 2";
+    else if ( numdev > 2 ) {
+      message.str(""); message << "ERROR: too many motor controllers: " << numdev << ". expected 2";
       logwrite( function, message.str() );
       error = ERROR;
     }
-    else if ( this->numdev == 1 ) {
+    else if ( numdev == 1 ) {
       logwrite( function, "ERROR: only one motor controller was defined" );
       error = ERROR;
     }
-    else if ( this->numdev < 1 ) {
-      message.str(""); message << "ERROR: no motor controllers: " << this->numdev << ". expected 2";
+    else if ( numdev < 1 ) {
+      message.str(""); message << "ERROR: no motor controllers: " << numdev << ". expected 2";
       logwrite( function, message.str() );
       error = ERROR;
     }
 
 #ifdef LOGLEVEL_DEBUG
-    for ( const auto &mot : _motormap ) {
+    for (auto &mot : this->motors) {
       message.str(""); message << "[DEBUG] motion controller " << mot.first
-                               << " addr=" << mot.second.addr;
-      for ( const auto &pos : mot.second.posmap ) {
+                               << " addr=" << mot.second.get_addr();
+      const auto* posmap = mot.second.posmap();
+      if (!posmap) continue;
+      for (const auto &pos : *posmap) {
         message << " " << pos.second.posname << "=" << pos.second.position;
       }
       logwrite( function, message.str() );
@@ -84,15 +72,16 @@ namespace Calib {
   long Motion::open() {
     long error = NO_ERROR;
 
-    // open the sockets,
-    // clear any error codes,
-    // enable servos.
-    //
-    error |= this->motorinterface.open();
-    error |= this->motorinterface.clear_errors();
-    error |= this->motorinterface.set_servo( true );
+    // Open connection to all motors
+    for (auto &mot : this->motors) error |= mot.second.open();
 
-    return( error );
+    // clear any error codes on startup (PI-only)
+    this->pi_interface->clear_errors();
+
+    // enable motion (servo for PI) for each address in controller_info.
+    for (auto &mot : this->motors) error |= mot.second.enable_motion();
+
+    return error;
   }
   /***** Calib::Motion::open **************************************************/
 
@@ -104,7 +93,9 @@ namespace Calib {
    *
    */
   long Motion::close( ) {
-    return this->motorinterface.close();
+    long error=NO_ERROR;
+    for (auto &mot : this->motors) error |= mot.second.close();
+    return error;
   }
   /***** Calib::Motion::close *************************************************/
 
@@ -123,8 +114,6 @@ namespace Calib {
     std::string function = "Calib::Motion::is_open";
     std::stringstream message;
 
-    auto _motormap = this->motorinterface.get_motormap();
-
     // Help
     //
     if ( arg == "?" ) {
@@ -140,29 +129,27 @@ namespace Calib {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( const auto &mot : _motormap ) {
-
-      bool _isopen = this->motorinterface.is_connected( mot.second.name );
-
+    for (auto &mot : this->motors) {
+      // am I connected?
+      bool _isopen = mot.second.is_connected();
+      // count number connected
       num_open += ( _isopen ? 1 : 0 );
-
-      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
-      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
+      // make lists of connected|unconnected motors
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.first );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.first : "" );
     }
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
+    if ( num_open == this->motors.size() ) retstring = "true"; else retstring = "false";
 
     // Log who's connected and not
     //
     if ( !connected.empty() ) {
-      message.str(""); message << "connected to" << connected;
-      logwrite( function, message.str() );
+      logwrite(function, "connected to"+connected);
     }
     if ( !unconnected.empty() ) {
-      message.str(""); message << "not connected to" << unconnected;
-      logwrite( function, message.str() );
+      logwrite(function, "not connected to"+unconnected);
     }
 
     return NO_ERROR;
@@ -185,8 +172,7 @@ namespace Calib {
     if ( name_in == "?" || name_in == "help" ) {
       retstring = CALIBD_HOME;
       retstring.append( " [ " );
-      auto _motormap = this->motorinterface.get_motormap();
-      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for (auto &mot : this->motors) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "]\n" );
       retstring.append( "  Home all calib motors or single motor indicated by optional <name>.\n" );
       retstring.append( "  If no argument is supplied then all are homed simultaneously.\n" );
@@ -195,7 +181,7 @@ namespace Calib {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.home( name_in, retstring );
+    return this->motors.at(name_in).home(&retstring);
   }
   /***** Calib::Motion::home **************************************************/
 
@@ -217,8 +203,7 @@ namespace Calib {
     if ( name_in == "?" ) {
       retstring = CALIBD_ISHOME;
       retstring.append( " [ " );
-      auto _motormap = this->motorinterface.get_motormap();
-      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      for (auto &mot : this->motors) { retstring.append(mot.first); retstring.append(" "); }
       retstring.append( "]\n" );
       retstring.append( "  Reads the referencing state from each of the indicated controllers,\n" );
       retstring.append( "  or all controllers if none supplied. Returns true if all (named) are\n" );
@@ -228,7 +213,9 @@ namespace Calib {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.is_home( name_in, retstring );
+    bool _ishome = this->motors.at(name_in).is_home();
+    retstring = name_in+":"+(_ishome ? "true" : "false");
+    return NO_ERROR;
   }
   /***** Calib::Motion::is_home ***********************************************/
 
@@ -249,17 +236,17 @@ namespace Calib {
     std::string function = "Calib::Motion::set";
     std::stringstream message;
 
-    auto _motormap = this->motorinterface.get_motormap();
-
     // Help
     //
     if ( input == "?" ) {
       retstring = CALIBD_SET;
       retstring.append( " <actuator>=<posname> [ <actuator>=<posname> ]\n" );
       retstring.append( "  where <posname> is\n" );
-      for ( const auto &mot : _motormap ) {
+      for (auto &mot : this->motors) {
+        const auto* posmap = mot.second.posmap();
+        if (!posmap) continue;
         retstring.append( "                     { " );
-        for ( const auto &pos : mot.second.posmap ) {
+        for (const auto &pos : *posmap ) {
           retstring.append( pos.second.posname ); retstring.append( " " );
         }
         retstring.append( "} for <actuator> = " );
@@ -307,7 +294,9 @@ namespace Calib {
       }
     }
 
-    long error = this->motorinterface.moveto( motornames, axisnums, posnames, retstring );
+    // I'm breaking the abstraction because this is just faster here
+    //
+    long error = this->pi_interface->moveto( motornames, axisnums, posnames, retstring );
 
     // read and return the position(s) after successful move
     //
@@ -333,15 +322,13 @@ namespace Calib {
     long error = NO_ERROR;
     std::vector<std::string> name_list;
 
-    auto _motormap = this->motorinterface.get_motormap();  // get a copy of the motormap
-
     // Help
     //
     if ( name_in == "?" ) {
       retstring = CALIBD_GET;
       retstring.append( " all | [ <actuator> ]\n" );
       retstring.append( "  where <actuator> is { " );
-      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append( " " ); }
+      for (auto &mot : this->motors) { retstring.append( mot.first ); retstring.append( " " ); }
       retstring.append( "}\n" );
       retstring.append( "  If all is supplied then the position of both is returned.\n" );
       retstring.append( "  Supplying an actuator name returns the position of only the specified actuator.\n" );
@@ -351,7 +338,7 @@ namespace Calib {
     // If no name(s) supplied then create a vector of all defined actuator names
     //
     if ( name_in == "all" ) {
-      for ( const auto &mot : _motormap ) {
+      for (auto &mot : this->motors) {
         name_list.push_back( mot.first );
       }
     }
@@ -362,24 +349,22 @@ namespace Calib {
     for ( const auto &name : name_list ) {
       std::string posname;
 
-      if ( _motormap.find( name ) == _motormap.end() ) {
-        message.str(""); message << "ERROR: actuator \"" << name << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
+      if (this->motors.find(name) == this->motors.end()) {
+        logwrite(function, "ERROR actuator '"+name+"' not found in configuration");
         posname = "error";
         error = ERROR;
       }
       else {
         // and then get the current position of this actuator.
         //
-        int addr = _motormap[ name ].addr;
+        int addr = this->motors.at(name).get_addr();
         int axis = 1;
         float position = NAN;
 
-        error = this->motorinterface.get_pos( name, axis, addr, position, posname );
+        error = this->motors.at(name).get_pos( axis, addr, position, posname );
 
         if ( error == ERROR ) {
-          message.str(""); message << "ERROR reading position of actuator \"" << name << "\"";
-          logwrite( function, message.str() );
+          logwrite(function, "ERROR reading position of actuator '"+name+"'");
         }
       }
 
@@ -414,7 +399,7 @@ namespace Calib {
    *
    */
   long Motion::send_command( const std::string &name, std::string cmd ) {
-    return( this->motorinterface.send_command( name, cmd ) );
+    return this->motors.at(name).send_command( cmd );
   }
   /***** Calib::Motion::send_command ******************************************/
 
@@ -433,10 +418,10 @@ namespace Calib {
    */
   long Motion::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
     if ( cmd.find( "?" ) != std::string::npos ) {
-      return( this->motorinterface.send_command( name, cmd, retstring ) );
+      return this->motors.at(name).send_command( cmd, &retstring );
     }
     else {
-      return( this->motorinterface.send_command( name, cmd ) );
+      return this->motors.at(name).send_command( cmd );
     }
   }
   /***** Calib::Motion::send_command ******************************************/
@@ -736,13 +721,11 @@ namespace Calib {
     // get a copy of the motormap and
     // loop through all motors, getting their actuator position
     //
-    auto _motormap = this->motion.motorinterface.get_motormap();  // local copy of motormap
-
     std::string retmotion;
     this->is_open("motion",retmotion);
     bool ismotion = (retmotion=="true" ? true : false);
 
-    for ( const auto &mot : _motormap ) {
+    for (auto &mot : this->motion.motors) {
       if (ismotion) this->motion.get( mot.first, retstring );     // get position of actuator
       std::string key="CAL"+mot.first;                            // key = CALxxxx
       make_uppercase(key);                                        // make key uppercase
