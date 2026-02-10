@@ -42,11 +42,10 @@ namespace Flexure {
    */
   class Interface {
     private:
-      size_t numdev;
       bool class_initialized;
     public:
 
-      Interface() : numdev(-1), motorinterface( FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE ) {}
+      Interface() {}
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 
@@ -54,9 +53,12 @@ namespace Flexure {
 
       // PI Interface class for the Piezo type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo> motorinterface;
+      std::unique_ptr<Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo>> pi_interface;
 
-      long initialize_class();
+      // container to hold controllers indexed by name
+      //
+      std::map<std::string, MotionController::Name> motors;
+
       long open();                               ///< opens the PI socket connection
       long close();                              ///< closes the PI socket connection
       long is_open( std::string arg, std::string &retstring );     ///< are motor controllers connected?

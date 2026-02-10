@@ -145,7 +145,14 @@ namespace MotionController {
       // these functions need the name of the motor
       //
       const AxisInfo* axis(int axis) const { return _controller->get_axis(_name, axis); }
-      const PosInfo* posmap(const std::string &posname) const { return _controller->get_posmap(_name, posname); }
+//    const PosInfo* posmap(const std::string &posname) const { return _controller->get_posmap(_name, posname); }
+
+//    const std::map<int, AxisInfo>* axes() const { return _controller->get_axes_map(_name); }
+      const std::map<std::string, PosInfo>* posmap() const { return _controller->get_posmap(_name); }
+
+      std::vector<int> axes() const { return _controller->get_axes(_name); }
+      std::vector<std::string> posnames() const { return _controller->get_posnames(_name); }
+      bool has_pos(const std::string &posname) const { return _controller->has_posname(_name, posname); }
 
       long add_posmap(const PosInfo &posinfo) { return _controller->add_posmap(_name, posinfo); }
       long add_axis(const AxisInfo &axis) { return _controller->add_axis(_name, axis); }
@@ -171,6 +178,9 @@ namespace MotionController {
         return _controller->get_pos(_name, axisnum, position, &posname, addr); }
 
       long moveto(int axisnum, const std::string &posstr, std::string &retstring) {
+        return _controller->moveto(_name, axisnum, posstr, retstring); }
+      long moveto(int axisnum, float position, std::string &retstring) {
+        const std::string posstr = std::to_string(position);
         return _controller->moveto(_name, axisnum, posstr, retstring); }
 
       long send_command(const std::string &cmd, std::string* retstring=nullptr) {
@@ -228,6 +238,13 @@ namespace MotionController {
       //
       const AxisInfo* get_axis(const std::string &name, int axis) const;
       const PosInfo* get_posmap(const std::string &name, const std::string &posname) const;
+
+      std::map<int, AxisInfo>* get_axes_map(const std::string &name) const override;
+      const std::map<std::string, PosInfo>* get_posmap(const std::string &name) const override;
+
+      std::vector<int> get_axes(const std::string &name) const override;
+      std::vector<std::string> get_posnames(const std::string &name) const override;
+      bool has_posname(const std::string &name, const std::string &posname) const override;
       int get_naxes(const std::string &name) const;
       std::string get_host(const std::string &name) const;
       int get_port(const std::string &name) const;

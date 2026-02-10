@@ -14,26 +14,21 @@ namespace Focus {
 
   /***** Focus::Interface::open ***********************************************/
   /**
-   * @brief      opens the PI socket connection
+   * @brief      opens the socket connection and enables motion
    * @return     ERROR or NO_ERROR
    *
    */
   long Interface::open( ) {
     long error = NO_ERROR;
 
-    // Open the sockets,
-    // clear any error codes on startup, and
-    // enable the servo for each address in controller_info.
-    //
+    // Open connection to all motors
     for (auto &mot : this->motors) error |= mot.second.open();
 
+    // clear any error codes on startup (PI-only)
     this->pi_interface->clear_errors();
-    this->galil_interface->clear_errors();
 
+    // enable motion (servo for PI) for each address in controller_info.
     for (auto &mot : this->motors) error |= mot.second.enable_motion();
-
-    this->pi_interface->move_to_default();
-    this->galil_interface->move_to_default();
 
     // Focus controllers interface via a terminal server, so it's possible to
     // have open a socket connection and not actually be connected to the motor
@@ -43,14 +38,14 @@ namespace Focus {
     //
     if ( error != NO_ERROR ) this->close();
 
-    return( error );
+    return error;
   }
   /***** Focus::Interface::open ***********************************************/
 
 
   /***** Focus::Interface::close **********************************************/
   /**
-   * @brief      closes the PI socket connection
+   * @brief      closes the socket connection
    * @return     ERROR or NO_ERROR
    *
    */
@@ -138,8 +133,8 @@ namespace Focus {
       retstring.append( "  Send native command <cmd> to controller indicated by channel name,\n" );
       retstring.append( "  where <chan> is one of { " );
       for (auto &mot : this->motors) { retstring.append( mot.first ); retstring.append( " " ); }
-      retstring.append( "} and <cmd> is any PI-native command and args. This command blocks;\n" );
-      retstring.append( "native commands are not run in a separate thread.\n" );
+      retstring.append( "} and <cmd> is any motor controller native command and args. This command\n" );
+      retstring.append( "blocks; native commands are not run in a separate thread.\n" );
       return HELP;
     }
 
@@ -180,7 +175,7 @@ namespace Focus {
     }
 
     std::ostringstream oss;
-    oss << this->motors.at(chan).addr() << " " << cmd;
+    oss << this->motors.at(chan).get_addr() << " " << cmd;
 
     logwrite(function, oss.str());
 
@@ -244,7 +239,7 @@ namespace Focus {
       return HELP;
     }
 
-    // All the work is done by the PI motor interface class
+    // All the work is done by the motor interface class
     //
     try {
       retstring = (this->motors.at(name_in).is_home() ? "true" : "false");
@@ -278,6 +273,7 @@ namespace Focus {
       retstring.append( " <chan> { <pos> | nominal }\n" );
       retstring.append( "  Set focus position of indicated channel to <pos> or to the nominal best focus.\n" );
       retstring.append( "  where <chan> <min> <nominal> <max> are as follows:\n" );
+      /***
       try {
         for (auto &mot : this->motors) {
           auto ax = mot.second.axis(axis);
@@ -303,6 +299,7 @@ namespace Focus {
         logwrite( function, message.str() );
         return( ERROR );
       }
+      ***/
       return HELP;
     }
 
@@ -320,7 +317,6 @@ namespace Focus {
     std::string chan   = tokens[0];
     std::string posstr = tokens[1];
 
-//  long error = this->pi_interface.moveto( chan, axis, posstr, retstring );
     long error = this->motors.at(chan).moveto(axis, posstr, retstring);
 
     message.str("");
@@ -378,7 +374,7 @@ namespace Focus {
     //
     std::string posstring;
     int axis=1;
-    auto addr=this->motors.at(name).addr();
+    auto addr=this->motors.at(name).get_addr();
     float position=NAN;
     std::string posname;
     error = this->motors.at(name).get_pos(axis, addr, position, posname);
@@ -405,7 +401,7 @@ namespace Focus {
    * @param[in]  pos   motor position
    * @return     ERROR or NO_ERROR
    *
-   * This could be called by a thread, so hardware interactions with the PI
+   * This could be called by a thread, so hardware interactions with the
    * controller are protected by a mutex.
    *
    */
@@ -528,17 +524,17 @@ namespace Focus {
    * @brief      assembles a telemetry message
    * @details    This creates a JSON message for telemetry info, then serializes
    *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @param[out] retstring  optional string ref containing serialization of JSON message
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
+  void Interface::make_telemetry_message(std::string* retstring) {
     const std::string function="Focus::Interface::make_telemetry_message";
 
     // assemble the telemetry into a json message
     // Set a messagetype keyword to indicate what kind of message this is.
     //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="focusinfo";
+    nlohmann::json jmessage_out;
+    jmessage_out["messagetype"]="focusinfo";
 
     // get focus position for each motor
     //
@@ -552,30 +548,40 @@ namespace Focus {
 
       // assign the position or NaN to a key in the JSON jmessage
       //
-      if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
+      if ( !std::isnan(position) ) jmessage_out[key]=position; else jmessage_out[key]="NAN";
     }
 
-    retstring = jmessage.dump();  // serialize the json message into retstring
+    this->publisher->publish(jmessage_out);
 
-    this->publisher->publish(retstring);
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
+    if (retstring) {
+      *retstring = jmessage_out.dump();  // serialize the json message into retstring
+      retstring->append(JEOF);           // append the JSON message terminator
+    }
   }
   /***** Focus::Interface::make_telemetry_message *****************************/
 
 
+  /***** Focus::Interface::handletopic_snapshot *******************************/
+  /**
+   * @brief      publishes snapshot of my telemetry
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the "_snapshot"
+   *             topic and the payload contains my daemon name.
+   * @param[in]  jmessage  received JSON message
+   *
+   */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    // if my name is in the jmessage then publish my snapshot
     if ( jmessage.contains( Focus::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+      this->make_telemetry_message();
     }
     else
     if ( jmessage.contains( "test" ) ) {
       logwrite( "Focusd::Interface::handletopic_snapshot", jmessage.dump() );
     }
   }
+  /***** Focus::Interface::handletopic_snapshot *******************************/
+
 
   /***** Focus::Interface::test ***********************************************/
   /**

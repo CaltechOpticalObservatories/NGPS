@@ -41,22 +41,22 @@ namespace Acam {
    */
   class MotionInterface {
     private:
-      size_t numdev;                                                 ///< size of motors map (number of motor controllers)
-      bool class_initialized;
       std::string current_filtername;                                ///< current filter name, updated whenever set or read
       std::string current_coverpos;
 
     public:
-      MotionInterface() : numdev(-1), 
-                          class_initialized(false),
-                          current_filtername("unknown"),
-                          current_coverpos("unknown"),
-                          motorinterface( ACAMD_MOVE_TIMEOUT, ACAMD_HOME_TIMEOUT, ACAM_POSNAME_TOLERANCE ) { }
+      MotionInterface() : current_filtername("unknown"),
+                          current_coverpos("unknown")
+                          { }
                           // timeouts are defined in common/acamd_commands.h
 
-      // map of all motor controllers
+      // PI Interface class for the Stepper type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo> motorinterface;
+      std::unique_ptr<Physik_Instrumente::Interface<Physik_Instrumente::StepperInfo>> pi_interface;
+
+      // Container to hold all controllers indexed by name
+      //
+      std::map<std::string, MotionController::Name> motors;
 
       Common::Queue async;                                           ///< asynchronous message queue object
 

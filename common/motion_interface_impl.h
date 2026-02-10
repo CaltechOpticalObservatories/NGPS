@@ -9,6 +9,51 @@
 
 namespace MotionController {
 
+  /***** MotionController::Interface::has_posname *****************************/
+  template <typename ControllerType>
+  bool Interface<ControllerType>::has_posname(const std::string &name, const std::string &posname) const {
+    auto mot = this->motormap.find(name);
+    if (mot == this->motormap.end()) return false;
+    if (posname.empty()) return false;
+
+    for (const auto &pos : mot->second.posmap) {
+      if (pos.first==posname) return true;
+    }
+    return false;
+  }
+  /***** MotionController::Interface::has_posname *****************************/
+
+
+  /***** MotionController::Interface::get_posnames ****************************/
+  template <typename ControllerType>
+  std::vector<std::string> Interface<ControllerType>::get_posnames(const std::string &name) const {
+    std::vector<std::string> keys;
+    auto mot = this->motormap.find(name);
+    if (mot == this->motormap.end()) return keys;
+
+    for (const auto &pos : mot->second.posmap) {
+      keys.push_back(pos.first);
+    }
+    return keys;
+  }
+  /***** MotionController::Interface::get_posnames ****************************/
+
+
+  /***** MotionController::Interface::get_axes ********************************/
+  template <typename ControllerType>
+  std::vector<int> Interface<ControllerType>::get_axes(const std::string &name) const {
+    std::vector<int> keys;
+    auto mot = this->motormap.find(name);
+    if (mot == this->motormap.end()) return keys;
+
+    for (auto &ax : mot->second.axes) {
+      keys.push_back(ax.first);
+    }
+    return keys;
+  }
+  /***** MotionController::Interface::get_axes ********************************/
+
+
   /***** MotionController::Interface::get_axis ********************************/
   template <typename ControllerType>
   const AxisInfo* Interface<ControllerType>::get_axis(const std::string &name, int axis) const {
@@ -23,7 +68,20 @@ namespace MotionController {
   /***** MotionController::Interface::get_axis ********************************/
 
 
+  /***
+  template <typename ControllerType>
+  std::map<int, AxisInfo>* Interface<ControllerType>::get_axes_map(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return ( it != this->motormap.end()) ? &(it->second.axes) : nullptr;
+  }
+  ***/
+
   /***** MotionController::Interface::get_posmap ******************************/
+  template <typename ControllerType>
+  const std::map<std::string, PosInfo>* Interface<ControllerType>::get_posmap(const std::string &name) const {
+    auto it = this->motormap.find(name);
+    return ( it != this->motormap.end()) ? &(it->second.posmap) : nullptr;
+  }
   template <typename ControllerType>
   const PosInfo* Interface<ControllerType>::get_posmap(const std::string &name, const std::string &posname) const {
     auto mot = this->motormap.find(name);

@@ -90,8 +90,9 @@ PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
 # MOTION CONTROL
 #
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
+# MOTOR_CONTROLLER="<name> <type> <host> <port> <addr> <axes>"
 #   <name>  name of controller
+#   <type>  PI or GALIL
 #   <host>  hostname of controller
 #   <port>  port on hostname
 #   <addr>  address is DIP-switch assigned PI address.
@@ -99,10 +100,10 @@ PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
 #
 # For acamd, one controller must be named "filter" and the other must be named "cover"
 #
-MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
-#MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
-#MOTOR_CONTROLLER="filter localhost @ACAMD_EMULATOR@ 1 1"     # emulator
-MOTOR_CONTROLLER="cover  localhost @ACAMD_EMULATOR@ 2 1"     # emulator
+MOTOR_CONTROLLER="filter PI @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
+#MOTOR_CONTROLLER="cover  PI @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
+#MOTOR_CONTROLLER="filter PI localhost @ACAMD_EMULATOR@ 1 1"     # emulator
+MOTOR_CONTROLLER="cover  PI localhost @ACAMD_EMULATOR@ 2 1"     # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"

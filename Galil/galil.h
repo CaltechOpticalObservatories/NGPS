@@ -70,7 +70,6 @@ namespace Galil {
       long stop(const std::string &name);
       long enable_motion(bool shouldenable);
       long move_to_default();
-      long Xend_command(const std::string &motorname, std::string cmd, std::string* retstring=nullptr);
 
   };
   /***** Galil::Interface *****************************************************/

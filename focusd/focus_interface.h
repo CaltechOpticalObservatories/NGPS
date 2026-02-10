@@ -83,8 +83,6 @@ namespace Focus {
 
       // Container to hold all controllers indexed by name
       //
-//    std::map<std::string, MotionController::ControllerInterface*> motors;
-
       std::map<std::string, MotionController::Name> motors;
 
       template <typename Function>
@@ -117,7 +115,7 @@ namespace Focus {
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( const std::string &name, std::string cmd, std::string &retstring );  ///< writes command?, reads reply
-      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
+      void make_telemetry_message(std::string* retstring=nullptr);  ///< assembles a telemetry message
 
       long test( std::string args, std::string &retstring );
 

@@ -36,12 +36,19 @@ namespace MotionController {
 
       // there are name-based functions
       //
+      virtual const std::map<int, AxisInfo>* get_axes_map(const std::string &name) const = 0;
+      virtual const std::map<std::string, PosInfo>* get_posmap(const std::string &name) const = 0;
+
       virtual const AxisInfo* get_axis(const std::string &name, int axis) const = 0;
       virtual const PosInfo* get_posmap(const std::string &name, const std::string &posname) const = 0;
 
       virtual long add_posmap(const std::string &name, const PosInfo &posinfo) = 0;
+      virtual bool has_posname(const std::string &name, const std::string &posname) const = 0;
+
       virtual long add_axis(const std::string &name, const AxisInfo &axis) = 0;
 
+      virtual std::vector<int> get_axes(const std::string &name) const = 0;
+      virtual std::vector<std::string> get_posnames(const std::string &name) const = 0;
       virtual int get_naxes(const std::string &name) const = 0;
       virtual int get_addr(const std::string &name) const = 0;
       virtual int get_port(const std::string &name) const = 0;

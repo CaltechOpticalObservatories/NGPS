@@ -154,14 +154,6 @@ namespace Physik_Instrumente {
       bool is_home(const std::string &name) override;
       long moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) override;
       long get_pos(const std::string &name, int axisnum, float &position, std::string* posname=nullptr, int addr=-1) override;
-      /***
-      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname) override;
-      long get_pos(const std::string &name, int axisnum, float &position, std::string &posname) override;
-      long get_pos(const std::string &name, int axisnum, float &position);
-//    long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname);
-//    long get_pos(const std::string &name, int axisnum, float &position, std::string &posname);
-      long get_pos(const std::string &name, int axisnum, int addr, float &position, std::string &posname, float tol_in);
-      ***/
 
       // PI-only
       //
@@ -181,8 +173,6 @@ namespace Physik_Instrumente {
       long on_target(const std::string &name, int addr, bool &retstring);
       long on_target(const std::string &name, int addr, int axis, bool &state);
       long stop_motion(const std::string &name, int addr);
-      long send_command(const std::string &motorname, std::string cmd);
-      long send_command(const std::string &motorname, std::string cmd, std::string &retstring);
 
       template <typename ReplyType> long parse_reply( int axis, std::string &reply, ReplyType &retval );
   };

@@ -124,7 +124,7 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "ERR?";
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command(name, cmd.str(), &reply);                // send the command
 
     if ( error != NO_ERROR ) return error;
 
@@ -1184,7 +1184,7 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command(name, cmd.str(), &reply);                  // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1215,7 +1215,7 @@ namespace Physik_Instrumente {
     if ( addr > 0 ) cmd << addr << " ";
     cmd << "FRF? " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command(name, cmd.str(), &reply);                  // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1266,7 +1266,7 @@ namespace Physik_Instrumente {
     cmd << "ONT?";
     if ( axis > 0 ) cmd << " " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command(name, cmd.str(), &reply);                  // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, state );  // parse the response
 
@@ -1384,7 +1384,7 @@ namespace Physik_Instrumente {
     cmd << "POS?";
     if ( axis > 0 ) cmd << " " << axis;
 
-    long error = this->send_command( name, cmd.str(), reply );                 // send the command
+    long error = this->send_command(name, cmd.str(), &reply);                  // send the command
 
     if ( error == NO_ERROR ) error = this->parse_reply( axis, reply, pos );    // parse the response
 
@@ -1410,140 +1410,6 @@ namespace Physik_Instrumente {
     return NO_ERROR;
   }
   /***** Physik_Instrumente::Interface::stop_motion ***************************/
-
-
-  /***** Physik_Instrumente::Interface::send_command **************************/
-  /**
-   * @brief      send a command string to the controller
-   * @param[in]  name controller name
-   * @param[in]  cmd  command to send
-   * @return     ERROR or NO_ERROR
-   *
-   * The needed linefeed \n is added here
-   *
-   * This function is overloaded with a version that accepts a return string.
-   * This version sends a command only and does not read back any reply.
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd ) {
-    std::string function = "Physik_Instrumente::Interface::send_command";
-    std::stringstream message;
-
-    std::unique_lock<std::mutex> lock( *this->controller_mutex );
-
-    try {
-      Network::TcpSocket &socket = this->get_socket( motorname );  // includes check of motorname
-
-      if ( !socket.isconnected() ) {
-        message.str(""); message << "ERROR no socket connection to motor " << motorname;
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-
-      message.str(""); message << "sending \"" << cmd << "\" to motor " << motorname;
-      logwrite( function, message.str() );
-
-      cmd.append( "\n" );                   // add the newline character
-
-      int written = socket.Write( cmd );    // write the command
-
-      if ( written <= 0 ) return ERROR;     // return error if error writing to socket
-    }
-    catch ( const std::runtime_error &e ) {
-      message.str(""); message << "ERROR: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Physik_Instrumente::Interface::send_command **************************/
-
-
-  /***** Physik_Instrumente::Interface::send_command **************************/
-  /**
-   * @brief      send a command string to the controller
-   * @param[in]  name   controller name
-   * @param[in]  cmd    command to send
-   * @param[in]  reply  reference to reply
-   * @return     ERROR or NO_ERROR
-   *
-   * The needed linefeed \n is added here
-   *
-   * This function is overloaded.
-   *
-   * This version is called with a reference to return string, in which case 
-   * after writing the command the reply is read and placed into the return
-   * string.
-   *
-   */
-  template <typename ControllerType>
-  long Interface<ControllerType>::send_command( const std::string &motorname, std::string cmd, std::string &retstring ) {
-    std::string function = "Physik_Instrumente::Interface::send_command";
-    std::stringstream message;
-    std::string reply;
-    long error=NO_ERROR;
-    long retval=0;
-
-    Network::TcpSocket socket;
-
-    std::unique_lock<std::mutex> lock( *this->controller_mutex );
-
-    try {
-      socket = this->get_socket( motorname );   // includes check of motorname
-    }
-    catch ( const std::runtime_error &e ) {
-      message.str(""); message << "ERROR: " << e.what();
-      logwrite( function, message.str() );
-      retstring="invalid_argument";
-      return ERROR;
-    }
-
-    if ( !socket.isconnected() ) {
-      message.str(""); message << "ERROR no socket connection to motor " << motorname;
-      logwrite( function, message.str() );
-      retstring="not_connected";
-      return ERROR;
-    }
-
-    cmd.append( "\n" );                   // add the newline character
-
-    int written = socket.Write( cmd );    // write the command
-
-    if ( written <= 0 ) return ERROR;     // return error if error writing to socket
-
-    // read the reply
-    //
-    while ( error == NO_ERROR && retval >= 0 ) {
-
-      if ( ( retval=socket.Poll() ) <= 0 ) {
-        if ( retval==0 ) { message.str(""); message << "TIMEOUT on fd " << socket.getfd() << ": " << strerror(errno);
-                           error = TIMEOUT; }
-        if ( retval <0 ) { message.str(""); message << "ERROR on fd " << socket.getfd() << ": " << strerror(errno);
-                           error = ERROR; }
-        if ( error != NO_ERROR ) logwrite( function, message.str() );
-        break;
-      }
-
-      if ( ( retval = socket.Read( reply, '\n' ) ) < 0 ) {
-        message.str(""); message << "ERROR reading from motor controller: " << strerror( errno );
-        logwrite( function, message.str() );
-        break;
-      }
-
-      // remove any newline characters and get out
-      //
-      reply.erase(std::remove(reply.begin(), reply.end(), '\r' ), reply.end());
-      reply.erase(std::remove(reply.begin(), reply.end(), '\n' ), reply.end());
-      break;
-    }
-
-    retstring = reply;
-
-    return error;
-  }
-  /***** Physik_Instrumente::Interface::send_command **************************/
 
 
   /***** Physik_Instrumente::Interface::parse_reply ***************************/

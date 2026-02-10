@@ -1629,14 +1629,11 @@ namespace Sequencer {
           throw std::runtime_error("focus "+FOCUSD_HOME+" returned: "+reply);
         }
       }
-      // send actuators to nominal positions
-      logwrite( function, "setting nominal positions" );
-      std::vector<std::string> chans = {"I", "R"};
-      for ( const auto &chan : chans ) {
-        std::string command = "set " + chan + " nominal";
-        if ( this->focusd.command_timeout( command, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR setting focus "+chan );
-          throw std::runtime_error("focus "+command+" returned: "+reply);
+      // send actuators to default positions
+      logwrite( function, "setting default positions" );
+      if ( this->focusd.command_timeout( FOCUSD_DEFAULTPOS, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
+          this->async.enqueue_and_log(function, "ERROR setting focus ");
+          throw std::runtime_error("focus "+FOCUSD_DEFAULTPOS+" returned: "+reply);
         }
       }
     }

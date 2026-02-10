@@ -14,17 +14,18 @@ PUBLISHER_PORT="tcp://127.0.0.1:@FLEXURED_PUB_PORT@"  # my zeromq pub port
 EMULATOR_PORT=@FLEXURED_EMULATOR@
 
 # For each actuator's controller specify:
-# MOTOR_CONTROLLER="<name> <host> <port> <addr> <axes>"
+# MOTOR_CONTROLLER="<name> <type> <host> <port> <addr> <axes>"
 #   <name>  name of controller
+#   <type>  PI or GALIL
 #   <host>  hostname of controller
 #   <port>  port on hostname
 #   <addr>  address is DIP-switch assigned PI address.
 #   <axes>  number of axes for this controller's actuator
 #
-#MOTOR_CONTROLLER="U @IP_FLEXURE_U@ 50000 1 3"
-MOTOR_CONTROLLER="G @IP_FLEXURE_G@ 50000 1 3"
-MOTOR_CONTROLLER="R @IP_FLEXURE_R@ 50000 1 3"
-MOTOR_CONTROLLER="I @IP_FLEXURE_I@ 50000 1 3"
+#MOTOR_CONTROLLER="U PI @IP_FLEXURE_U@ 50000 1 3"
+MOTOR_CONTROLLER="G PI @IP_FLEXURE_G@ 50000 1 3"
+MOTOR_CONTROLLER="R PI @IP_FLEXURE_R@ 50000 1 3"
+MOTOR_CONTROLLER="I PI @IP_FLEXURE_I@ 50000 1 3"
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref> [ <default> ]"

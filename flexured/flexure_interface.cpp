@@ -12,37 +12,6 @@
 
 namespace Flexure {
 
-  /***** Flexure::Interface::initialize_class *********************************/
-  /**
-   * @brief      initializes the class from configure_flexured()
-   * @return     ERROR or NO_ERROR
-   *
-   * This is called by Flexure::Server::configure_flexured() after reading the
-   * configuration file to apply the config file setting.
-   *
-   */
-  long Interface::initialize_class() {
-    std::string function = "Flexure::Interface::initialize_class";
-    std::stringstream message;
-
-    auto _motormap = this->motorinterface.get_motormap();
-
-    this->numdev = _motormap.size();
-
-    // I don't want to prevent the system from working with a subset of controllers,
-    // but the user should be warned, in case it wasn't intentional.
-    //
-    if ( this->numdev != 2 ) {
-      message.str(""); message << "WARNING: " << this->numdev << " PI motor controller"
-                               << ( this->numdev == 1 ? "" : "s" ) << " defined! (expected 4)";
-      logwrite( function, message.str() );
-    }
-
-    return( NO_ERROR );
-  }
-  /***** Flexure::Interface::initialize_class *********************************/
-
-
   /***** Flexure::Interface::open *********************************************/
   /**
    * @brief      opens the PI socket connection
@@ -53,16 +22,16 @@ namespace Flexure {
   long Interface::open( ) {
     long error = NO_ERROR;
 
-    // Open the sockets,
-    // clear any error codes on startup, and
-    // enable servo mode.
-    //
-    error |= this->motorinterface.open();
-    error |= this->motorinterface.clear_errors();
-    error |= this->motorinterface.set_servo( true );
-    error |= this->motorinterface.move_to_default();
+    // Open connection to all motors
+    for (auto &mot : this->motors) error |= mot.second.open();
 
-    return( error );
+    // clear any error codes on startup
+    this->pi_interface->clear_errors();
+
+    // enable motion and servo mode
+    for (auto &mot : this->motors) error |= mot.second.enable_motion();
+
+    return error;
   }
   /***** Flexure::Interface::open *********************************************/
 
@@ -75,7 +44,9 @@ namespace Flexure {
    *
    */
   long Interface::close( ) {
-    return this->motorinterface.close();
+    long error=NO_ERROR;
+    for (auto &mot : this->motors) error |= mot.second.close();
+    return error;
   }
   /***** Flexure::Interface::close ********************************************/
 
@@ -91,11 +62,9 @@ namespace Flexure {
    *
    */
   long Interface::is_open( std::string arg, std::string &retstring ) {
-    std::string function = "Flexure::Interface::is_open";
+    const std::string function("Flexure::Interface::is_open");
     std::stringstream message;
     long error = NO_ERROR;
-
-    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -112,32 +81,30 @@ namespace Flexure {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( const auto &mot : _motormap ) {
-
-      bool _isopen = this->motorinterface.is_connected( mot.second.name );
-
+    for (auto &mot : this->motors) {
+      // am I connected?
+      bool _isopen = mot.second.is_connected();
+      // count number connected
       num_open += ( _isopen ? 1 : 0 );
-
-      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
-      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
+      // make lists of connected|unconnected motors
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.first );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.first : "" );
     }
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
+    if ( num_open == this->motors.size() ) retstring = "true"; else retstring = "false";
 
     // Log who's connected and not
     //
     if ( !connected.empty() ) {
-      message.str(""); message << "connected to" << connected;
-      logwrite( function, message.str() );
+      logwrite(function, "connected to"+connected);
     }
     if ( !unconnected.empty() ) {
-      message.str(""); message << "not connected to" << unconnected;
-      logwrite( function, message.str() );
+      logwrite(function, "not connected to"+unconnected);
     }
 
-    return( error );
+    return NO_ERROR;
   }
   /***** Flexure::Interface::is_open ******************************************/
 
@@ -151,10 +118,8 @@ namespace Flexure {
    *
    */
   long Interface::set( std::string args, std::string &retstring ) {
-    std::string function = "Flexure::Interface::set";
+    const std::string function("Flexure::Interface::set");
     std::stringstream message;
-
-    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -163,56 +128,47 @@ namespace Flexure {
       retstring.append( " <chan> <axis> <pos>\n" );
       retstring.append( "  Set position of indicated <chan> and <axis> to <pos>,\n" );
       retstring.append( "  where <chan> <axis> <min> <max> are as follows:\n" );
-      for ( const auto &mot : _motormap ) {
-        for ( const auto &axis : mot.second.axes ) {
-          retstring.append( "     " );
-          retstring.append( mot.first ); retstring.append( " " );
-          message.str(""); message << axis.first << " ";
-          retstring.append( message.str() );
-          message.str(""); message << std::fixed << std::setprecision(3) << axis.second.min << " " << axis.second.max;
-          retstring.append( message.str() );
-          retstring.append( "\n" );
+      try {
+        for (auto &mot : this->motors) {
+          const auto &motor = mot.second;
+          for (int axisnum : motor.axes()) {
+            auto ax = motor.axis(axisnum);
+            if (!ax) continue;
+            retstring.append( "     " );
+            retstring.append( mot.first ); retstring.append( " " );
+            message.str(""); message << ax->axisnum << " ";
+            retstring.append( message.str() );
+            message.str(""); message << std::fixed << std::setprecision(3) << ax->min << " " << ax->max;
+            retstring.append( message.str() );
+            retstring.append( "\n" );
+          }
         }
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR: "+std::string(e.what()));
+        return ERROR;
       }
       return HELP;
     }
 
-    // Tokenize the input arg list,
-    // expecting <chan> <axis> <pos>
-    //
-    std::transform( args.begin(), args.end(), args.begin(), ::toupper );
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
-
-    if ( tokens.size() != 3 ) {
-      logwrite( function, "ERROR invalid arguments. expected <chan> <axis> <pos>" );
-      retstring="invalid_argument";
-      return( ERROR );
-    }
-
+    make_uppercase(args);
+    std::istringstream iss(args);
     std::string chan;
     int axis;
     float pos;
 
-    try {
-      chan = tokens[0];
-      axis = std::stoi( tokens[1] );
-      pos  = std::stof( tokens[2] );
-    }
-    catch ( const std::invalid_argument &e ) {
-      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
-      logwrite( function, message.str() );
-      retstring="invalid_argument";
-      return( ERROR );
-    }
-    catch ( const std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
-      logwrite( function, message.str() );
-      retstring="out_of_range";
-      return( ERROR );
+    if (!(iss >> chan >> axis >> pos)) {
+      logwrite(function, "ERROR expected <chan> <axis> <pos>");
+      return ERROR;
     }
 
-    return this->motorinterface.moveto( chan, axis, pos, retstring );
+    long error = this->motors.at(chan).moveto(axis, pos, retstring);
+
+    message << (error==NO_ERROR ? "success" : "failed")
+            << " moving " << chan << " axis " << axis << " to " << pos;
+    logwrite(function, message.str());
+
+    return error;
   }
   /***** Flexure::Interface::set **********************************************/
 
@@ -226,10 +182,8 @@ namespace Flexure {
    *
    */
   long Interface::get( std::string args, std::string &retstring ) {
-    std::string function = "Flexure::Interface::get";
+    const std::string function("Flexure::Interface::get");
     std::stringstream message;
-
-    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -238,55 +192,33 @@ namespace Flexure {
       retstring.append( " <chan> <axis>\n" );
       retstring.append( "  Get position of indicated <chan> and <axis>,\n" );
       retstring.append( "  where <chan> <axis> are as follows:\n" );
-      for ( const auto &mot : _motormap ) {
-        for ( const auto &axis : mot.second.axes ) {
-          message.str(""); message << "     " << mot.first << " " << axis.first << "\n";
+      for (auto &mot : this->motors) {
+        const auto &motor = mot.second;
+        for (int axisnum : motor.axes()) {
+          message.str(""); message << "     " << mot.first << " " << axisnum << "\n";
           retstring.append( message.str() );
         }
       }
       return HELP;
     }
 
-    // Tokenize the input arg list,
-    // expecting <chan> <axis>
-    //
-    std::transform( args.begin(), args.end(), args.begin(), ::toupper );
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
-
-    if ( tokens.size() != 2 ) {
-      logwrite( function, "ERROR invalid arguments. expected <chan> <axis>" );
-      retstring="invalid_argument";
-      return( ERROR );
-    }
-
+    std::istringstream iss(args);
     std::string chan;
     int axis;
 
-    try {
-      chan = tokens[0];
-      axis = std::stoi( tokens[1] );
-    }
-    catch ( const std::invalid_argument &e ) {
-      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
-      logwrite( function, message.str() );
+    if (!(iss >> chan >> axis)) {
+      logwrite( function, "ERROR parsing arguments. expected <chan> <axis>" );
       retstring="invalid_argument";
-      return( ERROR );
-    }
-    catch ( const std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing args \"" << args << "\" : " << e.what();
-      logwrite( function, message.str() );
-      retstring="out_of_range";
-      return( ERROR );
+      return ERROR;
     }
 
     // get the position
     //
     std::string posstring;
-    auto addr=this->motorinterface.get_motormap()[chan].addr;
+    auto addr=this->motors.at(chan).get_addr();
     float position=NAN;
     std::string posname;
-    long error = this->motorinterface.get_pos( chan, axis, addr, position, posname );
+    long error = this->motors.at(chan).get_pos(axis, addr, position, posname);
 
     // form the return value
     //
@@ -298,7 +230,7 @@ namespace Flexure {
     message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " " << retstring;
     this->async.enqueue( message.str() );
 
-    return( error );
+    return error;
   }
   /***** Flexure::Interface::get **********************************************/
 
@@ -361,7 +293,11 @@ namespace Flexure {
    *
    */
   long Interface::send_command( const std::string &name, std::string cmd ) {
-    return this->motorinterface.send_command( name, cmd );
+    if (this->motors.find(name)==this->motors.end()) {
+      logwrite("Flexure::Interface::send_command", "ERROR '"+name+"' not configured");
+      return ERROR;
+    }
+    return this->motors.at(name).send_command(cmd);
   }
   /***** Flexure::Interface::send_command *************************************/
 
@@ -380,11 +316,15 @@ namespace Flexure {
    *
    */
   long Interface::send_command( const std::string &name, std::string cmd, std::string &retstring ) {
+    if (this->motors.find(name)==this->motors.end()) {
+      logwrite("Flexure::Interface::send_command", "ERROR '"+name+"' not configured");
+      return ERROR;
+    }
     if ( cmd.find( "?" ) != std::string::npos ) {
-      return( this->motorinterface.send_command( name, cmd, retstring ) );
+      return this->motors.at(name).send_command(cmd, &retstring);
     }
     else {
-      return( this->motorinterface.send_command( name, cmd ) );
+      return this->motors.at(name).send_command(cmd);
     }
   }
   /***** Flexure::Interface::send_command *************************************/
@@ -410,24 +350,24 @@ namespace Flexure {
 
     // get all flexure actuator positions
     //
-    auto _motormap = this->motorinterface.get_motormap();
-
-    // loop through all motors in motormap
-    for ( const auto &mot : _motormap ) {
+    for (auto &mot : this->motors) {
+      const auto &motor = mot.second;
       // loop through all axes for each motor
-      for ( const auto &axis : mot.second.axes ) {
-        auto chan = mot.second.name;
-        auto addr = mot.second.addr;
+      for (int axisnum : motor.axes()) {
+        auto ax = motor.axis(axisnum);
+        if (!ax) continue;
+        auto chan = mot.first;
+        auto addr = mot.second.get_addr();
         float position = NAN;
         std::string posname;
         std::string key;
-        this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
-        switch ( axis.second.axisnum ) {
+        mot.second.get_pos(axisnum, addr, position, posname);
+        switch ( axisnum ) {
           case 1 : key = "FLXPIS_" + chan; break;
           case 2:  key = "FLXSPE_" + chan; break;
           case 3:  key = "FLXSPA_" + chan; break;
           default: key = "error";
-                   message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
+                   message.str(""); message << "ERROR unknown axis " << axisnum;
                    logwrite( function, message.str() );
         }
 
@@ -577,8 +517,6 @@ namespace Flexure {
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
-
     Tokenize( args, tokens, " " );
 
     if ( tokens.size() < 1 ) {
@@ -600,16 +538,19 @@ namespace Flexure {
     //
     if ( testname == "motormap" ) {
       retstring="name host:port addr naxes \n      axisnum min max reftype defpos";
-      for ( const auto &mot : _motormap ) {
+      for (auto &mot : this->motors) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
-                                 << mot.second.host << ":"
-                                 << mot.second.port << " "
-                                 << mot.second.addr << " "
-                                 << mot.second.naxes;
-        for ( const auto &axis : mot.second.axes ) {
-          message << "\n      " << axis.second.axisnum << " " << axis.second.min << " " << axis.second.max << " "
-                  << axis.second.reftype << " " << axis.second.defpos;
+                                 << mot.second.get_host() << ":"
+                                 << mot.second.get_port() << " "
+                                 << mot.second.get_addr() << " "
+                                 << mot.second.get_naxes();
+        const auto &motor = mot.second;
+        for (int axisnum : motor.axes()) {
+          auto ax = motor.axis(axisnum);
+          if (!ax) continue;
+          message << "\n      " << axisnum << " " << ax->min << " " << ax->max << " "
+                  << ax->reftype << " " << ax->defpos;
         }
         retstring.append( message.str() );
       }

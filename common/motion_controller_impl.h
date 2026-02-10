@@ -16,8 +16,8 @@ namespace MotionController {
    * @details    This function will expect and return a reply if the retstring
    *             parameter is provided (defaults to nullptr).
    * @param[in]  name       name of motor
-   * @param[in]  cmd        command to send
-   * @param[out] retstring  reply read back from device if provided
+   * @param[in]  cmd        reference to command to send
+   * @param[out] retstring  optional reply read back from device if provided
    * @return     ERROR or NO_ERROR
    *
    */
@@ -50,9 +50,11 @@ namespace MotionController {
 
     if ( written <= 0 ) return ERROR;         // return error if error writing to socket
 
-    if (retstring==nullptr) return NO_ERROR;  // no reply needed
+    // If retstring was not supplied then no reply needed,
+    //
+    if (retstring==nullptr) return NO_ERROR;
 
-    // read the reply when retstring is supplied
+    // otherwise read the reply when retstring is supplied.
     //
     while ( error == NO_ERROR && retval >= 0 ) {
 

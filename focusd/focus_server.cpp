@@ -645,7 +645,7 @@ namespace Focus {
                         ret=HELP;
                       }
                       else {
-                        this->interface.make_telemetry_message( retstring );
+                        this->interface.make_telemetry_message(&retstring);
                         ret = JSON;
                       }
       }
