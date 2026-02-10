@@ -75,6 +75,7 @@ struct SequenceState {
   bool waiting_for_tcsop = false;
   bool user_wait_after_failure = false;
   bool continue_will_expose = false;
+  bool continue_starts_acquisition = false;
   bool ontarget = false;
   bool guiding_on = false;
   bool guiding_failed = false;
@@ -106,6 +107,7 @@ struct SequenceState {
     waiting_for_tcsop = false;
     user_wait_after_failure = false;
     continue_will_expose = false;
+    continue_starts_acquisition = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -134,6 +136,7 @@ struct SequenceState {
     waiting_for_tcsop = false;
     user_wait_after_failure = false;
     continue_will_expose = false;
+    continue_starts_acquisition = false;
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -663,7 +666,7 @@ class SeqProgressGui {
     if (state_.waiting_for_tcsop) {
       status = "WAITING FOR TCS OPERATOR (ONTARGET)";
     } else if (state_.waiting_for_user) {
-      status = "WAITING FOR USER CONTINUE";
+      status = "WAITING FOR USER ACTION";
     } else if (state_.phase_active[PHASE_SLEW]) {
       status = "SLEWING";
     } else if (state_.phase_active[PHASE_SOLVE]) {
@@ -734,10 +737,14 @@ class SeqProgressGui {
 
   void draw_buttons() {
     draw_button(ontarget_btn_, "ONTARGET", state_.waiting_for_tcsop);
-    const char *continue_label = "CONTINUE";
-    if (state_.waiting_for_user && state_.continue_will_expose) {
-      bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
-      continue_label = has_offset ? "OFFSET & EXPOSE" : "EXPOSE";
+    const char *continue_label = "EXPOSE";
+    if (state_.waiting_for_user) {
+      if (state_.continue_starts_acquisition) {
+        continue_label = "START ACQUISITION";
+      } else {
+        bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
+        continue_label = has_offset ? "OFFSET & EXPOSE" : "EXPOSE";
+      }
     }
     draw_button(continue_btn_, continue_label, state_.waiting_for_user);
   }
@@ -1280,11 +1287,8 @@ class SeqProgressGui {
     if (msg.find("NOTICE: waiting for USER") != std::string::npos) {
       state_.waiting_for_user = true;
       // Determine what "continue" will do based on the wait message
-      if (msg.find("start acquisition") != std::string::npos) {
-        state_.continue_will_expose = false;
-      } else {
-        state_.continue_will_expose = true;
-      }
+      state_.continue_starts_acquisition = (msg.find("start acquisition") != std::string::npos);
+      state_.continue_will_expose = !state_.continue_starts_acquisition;
       // Detect if this is a failure-based user wait
       if (msg.find("guiding failed") != std::string::npos ||
           msg.find("fine tune failed") != std::string::npos) {
@@ -1295,6 +1299,7 @@ class SeqProgressGui {
       state_.waiting_for_user = false;
       state_.user_wait_after_failure = false;
       state_.continue_will_expose = false;
+      state_.continue_starts_acquisition = false;
     }
     if (msg.find("NOTICE: waiting for ACAM guiding") != std::string::npos) {
       state_.guiding_on = false;
