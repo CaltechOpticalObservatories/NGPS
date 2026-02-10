@@ -144,10 +144,10 @@ namespace MotionController {
 
       // these functions need the name of the motor
       //
-      const AxisInfo* axis(int axis) const { return _controller->get_axis(_name, axis); }
-//    const PosInfo* posmap(const std::string &posname) const { return _controller->get_posmap(_name, posname); }
+      const AxisInfo* axisinfo(int axis) const { return _controller->get_axisinfo(_name, axis); }
+      const PosInfo* posinfo(const std::string &posname) const { return _controller->get_posinfo(_name, posname); }
 
-//    const std::map<int, AxisInfo>* axes() const { return _controller->get_axes_map(_name); }
+      const std::map<int, AxisInfo>* axesmap() const { return _controller->get_axesmap(_name); }
       const std::map<std::string, PosInfo>* posmap() const { return _controller->get_posmap(_name); }
 
       std::vector<int> axes() const { return _controller->get_axes(_name); }
@@ -174,8 +174,12 @@ namespace MotionController {
         return _controller->get_pos(_name, axisnum, position); }
       long get_pos(int axisnum, float &position, std::string &posname) {
         return _controller->get_pos(_name, axisnum, position, &posname); }
+      long get_pos(int axisnum, float &position, std::string &posname, float tolerance) {
+        return _controller->get_pos(_name, axisnum, position, &posname, tolerance); }
       long get_pos(int axisnum, int addr, float &position, std::string &posname) {
         return _controller->get_pos(_name, axisnum, position, &posname, addr); }
+      long get_pos(int axisnum, int addr, float &position, std::string &posname, float tolerance) {
+        return _controller->get_pos(_name, axisnum, position, &posname, tolerance, addr); }
 
       long moveto(int axisnum, const std::string &posstr, std::string &retstring) {
         return _controller->moveto(_name, axisnum, posstr, retstring); }
@@ -236,10 +240,10 @@ namespace MotionController {
 
       // these are implemented here
       //
-      const AxisInfo* get_axis(const std::string &name, int axis) const;
-      const PosInfo* get_posmap(const std::string &name, const std::string &posname) const;
+      const AxisInfo* get_axisinfo(const std::string &name, int axis) const;
+      const PosInfo* get_posinfo(const std::string &name, const std::string &posname) const;
 
-      std::map<int, AxisInfo>* get_axes_map(const std::string &name) const override;
+      const std::map<int, AxisInfo>* get_axesmap(const std::string &name) const override;
       const std::map<std::string, PosInfo>* get_posmap(const std::string &name) const override;
 
       std::vector<int> get_axes(const std::string &name) const override;

@@ -317,19 +317,17 @@ namespace Acam {
     if ( arglist.size() == 2 ) {
       std::string posname = arglist[1];
 
-      // Check that posname is found in the motormap.posmap map
-      //
-      if (!this->motors.at(name).has_pos(posname)) {
+      const auto* posinfo = this->motors.at(name).posinfo(posname);
+
+      if (posinfo==nullptr) {  // posname not found in the motormap.posmap map
         logwrite(function, "ERROR position '"+posname+"' not found in configuration.");
         retstring="posname_not_found";
         return ERROR;
       }
 
-      auto posinfo = this->motors.at(name).posmap()->at(posname);
-
       retstream << posname << ": "
-                << "posid="    << posinfo.posid
-                << "position=" << posinfo.position;
+                << "posid="    << posinfo->posid
+                << "position=" << posinfo->position;
       retstring = retstream.str();
       logwrite( function, retstring );
     }
@@ -381,10 +379,7 @@ namespace Acam {
    *
    */
   long MotionInterface::send_command( const std::string &name, std::string cmd ) {
-    std::string function = "Acam::MotionInterface::send_command";
-    std::stringstream message;
-
-    return( this->motorinterface.send_command( name, cmd ) );
+    return this->motors.at(name).send_command(cmd);
   }
   /***** Acam::MotionInterface::send_command **********************************/
 
@@ -407,10 +402,10 @@ namespace Acam {
     std::stringstream message;
 
     if ( cmd.find( "?" ) != std::string::npos ) {
-      return ( this->motorinterface.send_command( name, cmd, retstring ) );
+      return this->motors.at(name).send_command(cmd, &retstring);
     }
     else {
-      return( this->motorinterface.send_command( name, cmd ) );
+      return this->motors.at(name).send_command(cmd);
     }
   }
   /***** Acam::MotionInterface::send_command **********************************/
@@ -425,12 +420,10 @@ namespace Acam {
    *
    */
   long MotionInterface::filter( std::string destname, std::string &retstring ) {
-    std::string function = "Acam::MotionInterface::filter";
+    const std::string function("Acam::MotionInterface::filter");
     std::string filter = "filter";
     std::stringstream message;
     long error = NO_ERROR;
-
-    auto _motormap = this->motorinterface.get_motormap();
 
     // Help
     //
@@ -439,15 +432,15 @@ namespace Acam {
       retstring.append( " [ <filtername> | home | ishome ]\n" );
       retstring.append( "  Move filterwheel to filter <filtername> \n" );
       retstring.append( "  where <filtername> = { " );
-      for ( const auto &pos : _motormap[ filter ].posmap ) {
-        retstring.append( pos.first );
-        retstring.append( " " );
+      for (const auto &[posname, posinfo] : *this->motors.at(filter).posmap()) {
+        retstring.append(posname);
+        retstring.append(" ");
       }
       retstring.append( "}\n" );
       retstring.append( "  and return <filtername>.\n" );
       retstring.append( "  Optionally home the filterwheel or check if homed, return true|false.\n" );
       retstring.append( "  If no arg provided, return only the current <filtername>.\n" );
-      return( HELP );
+      return HELP;
     }
 
     // Option to home the filter or check if homed
@@ -470,7 +463,7 @@ namespace Acam {
     if ( error==NO_ERROR && ishome != "true" ) {
       logwrite( function, "ERROR: filter motor is not homed" );
       retstring = "not_homed";
-      return( ERROR );
+      return ERROR;
     }
 
     // If destname is supplied then move wheel to that position.
@@ -481,19 +474,18 @@ namespace Acam {
       float currpos;
       int axis = 1;
 
-      // Check that destname is found in the motormap.posmap map
-      //
-      if ( _motormap[filter].posmap.find( destname ) == _motormap[filter].posmap.end() ) {
-        message.str(""); message << "ERROR: position \"" << destname << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
+      const auto* posinfo = this->motors.at(filter).posinfo(destname);
+
+      if (posinfo==nullptr) {
+        logwrite(function, "ERROR position '"+destname+"' not found in configuration");
         retstring="filter_not_found";
-        return( ERROR );
+        return ERROR;
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << _motormap[filter].posmap[destname].posname << " "
-                               << "posid="        << _motormap[filter].posmap[destname].posid << " "
-                               << "position="     << _motormap[filter].posmap[destname].position;
+      message.str(""); message << "[DEBUG] dest=" << posinfo->posname << " "
+                               << "posid="        << posinfo->posid << " "
+                               << "position="     << posinfo->position;
       logwrite( function, message.str() );
 #endif
 
@@ -503,8 +495,8 @@ namespace Acam {
 
       // Where do we want to go?
       //
-      int destid = _motormap[ filter ].posmap[ destname ].posid;
-      float destpos = _motormap[ filter ].posmap[ destname ].position;
+      int destid = posinfo->posid;
+      float destpos = posinfo->position;
       int newid = mod( ( destid + ( 2 - currid ) ) , 6 );
 
       // Find the position for id=2 so that we can temporarily remap
@@ -513,12 +505,21 @@ namespace Acam {
       // either direction +/- from the middle, without having to go
       // possibly the long way around.
       //
-      std::stringstream cmd;
-      float remap;
-      for ( auto fit  = _motormap[filter].posmap.begin();
-                 fit != _motormap[filter].posmap.end(); ++fit) {
-        if ( fit->second.posid == 2 ) remap = fit->second.position;       // remap = (position for posid=2)
+      float remap=NAN;
+      const auto* posmap = this->motors.at(filter).posmap();
+      if (posmap != nullptr) {
+        for (const auto &[name, pos] : *posmap) {
+          if (pos.posid == 2) {
+            remap = pos.position;  // remap = (position for posid=2)
+            break;
+          }
+        }
       }
+      if (std::isnan(remap)) {
+        logwrite(function, "ERROR no position found for midpoint position id=2");
+        return ERROR;
+      }
+      std::ostringstream cmd;
       cmd.str(""); cmd << "RON " << axis << " 0";         this->send_command( filter, cmd.str() );  // reference mode on
       cmd.str(""); cmd << "POS " << axis << " " << remap; this->send_command( filter, cmd.str() );  // set position of axis
       cmd.str(""); cmd << "RON " << axis << " 1";         this->send_command( filter, cmd.str() );  // reference mode off
@@ -526,11 +527,13 @@ namespace Acam {
       // Now move to the position with the calculated "newid"
       //
       float newpos=NAN;
-      for ( auto fit  = _motormap[filter].posmap.begin();
-                 fit != _motormap[filter].posmap.end(); ++fit) {
-        if ( fit->second.posid == newid ) newpos = fit->second.position;  // newpos = (position for posid=newid)
+      for (const auto &[name, pos] : *posmap) {
+        if (pos.posid == newid) {
+          newpos = pos.position;   // newpos = (position for posid=newid)
+          break;
+        }
       }
-      if ( ! std::isnan( newpos ) ) error = this->motorinterface.moveto( filter, axis, newpos, retstring );
+      if ( ! std::isnan( newpos ) ) error = this->motors.at(filter).moveto( axis, newpos, retstring );
       else {
         message.str(""); message << "ERROR: no position found for filter ID " << newid;
         logwrite( function, message.str() );
@@ -598,9 +601,8 @@ namespace Acam {
    *
    */
   long MotionInterface::get_current_filter( std::string &currname, int &currid, float &currpos ) {
-    std::string function = "Acam::MotionInterface::currernt_filter";
+    const std::string function("Acam::MotionInterface::currernt_filter");
     std::string filter = "filter";
-    std::stringstream message;
     long error = NO_ERROR;
     float tolerance = 2;
 
@@ -608,11 +610,10 @@ namespace Acam {
     //
     std::string posstring;
     int axis=1;
-    auto filter_motor = this->motorinterface.get_motormap()[filter];
     currpos=NAN;
     std::string posname;
 
-    error = this->motorinterface.get_pos( filter, axis, filter_motor.addr, currpos, posname, tolerance );
+    error = this->motors.at(filter).get_pos( axis, currpos, posname, tolerance );
 
     // save the filter name to the class
     //
@@ -624,15 +625,21 @@ namespace Acam {
 
     // return the id of this position
     //
-    currid = filter_motor.posmap[posname].posid;
+    const auto* posinfo = this->motors.at(filter).posinfo(posname);
+    if (posinfo==nullptr) {
+      logwrite(function, "ERROR position '"+posname+"' not found in configuration");
+      return ERROR;
+    }
+    currid = posinfo->posid;
 
     // log the position and name
     //
-    message.str(""); message << std::fixed << std::setprecision(3) << currpos;
+    std::ostringstream message;
+    message << std::fixed << std::setprecision(3) << currpos;
     if ( ! posname.empty() ) { message << " (" << posname << ")"; }
     logwrite( function, message.str() );
 
-    return( error );
+    return error;
   }
   /***** Acam::MotionInterface::get_current_filter ****************************/
 
@@ -649,7 +656,6 @@ namespace Acam {
     std::string function = "Acam::MotionInterface::cover";
     std::string cover = "cover";
     std::stringstream message;
-    float tolerance = 2;
     long error = NO_ERROR;
 
     // Help
@@ -688,7 +694,6 @@ namespace Acam {
     }
 
     int axis = 1;
-    auto _motormap = this->motorinterface.get_motormap();
 
     // If posname is supplied then move cover to that position.
     //
@@ -696,21 +701,22 @@ namespace Acam {
 
       // Check that posname is found in the motormap.posmap map
       //
-      if ( _motormap[cover].posmap.find( posname ) == _motormap[cover].posmap.end() ) {
-        message.str(""); message << "ERROR: position \"" << posname << "\" not found. Check configuration.";
-        logwrite( function, message.str() );
+      const auto* posinfo = this->motors.at(cover).posinfo(posname);
+
+      if (posinfo==nullptr) {
+        logwrite(function, "ERROR position '"+posname+"' not found in configuration");
         retstring="not_found";
-        return( ERROR );
+        return ERROR;
       }
 
 #ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] dest=" << _motormap[cover].posmap[posname].posname << " "
-                               << "posid="        << _motormap[cover].posmap[posname].posid << " "
-                               << "position="     << _motormap[cover].posmap[posname].position;
+      message.str(""); message << "[DEBUG] dest=" << posinfo->posname << " "
+                               << "posid="        << posinfo->posid << " "
+                               << "position="     << posinfo->position;
       logwrite( function, message.str() );
 #endif
 
-      this->motorinterface.moveto( cover, axis, _motormap[cover].posmap[posname].position, retstring );
+      this->motors.at(cover).moveto( axis, posinfo->position, retstring );
 
     }
 
@@ -722,13 +728,13 @@ namespace Acam {
     //
     message.str(""); message << posname << " "
                              << std::fixed << std::setprecision(3)
-                             << _motormap[cover].posmap[posname].position;
+                             << this->current_coverpos;
     if ( ! posname.empty() ) { message << " (" << posname << ")"; }
     logwrite( function, message.str() );
 
     retstring=message.str();
 
-    return( error );
+    return error;
   }
   /***** Acam::MotionInterface::cover *****************************************/
 
@@ -746,12 +752,12 @@ namespace Acam {
 
     // get the position
     //
-    auto addr=this->motorinterface.get_motormap()[cover].addr;
+    auto addr=this->motors.at(cover).get_addr();
     float position=NAN;
     int axis = 1;
     float tolerance = 2;
 
-    long error = this->motorinterface.get_pos( cover, axis, addr, position, retstring, tolerance );
+    long error = this->motors.at(cover).get_pos( axis, addr, position, retstring, tolerance );
 
     this->current_coverpos = retstring;
 

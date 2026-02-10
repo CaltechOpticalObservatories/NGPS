@@ -86,7 +86,7 @@ namespace Galil {
    */
   template <typename ControllerType>
   long Interface<ControllerType>::get_pos(const std::string &name, int axisnum, float &position,
-                                          std::string* posname, int addr) {
+                                          std::string* posname, float tol, int addr) {
     const std::string function("Galil::Interface::get_pos");
     logwrite(function, "ERROR not implemented");
     return ERROR;

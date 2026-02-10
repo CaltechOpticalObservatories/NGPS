@@ -273,33 +273,20 @@ namespace Focus {
       retstring.append( " <chan> { <pos> | nominal }\n" );
       retstring.append( "  Set focus position of indicated channel to <pos> or to the nominal best focus.\n" );
       retstring.append( "  where <chan> <min> <nominal> <max> are as follows:\n" );
-      /***
-      try {
-        for (auto &mot : this->motors) {
-          auto ax = mot.second.axis(axis);
-          auto pos = mot.second.posmap(std::string("nominal"));
-          retstring.append( "     " );
-          retstring.append( mot.first ); retstring.append( " " );
-          message.str(""); message << std::fixed << std::setprecision(3) << (ax ? ax->min : NAN) << " ";
-          retstring.append( message.str() );
-          message.str(""); message << std::fixed << std::setprecision(3) << (pos ? pos->position : NAN) << " ";
-          retstring.append( message.str() );
-          message.str(""); message << std::fixed << std::setprecision(3) << (ax ? ax->max : NAN) << " ";
-          retstring.append( message.str() );
-          retstring.append( "\n" );
-        }
+      // loop through all motors
+      for (auto &mot : this->motors) {
+        const auto* ax = mot.second.axisinfo(axis);       // get the AxisInfo map for this motor and axis
+        const auto* pos = mot.second.posinfo("nominal");  // get the PosInfo map for this motor and "nominal" pos
+        retstring.append( "     " );
+        retstring.append( mot.first ); retstring.append( " " );
+        message.str(""); message << std::fixed << std::setprecision(3) << (ax ? ax->min : NAN) << " ";
+        retstring.append( message.str() );
+        message.str(""); message << std::fixed << std::setprecision(3) << (pos ? pos->position : NAN) << " ";
+        retstring.append( message.str() );
+        message.str(""); message << std::fixed << std::setprecision(3) << (ax ? ax->max : NAN) << " ";
+        retstring.append( message.str() );
+        retstring.append( "\n" );
       }
-      catch( std::invalid_argument &e ) {
-        message.str(""); message << "ERROR invalid argument: " << e.what();
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-      catch( std::out_of_range &e ) {
-        message.str(""); message << "ERROR out of range: " << e.what();
-        logwrite( function, message.str() );
-        return( ERROR );
-      }
-      ***/
       return HELP;
     }
 

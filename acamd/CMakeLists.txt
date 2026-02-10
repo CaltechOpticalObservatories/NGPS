@@ -64,6 +64,7 @@ target_link_libraries(acamd
         andor
         python3.9
         physik_instrumente
+        motioncontroller
         network
         common
         tcsd_client

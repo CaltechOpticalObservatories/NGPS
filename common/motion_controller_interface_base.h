@@ -36,11 +36,11 @@ namespace MotionController {
 
       // there are name-based functions
       //
-      virtual const std::map<int, AxisInfo>* get_axes_map(const std::string &name) const = 0;
+      virtual const std::map<int, AxisInfo>* get_axesmap(const std::string &name) const = 0;
       virtual const std::map<std::string, PosInfo>* get_posmap(const std::string &name) const = 0;
 
-      virtual const AxisInfo* get_axis(const std::string &name, int axis) const = 0;
-      virtual const PosInfo* get_posmap(const std::string &name, const std::string &posname) const = 0;
+      virtual const AxisInfo* get_axisinfo(const std::string &name, int axis) const = 0;
+      virtual const PosInfo* get_posinfo(const std::string &name, const std::string &posname) const = 0;
 
       virtual long add_posmap(const std::string &name, const PosInfo &posinfo) = 0;
       virtual bool has_posname(const std::string &name, const std::string &posname) const = 0;
@@ -64,7 +64,7 @@ namespace MotionController {
 
       virtual long moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) = 0;
       virtual long get_pos(const std::string &name, int axisnum, float &position,
-                           std::string* posname=nullptr, int addr=-1) = 0;
+                           std::string* posname=nullptr, float tol=NAN, int addr=-1) = 0;
 
       virtual long send_command(const std::string &name, const std::string &cmd, std::string* retstring=nullptr) = 0;
 

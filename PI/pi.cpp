@@ -1290,7 +1290,7 @@ namespace Physik_Instrumente {
    */
   template <typename ControllerType>
   long Interface<ControllerType>::get_pos(const std::string &name, int axisnum, float &position,
-                                          std::string* posname, int addr) {
+                                          std::string* posname, float tol, int addr) {
     const std::string function("Physik_Instrumente::Interface::get_pos");
 
     // Check that requested name is defined in the motormap
@@ -1328,10 +1328,14 @@ namespace Physik_Instrumente {
     position=NAN;
     long error = this->_get_pos( name, axisnum, addr, position );
 
+    // if tolerance not supplied then use the value from the class constructor
+    //
+    if (std::isnan(tol)) tol=this->tolerance;
+
     // does this position have a corresponding name in the posmap for this actuator?
     //
     for ( const auto &pos : this->motormap[name].posmap ) {
-      if ( std::abs( pos.second.position - position ) < this->tolerance ) {
+      if ( std::abs( pos.second.position - position ) < tol ) {
         if (posname) *posname = pos.second.posname;
         break;
       }

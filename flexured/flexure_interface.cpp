@@ -128,25 +128,21 @@ namespace Flexure {
       retstring.append( " <chan> <axis> <pos>\n" );
       retstring.append( "  Set position of indicated <chan> and <axis> to <pos>,\n" );
       retstring.append( "  where <chan> <axis> <min> <max> are as follows:\n" );
-      try {
-        for (auto &mot : this->motors) {
-          const auto &motor = mot.second;
-          for (int axisnum : motor.axes()) {
-            auto ax = motor.axis(axisnum);
-            if (!ax) continue;
-            retstring.append( "     " );
-            retstring.append( mot.first ); retstring.append( " " );
-            message.str(""); message << ax->axisnum << " ";
-            retstring.append( message.str() );
-            message.str(""); message << std::fixed << std::setprecision(3) << ax->min << " " << ax->max;
-            retstring.append( message.str() );
-            retstring.append( "\n" );
-          }
+      // loop through all motors
+      for (auto &mot : this->motors) {
+        // get a pointer to the axes map for this motor
+        const auto* axesmap = mot.second.axesmap();
+        if (!axesmap) continue;
+        // dereference and loop through axes
+        for (const auto &[axisnum, axisinfo] : *axesmap) {
+          retstring.append( "     " );
+          retstring.append( mot.first ); retstring.append( " " );
+          message.str(""); message << axisnum << " ";
+          retstring.append( message.str() );
+          message.str(""); message << std::fixed << std::setprecision(3) << axisinfo.min << " " << axisinfo.max;
+          retstring.append( message.str() );
+          retstring.append( "\n" );
         }
-      }
-      catch (const std::exception &e) {
-        logwrite(function, "ERROR: "+std::string(e.what()));
-        return ERROR;
       }
       return HELP;
     }
@@ -348,21 +344,20 @@ namespace Flexure {
     nlohmann::json jmessage;
     jmessage["messagetype"]="flexureinfo";
 
-    // get all flexure actuator positions
-    //
+    // loop through all motors
     for (auto &mot : this->motors) {
-      const auto &motor = mot.second;
-      // loop through all axes for each motor
-      for (int axisnum : motor.axes()) {
-        auto ax = motor.axis(axisnum);
-        if (!ax) continue;
+      // get a pointer to the posmap for this motor
+      const auto* posmap = mot.second.posmap();
+      if (!posmap) continue;
+      // dereference and loop through all positions
+      for (const auto &[posname, posinfo] : *posmap) {
         auto chan = mot.first;
-        auto addr = mot.second.get_addr();
+        auto axisnum = posinfo.axis;
         float position = NAN;
-        std::string posname;
         std::string key;
-        mot.second.get_pos(axisnum, addr, position, posname);
-        switch ( axisnum ) {
+        // get the position for this axis
+        mot.second.get_pos(axisnum, position);
+        switch (axisnum) {
           case 1 : key = "FLXPIS_" + chan; break;
           case 2:  key = "FLXSPE_" + chan; break;
           case 3:  key = "FLXSPA_" + chan; break;
@@ -370,7 +365,6 @@ namespace Flexure {
                    message.str(""); message << "ERROR unknown axis " << axisnum;
                    logwrite( function, message.str() );
         }
-
         // assign the position or NaN to a key in the JSON jmessage
         //
         if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
@@ -538,6 +532,7 @@ namespace Flexure {
     //
     if ( testname == "motormap" ) {
       retstring="name host:port addr naxes \n      axisnum min max reftype defpos";
+      // loop through all motors
       for (auto &mot : this->motors) {
         retstring.append("\n");
         message.str(""); message << mot.first << " "
@@ -545,12 +540,13 @@ namespace Flexure {
                                  << mot.second.get_port() << " "
                                  << mot.second.get_addr() << " "
                                  << mot.second.get_naxes();
-        const auto &motor = mot.second;
-        for (int axisnum : motor.axes()) {
-          auto ax = motor.axis(axisnum);
-          if (!ax) continue;
-          message << "\n      " << axisnum << " " << ax->min << " " << ax->max << " "
-                  << ax->reftype << " " << ax->defpos;
+        // get a pointer to the axes map
+        const auto* axesmap = mot.second.axesmap();
+        if (!axesmap) continue;
+        // dereference and loop through axes
+        for (const auto &[axisnum, axisinfo] : *axesmap) {
+          message << "\n      " << axisnum << " " << axisinfo.min << " " << axisinfo.max << " "
+                  << axisinfo.reftype << " " << axisinfo.defpos;
         }
         retstring.append( message.str() );
       }

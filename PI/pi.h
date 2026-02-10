@@ -153,7 +153,8 @@ namespace Physik_Instrumente {
       void test() override;
       bool is_home(const std::string &name) override;
       long moveto(const std::string &name, int axisnum, const std::string &posstr, std::string &retstring) override;
-      long get_pos(const std::string &name, int axisnum, float &position, std::string* posname=nullptr, int addr=-1) override;
+      long get_pos(const std::string &name, int axisnum, float &position,
+                   std::string* posname=nullptr, float tol=NAN, int addr=-1) override;
 
       // PI-only
       //
