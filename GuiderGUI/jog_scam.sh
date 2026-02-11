@@ -33,7 +33,7 @@ crosscenter=`xpaget $id crosshair wcs degrees`
 X0_deg=$(echo $crosscenter | cut -f1 -d ' ')
 Y0_deg=$(echo $crosscenter | cut -f2 -d ' ')
 
-case ${JOG_DIRECTION^^} in
+case "$JOG_DIRECTION" in
   LEFT)
     xpaset -p $id crosshair $JOGSIZE_PX 0 image
     ;;
