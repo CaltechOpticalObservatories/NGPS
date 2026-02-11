@@ -74,7 +74,7 @@ namespace Slit {
 
     // Clear the motormap map before loading new information from the config file
     //
-    this->interface.motorinterface.clear_motormap();
+    this->interface.pi_interface->clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -168,8 +168,38 @@ namespace Slit {
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
-          this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
+        std::istringstream iss(config.arg[entry]);
+        std::string name, type, host;
+        int port, addr, axes;
+        long ret=NO_ERROR;
+
+        if (!(iss >> name >> type >> host >> port >> addr >> axes)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <type> <host> <port> <addr> <axes> }");
+          error=ERROR;
+          continue;
+        }
+
+        // call the load_controller_config for the appropriate vendor
+        if (type=="PI") {
+          if (!this->interface.pi_interface) {
+            // initialize a pointer if it doesn't already exist
+            this->interface.pi_interface = std::make_unique<
+            Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo>>(MOVE_TIMEOUT,
+                                                                          HOME_TIMEOUT,
+                                                                          NAN);
+          }
+          this->interface.motors.emplace(name, MotionController::Name(this->interface.pi_interface.get(), name));
+          ret = this->interface.pi_interface->load_controller_config(config.arg[entry]);
+        }
+        else {
+          logwrite(function, "ERROR: unknown type. Expected { PI | GALIL }");
+          error=ERROR;
+          continue;
+        }
+
+        if (ret==NO_ERROR) {
+          message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
+          this->interface.async.enqueue_and_log( function, message.str() );
           applied++;
         }
       }
@@ -177,33 +207,36 @@ namespace Slit {
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
       //
       if ( config.param[entry].find( "MOTOR_AXIS" ) == 0 ) {
+        std::istringstream iss(config.arg[entry]);
+        std::string name, ref;
+        int axis;
+        double min, max, zero, def;
 
-        Physik_Instrumente::AxisInfo AXIS;
-
-        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+        if (!(iss >> name >> axis >> min >> max >> zero >> ref)) {
+          logwrite(function, "ERROR: bad config input. Expected { <name> <axis> <min> <max> <zero> <ref> }");
+          error=ERROR;
+          continue;
+        }
+        if (!(iss >> def)) def=NAN;
 
         // Each AXIS is associated with a CONTROLLER by name, so a controller
         // of this name must have already been configured.
         //
-        // loc checks if the motorname for this AXIS is found in the motormap
-        //
-        auto _motormap = this->interface.motorinterface.get_motormap();
-        auto loc = _motormap.find( AXIS.motorname );
-        if ( loc != _motormap.end() ) {
-          this->interface.motorinterface.add_axis( AXIS );
-          this->interface.async.enqueue_and_log( function, "SLITD:config:"+config.param[entry]+"="+config.arg[entry] );
-          applied++;
+        if (this->interface.motors.find(name) == this->interface.motors.end()) {
+          logwrite(function, "ERROR bad config: motor name '"+name+"' has no match in MOTOR_CONTROLLER");
+          error=ERROR;
+          continue;
         }
-        else {
-          message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
-                                   << "has no matching name defined by MOTOR_CONTROLLER";
-          logwrite( function, message.str() );
-          message.str(""); message << "valid names are:";
-          for ( const auto &mot : _motormap ) { message << " " << mot.first; }
-          logwrite( function, message.str() );
-          error = ERROR;
-          break;
-        }
+
+        // parse the axis info into an object
+        Physik_Instrumente::AxisInfo AXIS;
+        if ( AXIS.load_axis_info( config.arg[entry] ) == ERROR ) break;
+
+        // add that object to this motor
+        if ( (error=this->interface.motors.at(name).add_axis(AXIS)) != NO_ERROR ) continue;
+        message.str(""); message << "SLITD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
       }
 
       // MIN_WIDTH: minimum slit width in physical units (mm)

@@ -176,12 +176,10 @@ namespace Slit {
   class Interface {
     private:
       zmqpp::context context;
-      size_t numdev;
 
     public:
       Interface()
         : context(),
-          numdev(0),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false) {
@@ -222,7 +220,11 @@ namespace Slit {
 
       // PI Interface class for Servo type
       //
-      Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo> motorinterface;
+      std::unique_ptr<Physik_Instrumente::Interface<Physik_Instrumente::ServoInfo>> pi_interface;
+
+      // Container to hold all controllers indexed by name
+      //
+      std::map<std::string, MotionController::Name> motors;
 
       // publish/subscribe functions
       //

@@ -24,31 +24,29 @@ namespace Slit {
    *
    */
   long Interface::initialize_class() {
-    std::string function = "Slit::Interface::initialize_class";
+    const std::string function("Slit::Interface::initialize_class");
     std::stringstream message;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
+    auto numdev = this->motors.size();
 
-    this->numdev = _motormap.size();
-
-    if ( this->numdev == 2 ) {
+    if ( numdev == 2 ) {
       logwrite( function, "interface initialized ok" );
       error = NO_ERROR;
     }
-    else if ( this->numdev > 2 ) {
-      message.str(""); message << "ERROR: too many motor controllers: " << this->numdev << ". expected 2";
+    else if ( numdev > 2 ) {
+      message.str(""); message << "ERROR: too many motor controllers: " << numdev << ". expected 2";
       logwrite( function, message.str() );
       error = ERROR;
     }
-    else if ( this->numdev == 1 ) {
+    else if ( numdev == 1 ) {
       logwrite( function, "ERROR: only one motor controller was defined" );
       error = ERROR;
 //    logwrite( function, "WARNING: limited slit range with only one motor controller" );  // consider allowing this?
 //    error = NO_ERROR;
     }
-    else if ( this->numdev < 1 ) {
-      message.str(""); message << "ERROR: no motor controllers: " << this->numdev << ". expected 2";
+    else if ( numdev < 1 ) {
+      message.str(""); message << "ERROR: no motor controllers: " << numdev << ". expected 2";
       logwrite( function, message.str() );
       error = ERROR;
     }
@@ -61,17 +59,15 @@ namespace Slit {
     std::vector<std::string> motornames = { "A", "B" };  // expecting motors with these names!
 
     for ( const auto &name : motornames ) {
-      auto loc = _motormap.find( name );
-
-      if ( loc != _motormap.end() ) {
-        if ( _motormap[name].axes.find(1) != _motormap[name].axes.end() ) {
-          this->maxwidth.mm() += (_motormap[name].axes[1].max-this->center.mm());
-        }
-        else {
+      if (this->motors.find(name) != this->motors.end()) {
+        const auto* axisinfo = this->motors.at(name).axisinfo(1);
+        if (!axisinfo) {
           message.str(""); message << "ERROR motor " << name << " missing configuration for axis 1";
           logwrite( function, message.str() );
           error = ERROR;
+          break;
         }
+        this->maxwidth.mm() += (axisinfo->max-this->center.mm());
       }
       else {
         logwrite( function, "ERROR missing configuration for motor \"A\"" );
@@ -79,7 +75,7 @@ namespace Slit {
       }
     }
 
-    return( error );
+    return error;
   }
   /***** Slit::Interface::initialize_class ************************************/
 
@@ -93,13 +89,14 @@ namespace Slit {
   long Interface::open( ) {
     long error = NO_ERROR;
 
-    // Open the sockets,
-    // clear any error codes on startup, and
-    // enable the servo for each address in controller_info.
-    //
-    error |= this->motorinterface.open();
-    error |= this->motorinterface.clear_errors();
-    error |= this->motorinterface.set_servo( true );
+    // Open connection to all motors
+    for (auto &mot : this->motors) error |= mot.second.open();
+
+    // clear any error codes on startup (PI-only)
+    this->pi_interface->clear_errors();
+
+    // enable motion (servo for PI) for each address in controller_info.
+    for (auto &mot : this->motors) error |= mot.second.enable_motion();
 
     std::string retstring;
 
@@ -124,7 +121,9 @@ namespace Slit {
    *
    */
   long Interface::close( ) {
-    return this->motorinterface.close();
+    long error=NO_ERROR;
+    for (auto &mot : this->motors) error |= mot.second.close();
+    return error;
   }
   /***** Slit::Interface::close ***********************************************/
 
@@ -144,8 +143,6 @@ namespace Slit {
     std::stringstream message;
     long error = NO_ERROR;
 
-    auto _motormap = this->motorinterface.get_motormap();
-
     // Help
     //
     if ( arg == "?" ) {
@@ -161,32 +158,30 @@ namespace Slit {
     size_t num_open=0;
     std::string unconnected, connected;
 
-    for ( const auto &mot : _motormap ) {
-
-      bool _isopen = this->motorinterface.is_connected( mot.second.name );
-
+    for (auto &mot : this->motors) {
+      // am I connected?
+      bool _isopen = mot.second.is_connected();
+      // count number connected
       num_open += ( _isopen ? 1 : 0 );
-
-      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.second.name );
-      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.second.name : "" );
+      // make lists of connected|unconnected motors
+      unconnected.append ( _isopen ? "" : " " ); unconnected.append ( _isopen ? "" : mot.first );
+      connected.append   ( _isopen ? " " : "" ); connected.append   ( _isopen ? mot.first : "" );
     }
 
     // Set the retstring true or false, true only if all controllers are homed.
     //
-    if ( num_open == _motormap.size() ) retstring = "true"; else retstring = "false";
+    if ( num_open == this->motors.size() ) retstring = "true"; else retstring = "false";
 
     // Log who's connected and not
     //
     if ( !connected.empty() ) {
-      message.str(""); message << "connected to" << connected;
-      logwrite( function, message.str() );
+      logwrite(function, "connected to"+connected);
     }
     if ( !unconnected.empty() ) {
-      message.str(""); message << "not connected to" << unconnected;
-      logwrite( function, message.str() );
+      logwrite(function, "not connected to"+unconnected);
     }
 
-    return error;
+    return NO_ERROR;
   }
   /***** Slit::Interface::is_open *********************************************/
 
@@ -220,7 +215,7 @@ namespace Slit {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.home( arg, retstring );
+    return this->motors.at(arg).home(&retstring);
   }
   /***** Slit::Interface::home ************************************************/
 
@@ -254,7 +249,14 @@ namespace Slit {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motorinterface.is_home( arg, retstring );
+    try {
+      retstring = (this->motors.at(arg).is_home() ? "true" : "false");
+    }
+    catch (const std::exception &e) {
+      retstring=std::string(e.what());
+      return ERROR;
+    }
+    return NO_ERROR;
   }
   /***** Slit::Interface::is_home *********************************************/
 
@@ -408,7 +410,7 @@ namespace Slit {
       return ERROR;
     }
 
-    if ( reqoffset.arcsec() < 0 && this->numdev < 2 ) {
+    if ( reqoffset.arcsec() < 0 && this->motors.size() < 2 ) {
       message.str(""); message << "ERROR: negative offset " << reqoffset.arcsec() << " not allowed with only one motor";
       logwrite( function, message.str() );
       retstring="invalid_offset";
@@ -422,12 +424,13 @@ namespace Slit {
 
     // actuator limits
     //
-    auto _motormap = this->motorinterface.get_motormap();
+    const auto* axisinfoA = this->motors.at("A").axisinfo(1);
+    const auto* axisinfoB = this->motors.at("B").axisinfo(1);
 
-    auto minA = SlitDimension( _motormap["A"].axes[1].min, Unit::MM );
-    auto maxA = SlitDimension( _motormap["A"].axes[1].max, Unit::MM );
-    auto minB = SlitDimension( _motormap["B"].axes[1].min, Unit::MM );
-    auto maxB = SlitDimension( _motormap["B"].axes[1].max, Unit::MM );
+    auto minA = SlitDimension( axisinfoA->min, Unit::MM );
+    auto maxA = SlitDimension( axisinfoA->max, Unit::MM );
+    auto minB = SlitDimension( axisinfoB->min, Unit::MM );
+    auto maxB = SlitDimension( axisinfoB->max, Unit::MM );
 
     if ( posA < minA || posA > maxA ) {
       message.str(""); message << "ERROR requested actuator A position " << posA.arcsec()
@@ -465,7 +468,7 @@ namespace Slit {
     std::vector<int> axisnums = { 1, 1 };
     std::vector<std::string> positions = { posAstring.str(), posBstring.str() };
 
-    error = this->motorinterface.moveto( motornames, axisnums, positions, retstring );
+    error = this->pi_interface->moveto( motornames, axisnums, positions, retstring );
 
     // after all the moves, read and return the position
     //
@@ -557,7 +560,7 @@ namespace Slit {
 
     // check here to guard against divide-by-zero
     //
-    if ( this->numdev == 0 ) {
+    if ( this->motors.size() == 0 ) {
       logwrite( "Slit::Interface::read_positions", "ERROR no motor controllers defined!" );
       return ERROR;
     }
@@ -565,14 +568,14 @@ namespace Slit {
     // get the actuator position for each address in controller_info
     //
     int axis=1;
-    if ( this->motorinterface.is_connected("A") ) error |= this->motorinterface.get_pos( "A", axis, posA );
-    if ( this->motorinterface.is_connected("B") ) error |= this->motorinterface.get_pos( "B", axis, posB );
+    error |= this->motors.at("A").get_pos(axis, posA);
+    error |= this->motors.at("B").get_pos(axis, posB);
 
     // calculate poswidth and posoffset from actuator positions,
     // which is width and offset in actuator units (mm)
     //
     poswidth  = ( ( posA - this->center.mm() ) + ( posB - this->center.mm() ) );
-    posoffset = ( ( posA - posB ) / this->numdev );
+    posoffset = ( ( posA - posB ) / this->motors.size() );
 
     return error;
   }
@@ -599,17 +602,7 @@ namespace Slit {
    *
    */
   long Interface::stop( ) {
-    std::string function = "Slit::Interface::stop";
-    std::stringstream message;
-
-    // send the stop_motion command for each address in controller_info
-    //
-    auto _motormap = this->motorinterface.get_motormap();
-
-    for ( const auto &mot : _motormap ) {
-      this->motorinterface.stop_motion( mot.second.name, mot.second.addr );
-    }
-
+    for (auto &mot : this->motors) mot.second.stop();
     return NO_ERROR;
   }
   /***** Slit::Interface::stop ************************************************/
@@ -630,8 +623,6 @@ namespace Slit {
     std::string function = "Slit::Interface::send_command";
     std::stringstream message;
 
-    auto _motormap = this->motorinterface.get_motormap();
-
     // Help
     //
     if ( args == "?" || args == "help" ) {
@@ -639,7 +630,7 @@ namespace Slit {
       retstring.append( " <name> <cmd> [ <axis> <arg> ] \n" );
       retstring.append( "  sends <cmd> directly to the controller named <name>,\n" );
       retstring.append( "  where <name> is in { " );
-      for ( const auto &mot : _motormap ) { retstring.append( mot.first ); retstring.append(" "); }
+      for (auto &mot : this->motors) { retstring.append( mot.first ); retstring.append(" "); }
       retstring.append( "}\n" );
       retstring.append( "  No checks are made as to the validity of the command string. Note that\n" );
       retstring.append( "  some commands require specifying the axisid and may have additional args.\n" );
@@ -671,16 +662,15 @@ namespace Slit {
 
     // find name in the motormap
     //
-    if ( _motormap.find(name) == _motormap.end() ) {
-      message.str(""); message << "ERROR \"" << name << "\" not found in motormap";
-      logwrite( function, message.str() );
+    if (this->motors.find(name) == this->motors.end()) {
+      logwrite(function, "ERROR '"+name+"' not found in configuration");
       return ERROR;
     }
 
     // once the name is verified, get the addr because it needs to be
     // sent with the <cmd>
     //
-    auto addr = _motormap[name].addr;
+    auto addr = this->motors.at(name).get_addr();
 
     std::stringstream cmd;
     if ( addr > 0 ) cmd << addr << " ";
@@ -689,10 +679,10 @@ namespace Slit {
     long error;
 
     if ( cmd.str().find( "?" ) != std::string::npos ) {
-      error = this->motorinterface.send_command( name, cmd.str(), retstring );
+      error = this->motors.at(name).send_command( cmd.str(), &retstring );
     }
     else {
-      error = this->motorinterface.send_command( name, cmd.str() );
+      error = this->motors.at(name).send_command( cmd.str() );
     }
 
     // read the positions now for telemetry purposes
