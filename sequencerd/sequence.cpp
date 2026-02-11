@@ -834,8 +834,12 @@ namespace Sequencer {
           }
 
           bool sent_stop = false;
+          bool timed_out = false;
           auto stop_deadline = std::chrono::steady_clock::time_point::min();
           auto next_status_poll = std::chrono::steady_clock::now();
+          const bool use_timeout = ( this->acquisition_timeout > 0 );
+          const auto fine_tune_timeout = std::chrono::duration<double>( this->acquisition_timeout );
+          const auto fine_tune_start = std::chrono::steady_clock::now();
           while ( true ) {
             {
               std::unique_lock<std::mutex> lock( this->fine_tune_mtx );
@@ -859,13 +863,47 @@ namespace Sequencer {
                     if ( tokens.at(0) == "success" || tokens.at(0) == "failed" || tokens.at(0) == "aborted" ) {
                       std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
                       this->fine_tune_done = true;
-                      this->fine_tune_success = ( tokens.at(0) == "success" );
-                      this->fine_tune_message = "fine tune " + tokens.at(0);
+                      if ( timed_out ) {
+                        this->fine_tune_success = false;
+                        this->fine_tune_message = "fine tune timeout";
+                      }
+                      else {
+                        this->fine_tune_success = ( tokens.at(0) == "success" );
+                        this->fine_tune_message = "fine tune " + tokens.at(0);
+                      }
                       break;
                     }
                   }
                 }
               }
+            }
+
+            if ( use_timeout && !timed_out &&
+                 std::chrono::steady_clock::now() > ( fine_tune_start + fine_tune_timeout ) ) {
+              timed_out = true;
+              this->async.enqueue_and_log( function,
+                                           "ERROR: fine tune timed out after "
+                                           +std::to_string(this->acquisition_timeout)
+                                           +" s; stopping slicecamd autoacq" );
+              {
+                std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                this->fine_tune_success = false;
+                this->fine_tune_message = "fine tune timeout";
+              }
+              if ( !sent_stop ) {
+                this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+                sent_stop = true;
+                stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+              }
+            }
+
+            if ( timed_out && stop_deadline != std::chrono::steady_clock::time_point::min() &&
+                 std::chrono::steady_clock::now() > stop_deadline ) {
+              std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+              this->fine_tune_done = true;
+              this->fine_tune_success = false;
+              if ( this->fine_tune_message.empty() ) this->fine_tune_message = "fine tune timeout";
+              break;
             }
 
             if ( this->cancel_flag.load() ) {
