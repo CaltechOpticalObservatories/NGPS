@@ -311,7 +311,7 @@ namespace Slicecam {
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
           snapshot_status { { "slitd", false }, {"tcsd", false} },
-          autoacq_args("--input /tmp/slicecam.fits --frame-mode stream --framegrab-out /tmp/ngps_acq.fits --goal-x 151.25 --goal-y 115.25 --pixel-origin 1 --max-dist 40 --snr 10 --min-adj 4 --filt-sigma 1.2 --centroid-hw 6 --centroid-sigma 2.0 --extname L --extnum 1 --bg-x1 80 --bg-x2 200 --bg-y1 30 --bg-y2 210 --search-x1 80 --search-x2 200 --search-y1 30 --search-y2 210 --loop 1 --cadence-sec 2 --max-samples 10 --min-samples 3 --prec-arcsec 0.15 --goal-arcsec 0.15 --max-cycles 20 --gain 1.0 --adaptive 0 --adaptive-faint 500 --adaptive-faint-goal 500 --adaptive-bright 10000 --adaptive-bright-goal 10000 --reject-identical 1 --reject-after-move 3 --settle-sec 0.0 --max-move-arcsec 10 --continue-on-fail 0 --tcs-set-units 0 --use-putonslit 1 --dra-use-cosdec 1 --tcs-sign +1 --wait-guiding 1 --guiding-poll-sec 1.0 --guiding-timeout-sec 120 --debug 1 --debug-out ./ngps_acq_debug.ppm --dry-run 0 --verbose 1")
+          autoacq_args("--frame-mode stream --input /tmp/slicecam.fits --goal-x 150.0 --goal-y 115.5 --bg-x1 80 --bg-x2 165 --bg-y1 30 --bg-y2 210 --pixel-origin 1 --max-dist 40 --snr 3 --min-adj 4 --centroid-hw 4 --centroid-sigma 1.2 --loop 1 --cadence-sec 4 --prec-arcsec 0.4 --goal-arcsec 0.3 --gain 1.0 --dry-run 0 --tcs-set-units 0 --verbose 1 --debug 1 --use-putonslit 1 --adaptive 1 --adaptive-bright 40000 --adaptive-bright-goal 10000")
       {
         topic_handlers = {
           { "_snapshot", std::function<void(const nlohmann::json&)>(
