@@ -706,7 +706,8 @@ static int move_to_image_hdu_by_extname(fitsfile* fptr, const char* want_extname
 static int read_fits_image_and_header(const char* path, const AcqParams* p,
                                       float** img_out, long* nx_out, long* ny_out,
                                       char** header_out, int* nkeys_out,
-                                      int* used_hdu_out, char* used_extname_out, size_t used_extname_sz)
+                                      int* used_hdu_out, char* used_extname_out, size_t used_extname_sz,
+                                      double* exptime_sec_out)
 {
   fitsfile* fptr = NULL;
   int status = 0;
@@ -746,6 +747,17 @@ static int read_fits_image_and_header(const char* path, const AcqParams* p,
     int keystat = 0;
     if (fits_read_key(fptr, TSTRING, "EXTNAME", used_extname, NULL, &keystat)) {
       used_extname[0] = '\0';
+    }
+  }
+
+  // record EXPTIME (fallback to 1s if unavailable)
+  double exptime_sec = 1.0;
+  {
+    int keystat = 0;
+    double exptmp = 0.0;
+    if (!fits_read_key(fptr, TDOUBLE, "EXPTIME", &exptmp, NULL, &keystat) &&
+        isfinite(exptmp) && exptmp > 0.0) {
+      exptime_sec = exptmp;
     }
   }
 
@@ -797,6 +809,7 @@ static int read_fits_image_and_header(const char* path, const AcqParams* p,
   if (used_extname_out && used_extname_sz > 0) {
     snprintf(used_extname_out, used_extname_sz, "%s", used_extname);
   }
+  if (exptime_sec_out) *exptime_sec_out = exptime_sec;
 
   return 0;
 }
@@ -1699,7 +1712,8 @@ static int wait_for_stream_update(const char* path, FrameState* fs, double settl
 static int acquire_next_frame(const AcqParams* p, FrameState* fs,
                               double cadence_sec,
                               float** img_out, long* nx_out, long* ny_out,
-                              char** header_out, int* nkeys_out)
+                              char** header_out, int* nkeys_out,
+                              double* exptime_sec_out)
 {
   const char* path = NULL;
 
@@ -1718,12 +1732,15 @@ static int acquire_next_frame(const AcqParams* p, FrameState* fs,
 
   int used_hdu = 0;
   char used_extname[64] = {0};
+  double exptime_sec = 1.0;
   int st = read_fits_image_and_header(path, p, img_out, nx_out, ny_out, header_out, nkeys_out,
-                                      &used_hdu, used_extname, sizeof(used_extname));
+                                      &used_hdu, used_extname, sizeof(used_extname),
+                                      &exptime_sec);
   if (st) {
     acq_logf( "ERROR: CFITSIO read failed for %s (status=%d)\n", path, st);
     return 4;
   }
+  if (exptime_sec_out) *exptime_sec_out = exptime_sec;
   return 0;
 }
 
@@ -2059,13 +2076,16 @@ static int process_once(const AcqParams* p, FrameState* fs)
   long nx=0, ny=0;
   char* header = NULL;
   int nkeys = 0;
+  double exptime_sec = 1.0;
 
-  int rc = acquire_next_frame(p, fs, p->cadence_sec, &img, &nx, &ny, &header, &nkeys);
+  int rc = acquire_next_frame(p, fs, p->cadence_sec, &img, &nx, &ny, &header, &nkeys, &exptime_sec);
   if (rc) {
     if (img) free(img);
     if (header) free(header);
     return 4;
   }
+
+  (void)exptime_sec;
 
   // signature for rejecting identical frames
   if (p->reject_identical) {
@@ -2156,6 +2176,9 @@ static int run_loop(const AcqParams* p)
   AdaptiveRuntime adaptive_rt;
   memset(&adaptive_rt, 0, sizeof(adaptive_rt));
   adaptive_rt.mode = ADAPT_MODE_BASELINE;
+  double initial_metric_exptime_sec = 1.0;
+  int have_initial_metric_exptime = 0;
+  int initial_metric_scaled_once = 0;
 
   for (int cycle = 1; cycle <= p->max_cycles && !stop_requested(); cycle++) {
     if (p->verbose) acq_logf( "\n=== Cycle %d/%d ===\n", cycle, p->max_cycles);
@@ -2164,6 +2187,18 @@ static int run_loop(const AcqParams* p)
     adaptive_build_cycle_config(p, &adaptive_rt, ADAPT_MODE_BASELINE, 0.0, &cycle_cfg);
     if (p->adaptive) {
       double metric_cfg = adaptive_rt.have_metric ? adaptive_rt.metric_ewma : 0.0;
+      if ( !initial_metric_scaled_once &&
+           adaptive_rt.have_metric &&
+           adaptive_rt.mode != ADAPT_MODE_BASELINE &&
+           have_initial_metric_exptime &&
+           initial_metric_exptime_sec > 0.0 ) {
+        metric_cfg /= initial_metric_exptime_sec;
+        initial_metric_scaled_once = 1;
+        if ( p->verbose ) {
+          acq_logf( "Adaptive one-shot metric scaling: metric/EXPTIME using initial EXPTIME=%.3fs\n",
+                    initial_metric_exptime_sec );
+        }
+      }
       adaptive_build_cycle_config(p, &adaptive_rt, adaptive_rt.mode, metric_cfg, &cycle_cfg);
       (void)adaptive_apply_camera(p, &adaptive_rt, &cycle_cfg);
       if (p->verbose) {
@@ -2199,6 +2234,8 @@ static int run_loop(const AcqParams* p)
 
     int attempts = 0;
     int max_attempts = p->max_samples * 10;
+    int invalid_solution_total = 0;
+    int faint_rescue_steps = 0;
 
     while (n < p->max_samples && attempts < max_attempts && !stop_requested()) {
       attempts++;
@@ -2207,8 +2244,9 @@ static int run_loop(const AcqParams* p)
       long nx=0, ny=0;
       char* header = NULL;
       int nkeys = 0;
+      double exptime_sec = 1.0;
 
-      int rc = acquire_next_frame(p, &fs, runtime_cadence_sec, &img, &nx, &ny, &header, &nkeys);
+      int rc = acquire_next_frame(p, &fs, runtime_cadence_sec, &img, &nx, &ny, &header, &nkeys, &exptime_sec);
       if (rc) {
         if (img) free(img);
         if (header) free(header);
@@ -2255,6 +2293,43 @@ static int run_loop(const AcqParams* p)
       if (header) free(header);
 
       if (!fr.ok) {
+        invalid_solution_total++;
+        if (p->adaptive && invalid_solution_total >= (6 * (faint_rescue_steps + 1))) {
+          double cur_exp = adaptive_rt.have_last_camera ? adaptive_rt.last_exptime_sec : exptime_sec;
+          int cur_avg = adaptive_rt.have_last_camera ? adaptive_rt.last_avgframes : 1;
+          if (!isfinite(cur_exp) || cur_exp <= 0.0) cur_exp = 1.0;
+          if (cur_avg < 1) cur_avg = 1;
+          if (cur_avg > 5) cur_avg = 5;
+
+          static const double rescue_exptime_ladder[] = { 0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 15.0 };
+          double target_exp = cur_exp;
+          for (size_t i = 0; i < sizeof(rescue_exptime_ladder)/sizeof(rescue_exptime_ladder[0]); i++) {
+            if (rescue_exptime_ladder[i] > cur_exp + 1e-6) {
+              target_exp = rescue_exptime_ladder[i];
+              break;
+            }
+          }
+
+          if (target_exp > cur_exp + 1e-6) {
+            if (p->verbose) {
+              acq_logf( "Adaptive faint rescue: %d invalid frames; exptime %.3fs -> %.3fs\n",
+                        invalid_solution_total, cur_exp, target_exp);
+            }
+            (void)scam_set_exptime(target_exp, p->dry_run, p->verbose);
+            adaptive_rt.have_last_camera = 1;
+            adaptive_rt.last_exptime_sec = target_exp;
+            adaptive_rt.last_avgframes = cur_avg;
+            runtime_cadence_sec = fmax(runtime_cadence_sec, target_exp * (double)cur_avg + 0.20);
+          }
+          else {
+            if (p->verbose) {
+              acq_logf( "Adaptive faint rescue: %d invalid frames; exptime cannot increase further (cur=%.3fs)\n",
+                        invalid_solution_total, cur_exp);
+            }
+          }
+
+          faint_rescue_steps++;
+        }
         if (p->verbose) acq_logf( "Reject: no valid solution (SNR/WCS/star).\n");
         continue;
       }
@@ -2262,6 +2337,11 @@ static int run_loop(const AcqParams* p)
       if (fr.r_cmd_arcsec > p->max_move_arcsec) {
         acq_logf( "Reject: |offset|=%.3f"" exceeds --max-move-arcsec=%.3f\n", fr.r_cmd_arcsec, p->max_move_arcsec);
         continue;
+      }
+
+      if ( !have_initial_metric_exptime && isfinite(exptime_sec) && exptime_sec > 0.0 ) {
+        initial_metric_exptime_sec = exptime_sec;
+        have_initial_metric_exptime = 1;
       }
 
       metric_samp[n] = fr.det.src_top10_mean;
