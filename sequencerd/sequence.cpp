@@ -13,10 +13,7 @@
 
 #include "sequence.h"
 
-#include <signal.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
+#include <fstream>
 
 namespace Sequencer {
 
@@ -43,6 +40,57 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slicecam_autoacq ********************/
+  /**
+   * @brief      handles slicecamd autoacq status updates
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slicecam_autoacq( const nlohmann::json &jmessage_in ) {
+    if ( !jmessage_in.contains("state") ) return;
+    if ( jmessage_in.contains("source") &&
+         jmessage_in.at("source").is_string() &&
+         jmessage_in.at("source").get<std::string>() != "slicecamd" ) return;
+
+    std::string state = jmessage_in.value( "state", "" );
+    std::string message = jmessage_in.value( "message", "" );
+    uint64_t run_id = jmessage_in.value( "run_id", static_cast<uint64_t>(0) );
+
+    bool should_notify = false;
+    bool should_publish = false;
+    {
+      std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+
+      // Ignore stale messages when waiting on a specific run_id.
+      if ( this->fine_tune_run_id != 0 && run_id != 0 && run_id != this->fine_tune_run_id ) return;
+
+      if ( state == "running" ) {
+        this->fine_tune_active.store( true, std::memory_order_release );
+        this->fine_tune_done = false;
+        this->fine_tune_success = false;
+        this->fine_tune_message = message;
+        should_publish = true;
+      }
+      else if ( state == "success" || state == "failed" || state == "aborted" ) {
+        this->fine_tune_active.store( false, std::memory_order_release );
+        this->fine_tune_done = true;
+        this->fine_tune_success = ( state == "success" );
+        this->fine_tune_message = message;
+        should_notify = true;
+        should_publish = true;
+      }
+      else if ( state == "idle" ) {
+        this->fine_tune_active.store( false, std::memory_order_release );
+        should_publish = true;
+      }
+    }
+
+    if ( should_publish ) this->publish_progress();
+    if ( should_notify ) this->fine_tune_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slicecam_autoacq ********************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -193,8 +241,8 @@ namespace Sequencer {
     nlohmann::json jmessage_out;
     jmessage_out["source"] = Sequencer::DAEMON_NAME;
 
-    // Track fine-tune status via fine_tune_pid
-    jmessage_out["fine_tune_active"] = (this->fine_tune_pid.load() != 0);
+    // Track fine-tune status from slicecamd autoacq state
+    jmessage_out["fine_tune_active"] = this->fine_tune_active.load(std::memory_order_acquire);
 
     // Track offset status
     jmessage_out["offset_active"] = this->offset_active.load();
@@ -726,145 +774,144 @@ namespace Sequencer {
 
         auto run_fine_tune = [&]() -> long {
           if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
-          this->async.enqueue_and_log( function, "NOTICE: running fine tune command: "+this->acq_fine_tune_cmd );
-
-          // Construct log filename using same pattern as daemon logs: /data/{datedir}/logs/ngps_acq_{datedir}.log
-          std::string datedir = get_latest_datedir( "/data" );
-          std::stringstream logfilename;
-          logfilename << "/data/" << datedir << "/logs/ngps_acq_" << datedir << ".log";
-          std::string acq_logfile = logfilename.str();
-
-          // Build command with optional logging redirection
           std::string cmd_to_run = this->acq_fine_tune_cmd;
+          std::string acq_logfile;
           if ( this->acq_fine_tune_log ) {
-            cmd_to_run += " >> " + acq_logfile + " 2>&1";
+            std::string datedir = get_latest_datedir( "/data" );
+            if ( !datedir.empty() ) {
+              std::stringstream logfilename;
+              logfilename << "/data/" << datedir << "/logs/ngps_acq_" << datedir << ".log";
+              acq_logfile = logfilename.str();
+            }
+            else {
+              acq_logfile = "/tmp/ngps_acq.log";
+              this->async.enqueue_and_log( function, "NOTICE: /data datedir not found, logging fine tune output to "+acq_logfile );
+            }
+          }
+
+          auto append_fine_tune_log = [&]( const std::string &line ) {
+            if ( !this->acq_fine_tune_log || acq_logfile.empty() ) return;
+            std::ofstream logfile( acq_logfile, std::ios::app );
+            if ( logfile.is_open() ) {
+              logfile << "=== SEQUENCER: " << line << " ===" << std::endl;
+            }
+          };
+
+          if ( this->acq_fine_tune_log && !acq_logfile.empty() ) {
             this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to "+acq_logfile );
           }
 
-          // Temporarily restore default SIGCHLD handling so we can waitpid() on this child.
-          // The daemon has SIGCHLD=SIG_IGN which causes kernel to auto-reap children.
-          struct sigaction old_action, new_action;
-          memset(&new_action, 0, sizeof(new_action));
-          new_action.sa_handler = SIG_DFL;
-          sigemptyset(&new_action.sa_mask);
-          sigaction(SIGCHLD, &new_action, &old_action);
+          this->async.enqueue_and_log( function, "NOTICE: starting slicecamd autoacq: "+cmd_to_run );
 
-          pid_t pid = fork();
-          if ( pid == 0 ) {
-            // make a dedicated process group so we can signal the whole tree
-            setpgid( 0, 0 );
-            execl( "/bin/sh", "sh", "-c", cmd_to_run.c_str(), (char*)nullptr );
-            _exit(127);
+          {
+            std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+            this->fine_tune_done = false;
+            this->fine_tune_success = false;
+            this->fine_tune_run_id = 0;
+            this->fine_tune_message.clear();
           }
-          if ( pid < 0 ) {
-            logwrite( function, "ERROR starting fine tune command: "+this->acq_fine_tune_cmd );
-            sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
+
+          std::string start_reply;
+          std::string start_cmd = SLICECAMD_AUTOACQ + " start";
+          if ( !acq_logfile.empty() ) start_cmd += " --log-file " + acq_logfile;
+          if ( !cmd_to_run.empty() ) start_cmd += " " + cmd_to_run;
+          this->fine_tune_active.store( true, std::memory_order_release );
+          this->publish_progress();
+
+          if ( this->slicecamd.command( start_cmd, start_reply ) != NO_ERROR ) {
+            this->fine_tune_active.store( false, std::memory_order_release );
+            this->publish_progress();
+            this->async.enqueue_and_log( function, "ERROR failed to start slicecamd autoacq" );
+            append_fine_tune_log( "failed to start slicecamd autoacq" );
             return ERROR;
           }
-          // Ensure the child is its own process group (best effort).
-          setpgid( pid, pid );
-          this->fine_tune_pid.store( pid );
-          this->publish_progress();  // Publish fine_tune_active=true
 
-          int status = 0;
+          auto runpos = start_reply.find( "run_id=" );
+          if ( runpos != std::string::npos ) {
+            try {
+              std::string runid_str = start_reply.substr( runpos + 7 );
+              std::vector<std::string> tokens;
+              Tokenize( runid_str, tokens, " " );
+              if ( !tokens.empty() ) {
+                std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                this->fine_tune_run_id = std::stoull( tokens.at(0) );
+              }
+            }
+            catch ( const std::exception & ) { }
+          }
+
+          bool sent_stop = false;
+          auto stop_deadline = std::chrono::steady_clock::time_point::min();
+          auto next_status_poll = std::chrono::steady_clock::now();
           while ( true ) {
-            pid_t result = waitpid( pid, &status, WNOHANG );
-            if ( result == pid ) break;
-            if ( result < 0 ) {
-              std::stringstream errmsg;
-              errmsg << "ERROR waiting on fine tune command: waitpid returned " << result
-                     << " errno=" << errno << " (" << strerror(errno) << ")";
-              logwrite( function, errmsg.str() );
-              if ( this->acq_fine_tune_log ) {
-                std::ofstream logfile(acq_logfile, std::ios::app);
-                if ( logfile.is_open() ) {
-                  logfile << "=== SEQUENCER: " << errmsg.str() << " ===" << std::endl;
-                  logfile.close();
+            {
+              std::unique_lock<std::mutex> lock( this->fine_tune_mtx );
+              if ( this->fine_tune_cv.wait_for( lock, std::chrono::milliseconds(200),
+                                                [this](){ return this->fine_tune_done || this->cancel_flag.load(); } ) ) {
+                if ( this->fine_tune_done ) break;
+              }
+            }
+
+            // Fallback in case status topic messages are delayed or dropped.
+            if ( std::chrono::steady_clock::now() >= next_status_poll ) {
+              next_status_poll = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+              std::string status_reply;
+              if ( this->slicecamd.command( SLICECAMD_AUTOACQ + " status", status_reply ) == NO_ERROR ) {
+                auto pos = status_reply.find( "state=" );
+                if ( pos != std::string::npos ) {
+                  std::string statestr = status_reply.substr( pos + 6 );
+                  std::vector<std::string> tokens;
+                  Tokenize( statestr, tokens, " " );
+                  if ( !tokens.empty() ) {
+                    if ( tokens.at(0) == "success" || tokens.at(0) == "failed" || tokens.at(0) == "aborted" ) {
+                      std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                      this->fine_tune_done = true;
+                      this->fine_tune_success = ( tokens.at(0) == "success" );
+                      this->fine_tune_message = "fine tune " + tokens.at(0);
+                      break;
+                    }
+                  }
                 }
               }
-              sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
-              return ERROR;
             }
+
             if ( this->cancel_flag.load() ) {
-              this->async.enqueue_and_log( function, "NOTICE: abort requested; terminating fine tune" );
-              // terminate the whole fine-tune process group
-              kill( -pid, SIGTERM );
-              auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-              while ( std::chrono::steady_clock::now() < deadline ) {
-                result = waitpid( pid, &status, WNOHANG );
-                if ( result == pid ) break;
-                std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+              if ( !sent_stop ) {
+                this->async.enqueue_and_log( function, "NOTICE: abort requested; stopping slicecamd autoacq" );
+                this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+                sent_stop = true;
+                stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
               }
-              if ( result != pid ) {
-                kill( -pid, SIGKILL );
-                waitpid( pid, &status, 0 );
-              }
-              this->fine_tune_pid.store( 0 );
-              sigaction(SIGCHLD, &old_action, nullptr);  // Restore old handler
-              return ERROR;
-            }
-            std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-          }
-
-          this->fine_tune_pid.store( 0 );
-
-          // Restore old SIGCHLD handler now that we've reaped the child
-          sigaction(SIGCHLD, &old_action, nullptr);
-
-          // Log detailed exit status information
-          std::stringstream status_msg;
-          status_msg << "fine tune process exit status: raw=" << status;
-
-          if ( WIFEXITED( status ) ) {
-            int exit_code = WEXITSTATUS( status );
-            status_msg << " exited_normally=true exit_code=" << exit_code;
-            logwrite( function, status_msg.str() );
-
-            if ( this->acq_fine_tune_log ) {
-              std::ofstream logfile(acq_logfile, std::ios::app);
-              if ( logfile.is_open() ) {
-                logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
-                logfile.close();
+              else
+              if ( stop_deadline != std::chrono::steady_clock::time_point::min() &&
+                   std::chrono::steady_clock::now() > stop_deadline ) {
+                break;
               }
             }
-
-            if ( exit_code == 0 ) {
-              this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
-              this->publish_progress();  // Publish fine_tune_active=false (success)
-              return NO_ERROR;
-            }
-            else {
-              message.str(""); message << "ERROR: fine tune command exited with code " << exit_code;
-              this->async.enqueue_and_log( function, message.str() );
-              this->publish_progress();  // Publish fine_tune_active=false (failure)
-              return ERROR;
-            }
           }
-          else if ( WIFSIGNALED( status ) ) {
-            int signal = WTERMSIG( status );
-            status_msg << " exited_normally=false terminated_by_signal=" << signal;
-            logwrite( function, status_msg.str() );
 
-            if ( this->acq_fine_tune_log ) {
-              std::ofstream logfile(acq_logfile, std::ios::app);
-              if ( logfile.is_open() ) {
-                logfile << "=== SEQUENCER: " << status_msg.str() << " ===" << std::endl;
-                logfile.close();
-              }
-            }
+          bool success = false;
+          std::string fine_tune_message;
+          {
+            std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+            success = this->fine_tune_success;
+            fine_tune_message = this->fine_tune_message;
+            this->fine_tune_run_id = 0;
+          }
 
-            message.str(""); message << "ERROR: fine tune command terminated by signal " << signal;
-            this->async.enqueue_and_log( function, message.str() );
-            this->publish_progress();  // Publish fine_tune_active=false (terminated)
-            return ERROR;
+          this->fine_tune_active.store( false, std::memory_order_release );
+          this->publish_progress();
+
+          if ( success ) {
+            this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+            append_fine_tune_log( "fine tune complete" );
+            return NO_ERROR;
           }
-          else {
-            status_msg << " unknown_exit_condition";
-            logwrite( function, status_msg.str() );
-            logwrite( function, "ERROR fine tune command failed: "+this->acq_fine_tune_cmd );
-            this->publish_progress();  // Publish fine_tune_active=false (unknown)
-            return ERROR;
-          }
+
+          if ( fine_tune_message.empty() ) fine_tune_message = "fine tune failed";
+          this->async.enqueue_and_log( function, "ERROR: "+fine_tune_message );
+          append_fine_tune_log( fine_tune_message );
+          return ERROR;
         };
 
         if ( this->acq_automatic_mode == 1 ) {
@@ -2584,24 +2631,13 @@ namespace Sequencer {
     this->cancel_flag.store(true);
     this->cv.notify_all();
 
-    // terminate fine tune process if running
+    // request slicecamd to stop autoacq if it is running
     //
-    pid_t ftpid = this->fine_tune_pid.load();
-    if ( ftpid > 0 ) {
-      logwrite( function, "NOTICE: terminating fine tune process" );
-      kill( -ftpid, SIGTERM );
-      auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-      int status = 0;
-      while ( std::chrono::steady_clock::now() < deadline ) {
-        pid_t result = waitpid( ftpid, &status, WNOHANG );
-        if ( result == ftpid ) break;
-        std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-      }
-      if ( waitpid( ftpid, &status, WNOHANG ) == 0 ) {
-        kill( -ftpid, SIGKILL );
-        waitpid( ftpid, &status, 0 );
-      }
-      this->fine_tune_pid.store( 0 );
+    if ( this->fine_tune_active.load(std::memory_order_acquire) ) {
+      logwrite( function, "NOTICE: stopping slicecamd autoacq" );
+      this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+      this->fine_tune_active.store( false, std::memory_order_release );
+      this->publish_progress();
     }
 
     // drop into do-one to prevent auto increment to next target
