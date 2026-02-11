@@ -183,6 +183,17 @@ namespace Sequencer {
   };
 
   /**
+   * @enum  UserGateAction
+   * @brief explicit action represented by a USER wait gate
+   */
+  enum UserGateAction : int {
+    USER_GATE_NONE = 0,
+    USER_GATE_ACQUIRE,
+    USER_GATE_EXPOSE,
+    USER_GATE_OFFSET_EXPOSE
+  };
+
+  /**
    * @enum     ThreadStatusBits
    * @brief    assigns each thread a bit in a threadstate word
    * @details  bit is set while thread is running
@@ -291,6 +302,7 @@ namespace Sequencer {
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
       std::atomic<pid_t> fine_tune_pid{0};       ///< fine tune process pid (process group leader)
       std::atomic<bool> offset_active{false};    ///< tracks offset operation in progress
+      std::atomic<int> user_gate_action{USER_GATE_NONE};  ///< explicit USER gate action for GUI labeling
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
