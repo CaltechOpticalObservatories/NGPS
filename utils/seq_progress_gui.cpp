@@ -74,8 +74,8 @@ struct SequenceState {
   bool waiting_for_user = false;
   bool waiting_for_tcsop = false;
   bool user_wait_after_failure = false;
-  bool continue_will_expose = false;
-  bool continue_starts_acquisition = false;
+  bool user_gate_action_polled = false;
+  std::string user_gate_action = "NONE";  // NONE|ACQUIRE|EXPOSE|OFFSET_EXPOSE
   bool ontarget = false;
   bool guiding_on = false;
   bool guiding_failed = false;
@@ -106,8 +106,8 @@ struct SequenceState {
     waiting_for_user = false;
     waiting_for_tcsop = false;
     user_wait_after_failure = false;
-    continue_will_expose = false;
-    continue_starts_acquisition = false;
+    user_gate_action_polled = false;
+    user_gate_action = "NONE";
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -135,8 +135,8 @@ struct SequenceState {
     waiting_for_user = false;
     waiting_for_tcsop = false;
     user_wait_after_failure = false;
-    continue_will_expose = false;
-    continue_starts_acquisition = false;
+    user_gate_action_polled = false;
+    user_gate_action = "NONE";
     ontarget = false;
     guiding_on = false;
     guiding_failed = false;
@@ -717,18 +717,26 @@ class SeqProgressGui {
   }
 
   void draw_user_instruction() {
-    if (!state_.waiting_for_user || !state_.continue_will_expose) return;
+    if (!state_.waiting_for_user) return;
     if (!blink_on_) return;  // blink the instruction for visibility
 
-    bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
     char instruction[256];
-    if (has_offset) {
+    if (!state_.user_gate_action_polled || state_.user_gate_action == "NONE") {
+      snprintf(instruction, sizeof(instruction),
+               ">>> Click CONTINUE <<<");
+    } else if (state_.user_gate_action == "ACQUIRE") {
+      snprintf(instruction, sizeof(instruction),
+               ">>> Click ACQUIRE to start acquisition <<<");
+    } else if (state_.user_gate_action == "OFFSET_EXPOSE") {
       snprintf(instruction, sizeof(instruction),
                ">>> Click OFFSET & EXPOSE to apply offset (RA=%.2f\" DEC=%.2f\") then expose <<<",
                state_.offset_ra, state_.offset_dec);
-    } else {
+    } else if (state_.user_gate_action == "EXPOSE") {
       snprintf(instruction, sizeof(instruction),
                ">>> Click EXPOSE to begin exposure (no target offset) <<<");
+    } else {
+      snprintf(instruction, sizeof(instruction),
+               ">>> Waiting for sequencer USER action details... <<<");
     }
 
     XSetForeground(display_, gc_, color_wait_);  // red bold
@@ -737,13 +745,14 @@ class SeqProgressGui {
 
   void draw_buttons() {
     draw_button(ontarget_btn_, "ONTARGET", state_.waiting_for_tcsop);
-    const char *continue_label = "EXPOSE";
-    if (state_.waiting_for_user) {
-      if (state_.continue_starts_acquisition) {
-        continue_label = "START ACQUISITION";
-      } else {
-        bool has_offset = (state_.offset_ra != 0.0 || state_.offset_dec != 0.0);
-        continue_label = has_offset ? "OFFSET & EXPOSE" : "EXPOSE";
+    const char *continue_label = "CONTINUE";
+    if (state_.waiting_for_user && state_.user_gate_action_polled) {
+      if (state_.user_gate_action == "ACQUIRE") {
+        continue_label = "ACQUIRE";
+      } else if (state_.user_gate_action == "OFFSET_EXPOSE") {
+        continue_label = "OFFSET & EXPOSE";
+      } else if (state_.user_gate_action == "EXPOSE") {
+        continue_label = "EXPOSE";
       }
     }
     draw_button(continue_btn_, continue_label, state_.waiting_for_user);
@@ -947,6 +956,21 @@ class SeqProgressGui {
         if (jmessage.contains("acqmode") && jmessage["acqmode"].is_number()) {
           state_.acqmode = jmessage["acqmode"].get<int>();
         }
+        if (jmessage.contains("user_gate_action") && jmessage["user_gate_action"].is_string()) {
+          std::string gate = to_upper_copy(jmessage["user_gate_action"].get<std::string>());
+          if (gate != "ACQUIRE" && gate != "EXPOSE" && gate != "OFFSET_EXPOSE" && gate != "NONE") {
+            gate = "NONE";
+          }
+          if (state_.waiting_for_user) {
+            if (gate != "NONE") {
+              state_.user_gate_action = gate;
+              state_.user_gate_action_polled = true;
+            }
+          } else {
+            state_.user_gate_action = gate;
+            state_.user_gate_action_polled = false;
+          }
+        }
         if (jmessage.contains("nexp") && jmessage["nexp"].is_number()) {
           int new_nexp = jmessage["nexp"].get<int>();
           if (new_nexp != state_.nexp) {
@@ -1030,6 +1054,12 @@ class SeqProgressGui {
     const bool allow_tcp_poll = !have_zmq || (zmq_quiet && stale_seq);
 
     if (options_.poll_ms > 0) {
+      // During USER wait, keep polling snapshots until gate action arrives.
+      if (have_zmq && zmq_pub_ && state_.waiting_for_user && !state_.user_gate_action_polled &&
+          std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= 1000) {
+        request_snapshot();
+        updated = true;
+      }
       if (have_zmq && zmq_pub_) {
         if (stale_seq &&
             std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= stale_ms) {
@@ -1137,6 +1167,7 @@ class SeqProgressGui {
   }
 
   void handle_waitstate(const std::string &waitstate) {
+    bool was_waiting_for_user = state_.waiting_for_user;
     state_.waitstate = waitstate;
     last_waitstate_update_ = std::chrono::steady_clock::now();
     auto tokens = split_ws(waitstate);
@@ -1149,6 +1180,17 @@ class SeqProgressGui {
 
     state_.waiting_for_tcsop = has_tcsop;
     state_.waiting_for_user = has_user;
+    if (has_user && !was_waiting_for_user) {
+      // New USER gate: default to CONTINUE until explicit gate action is polled.
+      state_.user_gate_action = "NONE";
+      state_.user_gate_action_polled = false;
+      request_snapshot();
+    }
+    if (!has_user) {
+      // USER gate action applies only while WAITSTATE includes USER.
+      state_.user_gate_action = "NONE";
+      state_.user_gate_action_polled = false;
+    }
 
     if (!has_tcsop && (has_acquire || has_guide || has_expose || has_readout || has_user)) {
       state_.ontarget = true;
@@ -1285,10 +1327,8 @@ class SeqProgressGui {
       state_.last_ontarget = std::chrono::steady_clock::now();
     }
     if (msg.find("NOTICE: waiting for USER") != std::string::npos) {
-      state_.waiting_for_user = true;
-      // Determine what "continue" will do based on the wait message
-      state_.continue_starts_acquisition = (msg.find("start acquisition") != std::string::npos);
-      state_.continue_will_expose = !state_.continue_starts_acquisition;
+      // USER gate intent is driven by seq_waitstate + seq_progress.user_gate_action.
+      // Ignore async NOTICE text so UDP/non-ZMQ paths cannot override ZMQ truth.
       // Detect if this is a failure-based user wait
       if (msg.find("guiding failed") != std::string::npos ||
           msg.find("fine tune failed") != std::string::npos) {
@@ -1296,10 +1336,7 @@ class SeqProgressGui {
       }
     }
     if (msg.find("NOTICE: received continue") != std::string::npos) {
-      state_.waiting_for_user = false;
       state_.user_wait_after_failure = false;
-      state_.continue_will_expose = false;
-      state_.continue_starts_acquisition = false;
     }
     if (msg.find("NOTICE: waiting for ACAM guiding") != std::string::npos) {
       state_.guiding_on = false;

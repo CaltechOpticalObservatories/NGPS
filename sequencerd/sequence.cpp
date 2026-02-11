@@ -60,6 +60,7 @@ namespace Sequencer {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_progress();
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
@@ -218,6 +219,16 @@ namespace Sequencer {
 
     // Current acquisition mode
     jmessage_out["acqmode"] = this->acq_automatic_mode;
+
+    // Explicit USER gate action for GUI button labeling
+    std::string user_gate_action = "NONE";
+    switch ( this->user_gate_action.load() ) {
+      case USER_GATE_ACQUIRE:      user_gate_action = "ACQUIRE"; break;
+      case USER_GATE_EXPOSE:       user_gate_action = "EXPOSE"; break;
+      case USER_GATE_OFFSET_EXPOSE:user_gate_action = "OFFSET_EXPOSE"; break;
+      default:                     user_gate_action = "NONE"; break;
+    }
+    jmessage_out["user_gate_action"] = user_gate_action;
 
     try {
       this->publisher->publish( jmessage_out, "seq_progress" );
@@ -673,9 +684,11 @@ namespace Sequencer {
         this->async.enqueue_and_log( function, mode_msg.str() );
         }
 
-        auto wait_for_user = [&](const std::string &notice) -> bool {
+        auto wait_for_user = [&](const std::string &notice, UserGateAction action) -> bool {
           this->is_usercontinue.store(false);
           ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+          this->user_gate_action.store( action );
+          this->publish_progress();
           this->async.enqueue_and_log( function, "NOTICE: "+notice );
           while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
             std::unique_lock<std::mutex> lock(cv_mutex);
@@ -684,6 +697,8 @@ namespace Sequencer {
           this->async.enqueue_and_log( function, "NOTICE: received "
                                                  +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
                                                  +" signal!" );
+          this->user_gate_action.store( USER_GATE_NONE );
+          this->publish_progress();
           if ( this->cancel_flag.load() ) return false;
           this->is_usercontinue.store(false);
           return true;
@@ -853,14 +868,14 @@ namespace Sequencer {
         };
 
         if ( this->acq_automatic_mode == 1 ) {
-          if ( !wait_for_user( "waiting for USER to send \"continue\" signal" ) ) {
+          if ( !wait_for_user( "waiting for USER to send \"continue\" signal", USER_GATE_EXPOSE ) ) {
             this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
             return;
           }
         }
         else {
           if ( this->acq_automatic_mode == 2 ) {
-            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition" ) ) {
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition", USER_GATE_ACQUIRE ) ) {
               this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
               return;
             }
@@ -873,7 +888,9 @@ namespace Sequencer {
           if ( acqerr != NO_ERROR ) {
             std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
             this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
-            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (guiding failed)" ) ) {
+            UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                         ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (guiding failed)", gate_action ) ) {
               this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
               return;
             }
@@ -903,7 +920,9 @@ namespace Sequencer {
             bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
             if ( !fine_tune_ok ) {
               this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to apply offset and expose" );
-              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (fine tune failed)" ) ) {
+              UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                           ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (fine tune failed)", gate_action ) ) {
                 this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                 return;
               }
@@ -911,7 +930,9 @@ namespace Sequencer {
 
             // acqmode 2: wait for user before offset (only if fine-tune succeeded)
             if ( fine_tune_ok && this->acq_automatic_mode == 2 ) {
-              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose" ) ) {
+              UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                           ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose", gate_action ) ) {
                 this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
                 return;
               }
