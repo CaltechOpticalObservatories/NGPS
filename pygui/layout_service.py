@@ -2,11 +2,12 @@ from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QStyle, QFrame, QDia
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator
 from logic_service import LogicService
-from PyQt5.QtCore import Qt, QSignalBlocker
+from PyQt5.QtCore import Qt, QSignalBlocker, QSettings
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 from database_tab import DatabaseTab
 import re
+import os
 
 class LayoutService:
     def __init__(self, parent):
@@ -21,6 +22,9 @@ class LayoutService:
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
         self.modulator_checkboxes = {}
+        self._settings = QSettings("NGPS", "ngps_gui")
+        saved_dir = self._settings.value("paths/last_target_list_dir", "")
+        self._last_target_list_dir = str(saved_dir).strip() if saved_dir else ""
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -645,7 +649,8 @@ class LayoutService:
         self.database_tab_widget = None
 
         # ── Legacy attributes (kept for backward compatibility) ──
-        self.target_list_display = QTableWidget()
+        # Keep legacy table parented so it can never float as a standalone window.
+        self.target_list_display = QTableWidget(self._target_list_group)
         self.target_list_display.setRowCount(0)
         self.target_list_display.setColumnCount(0)
         self.target_list_display.setVisible(False)
@@ -1397,9 +1402,16 @@ class LayoutService:
         file_dialog = QFileDialog(self.parent)
         file_dialog.setFileMode(QFileDialog.ExistingFile)   # was ExistingFiles
         file_dialog.setNameFilter("CSV Files (*.csv)")
+        start_dir = self._last_target_list_dir if os.path.isdir(self._last_target_list_dir) else os.path.expanduser("~")
+        if start_dir:
+            file_dialog.setDirectory(start_dir)
 
         if file_dialog.exec_() == QFileDialog.Accepted:
             file_path = file_dialog.selectedFiles()[0]
+            selected_dir = os.path.dirname(file_path)
+            if selected_dir and os.path.isdir(selected_dir):
+                self._last_target_list_dir = selected_dir
+                self._settings.setValue("paths/last_target_list_dir", selected_dir)
 
             # 2) Ask for a name
             target_set_name, ok = QInputDialog.getText(self.parent, "Enter Target Set Name", "Target Set Name:")
@@ -1867,4 +1879,3 @@ class LayoutService:
                     print(f"Checkbox for {mapped_modulator} not found")
             else:
                 print(f"Modulator {modulator} not mapped to a checkbox")
-

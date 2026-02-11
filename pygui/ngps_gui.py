@@ -1,7 +1,7 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog, QStatusBar, QSizePolicy
-from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QSettings
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog, QStatusBar, QSizePolicy, QDialogButtonBox
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QSettings, QEvent
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
@@ -57,6 +57,11 @@ class NgpsGUI(QMainWindow):
         
         # Login status flag
         self.logged_in = False
+
+        # Ensure Enter uses affirmative actions (Yes/OK) on dialogs.
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
         # Initialize the UI
         self.init_ui()
@@ -163,6 +168,40 @@ class NgpsGUI(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(main_window_layout)
         self.setCentralWidget(central_widget)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Show and isinstance(obj, QDialog):
+            self._set_affirmative_default_button(obj)
+        return super().eventFilter(obj, event)
+
+    def _set_affirmative_default_button(self, dialog):
+        """Force Enter to trigger Yes/OK style actions for popup dialogs."""
+        if isinstance(dialog, QMessageBox):
+            for standard_button in (QMessageBox.Yes, QMessageBox.Ok):
+                if dialog.standardButtons() & standard_button:
+                    button = dialog.button(standard_button)
+                    if button:
+                        dialog.setDefaultButton(button)
+                        button.setAutoDefault(True)
+                        button.setDefault(True)
+                    return
+
+        button_box = dialog.findChild(QDialogButtonBox)
+        if button_box is None:
+            return
+
+        for standard_button in (
+            QDialogButtonBox.Yes,
+            QDialogButtonBox.Ok,
+            QDialogButtonBox.Apply,
+            QDialogButtonBox.Save,
+            QDialogButtonBox.Open,
+        ):
+            button = button_box.button(standard_button)
+            if button:
+                button.setAutoDefault(True)
+                button.setDefault(True)
+                return
 
     def initialize_services(self):
 
@@ -526,4 +565,3 @@ if __name__ == '__main__':
     window = NgpsGUI()
     window.show()
     sys.exit(app.exec_())
-

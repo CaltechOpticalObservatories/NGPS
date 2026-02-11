@@ -30,14 +30,17 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QMessageBox, QDialog, QDialogButtonBox, QFormLayout, QScrollArea,
-    QMenu, QHeaderView, QProgressDialog, QInputDialog, QCheckBox
+    QMenu, QHeaderView, QProgressDialog, QInputDialog, QCheckBox,
+    QAbstractItemView
 )
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtGui import QBrush, QColor, QPalette, QCursor
 
 
 # Settings
 SETTINGS_ORG = "NGPS"
 SETTINGS_APP = "ngps_gui_database"
+GROUP_COORD_TOL_ARCSEC = 1.0
+OFFSET_ZERO_TOL_ARCSEC = 0.1
 
 # Import normalization functions and data structures from parent directory tools
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -110,18 +113,6 @@ try:
 except ImportError as e:
     print(f"Warning: Record editor dialog not available: {e}")
     RECORD_EDITOR_AVAILABLE = False
-
-# Import coordinate utilities for grouping
-try:
-    from coordinate_utils import (
-        parse_sexagesimal_ra, parse_sexagesimal_dec, gnomonic_projection,
-        angular_separation_arcsec, compute_coordinate_key, find_nearest_center,
-        DEFAULT_GROUP_TOLERANCE_ARCSEC
-    )
-    COORDINATE_UTILS_AVAILABLE = True
-except ImportError as e:
-    print(f"Warning: Coordinate utilities not available: {e}")
-    COORDINATE_UTILS_AVAILABLE = False
 
 # Import QWebEngineView and QWebChannel for Plotly timeline display
 try:
@@ -217,6 +208,12 @@ class DbClient:
             raise RuntimeError("Database session not open")
         final_sql = self._format_sql(sql, params)
         return self._session.sql(final_sql).execute()
+
+    def get_schema(self, schema_name: str):
+        """Compatibility helper for call sites that use mysqlx table API."""
+        if not self.is_open():
+            raise RuntimeError("Database session not open")
+        return self._session.get_schema(schema_name)
 
     def _column_names_from_result(self, res) -> List[str]:
         try:
@@ -334,6 +331,86 @@ class DbClient:
         raise ValueError("Unsupported key column count for OBS_ORDER update.")
 
 
+class ReorderableTableWidget(QTableWidget):
+    """QTableWidget that emits source/target OBS IDs for drag-reorder."""
+
+    reorder_requested = pyqtSignal(str, str)  # (from_obs_id, after_obs_id), after_obs_id may be "" for top
+
+    def __init__(self, parent: QWidget = None) -> None:
+        super().__init__(parent)
+        self._obs_id_col: Optional[int] = None
+        self._drag_source_obs_id: str = ""
+        self._drag_source_row: int = -1
+
+    def set_obs_id_column(self, col_idx: Optional[int]) -> None:
+        self._obs_id_col = col_idx
+
+    def _obs_id_for_row(self, row: int) -> str:
+        if self._obs_id_col is None or row < 0 or row >= self.rowCount():
+            return ""
+        item = self.item(row, self._obs_id_col)
+        return item.text().strip() if item else ""
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            row = self.rowAt(event.pos().y())
+            self._drag_source_row = row
+            self._drag_source_obs_id = self._obs_id_for_row(row)
+        super().mousePressEvent(event)
+
+    def dropEvent(self, event) -> None:
+        # Keep table order source-of-truth in DB: on drop, emit reorder request
+        # and let existing DB reorder+refresh logic redraw the table.
+        if event.source() is not self:
+            event.ignore()
+            return
+
+        from_obs_id = self._drag_source_obs_id
+        if not from_obs_id:
+            event.ignore()
+            return
+
+        row_count = self.rowCount()
+        if row_count == 0:
+            event.ignore()
+            return
+
+        # Robust top detection: if release point is above first-row midpoint,
+        # always interpret as "move to top". This matches timeline semantics.
+        first_rect = self.visualRect(self.model().index(0, 0))
+        first_mid_y = first_rect.center().y() if first_rect.isValid() else 0
+        if event.pos().y() < first_mid_y:
+            self.reorder_requested.emit(from_obs_id, "")
+            event.acceptProposedAction()
+            return
+
+        target_row = self.rowAt(event.pos().y())
+        if target_row < 0:
+            target_row = row_count - 1
+            insert_above = False
+        else:
+            insert_above = False
+            row_rect = self.visualRect(self.model().index(target_row, 0))
+            if row_rect.isValid():
+                insert_above = event.pos().y() < row_rect.center().y()
+
+        if insert_above:
+            if target_row == 0:
+                self.reorder_requested.emit(from_obs_id, "")
+                event.acceptProposedAction()
+                return
+            after_obs_id = self._obs_id_for_row(target_row - 1)
+        else:
+            after_obs_id = self._obs_id_for_row(target_row)
+
+        if not after_obs_id or from_obs_id == after_obs_id:
+            event.ignore()
+            return
+
+        self.reorder_requested.emit(from_obs_id, after_obs_id)
+        event.acceptProposedAction()
+
+
 class DatabaseTableWidget(QWidget):
     """Enhanced table widget with state persistence and normalization."""
 
@@ -341,6 +418,7 @@ class DatabaseTableWidget(QWidget):
     data_changed = pyqtSignal()
     write_requested = pyqtSignal(dict, dict)    # (key_values, updates) for centralized DB write
     views_need_refresh = pyqtSignal()            # DB was written internally, all views need refresh
+    reorder_requested = pyqtSignal(str, str)     # (from_obs_id, after_obs_id)
 
     def __init__(
         self,
@@ -377,7 +455,10 @@ class DatabaseTableWidget(QWidget):
         self._grouping_enabled = False
         self._expanded_groups: Set[str] = set()  # Set of expanded group keys
         self._manual_ungroup_obs_ids: Set[str] = set()  # Manually ungrouped targets
-        self._group_data: Dict[str, List[int]] = {}  # group_key -> [row_indices]
+        self._manual_group_key_by_obs_id: Dict[str, str] = {}
+        self._selected_obs_id_by_header: Dict[str, str] = {}
+        self._group_data: Dict[str, Dict[str, Any]] = {}
+        self._row_metadata: List[Dict[str, Any]] = []  # Parallel to _row_keys
 
         self._init_ui()
         self._setup_database()
@@ -394,7 +475,7 @@ class DatabaseTableWidget(QWidget):
         top.addWidget(self.delete_button)
 
         # Grouping button (only for targets table)
-        if self._is_targets_table() and COORDINATE_UTILS_AVAILABLE:
+        if self._is_targets_table():
             top.addSpacing(12)
             self.group_button = QPushButton("Enable Grouping", self)
             self.group_button.setCheckable(True)
@@ -450,7 +531,7 @@ class DatabaseTableWidget(QWidget):
         # Bulk operations buttons (right side)
         top.addSpacing(12)
         self.bulk_edit_button = QPushButton("Bulk Edit...", self)
-        self.bulk_edit_button.setToolTip("Edit column value for multiple selected rows")
+        self.bulk_edit_button.setToolTip("Edit one column for all targets in the current view")
         self.bulk_edit_button.clicked.connect(self._bulk_edit_dialog)
         top.addWidget(self.bulk_edit_button)
 
@@ -462,7 +543,7 @@ class DatabaseTableWidget(QWidget):
         layout.addLayout(top)
 
         # Table widget
-        self.table = QTableWidget(self)
+        self.table = ReorderableTableWidget(self)
         self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.SelectedClicked)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
@@ -478,6 +559,8 @@ class DatabaseTableWidget(QWidget):
         # Enable context menu for all tables
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
+        self.table.reorder_requested.connect(self.reorder_requested.emit)
+        self._update_reorder_drag_state()
 
         # Connect signals
         self.add_button.clicked.connect(self._on_add_clicked)
@@ -504,6 +587,7 @@ class DatabaseTableWidget(QWidget):
         self._columns = self._db.fetch_columns(self._table_name)
         self._column_by_name = {c.name: c for c in self._columns}
         self._column_index = {c.name: idx for idx, c in enumerate(self._columns)}
+        self.table.set_obs_id_column(self._column_index.get("OBSERVATION_ID"))
 
         self.table.setColumnCount(len(self._columns))
         self.table.setHorizontalHeaderLabels([c.name for c in self._columns])
@@ -514,6 +598,26 @@ class DatabaseTableWidget(QWidget):
 
         # Restore column widths
         self._restore_column_widths()
+
+        # Restore grouping state from QSettings
+        self._restore_grouping_state()
+        if self.group_button:
+            self.group_button.setChecked(self._grouping_enabled)
+            self.group_button.setText(
+                "Disable Grouping" if self._grouping_enabled else "Enable Grouping"
+            )
+        self._update_reorder_drag_state()
+
+    def _update_reorder_drag_state(self) -> None:
+        """Enable drag-reorder for targets table when reordering is allowed."""
+        enabled = self._allow_reorder and self._is_targets_table()
+        self.table.setDragEnabled(enabled)
+        self.table.setAcceptDrops(enabled)
+        self.table.viewport().setAcceptDrops(enabled)
+        self.table.setDropIndicatorShown(enabled)
+        self.table.setDefaultDropAction(Qt.MoveAction)
+        self.table.setDragDropOverwriteMode(False)
+        self.table.setDragDropMode(QAbstractItemView.DragDrop if enabled else QAbstractItemView.NoDragDrop)
 
     def set_hidden_columns(self, columns: List[str]) -> None:
         """Set which columns should be hidden."""
@@ -562,6 +666,7 @@ class DatabaseTableWidget(QWidget):
         self._loading = True
         self.table.setRowCount(0)
         self._row_keys = []
+        self._row_metadata = []
 
         for row_idx, row in enumerate(rows):
             self.table.insertRow(row_idx)
@@ -581,11 +686,56 @@ class DatabaseTableWidget(QWidget):
                     key_vals[col.name] = row.get(col.name)
             self._row_keys.append(key_vals)
 
+            # Store grouping metadata from the row dict
+            meta: Dict[str, Any] = {
+                key: value for key, value in row.items()
+                if isinstance(key, str) and key.startswith("_")
+            }
+            self._row_metadata.append(meta)
+            self._apply_group_name_style(row_idx, meta)
+
         self._apply_hidden_columns()
         self._loading = False
 
         # Restore view state
         self._restore_view_state(view_state)
+
+    def _apply_group_name_style(self, row_idx: int, meta: Dict[str, Any]) -> None:
+        """Make selected sequencer target stand out within grouped rows."""
+        if not self._grouping_enabled or not meta:
+            return
+
+        name_col = self._column_index.get("NAME")
+        if name_col is None:
+            return
+
+        item = self.table.item(row_idx, name_col)
+        if item is None:
+            return
+
+        is_header = bool(meta.get("_IS_GROUP_HEADER"))
+        is_member = bool(meta.get("_IS_GROUP_MEMBER"))
+        is_selected = bool(meta.get("_GROUP_IS_SELECTED"))
+        if not (is_header or is_member):
+            return
+
+        font = item.font()
+        font.setBold(is_selected)
+        item.setFont(font)
+
+        # Slight contrast boost for selected target relative to peers.
+        dark_theme = self.palette().color(QPalette.Base).lightness() < 128
+        if dark_theme:
+            selected_color = QColor(230, 230, 230)
+            member_color = QColor(200, 200, 200)
+        else:
+            selected_color = QColor(68, 68, 68)
+            member_color = QColor(86, 86, 86)
+
+        if is_selected:
+            item.setForeground(QBrush(selected_color))
+        elif is_member:
+            item.setForeground(QBrush(member_color))
 
     def _save_view_state(self) -> ViewState:
         """Save current scroll position and selection."""
@@ -711,22 +861,37 @@ class DatabaseTableWidget(QWidget):
             self.selection_changed.emit(values)
 
     def _on_cell_clicked(self, row: int, column: int) -> None:
-        """Handle cell click - check for group header clicks."""
+        """Handle cell click - toggle group only when clicking header icon hotspot."""
         if not self._grouping_enabled:
             return
 
-        # Get row data
-        row_values = self._current_row_values(row)
-        if not row_values:
+        # Read metadata from parallel structure
+        if row < 0 or row >= len(self._row_metadata):
+            return
+        meta = self._row_metadata[row]
+        if not meta.get("_IS_GROUP_HEADER"):
             return
 
-        # Check if this is a group header
-        is_header = row_values.get("_IS_GROUP_HEADER", False)
-        if not is_header:
+        # C++ parity: only clicks on the expand/collapse icon region should toggle.
+        name_col = self._column_index.get("NAME")
+        if name_col is None or column != name_col:
+            return
+
+        model_index = self.table.model().index(row, column)
+        if not model_index.isValid():
+            return
+
+        cell_rect = self.table.visualRect(model_index)
+        click_pos = self.table.viewport().mapFromGlobal(QCursor.pos())
+        if not cell_rect.contains(click_pos):
+            return
+
+        # Arrow icon + left padding hotspot width
+        if click_pos.x() > (cell_rect.left() + 24):
             return
 
         # Toggle expansion
-        group_key = row_values.get("_GROUP_KEY", "")
+        group_key = meta.get("_GROUP_KEY", "")
         if not group_key:
             return
 
@@ -734,6 +899,9 @@ class DatabaseTableWidget(QWidget):
             self._expanded_groups.remove(group_key)
         else:
             self._expanded_groups.add(group_key)
+
+        # Persist expanded state
+        self._save_grouping_state()
 
         # Refresh to show/hide members
         self.refresh()
@@ -868,10 +1036,45 @@ class DatabaseTableWidget(QWidget):
             etc_action.triggered.connect(lambda: self._launch_etc_dialog())
 
             # Grouping operations (if grouping enabled)
-            if self._grouping_enabled and COORDINATE_UTILS_AVAILABLE:
+            if self._grouping_enabled:
                 menu.addSeparator()
 
+                meta = self._row_metadata[row] if row < len(self._row_metadata) else {}
                 obs_id = row_values.get("OBSERVATION_ID", "")
+                group_key = meta.get("_GROUP_KEY", "")
+                group_members = meta.get("_GROUP_MEMBERS", [])
+                header_obs_id = meta.get("_GROUP_HEADER_OBS_ID", "")
+                selected_obs_id = meta.get("_GROUP_SELECTED_OBS_ID", "")
+
+                if (
+                    group_key
+                    and (meta.get("_IS_GROUP_MEMBER") or meta.get("_IS_GROUP_HEADER"))
+                    and isinstance(group_members, list)
+                    and group_members
+                ):
+                    seq_menu = menu.addMenu("Use For Sequencer")
+                    ordered_members = sorted(
+                        group_members,
+                        key=lambda m: int(str(m.get("obs_order", "0")).strip())
+                        if str(m.get("obs_order", "0")).strip().lstrip("-").isdigit() else 0
+                    )
+                    if not selected_obs_id and header_obs_id:
+                        selected_obs_id = self._selected_obs_id_by_header.get(header_obs_id, "")
+
+                    for member in ordered_members:
+                        member_obs_id = str(member.get("obs_id", "")).strip()
+                        if not member_obs_id:
+                            continue
+                        label = str(member.get("name", member_obs_id)).strip() or member_obs_id
+                        action = seq_menu.addAction(label)
+                        action.setCheckable(True)
+                        if selected_obs_id and member_obs_id == selected_obs_id:
+                            action.setChecked(True)
+                        action.triggered.connect(
+                            lambda checked, gk=group_key, oid=member_obs_id: self._set_sequencer_target(gk, oid)
+                        )
+                    menu.addSeparator()
+
                 is_ungrouped = obs_id in self._manual_ungroup_obs_ids
 
                 if is_ungrouped:
@@ -1187,163 +1390,453 @@ class DatabaseTableWidget(QWidget):
         if self.group_button:
             self.group_button.setText("Disable Grouping" if checked else "Enable Grouping")
 
+        self._save_grouping_state()
+        self._update_reorder_drag_state()
+
         # Refresh to apply/remove grouping
         self.refresh()
 
-    def _compute_groups(self, rows_data: List[Dict[str, Any]]) -> Dict[str, str]:
-        """
-        Compute group assignments for all targets.
+    def _grouping_settings_key(self, suffix: str) -> str:
+        if not self._table_name:
+            return suffix
+        return f"tableGrouping/{self._table_name}/{suffix}"
 
-        Args:
-            rows_data: List of row dictionaries from database
+    def _row_value_case_insensitive(self, row_data: Dict[str, Any], key: str) -> Tuple[Any, bool]:
+        if key in row_data:
+            return row_data[key], True
+        key_lower = key.lower()
+        for row_key, row_value in row_data.items():
+            if str(row_key).lower() == key_lower:
+                return row_value, True
+        return None, False
 
-        Returns:
-            Dictionary mapping OBSERVATION_ID -> group_key
-        """
-        if not COORDINATE_UTILS_AVAILABLE:
-            return {}
+    def _row_text_case_insensitive(self, row_data: Dict[str, Any], key: str) -> str:
+        value, found = self._row_value_case_insensitive(row_data, key)
+        if not found or value is None:
+            return ""
+        return str(value).strip()
 
-        group_assignments = {}
-        science_centers = []  # List of (key, ra_deg, dec_deg)
+    def _parse_float(self, value: Any) -> Optional[float]:
+        text = str(value).strip() if value is not None else ""
+        if not text:
+            return None
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
 
-        # First pass: Identify science centers (targets with science exposures and coordinates)
-        for row in rows_data:
-            obs_id = str(row.get("OBSERVATION_ID", ""))
-            name = str(row.get("NAME", ""))
-            ra_str = str(row.get("RA", ""))
-            dec_str = str(row.get("DECL", ""))
-            offset_ra = float(row.get("OFFSET_RA", 0.0) or 0.0)
-            offset_dec = float(row.get("OFFSET_DEC", 0.0) or 0.0)
+    def _parse_angle_degrees(self, text: str, is_ra: bool) -> Optional[float]:
+        value = str(text).strip()
+        if not value:
+            return None
 
-            # Skip if manually ungrouped
-            if obs_id in self._manual_ungroup_obs_ids:
+        if ":" in value:
+            parts = value.split(":")
+            if len(parts) < 2:
+                return None
+            first = parts[0].strip()
+            neg = (not is_ra) and first.startswith("-")
+            try:
+                a = abs(float(first))
+                b = abs(float(parts[1].strip()))
+            except (TypeError, ValueError):
+                return None
+            c = 0.0
+            if len(parts) > 2:
+                try:
+                    c = abs(float(parts[2].strip()))
+                except (TypeError, ValueError):
+                    c = 0.0
+
+            deg = (a + b / 60.0 + c / 3600.0) * (15.0 if is_ra else 1.0)
+            if not is_ra and neg:
+                deg = -deg
+        else:
+            try:
+                deg = float(value)
+            except (TypeError, ValueError):
+                return None
+            if is_ra and abs(deg) <= 24.0:
+                deg *= 15.0
+
+        if is_ra:
+            while deg < 0.0:
+                deg += 360.0
+            while deg >= 360.0:
+                deg -= 360.0
+
+        return deg
+
+    def _offset_arcsec_from_row(self, row_data: Dict[str, Any], keys: Tuple[str, ...]) -> Tuple[float, bool]:
+        for key in keys:
+            raw_value, found = self._row_value_case_insensitive(row_data, key)
+            if not found:
                 continue
-
-            # Skip calibration targets (no RA/DEC or name starts with CAL_)
-            if not ra_str or not dec_str or name.upper().startswith("CAL_"):
+            text = str(raw_value).strip() if raw_value is not None else ""
+            if not text:
                 continue
+            parsed = self._parse_float(text)
+            if parsed is not None:
+                return parsed, True
+        return 0.0, False
 
-            # Parse coordinates
-            ra_deg = parse_sexagesimal_ra(ra_str)
-            dec_deg = parse_sexagesimal_dec(dec_str)
+    def _compute_projected_science_coord(self, row_data: Dict[str, Any]) -> Tuple[bool, float, float]:
+        ra_text = self._row_text_case_insensitive(row_data, "RA")
+        dec_text = self._row_text_case_insensitive(row_data, "DECL")
+        if not ra_text or not dec_text:
+            return False, 0.0, 0.0
 
-            if ra_deg is None or dec_deg is None:
-                continue
+        ra_deg = self._parse_angle_degrees(ra_text, is_ra=True)
+        dec_deg = self._parse_angle_degrees(dec_text, is_ra=False)
+        if ra_deg is None or dec_deg is None:
+            return False, 0.0, 0.0
 
-            # Apply gnomonic projection if offsets present
-            if offset_ra != 0.0 or offset_dec != 0.0:
-                ra_deg, dec_deg = gnomonic_projection(ra_deg, dec_deg, offset_ra, offset_dec)
+        offset_ra, _ = self._offset_arcsec_from_row(row_data, ("OFFSET_RA", "DRA"))
+        offset_dec, _ = self._offset_arcsec_from_row(row_data, ("OFFSET_DEC", "DDEC"))
 
-            # Generate coordinate key
-            coord_key = compute_coordinate_key(ra_deg, dec_deg, DEFAULT_GROUP_TOLERANCE_ARCSEC)
+        deg2rad = math.pi / 180.0
+        ra0 = ra_deg * deg2rad
+        dec0 = dec_deg * deg2rad
+        xi = (offset_ra / 3600.0) * deg2rad
+        eta = (offset_dec / 3600.0) * deg2rad
 
-            # Add to science centers if not already present
-            if coord_key not in [c[0] for c in science_centers]:
-                science_centers.append((coord_key, ra_deg, dec_deg))
+        sin_dec0 = math.sin(dec0)
+        cos_dec0 = math.cos(dec0)
+        denom = cos_dec0 - eta * sin_dec0
+        ra1 = ra0 + math.atan2(xi, denom)
+        dec1 = math.atan2(sin_dec0 + eta * cos_dec0, math.sqrt((denom * denom) + (xi * xi)))
 
-        # Second pass: Assign all targets to groups
-        for row in rows_data:
-            obs_id = str(row.get("OBSERVATION_ID", ""))
-            name = str(row.get("NAME", ""))
-            ra_str = str(row.get("RA", ""))
-            dec_str = str(row.get("DECL", ""))
-            offset_ra = float(row.get("OFFSET_RA", 0.0) or 0.0)
-            offset_dec = float(row.get("OFFSET_DEC", 0.0) or 0.0)
+        ra_out = ra1 / deg2rad
+        dec_out = dec1 / deg2rad
+        while ra_out < 0.0:
+            ra_out += 360.0
+        while ra_out >= 360.0:
+            ra_out -= 360.0
 
-            # Manually ungrouped
-            if obs_id in self._manual_ungroup_obs_ids:
-                group_assignments[obs_id] = f"UNGROUP:{obs_id}"
-                continue
+        return True, ra_out, dec_out
 
-            # Calibration target (no coordinates)
-            if not ra_str or not dec_str or name.upper().startswith("CAL_"):
-                group_assignments[obs_id] = f"CAL:{obs_id}"
-                continue
+    def _angular_separation_arcsec(self, ra1_deg: float, dec1_deg: float,
+                                   ra2_deg: float, dec2_deg: float) -> float:
+        deg2rad = math.pi / 180.0
+        ra1 = ra1_deg * deg2rad
+        dec1 = dec1_deg * deg2rad
+        ra2 = ra2_deg * deg2rad
+        dec2 = dec2_deg * deg2rad
+        cosd = (
+            math.sin(dec1) * math.sin(dec2) +
+            math.cos(dec1) * math.cos(dec2) * math.cos(ra1 - ra2)
+        )
+        clamped = max(-1.0, min(1.0, cosd))
+        sep_rad = math.acos(clamped)
+        return sep_rad * (180.0 / math.pi) * 3600.0
 
-            # Parse coordinates
-            ra_deg = parse_sexagesimal_ra(ra_str)
-            dec_deg = parse_sexagesimal_dec(dec_str)
+    def _coordinate_key(self, ra_deg: float, dec_deg: float) -> str:
+        tol_deg = GROUP_COORD_TOL_ARCSEC / 3600.0
+        if tol_deg > 0.0:
+            ra_steps = ra_deg / tol_deg
+            dec_steps = dec_deg / tol_deg
+            if ra_steps >= 0:
+                ra_steps = math.floor(ra_steps + 0.5)
+            else:
+                ra_steps = math.ceil(ra_steps - 0.5)
+            if dec_steps >= 0:
+                dec_steps = math.floor(dec_steps + 0.5)
+            else:
+                dec_steps = math.ceil(dec_steps - 0.5)
+            ra_deg = ra_steps * tol_deg
+            dec_deg = dec_steps * tol_deg
+        while ra_deg < 0.0:
+            ra_deg += 360.0
+        while ra_deg >= 360.0:
+            ra_deg -= 360.0
+        return f"{ra_deg:.6f}:{dec_deg:.6f}"
 
-            if ra_deg is None or dec_deg is None:
-                group_assignments[obs_id] = f"OBS:{obs_id}"
-                continue
+    def _build_group_rows(self, rows_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        row_infos: List[Dict[str, Any]] = []
+        for row_data in rows_data:
+            obs_id = str(row_data.get("OBSERVATION_ID", "")).strip()
+            name = str(row_data.get("NAME", "")).strip()
 
-            # Apply gnomonic projection if offsets present
-            if offset_ra != 0.0 or offset_dec != 0.0:
-                ra_deg, dec_deg = gnomonic_projection(ra_deg, dec_deg, offset_ra, offset_dec)
-
-            # Find nearest science center
-            nearest_key = find_nearest_center(
-                ra_deg, dec_deg, science_centers, DEFAULT_GROUP_TOLERANCE_ARCSEC
+            offset_ra, has_offset_ra = self._offset_arcsec_from_row(row_data, ("OFFSET_RA", "DRA"))
+            offset_dec, has_offset_dec = self._offset_arcsec_from_row(row_data, ("OFFSET_DEC", "DDEC"))
+            is_science = (
+                (not has_offset_ra and not has_offset_dec) or
+                (abs(offset_ra) <= OFFSET_ZERO_TOL_ARCSEC and abs(offset_dec) <= OFFSET_ZERO_TOL_ARCSEC)
             )
 
-            if nearest_key:
-                group_assignments[obs_id] = nearest_key
-            else:
-                # Create singleton group
-                group_assignments[obs_id] = f"OBS:{obs_id}"
+            obs_order = 0
+            obs_order_raw = row_data.get("OBS_ORDER", 0)
+            try:
+                obs_order = int(float(obs_order_raw))
+            except (TypeError, ValueError):
+                obs_order = 0
 
-        return group_assignments
+            coord_ok, ra_deg, dec_deg = self._compute_projected_science_coord(row_data)
+            row_infos.append({
+                "obs_id": obs_id,
+                "name": name,
+                "row_data": row_data,
+                "group_key": "",
+                "is_science": is_science,
+                "obs_order": obs_order,
+                "coord_ok": coord_ok,
+                "ra_deg": ra_deg,
+                "dec_deg": dec_deg,
+            })
+
+        centers: List[Dict[str, Any]] = []
+        for info in row_infos:
+            if info["obs_id"] in self._manual_ungroup_obs_ids:
+                continue
+            if info["coord_ok"] and info["is_science"]:
+                centers.append({
+                    "key": self._coordinate_key(info["ra_deg"], info["dec_deg"]),
+                    "ra": info["ra_deg"],
+                    "dec": info["dec_deg"],
+                })
+
+        has_science_centers = len(centers) > 0
+        for info in row_infos:
+            obs_id = info["obs_id"]
+            if obs_id in self._manual_ungroup_obs_ids:
+                info["group_key"] = f"UNGROUP:{obs_id}"
+                continue
+
+            manual_key = self._manual_group_key_by_obs_id.get(obs_id, "")
+            if manual_key:
+                info["group_key"] = manual_key
+                continue
+
+            if not info["coord_ok"]:
+                info["group_key"] = f"OBS:{obs_id}"
+                continue
+
+            if not has_science_centers:
+                info["group_key"] = f"OBS:{obs_id}"
+                continue
+
+            best_sep = 1e12
+            best_idx = -1
+            for idx, center in enumerate(centers):
+                sep = self._angular_separation_arcsec(
+                    info["ra_deg"], info["dec_deg"], center["ra"], center["dec"]
+                )
+                if sep < best_sep:
+                    best_sep = sep
+                    best_idx = idx
+
+            if best_idx >= 0 and best_sep <= GROUP_COORD_TOL_ARCSEC:
+                info["group_key"] = centers[best_idx]["key"]
+            else:
+                info["group_key"] = f"OBS:{obs_id}"
+
+        return row_infos
 
     def _apply_grouping_to_display(self, rows_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Apply grouping to rows before display.
-
-        Groups rows by coordinate proximity and adds group header rows.
-        Only shows members of expanded groups.
-
-        Args:
-            rows_data: Original rows from database
-
-        Returns:
-            Modified rows list with group headers and filtered members
-        """
         if not self._grouping_enabled or not rows_data:
+            self._group_data = {}
             return rows_data
 
-        # Compute group assignments
-        group_assignments = self._compute_groups(rows_data)
+        rows = self._build_group_rows(rows_data)
+        if not rows:
+            self._group_data = {}
+            return rows_data
 
-        # Group rows by assignment
-        groups: Dict[str, List[Dict[str, Any]]] = {}
-        for row in rows_data:
-            obs_id = str(row.get("OBSERVATION_ID", ""))
-            group_key = group_assignments.get(obs_id, f"OBS:{obs_id}")
+        rows_by_key: Dict[str, List[Dict[str, Any]]] = {}
+        for info in rows:
+            rows_by_key.setdefault(info["group_key"], []).append(info)
 
-            if group_key not in groups:
-                groups[group_key] = []
-            groups[group_key].append(row)
+        selected_by_key: Dict[str, str] = {}
+        valid_header_obs_ids: Set[str] = set()
+        selection_changed = False
+        self._group_data = {}
+        group_order_records: List[Tuple[int, str]] = []
 
-        # Build display list with headers
-        display_rows = []
+        for group_key, members in rows_by_key.items():
+            ordered_members = sorted(members, key=lambda info: info["obs_order"])
+            header_info = next(
+                (member for member in ordered_members if member.get("is_science", False)),
+                ordered_members[0]
+            )
+            header_obs_id = str(header_info.get("obs_id", "")).strip()
+            if not header_obs_id:
+                continue
+            valid_header_obs_ids.add(header_obs_id)
+            group_order_records.append((int(header_info.get("obs_order", 0)), group_key))
 
-        for group_key, group_rows in groups.items():
-            # Determine if group is expanded
-            is_expanded = group_key in self._expanded_groups
+            member_obs_ids = {
+                str(member.get("obs_id", "")).strip()
+                for member in ordered_members
+                if str(member.get("obs_id", "")).strip()
+            }
 
-            # Add group header row (first row in group)
-            if group_rows:
-                header_row = group_rows[0].copy()
+            selected_obs_id = self._selected_obs_id_by_header.get(header_obs_id, "")
+            if selected_obs_id not in member_obs_ids:
+                default_obs_id = ""
+                for member in ordered_members:
+                    member_obs_id = str(member.get("obs_id", "")).strip()
+                    if member_obs_id and not member.get("is_science", False):
+                        default_obs_id = member_obs_id
+                        break
+                if not default_obs_id:
+                    default_obs_id = header_obs_id
+                selected_obs_id = default_obs_id
+                self._selected_obs_id_by_header[header_obs_id] = selected_obs_id
+                selection_changed = True
 
-                # Add expand/collapse indicator to NAME column
-                name_val = str(header_row.get("NAME", ""))
-                icon = "▼" if is_expanded else "▶"
-                header_row["NAME"] = f"{icon} {name_val} [{len(group_rows)}]"
-                header_row["_IS_GROUP_HEADER"] = True
-                header_row["_GROUP_KEY"] = group_key
+            selected_by_key[group_key] = selected_obs_id
+            self._group_data[group_key] = {
+                "header_obs_id": header_obs_id,
+                "members": ordered_members,
+            }
 
-                display_rows.append(header_row)
+        for header_obs_id in list(self._selected_obs_id_by_header.keys()):
+            if header_obs_id not in valid_header_obs_ids:
+                del self._selected_obs_id_by_header[header_obs_id]
+                selection_changed = True
 
-                # Add group members if expanded
-                if is_expanded and len(group_rows) > 1:
-                    for member_row in group_rows[1:]:
-                        # Indent member names
-                        member_copy = member_row.copy()
-                        name_val = str(member_copy.get("NAME", ""))
-                        member_copy["NAME"] = f"  {name_val}"
-                        member_copy["_IS_GROUP_MEMBER"] = True
-                        member_copy["_GROUP_KEY"] = group_key
-                        display_rows.append(member_copy)
+        if selection_changed:
+            self._save_grouping_state()
+
+        # C++ parity: enforce group STATE selection semantics.
+        # For rows whose current STATE is empty/pending/unassigned:
+        # - selected member in a group -> DEFAULT_TARGET_STATE (pending)
+        # - non-selected members       -> unassigned
+        state_updates: List[Tuple[Dict[str, Any], str, Dict[str, Any], str]] = []
+
+        def _row_state_key(row_dict: Dict[str, Any]) -> str:
+            if "STATE" in row_dict:
+                return "STATE"
+            for k in row_dict.keys():
+                if str(k).upper() == "STATE":
+                    return str(k)
+            return "STATE"
+
+        def _should_override_state(raw_state: Any) -> bool:
+            s = str(raw_state).strip().lower() if raw_state is not None else ""
+            return (s == "") or (s == "pending") or (s == "unassigned")
+
+        desired_pending_state = str(DEFAULT_TARGET_STATE).strip() if str(DEFAULT_TARGET_STATE).strip() else "pending"
+
+        if self._db and self._db.is_open() and rows_by_key:
+            for group_key, members in rows_by_key.items():
+                selected_obs_id = selected_by_key.get(group_key, "")
+                if not selected_obs_id:
+                    continue
+                for member in members:
+                    row_data = member.get("row_data", {})
+                    if not isinstance(row_data, dict):
+                        continue
+                    state_key = _row_state_key(row_data)
+                    current_state = row_data.get(state_key, "")
+                    if not _should_override_state(current_state):
+                        continue
+
+                    member_obs_id = str(member.get("obs_id", "")).strip()
+                    if not member_obs_id:
+                        continue
+                    is_selected = member_obs_id and (member_obs_id == selected_obs_id)
+                    desired_state = desired_pending_state if is_selected else "unassigned"
+                    if str(current_state).strip().lower() == desired_state.lower():
+                        continue
+
+                    key_values: Dict[str, Any] = {"OBSERVATION_ID": member_obs_id}
+                    if "SET_ID" in row_data and row_data.get("SET_ID") not in ("", None):
+                        key_values["SET_ID"] = row_data.get("SET_ID")
+
+                    state_updates.append((key_values, desired_state, row_data, state_key))
+
+            for key_values, desired_state, row_data, state_key in state_updates:
+                try:
+                    self._db.update_record(self._table_name, key_values, {"STATE": desired_state})
+                    row_data[state_key] = desired_state
+                except Exception as err:
+                    print(f"WARN: failed to update STATE selection: {err}")
+
+        group_any_pending: Dict[str, bool] = {}
+        for group_key, members in rows_by_key.items():
+            any_pending = False
+            for member in members:
+                row_data = member.get("row_data", {})
+                if not isinstance(row_data, dict):
+                    continue
+                state_key = _row_state_key(row_data)
+                state_value = str(row_data.get(state_key, "")).strip().lower()
+                if state_value == "pending":
+                    any_pending = True
+                    break
+            group_any_pending[group_key] = any_pending
+
+        group_order = [key for _, key in sorted(group_order_records, key=lambda pair: pair[0])]
+
+        display_rows: List[Dict[str, Any]] = []
+        for group_key in group_order:
+            group_info = self._group_data.get(group_key, {})
+            ordered_members = group_info.get("members", [])
+            if not ordered_members:
+                continue
+            header_obs_id = str(group_info.get("header_obs_id", "")).strip()
+            selected_obs_id = selected_by_key.get(group_key, "")
+            expanded = group_key in self._expanded_groups
+            group_size = len(ordered_members)
+
+            header_member = None
+            for member in ordered_members:
+                if str(member.get("obs_id", "")).strip() == header_obs_id:
+                    header_member = member
+                    break
+            if header_member is None:
+                header_member = ordered_members[0]
+
+            group_members_meta = []
+            for member in ordered_members:
+                group_members_meta.append({
+                    "obs_id": str(member.get("obs_id", "")).strip(),
+                    "name": str(member.get("name", "")).strip(),
+                    "obs_order": int(member.get("obs_order", 0)),
+                    "is_science": bool(member.get("is_science", False)),
+                })
+
+            header_row = dict(header_member.get("row_data", {}))
+            header_name = str(header_row.get("NAME", ""))
+            header_selected = bool(selected_obs_id and selected_obs_id == header_obs_id)
+            if header_selected:
+                header_name = f"★ {header_name}"
+            if group_size > 1:
+                icon = "▼" if expanded else "▶"
+                header_row["NAME"] = f"{icon} {header_name}"
+            else:
+                header_row["NAME"] = header_name
+            header_row["_IS_GROUP_HEADER"] = True
+            header_row["_GROUP_KEY"] = group_key
+            header_row["_GROUP_MEMBERS"] = group_members_meta
+            header_row["_GROUP_HEADER_OBS_ID"] = header_obs_id
+            header_row["_GROUP_SELECTED_OBS_ID"] = selected_obs_id
+            header_row["_GROUP_IS_SELECTED"] = header_selected
+            if (not expanded) and group_any_pending.get(group_key, False):
+                state_key = _row_state_key(header_row)
+                header_row[state_key] = desired_pending_state
+            display_rows.append(header_row)
+
+            if expanded and group_size > 1:
+                for member in ordered_members:
+                    member_obs_id = str(member.get("obs_id", "")).strip()
+                    if member_obs_id == header_obs_id:
+                        continue
+                    member_row = dict(member.get("row_data", {}))
+                    member_name = str(member_row.get("NAME", ""))
+                    member_selected = bool(selected_obs_id and member_obs_id == selected_obs_id)
+                    if member_selected:
+                        member_row["NAME"] = f"  ★ {member_name}"
+                    else:
+                        member_row["NAME"] = f"    {member_name}"
+                    member_row["_IS_GROUP_MEMBER"] = True
+                    member_row["_GROUP_KEY"] = group_key
+                    member_row["_GROUP_MEMBERS"] = group_members_meta
+                    member_row["_GROUP_HEADER_OBS_ID"] = header_obs_id
+                    member_row["_GROUP_SELECTED_OBS_ID"] = selected_obs_id
+                    member_row["_GROUP_IS_SELECTED"] = member_selected
+                    display_rows.append(member_row)
 
         return display_rows
 
@@ -1351,13 +1844,127 @@ class DatabaseTableWidget(QWidget):
         """Manually ungroup a target."""
         if obs_id:
             self._manual_ungroup_obs_ids.add(obs_id)
+            self._manual_group_key_by_obs_id.pop(obs_id, None)
+            self._save_grouping_state()
             self.refresh()
 
     def _regroup_target(self, obs_id: str) -> None:
         """Restore automatic grouping for a target."""
-        if obs_id in self._manual_ungroup_obs_ids:
-            self._manual_ungroup_obs_ids.remove(obs_id)
+        if obs_id in self._manual_ungroup_obs_ids or obs_id in self._manual_group_key_by_obs_id:
+            self._manual_ungroup_obs_ids.discard(obs_id)
+            self._manual_group_key_by_obs_id.pop(obs_id, None)
+            self._save_grouping_state()
             self.refresh()
+
+    def _set_sequencer_target(self, group_key: str, obs_id: str) -> None:
+        """Store sequencer selection using C++ parity: selected obs id keyed by header obs id."""
+        group_info = self._group_data.get(group_key, {})
+        members = group_info.get("members", [])
+        header_obs_id = str(group_info.get("header_obs_id", "")).strip()
+        if not header_obs_id or not members:
+            return
+        in_group = any(str(member.get("obs_id", "")).strip() == obs_id for member in members)
+        if not in_group:
+            return
+        self._selected_obs_id_by_header[header_obs_id] = obs_id
+        self._save_grouping_state()
+        self.refresh()
+
+    def _save_grouping_state(self) -> None:
+        """Persist grouping state to QSettings."""
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        prefix = self._settings_key_prefix
+        settings.setValue(f"{prefix}/groupingEnabled", self._grouping_enabled)
+        settings.setValue(f"{prefix}/expandedGroups", sorted(self._expanded_groups))
+
+        ungrouped = sorted([obs_id for obs_id in self._manual_ungroup_obs_ids if str(obs_id).strip()])
+        settings.setValue(self._grouping_settings_key("manualUngroup"), ungrouped)
+        settings.setValue(f"{prefix}/manualUngroupObsIds", ungrouped)
+
+        manual_groups = []
+        for obs_id, group_key in self._manual_group_key_by_obs_id.items():
+            obs_text = str(obs_id).strip()
+            group_text = str(group_key).strip()
+            if obs_text and group_text:
+                manual_groups.append(f"{obs_text}={group_text}")
+        manual_groups.sort()
+        settings.setValue(self._grouping_settings_key("manualGroups"), manual_groups)
+
+        selected_obs = []
+        for header_obs_id, selected_obs_id in self._selected_obs_id_by_header.items():
+            header_text = str(header_obs_id).strip()
+            selected_text = str(selected_obs_id).strip()
+            if header_text and selected_text:
+                selected_obs.append(f"{header_text}={selected_text}")
+        selected_obs.sort()
+        settings.setValue(self._grouping_settings_key("selectedObs"), selected_obs)
+
+    def _restore_grouping_state(self) -> None:
+        """Restore grouping state from QSettings."""
+        settings = QSettings(SETTINGS_ORG, SETTINGS_APP)
+        prefix = self._settings_key_prefix
+
+        # Restore grouping enabled (default True for targets table)
+        default_enabled = self._is_targets_table()
+        val = settings.value(f"{prefix}/groupingEnabled", default_enabled)
+        # QSettings may return string "true"/"false" instead of bool
+        if isinstance(val, str):
+            self._grouping_enabled = val.lower() == "true"
+        else:
+            self._grouping_enabled = bool(val)
+
+        # Restore expanded groups
+        expanded = settings.value(f"{prefix}/expandedGroups", [])
+        if isinstance(expanded, list):
+            self._expanded_groups = set(expanded)
+        elif isinstance(expanded, str):
+            self._expanded_groups = {expanded}
+        else:
+            self._expanded_groups = set()
+
+        # Restore manual ungroup obs ids
+        self._manual_ungroup_obs_ids = set()
+        ungrouped = settings.value(
+            self._grouping_settings_key("manualUngroup"),
+            settings.value(f"{prefix}/manualUngroupObsIds", [])
+        )
+        if isinstance(ungrouped, str):
+            ungrouped = [ungrouped]
+        if isinstance(ungrouped, list):
+            for obs_id in ungrouped:
+                obs_text = str(obs_id).strip()
+                if obs_text:
+                    self._manual_ungroup_obs_ids.add(obs_text)
+
+        self._manual_group_key_by_obs_id = {}
+        manual_groups = settings.value(self._grouping_settings_key("manualGroups"), [])
+        if isinstance(manual_groups, str):
+            manual_groups = [manual_groups]
+        if isinstance(manual_groups, list):
+            for entry in manual_groups:
+                text = str(entry).strip()
+                if "=" not in text:
+                    continue
+                obs_id, group_key = text.split("=", 1)
+                obs_text = obs_id.strip()
+                group_text = group_key.strip()
+                if obs_text and group_text:
+                    self._manual_group_key_by_obs_id[obs_text] = group_text
+
+        self._selected_obs_id_by_header = {}
+        selected_obs_entries = settings.value(self._grouping_settings_key("selectedObs"), [])
+        if isinstance(selected_obs_entries, str):
+            selected_obs_entries = [selected_obs_entries]
+        if isinstance(selected_obs_entries, list):
+            for entry in selected_obs_entries:
+                text = str(entry).strip()
+                if "=" not in text:
+                    continue
+                header_obs_id, selected_obs_id = text.split("=", 1)
+                header_text = header_obs_id.strip()
+                selected_text = selected_obs_id.strip()
+                if header_text and selected_text:
+                    self._selected_obs_id_by_header[header_text] = selected_text
 
     def _launch_etc_dialog(self) -> None:
         """Launch ETC dialog for selected target(s)."""
@@ -1419,7 +2026,7 @@ class DatabaseTableWidget(QWidget):
             self.refresh()
 
     def _bulk_edit_dialog(self) -> None:
-        """Launch bulk edit dialog for selected rows."""
+        """Launch bulk edit dialog for all targets in the current view scope."""
         try:
             from bulk_operations_dialog import BulkEditDialog
         except ImportError:
@@ -1430,18 +2037,25 @@ class DatabaseTableWidget(QWidget):
             )
             return
 
-        # Get selected rows
-        selected_rows = self.table.selectionModel().selectedRows()
-        if not selected_rows:
+        # C++ parity: bulk edit applies to all targets in current table scope
+        # (current set + search filter), not just currently selected row(s).
+        target_rows = self._get_bulk_edit_target_rows()
+        if not target_rows:
             QMessageBox.warning(
                 self,
-                "No Selection",
-                "Please select one or more rows to bulk edit."
+                "No Targets",
+                "No targets found to bulk edit."
             )
             return
 
         # Ask user which column to edit
-        column_names = list(self._column_index.keys())
+        column_names = [
+            col.name for col in self._columns
+            if not col.is_primary and not col.is_auto_increment
+        ]
+        if not column_names:
+            QMessageBox.warning(self, "Error", "No editable columns available.")
+            return
         column_name, ok = QInputDialog.getItem(
             self,
             "Select Column",
@@ -1470,7 +2084,7 @@ class DatabaseTableWidget(QWidget):
             parent=self,
             column_name=column_name,
             column_type=column_meta.type,
-            num_rows=len(selected_rows)
+            num_rows=len(target_rows)
         )
 
         if dialog.exec_() != QDialog.Accepted:
@@ -1478,96 +2092,123 @@ class DatabaseTableWidget(QWidget):
 
         # Apply the bulk edit operation
         operation = dialog.get_operation()
-        self._apply_bulk_edit(selected_rows, column_name, operation)
+        self._apply_bulk_edit(target_rows, column_name, operation)
 
-    def _apply_bulk_edit(self, selected_rows, column_name: str, operation: Dict[str, Any]) -> None:
-        """Apply bulk edit operation to selected rows."""
+    def _get_bulk_edit_target_rows(self) -> List[Dict[str, Any]]:
+        """Fetch rows in the same scope as the visible targets table."""
+        where_clauses = []
+        params: List[Any] = []
+        if self._fixed_filter_col is not None and self._fixed_filter_val is not None:
+            where_clauses.append(f"`{self._fixed_filter_col}`=%s")
+            params.append(self._fixed_filter_val)
+        if self._search_column and self.search_input:
+            text = self.search_input.text().strip()
+            if text:
+                where_clauses.append(f"LOWER(`{self._search_column}`) LIKE %s")
+                params.append(f"%{text.lower()}%")
+
+        where = " AND ".join(where_clauses)
+        order_by = self._order_by or ""
+        return self._db.fetch_rows(
+            self._table_name,
+            where=where,
+            params=tuple(params),
+            order_by=order_by,
+        )
+
+    def _apply_bulk_edit(self, target_rows: List[Dict[str, Any]], column_name: str, operation: Dict[str, Any]) -> None:
+        """Apply bulk edit to all target rows, then refresh once."""
         if not self._db.is_open():
             QMessageBox.warning(self, "Error", "Database not connected")
             return
 
         try:
-            schema = self._db.get_schema(self._config.schema)
-            table = schema.get_table(self._table_name)
-
-            # Get primary key column
-            pk_col = None
-            pk_col_name = None
-            for col in self._columns:
-                if col.is_primary:
-                    pk_col = self._column_index.get(col.name)
-                    pk_col_name = col.name
-                    break
-
-            if pk_col is None:
+            primary_keys = [col.name for col in self._columns if col.is_primary]
+            if not primary_keys:
+                fallback_keys = []
+                if "OBSERVATION_ID" in self._column_index:
+                    fallback_keys.append("OBSERVATION_ID")
+                if "SET_ID" in self._column_index:
+                    fallback_keys.append("SET_ID")
+                primary_keys = fallback_keys
+            if not primary_keys:
                 QMessageBox.warning(self, "Error", "Primary key column not found")
                 return
 
-            # Process each selected row
-            updates = 0
-            for index in selected_rows:
-                row = index.row()
-                pk_item = self.table.item(row, pk_col)
-                if not pk_item:
+            skip = object()
+
+            def compute_new_value(current_value: Any) -> Any:
+                op_type = str(operation.get("type", "")).strip().lower()
+                if op_type == "set":
+                    return operation.get("value")
+                if op_type == "null":
+                    return None
+                if op_type == "append":
+                    base = "" if current_value is None else str(current_value)
+                    return base + str(operation.get("value", ""))
+                if op_type == "prepend":
+                    base = "" if current_value is None else str(current_value)
+                    return str(operation.get("value", "")) + base
+                if op_type == "add":
+                    try:
+                        return str(float(current_value) + float(operation.get("value")))
+                    except (TypeError, ValueError):
+                        return skip
+                if op_type == "multiply":
+                    try:
+                        return str(float(current_value) * float(operation.get("value")))
+                    except (TypeError, ValueError):
+                        return skip
+                return skip
+
+            updates_to_apply: List[Tuple[Dict[str, Any], Any]] = []
+            skipped_rows = 0
+            for row_data in target_rows:
+                key_values: Dict[str, Any] = {}
+                for key in primary_keys:
+                    if key not in row_data:
+                        continue
+                    val = row_data.get(key)
+                    if val in ("", None):
+                        continue
+                    key_values[key] = val
+                if len(key_values) != len(primary_keys):
+                    skipped_rows += 1
                     continue
 
-                pk_value = pk_item.text()
+                new_value = compute_new_value(row_data.get(column_name))
+                if new_value is skip:
+                    skipped_rows += 1
+                    continue
+                updates_to_apply.append((key_values, new_value))
 
-                # Determine new value based on operation
-                new_value = None
+            if not updates_to_apply:
+                QMessageBox.information(
+                    self,
+                    "Bulk Edit Complete",
+                    "No rows were eligible for this operation."
+                )
+                return
 
-                if operation["type"] == "set":
-                    new_value = operation["value"]
-                elif operation["type"] == "null":
-                    new_value = None
-                elif operation["type"] == "append":
-                    # Get current value and append
-                    current_item = self.table.item(row, self._column_index[column_name])
-                    if current_item:
-                        current_value = current_item.text()
-                        new_value = current_value + operation["value"]
-                elif operation["type"] == "prepend":
-                    # Get current value and prepend
-                    current_item = self.table.item(row, self._column_index[column_name])
-                    if current_item:
-                        current_value = current_item.text()
-                        new_value = operation["value"] + current_value
-                elif operation["type"] == "add":
-                    # Get current value and add
-                    current_item = self.table.item(row, self._column_index[column_name])
-                    if current_item:
-                        try:
-                            current_value = float(current_item.text())
-                            add_value = float(operation["value"])
-                            new_value = str(current_value + add_value)
-                        except ValueError:
-                            continue
-                elif operation["type"] == "multiply":
-                    # Get current value and multiply
-                    current_item = self.table.item(row, self._column_index[column_name])
-                    if current_item:
-                        try:
-                            current_value = float(current_item.text())
-                            mult_value = float(operation["value"])
-                            new_value = str(current_value * mult_value)
-                        except ValueError:
-                            continue
-
-                # Update database
-                if new_value is None:
-                    table.update().set(column_name, None).where(f"{pk_col_name} = '{pk_value}'").execute()
-                else:
-                    table.update().set(column_name, new_value).where(f"{pk_col_name} = '{pk_value}'").execute()
-
-                updates += 1
+            updates = 0
+            self._db.start_transaction()
+            try:
+                for key_values, new_value in updates_to_apply:
+                    self._db.update_record(self._table_name, key_values, {column_name: new_value})
+                    updates += 1
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
             QMessageBox.information(
                 self,
                 "Bulk Edit Complete",
                 f"Successfully updated {updates} rows."
+                + (f"\nSkipped {skipped_rows} rows." if skipped_rows else "")
             )
 
-            # Refresh table and notify
+            # Single refresh/emit after full batch so OTM reruns only once.
             self.refresh()
             self.data_changed.emit()
             self.views_need_refresh.emit()
@@ -1895,6 +2536,7 @@ class DatabaseTab(QWidget):
         self._current_set_id = None
         self._timeline_stale = True
         self._otm_running = False
+        self._otm_ui_locked = False
         self._otm_thread = None
         self._otm_runner = None
         self._timeline_thread = None
@@ -1982,6 +2624,7 @@ class DatabaseTab(QWidget):
             # Table→Timeline+ControlTab sync: when user selects a row in targets table,
             # highlight corresponding target in timeline and populate control tab fields
             self.targets_table.selection_changed.connect(self._on_targets_table_selection)
+            self.targets_table.reorder_requested.connect(self._on_timeline_reorder)
 
             # Centralized DB write signals from table widget
             self.targets_table.write_requested.connect(
@@ -2091,10 +2734,16 @@ class DatabaseTab(QWidget):
                 print("OTM: timeline script path not configured or missing")
                 return
 
-            # Get targets for this set
+            # Get targets for this set and build C++-parity OTM group context
             targets = self._get_targets_for_otm(set_id)
             if not targets:
                 print(f"OTM: no targets found in set {set_id}")
+                return
+            otm_targets, members_by_science_obs, obs_order_by_obs_id = self._build_otm_group_context_for_set(
+                set_id, targets
+            )
+            if not otm_targets:
+                print(f"OTM: no grouped science targets found in set {set_id}")
                 return
 
             # Create temporary files
@@ -2105,7 +2754,7 @@ class DatabaseTab(QWidget):
             timeline_json = os.path.join(temp_dir, "timeline.json")
 
             # Generate input CSV (filters targets outside observable DEC range)
-            skipped = generate_otm_input_csv(targets, input_csv)
+            skipped = generate_otm_input_csv(otm_targets, input_csv)
             if skipped:
                 print(f"OTM: {len(skipped)} target(s) skipped (DEC outside observable range): {skipped}")
 
@@ -2124,6 +2773,7 @@ class DatabaseTab(QWidget):
             # Mark running and clean up old threads
             self._otm_running = True
             self._timeline_stale = False
+            self._set_otm_ui_locked(True)
             self._cleanup_otm_threads()
 
             # Run OTM in thread (no progress dialog)
@@ -2136,7 +2786,9 @@ class DatabaseTab(QWidget):
             self._otm_runner.finished.connect(
                 lambda success, msg: self._on_otm_finished(
                     success, msg, input_csv, output_csv, timeline_json, set_id, start_utc,
-                    progress=None
+                    progress=None,
+                    members_by_science_obs=members_by_science_obs,
+                    obs_order_by_obs_id=obs_order_by_obs_id,
                 )
             )
             self._otm_runner.finished.connect(self._otm_thread.quit)
@@ -2146,10 +2798,14 @@ class DatabaseTab(QWidget):
 
         except Exception as e:
             print(f"OTM: failed to run: {e}")
+            if self._otm_running:
+                self._finish_otm_pipeline(False)
 
     def _on_otm_finished(self, success: bool, message: str, input_csv: str, output_csv: str,
                          timeline_json: str, set_id: str, start_utc: str,
-                         progress: QProgressDialog, silent: bool = False) -> None:
+                         progress: QProgressDialog, silent: bool = False,
+                         members_by_science_obs: Optional[Dict[str, List[str]]] = None,
+                         obs_order_by_obs_id: Optional[Dict[str, int]] = None) -> None:
         """Handle OTM completion: import results, run timeline subprocess, display Plotly chart."""
         if not success:
             if progress:
@@ -2164,7 +2820,7 @@ class DatabaseTab(QWidget):
                 progress.setLabelText("Importing OTM results to database...")
 
             otm_results = parse_otm_output_csv(output_csv)
-            self._import_otm_results(set_id, otm_results)
+            self._import_otm_results(set_id, otm_results, members_by_science_obs=members_by_science_obs)
 
             # Refresh tables — then suppress the data_changed → stale cascade
             # since we're already inside the OTM pipeline
@@ -2196,7 +2852,8 @@ class DatabaseTab(QWidget):
             self._timeline_runner.progress.connect(lambda msg: progress.setLabelText(msg))
         self._timeline_runner.finished.connect(
             lambda ok, msg, json_path: self._on_timeline_finished(
-                ok, msg, json_path, len(otm_results), settings.airmass_max, progress, silent
+                ok, msg, json_path, len(otm_results), settings.airmass_max, progress, silent,
+                obs_order_by_obs_id=obs_order_by_obs_id,
             )
         )
         self._timeline_runner.finished.connect(self._timeline_thread.quit)
@@ -2208,7 +2865,8 @@ class DatabaseTab(QWidget):
 
     def _on_timeline_finished(self, success: bool, message: str, json_path: str,
                               num_results: int, airmass_limit: float,
-                              progress: QProgressDialog, silent: bool = False) -> None:
+                              progress: QProgressDialog, silent: bool = False,
+                              obs_order_by_obs_id: Optional[Dict[str, int]] = None) -> None:
         """Handle timeline JSON generation: parse, render Plotly HTML, display in WebView."""
         auto_run = silent
 
@@ -2224,6 +2882,53 @@ class DatabaseTab(QWidget):
             if progress:
                 progress.setLabelText("Rendering timeline chart...")
             timeline_data = parse_timeline_json(json_path)
+
+            # C++ parity: reapply table OBS_ORDER to timeline rows when available.
+            if obs_order_by_obs_id and timeline_data and timeline_data.targets:
+                ordered_pairs: List[Tuple[int, str]] = []
+                for target in timeline_data.targets:
+                    obs_id = str(getattr(target, "obs_id", "")).strip()
+                    raw_order = obs_order_by_obs_id.get(obs_id, 10**9)
+                    ordered_pairs.append((int(raw_order), obs_id))
+
+                ordered_pairs.sort(key=lambda pair: (pair[0], pair[1]))
+                seq_by_obs: Dict[str, int] = {}
+                seq = 1
+                for _, obs_id in ordered_pairs:
+                    if obs_id and obs_id not in seq_by_obs:
+                        seq_by_obs[obs_id] = seq
+                        seq += 1
+
+                for target in timeline_data.targets:
+                    obs_id = str(getattr(target, "obs_id", "")).strip()
+                    if obs_id in seq_by_obs:
+                        target.obs_order = seq_by_obs[obs_id]
+
+                def _parse_iso(ts: str):
+                    text = str(ts or "").strip()
+                    if not text:
+                        return None
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return dt
+                    except Exception:
+                        return None
+
+                from datetime import datetime, timezone
+                fallback_dt = datetime.max.replace(tzinfo=timezone.utc)
+                timeline_data.targets = sorted(
+                    timeline_data.targets,
+                    key=lambda t: (
+                        0 if int(getattr(t, "obs_order", 0) or 0) > 0 else 1,
+                        int(getattr(t, "obs_order", 0) or 0) if int(getattr(t, "obs_order", 0) or 0) > 0 else 0,
+                        _parse_iso(getattr(t, "start", "")) or fallback_dt,
+                        str(getattr(t, "name", "") or ""),
+                    ),
+                )
+
             html_content = generate_timeline_html(timeline_data, airmass_limit)
 
             # Write HTML to temp file (plotly.js is ~4.8MB, exceeds setHtml() limit)
@@ -2263,6 +2968,9 @@ class DatabaseTab(QWidget):
         After a successful write, refreshes the table, control tab fields,
         and marks the timeline stale so all views stay in sync.
         """
+        if self._otm_running or self._otm_ui_locked:
+            print(f"DB write blocked ({source}): OTM pipeline running")
+            return False
         try:
             self._db.update_record(self._config.table_targets, key_values, updates)
         except Exception as exc:
@@ -2362,6 +3070,7 @@ class DatabaseTab(QWidget):
     def _finish_otm_pipeline(self, auto_run: bool) -> None:
         """Clean up after OTM pipeline completes. Re-run if data changed while running."""
         self._otm_running = False
+        self._set_otm_ui_locked(False)
         if auto_run and self._timeline_stale:
             # Data changed while OTM was running — re-run
             self._otm_debounce_timer.start()
@@ -2395,21 +3104,104 @@ class DatabaseTab(QWidget):
         item = self.targets_table.table.item(row, obs_col)
         return item.text() if item else ""
 
-    def _select_obs_id_in_table(self, obs_id: str) -> None:
-        """Select the row matching obs_id in the targets table."""
+    def _find_visible_row_for_obs_id(self, obs_id: str) -> int:
+        """Return visible table row for OBSERVATION_ID, or -1 if not displayed."""
         table = self.targets_table.table
         obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
         if obs_col is None:
-            return
+            return -1
+        target = str(obs_id).strip()
         for row in range(table.rowCount()):
             item = table.item(row, obs_col)
-            if item and item.text() == str(obs_id):
-                table.selectRow(row)
-                table.scrollToItem(item)
-                values = self.targets_table._current_row_values(row)
-                if values:
-                    self._update_control_tab_fields(values)
-                break
+            if item and item.text().strip() == target:
+                return row
+        return -1
+
+    def _find_group_header_row_for_obs_id(self, obs_id: str) -> int:
+        """When grouped/collapsed, resolve member OBSERVATION_ID to its header row."""
+        target = str(obs_id).strip()
+        if not target:
+            return -1
+        for row, meta in enumerate(getattr(self.targets_table, "_row_metadata", [])):
+            if not isinstance(meta, dict):
+                continue
+            members = meta.get("_GROUP_MEMBERS", [])
+            if not isinstance(members, list):
+                continue
+            for member in members:
+                member_obs_id = str(member.get("obs_id", "")).strip() if isinstance(member, dict) else ""
+                if member_obs_id == target:
+                    return row
+        return -1
+
+    def _select_obs_id_in_table(self, obs_id: str) -> None:
+        """Select the row matching obs_id in the targets table."""
+        table = self.targets_table.table
+        row = self._find_visible_row_for_obs_id(obs_id)
+        if row < 0:
+            row = self._find_group_header_row_for_obs_id(obs_id)
+        if row < 0:
+            return
+
+        table.selectRow(row)
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        item = table.item(row, obs_col) if obs_col is not None else table.item(row, 0)
+        if item:
+            table.scrollToItem(item)
+
+        values = self.targets_table._current_row_values(row)
+        if values:
+            self._update_control_tab_fields(values)
+
+    def _fetch_target_row_by_obs_id(self, obs_id: str) -> Dict[str, Any]:
+        """Fetch a target row by OBSERVATION_ID from DB."""
+        if not self._db.is_open():
+            return {}
+        target = str(obs_id).strip()
+        if not target:
+            return {}
+        rows = self._db.fetch_rows(
+            self._config.table_targets,
+            where="`OBSERVATION_ID`=%s",
+            params=(target,),
+        )
+        return rows[0] if rows else {}
+
+    def _resolve_set_id_for_obs(self, obs_id: str) -> str:
+        """Resolve SET_ID for an observation, falling back to current set."""
+        row = self._fetch_target_row_by_obs_id(obs_id)
+        if row:
+            set_id = str(row.get("SET_ID", "")).strip()
+            if set_id:
+                return set_id
+        if self._current_set_id is None:
+            return ""
+        return str(self._current_set_id).strip()
+
+    def _fetch_ordered_rows_for_set(self, set_id: str) -> List[Dict[str, Any]]:
+        """Fetch all rows for a set ordered by OBS_ORDER then OBSERVATION_ID."""
+        if not self._db.is_open():
+            return []
+        sid = str(set_id).strip()
+        if not sid:
+            return []
+        return self._db.fetch_rows(
+            self._config.table_targets,
+            where="`SET_ID`=%s",
+            params=(sid,),
+            order_by="OBS_ORDER, OBSERVATION_ID",
+        )
+
+    def _write_ordered_obs_ids(self, rows: List[Dict[str, Any]]) -> None:
+        """Persist OBS_ORDER as the given OBSERVATION_ID list order (1..N)."""
+        ordered_keys: List[Dict[str, Any]] = []
+        for row in rows:
+            obs_id = str(row.get("OBSERVATION_ID", "")).strip()
+            if obs_id:
+                ordered_keys.append({"OBSERVATION_ID": obs_id})
+        if not ordered_keys:
+            return
+        self._db.update_obs_order(self._config.table_targets, ["OBSERVATION_ID"], ordered_keys)
 
     def _load_timeline_html(self, html_path: str, switch_to_tab: bool = False) -> None:
         """Load timeline HTML into QWebEngineView, preserving scroll and selection."""
@@ -2490,9 +3282,14 @@ class DatabaseTab(QWidget):
         if not settings.timeline_script_path or not os.path.exists(settings.timeline_script_path):
             return
 
-        # Get targets
+        # Get targets and build grouped OTM context
         targets = self._get_targets_for_otm(set_id)
         if not targets:
+            return
+        otm_targets, members_by_science_obs, obs_order_by_obs_id = self._build_otm_group_context_for_set(
+            set_id, targets
+        )
+        if not otm_targets:
             return
 
         # Generate input CSV
@@ -2503,7 +3300,7 @@ class DatabaseTab(QWidget):
         timeline_json = os.path.join(temp_dir, "timeline.json")
 
         try:
-            generate_otm_input_csv(targets, input_csv)
+            generate_otm_input_csv(otm_targets, input_csv)
         except Exception:
             return
 
@@ -2523,6 +3320,7 @@ class DatabaseTab(QWidget):
         # Mark running and clear stale flag
         self._otm_running = True
         self._timeline_stale = False
+        self._set_otm_ui_locked(True)
         self._cleanup_otm_threads()
 
         # Show status bar message
@@ -2530,21 +3328,118 @@ class DatabaseTab(QWidget):
         if hasattr(parent_window, 'statusBar'):
             parent_window.statusBar().showMessage("Auto-running OTM scheduler...", 5000)
 
-        # Run OTM in thread (silent — no progress dialog)
-        self._otm_thread = QThread()
-        self._otm_runner = OtmRunner(settings, input_csv, output_csv, start_utc)
-        self._otm_runner.moveToThread(self._otm_thread)
+        try:
+            # Run OTM in thread (silent — no progress dialog)
+            self._otm_thread = QThread()
+            self._otm_runner = OtmRunner(settings, input_csv, output_csv, start_utc)
+            self._otm_runner.moveToThread(self._otm_thread)
 
-        self._otm_thread.started.connect(self._otm_runner.run)
-        self._otm_runner.finished.connect(
-            lambda success, msg: self._on_otm_finished(
-                success, msg, input_csv, output_csv, timeline_json, set_id, start_utc,
-                progress=None, silent=True
+            self._otm_thread.started.connect(self._otm_runner.run)
+            self._otm_runner.finished.connect(
+                lambda success, msg: self._on_otm_finished(
+                    success, msg, input_csv, output_csv, timeline_json, set_id, start_utc,
+                    progress=None, silent=True,
+                    members_by_science_obs=members_by_science_obs,
+                    obs_order_by_obs_id=obs_order_by_obs_id,
+                )
             )
-        )
-        self._otm_runner.finished.connect(self._otm_thread.quit)
+            self._otm_runner.finished.connect(self._otm_thread.quit)
 
-        self._otm_thread.start()
+            self._otm_thread.start()
+        except Exception as e:
+            print(f"OTM: failed to auto-run: {e}")
+            self._finish_otm_pipeline(True)
+
+    def _set_otm_ui_locked(self, locked: bool) -> None:
+        """Enable/disable user interaction with targets and timeline panels during OTM runs."""
+        self._otm_ui_locked = bool(locked)
+
+        if hasattr(self, "targets_table") and self.targets_table is not None:
+            self.targets_table.setEnabled(not locked)
+
+        if hasattr(self, "timeline_view") and self.timeline_view is not None:
+            self.timeline_view.setEnabled(not locked)
+            if WEBENGINE_AVAILABLE:
+                try:
+                    js = "document.body.style.pointerEvents='none';" if locked else "document.body.style.pointerEvents='auto';"
+                    self.timeline_view.page().runJavaScript(js)
+                except Exception:
+                    pass
+
+    def _build_otm_group_context_for_set(
+        self,
+        set_id: str,
+        targets: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]], Dict[str, int]]:
+        """Build C++-parity OTM context: one input row per group science target.
+
+        Returns:
+            otm_targets: science/header rows sent to OTM (ordered)
+            members_by_science_obs: header/science OBS_ID -> all group member OBS_IDs
+            obs_order_by_obs_id: OBS_ID -> current table OBS_ORDER for timeline ordering
+        """
+        def _to_int(value: Any, default: int = 0) -> int:
+            try:
+                return int(float(value))
+            except Exception:
+                return default
+
+        obs_order_by_obs_id: Dict[str, int] = {}
+        for row in targets:
+            obs_id = str(row.get("OBSERVATION_ID", "")).strip()
+            if not obs_id:
+                continue
+            obs_order_by_obs_id[obs_id] = _to_int(row.get("OBS_ORDER", 0), 0)
+
+        # C++ parity: when grouping is disabled, each row is its own OTM target.
+        if not getattr(self.targets_table, "_grouping_enabled", False):
+            otm_targets: List[Dict[str, Any]] = []
+            members_by_science_obs: Dict[str, List[str]] = {}
+            ordered = sorted(targets, key=lambda r: (_to_int(r.get("OBS_ORDER", 0), 0), str(r.get("OBSERVATION_ID", ""))))
+            for row in ordered:
+                obs_id = str(row.get("OBSERVATION_ID", "")).strip()
+                if not obs_id:
+                    continue
+                otm_targets.append(dict(row))
+                members_by_science_obs[obs_id] = [obs_id]
+            return otm_targets, members_by_science_obs, obs_order_by_obs_id
+
+        row_infos = self.targets_table._build_group_rows(targets)
+        if not row_infos:
+            return [], {}, obs_order_by_obs_id
+
+        rows_by_key: Dict[str, List[Dict[str, Any]]] = {}
+        for info in row_infos:
+            rows_by_key.setdefault(str(info.get("group_key", "")), []).append(info)
+
+        group_records: List[Tuple[int, str, Dict[str, Any], List[str]]] = []
+        members_by_science_obs: Dict[str, List[str]] = {}
+        for group_key, members in rows_by_key.items():
+            ordered_members = sorted(members, key=lambda info: _to_int(info.get("obs_order", 0), 0))
+            if not ordered_members:
+                continue
+
+            header_info = next((m for m in ordered_members if bool(m.get("is_science", False))), ordered_members[0])
+            header_obs_id = str(header_info.get("obs_id", "")).strip()
+            if not header_obs_id:
+                continue
+
+            member_obs_ids: List[str] = []
+            for member in ordered_members:
+                member_obs_id = str(member.get("obs_id", "")).strip()
+                if member_obs_id and member_obs_id not in member_obs_ids:
+                    member_obs_ids.append(member_obs_id)
+            if not member_obs_ids:
+                member_obs_ids = [header_obs_id]
+
+            members_by_science_obs[header_obs_id] = member_obs_ids
+            header_row = dict(header_info.get("row_data", {}))
+            header_order = _to_int(header_info.get("obs_order", 0), 0)
+            group_records.append((header_order, group_key, header_row, member_obs_ids))
+
+        group_records.sort(key=lambda rec: (rec[0], str(rec[1])))
+        otm_targets = [rec[2] for rec in group_records]
+        return otm_targets, members_by_science_obs, obs_order_by_obs_id
 
     def _get_targets_for_otm(self, set_id: str) -> List[Dict[str, Any]]:
         """Get all targets for a set in OTM format."""
@@ -2564,7 +3459,12 @@ class DatabaseTab(QWidget):
             print(f"Error fetching targets for OTM: {e}")
             return []
 
-    def _import_otm_results(self, set_id: str, results: List) -> None:
+    def _import_otm_results(
+        self,
+        set_id: str,
+        results: List,
+        members_by_science_obs: Optional[Dict[str, List[str]]] = None,
+    ) -> None:
         """Import OTM results back to database.
 
         Maps OTM output CSV column names to database column names using
@@ -2598,29 +3498,153 @@ class DatabaseTab(QWidget):
         }
 
         try:
-            for result in results:
-                updates = {}
+            group_members = members_by_science_obs or {}
 
-                # Map each OTM CSV column to its database column name
+            all_rows = self._db.fetch_rows(
+                self._config.table_targets,
+                where="`SET_ID`=%s",
+                params=(set_id,),
+                order_by="OBS_ORDER, OBSERVATION_ID",
+            )
+            row_by_obs_id: Dict[str, Dict[str, Any]] = {}
+            order_by_obs_id: Dict[str, int] = {}
+            for row in all_rows:
+                obs_id_text = str(row.get("OBSERVATION_ID", "")).strip()
+                if not obs_id_text:
+                    continue
+                row_by_obs_id[obs_id_text] = row
+                try:
+                    order_by_obs_id[obs_id_text] = int(float(row.get("OBS_ORDER", 0)))
+                except Exception:
+                    order_by_obs_id[obs_id_text] = 0
+
+            def _parse_utc_iso(value: Any):
+                text = str(value or "").strip()
+                if not text:
+                    return None
+                try:
+                    from datetime import datetime, timezone
+                    dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    return dt
+                except Exception:
+                    return None
+
+            def _unique_preserve(values: List[str]) -> List[str]:
+                out: List[str] = []
+                for value in values:
+                    text = str(value).strip()
+                    if text and text not in out:
+                        out.append(text)
+                return out
+
+            # Aggregate per science OBSERVATION_ID (C++ parity: last update wins,
+            # but OTMexp_start keeps earliest and OTMexp_end keeps latest).
+            agg_by_obs_id: Dict[str, Dict[str, Any]] = {}
+            scheduled_science_order: List[str] = []
+            for result in results:
+                obs_id_text = str(getattr(result, "observation_id", "")).strip()
+                if not obs_id_text:
+                    continue
+                if obs_id_text not in scheduled_science_order:
+                    scheduled_science_order.append(obs_id_text)
+
+                updates: Dict[str, Any] = {}
                 for csv_col, db_col in OTM_CSV_TO_DB.items():
                     attr = csv_field_to_attr.get(csv_col)
                     if not attr:
                         continue
                     val = getattr(result, attr, '')
-                    # Store empty strings as NULL
                     updates[db_col] = val if val else None
 
-                # Always update OBS_ORDER
-                updates["OBS_ORDER"] = result.obs_order
+                if obs_id_text not in agg_by_obs_id:
+                    agg_by_obs_id[obs_id_text] = {
+                        "updates": updates,
+                        "start_dt": None,
+                        "start_txt": "",
+                        "end_dt": None,
+                        "end_txt": "",
+                    }
+                else:
+                    agg_by_obs_id[obs_id_text]["updates"] = updates
 
-                key_values = {
-                    "OBSERVATION_ID": result.observation_id,
-                    "SET_ID": set_id,
-                }
+                start_txt = str(updates.get("OTMexp_start") or "").strip()
+                if start_txt:
+                    start_dt = _parse_utc_iso(start_txt)
+                    cur_start = agg_by_obs_id[obs_id_text]["start_dt"]
+                    if start_dt is not None and (cur_start is None or start_dt < cur_start):
+                        agg_by_obs_id[obs_id_text]["start_dt"] = start_dt
+                        agg_by_obs_id[obs_id_text]["start_txt"] = start_txt
 
-                self._db.update_record(
-                    self._config.table_targets, key_values, updates
-                )
+                end_txt = str(updates.get("OTMexp_end") or "").strip()
+                if end_txt:
+                    end_dt = _parse_utc_iso(end_txt)
+                    cur_end = agg_by_obs_id[obs_id_text]["end_dt"]
+                    if end_dt is not None and (cur_end is None or end_dt > cur_end):
+                        agg_by_obs_id[obs_id_text]["end_dt"] = end_dt
+                        agg_by_obs_id[obs_id_text]["end_txt"] = end_txt
+
+            scheduled_obs_ids: Set[str] = set()
+
+            # Apply aggregated OTM updates to all members of each scheduled group.
+            for science_obs_id in scheduled_science_order:
+                agg = agg_by_obs_id.get(science_obs_id)
+                if not agg:
+                    continue
+                updates = dict(agg.get("updates", {}))
+                if agg.get("start_txt"):
+                    updates["OTMexp_start"] = agg["start_txt"]
+                if agg.get("end_txt"):
+                    updates["OTMexp_end"] = agg["end_txt"]
+
+                members = _unique_preserve(group_members.get(science_obs_id, [science_obs_id]))
+                members.sort(key=lambda obs: (order_by_obs_id.get(obs, 10**9), obs))
+                for member_obs_id in members:
+                    if member_obs_id not in row_by_obs_id:
+                        continue
+                    key_values = {"OBSERVATION_ID": member_obs_id, "SET_ID": set_id}
+                    self._db.update_record(self._config.table_targets, key_values, updates)
+                    scheduled_obs_ids.add(member_obs_id)
+
+            # Keep scheduled groups contiguous in OTM order, then push excluded to end.
+            if scheduled_science_order:
+                next_order = 1
+
+                for science_obs_id in scheduled_science_order:
+                    members = _unique_preserve(group_members.get(science_obs_id, [science_obs_id]))
+                    members.sort(key=lambda obs: (order_by_obs_id.get(obs, 10**9), obs))
+                    for member_obs_id in members:
+                        if member_obs_id not in row_by_obs_id:
+                            continue
+                        key_values = {"OBSERVATION_ID": member_obs_id, "SET_ID": set_id}
+                        self._db.update_record(
+                            self._config.table_targets,
+                            key_values,
+                            {"OBS_ORDER": next_order},
+                        )
+                        next_order += 1
+                        scheduled_obs_ids.add(member_obs_id)
+
+                excluded_rows: List[Dict[str, Any]] = []
+                for row in all_rows:
+                    obs_id_text = str(row.get("OBSERVATION_ID", "")).strip()
+                    if not obs_id_text:
+                        continue
+                    if obs_id_text not in scheduled_obs_ids:
+                        excluded_rows.append(row)
+
+                for row in excluded_rows:
+                    obs_id_text = str(row.get("OBSERVATION_ID", "")).strip()
+                    if not obs_id_text:
+                        continue
+                    key_values = {"OBSERVATION_ID": obs_id_text, "SET_ID": set_id}
+                    self._db.update_record(
+                        self._config.table_targets,
+                        key_values,
+                        {"OBS_ORDER": next_order},
+                    )
+                    next_order += 1
 
         except Exception as e:
             raise RuntimeError(f"Failed to import OTM results: {e}")
@@ -2642,44 +3666,24 @@ class DatabaseTab(QWidget):
 
     def _on_timeline_target_selected(self, obs_id: str) -> None:
         """Timeline click → select row in targets table."""
+        if self._otm_running or self._otm_ui_locked:
+            return
         if not hasattr(self, 'targets_table') or not self.targets_table:
             return
-        table = self.targets_table.table
-        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
-        if obs_col is None:
-            return
-        for row in range(table.rowCount()):
-            item = table.item(row, obs_col)
-            if item and item.text() == str(obs_id):
-                table.selectRow(row)
-                table.scrollToItem(item)
-                break
+        self._select_obs_id_in_table(obs_id)
 
     def _on_timeline_exptime_edit(self, obs_id: str) -> None:
         """Timeline double-click → edit exposure time dialog."""
+        if self._otm_running or self._otm_ui_locked:
+            return
         if not self._db.is_open():
             return
 
-        # Get current EXPTIME from the table
-        table = self.targets_table.table
-        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
-        exptime_col = self.targets_table._column_index.get("EXPTIME")
-        if obs_col is None or exptime_col is None:
+        row_values = self._fetch_target_row_by_obs_id(obs_id)
+        if not row_values:
             return
 
-        current_exptime = ""
-        target_row = -1
-        for row in range(table.rowCount()):
-            item = table.item(row, obs_col)
-            if item and item.text() == str(obs_id):
-                target_row = row
-                exp_item = table.item(row, exptime_col)
-                if exp_item:
-                    current_exptime = exp_item.text()
-                break
-
-        if target_row < 0:
-            return
+        current_exptime = str(row_values.get("EXPTIME", "")).strip()
 
         new_val, ok = QInputDialog.getText(
             self,
@@ -2693,13 +3697,7 @@ class DatabaseTab(QWidget):
         if not ok or not new_val.strip():
             return
 
-        # Get SET_ID for this row
-        set_col = self.targets_table._column_index.get("SET_ID")
-        set_id = ""
-        if set_col is not None:
-            set_item = table.item(target_row, set_col)
-            if set_item:
-                set_id = set_item.text()
+        set_id = str(row_values.get("SET_ID", "")).strip()
 
         key_values = {"OBSERVATION_ID": obs_id}
         if set_id:
@@ -2754,6 +3752,8 @@ class DatabaseTab(QWidget):
 
     def _on_timeline_context_menu(self, obs_id: str, screen_x: int, screen_y: int) -> None:
         """Timeline right-click → show context menu."""
+        if self._otm_running or self._otm_ui_locked:
+            return
         from PyQt5.QtCore import QPoint
         menu = QMenu(self)
 
@@ -2772,117 +3772,87 @@ class DatabaseTab(QWidget):
 
     def _timeline_move_target(self, obs_id: str, direction: int) -> None:
         """Move a target up or down in OBS_ORDER."""
-        if not self._db.is_open():
+        if self._otm_running or self._otm_ui_locked:
+            return
+        if not self._db.is_open() or direction == 0:
             return
 
-        # Find the target row and its neighbor
-        table = self.targets_table.table
-        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
-        order_col = self.targets_table._column_index.get("OBS_ORDER")
-        if obs_col is None or order_col is None:
+        set_id = self._resolve_set_id_for_obs(obs_id)
+        if not set_id:
             return
 
-        target_row = -1
-        for row in range(table.rowCount()):
-            item = table.item(row, obs_col)
-            if item and item.text() == str(obs_id):
-                target_row = row
+        ordered_rows = self._fetch_ordered_rows_for_set(set_id)
+        if len(ordered_rows) < 2:
+            return
+
+        from_idx = -1
+        for idx, row in enumerate(ordered_rows):
+            if str(row.get("OBSERVATION_ID", "")).strip() == str(obs_id).strip():
+                from_idx = idx
                 break
-
-        if target_row < 0:
+        if from_idx < 0:
             return
 
-        swap_row = target_row + direction
-        if swap_row < 0 or swap_row >= table.rowCount():
+        to_idx = from_idx + direction
+        if to_idx < 0 or to_idx >= len(ordered_rows):
             return
 
-        # Get OBS_ORDER and OBSERVATION_ID for both rows
-        cur_order_item = table.item(target_row, order_col)
-        swap_order_item = table.item(swap_row, order_col)
-        swap_obs_item = table.item(swap_row, obs_col)
+        moving_row = ordered_rows.pop(from_idx)
+        ordered_rows.insert(to_idx, moving_row)
 
-        if not all([cur_order_item, swap_order_item, swap_obs_item]):
-            return
-
-        cur_order = cur_order_item.text()
-        swap_order = swap_order_item.text()
-        swap_obs_id = swap_obs_item.text()
-
-        # Get SET_ID
-        set_col = self.targets_table._column_index.get("SET_ID")
-        set_id = ""
-        if set_col is not None:
-            set_item = table.item(target_row, set_col)
-            if set_item:
-                set_id = set_item.text()
-
-        key1 = {"OBSERVATION_ID": obs_id}
-        key2 = {"OBSERVATION_ID": swap_obs_id}
-        if set_id:
-            key1["SET_ID"] = set_id
-            key2["SET_ID"] = set_id
-
-        # Do both writes then one refresh
         try:
-            self._db.update_record(self._config.table_targets, key1, {"OBS_ORDER": swap_order})
-            self._db.update_record(self._config.table_targets, key2, {"OBS_ORDER": cur_order})
+            self._write_ordered_obs_ids(ordered_rows)
         except Exception as e:
             print(f"DB write failed (timeline_move): {e}")
             return
         self._refresh_all_views()
+        self._select_obs_id_in_table(obs_id)
 
     def _on_timeline_reorder(self, from_obs_id: str, after_obs_id: str) -> None:
-        """Timeline drag-reorder → swap OBS_ORDER values in DB and refresh."""
-        if not self._db.is_open():
+        """Shared drag-reorder handler (timeline/table) → move target and renumber OBS_ORDER."""
+        if self._otm_running or self._otm_ui_locked:
+            return
+        if not self._db.is_open() or not str(from_obs_id).strip():
             return
 
-        table = self.targets_table.table
-        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
-        order_col = self.targets_table._column_index.get("OBS_ORDER")
-        if obs_col is None or order_col is None:
+        set_id = self._resolve_set_id_for_obs(from_obs_id)
+        if not set_id:
             return
 
-        # Find the rows
-        from_row = -1
-        after_row = -1
-        for row in range(table.rowCount()):
-            item = table.item(row, obs_col)
-            if not item:
-                continue
-            if item.text() == str(from_obs_id):
-                from_row = row
-            if item.text() == str(after_obs_id):
-                after_row = row
-
-        if from_row < 0 or after_row < 0 or from_row == after_row:
+        ordered_rows = self._fetch_ordered_rows_for_set(set_id)
+        if len(ordered_rows) < 2:
             return
 
-        # Swap OBS_ORDER values
-        from_order_item = table.item(from_row, order_col)
-        after_order_item = table.item(after_row, order_col)
-        if not from_order_item or not after_order_item:
+        from_idx = -1
+        to_idx = -1
+        from_obs = str(from_obs_id).strip()
+        to_obs = str(after_obs_id).strip()
+        for idx, row in enumerate(ordered_rows):
+            row_obs_id = str(row.get("OBSERVATION_ID", "")).strip()
+            if row_obs_id == from_obs:
+                from_idx = idx
+            if to_obs and row_obs_id == to_obs:
+                to_idx = idx
+        if from_idx < 0:
             return
 
-        from_order = from_order_item.text()
-        after_order = after_order_item.text()
+        moving_row = ordered_rows.pop(from_idx)
 
-        set_col = self.targets_table._column_index.get("SET_ID")
-        set_id = ""
-        if set_col is not None:
-            set_item = table.item(from_row, set_col)
-            if set_item:
-                set_id = set_item.text()
+        if not to_obs:
+            insert_idx = 0
+        else:
+            if to_idx < 0:
+                return
+            if from_idx == to_idx:
+                return
+            if from_idx < to_idx:
+                to_idx -= 1
+            insert_idx = min(to_idx + 1, len(ordered_rows))
 
-        key1 = {"OBSERVATION_ID": from_obs_id}
-        key2 = {"OBSERVATION_ID": after_obs_id}
-        if set_id:
-            key1["SET_ID"] = set_id
-            key2["SET_ID"] = set_id
+        ordered_rows.insert(insert_idx, moving_row)
 
-        # Do both writes then one refresh
         try:
-            self._db.update_record(self._config.table_targets, key1, {"OBS_ORDER": after_order})
-            self._db.update_record(self._config.table_targets, key2, {"OBS_ORDER": from_order})
+            self._write_ordered_obs_ids(ordered_rows)
         except Exception as e:
             print(f"DB write failed (timeline_reorder): {e}")
             return

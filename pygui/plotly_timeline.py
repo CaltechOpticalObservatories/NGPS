@@ -215,7 +215,6 @@ def generate_timeline_html(timeline_data, airmass_limit: float = 4.0) -> str:
   html, body {{ margin: 0; padding: 0; overflow-y: auto; font-family: sans-serif;
                background: #2b2b2b; color: #c0c0c0; }}
   #timeline {{ width: 100%; }}
-  .xtick text {{ transform: translateX(-50px); }}
 </style>
 </head>
 <body>
@@ -446,11 +445,35 @@ function addAirmassLabels(anns, target, yCenter, bandH) {{
 // ── Render / update plot via Plotly.newPlot ──
 function renderPlot(selId) {{
     var pd = buildData(selId);
+    var anns = pd.anns.slice();
+    var dateSrc = TD.timeMin || TD.xRangeMin || ((TD.targets && TD.targets.length > 0) ? TD.targets[0].start : '');
+    var topDate = '';
+    if (dateSrc) {{
+        var dateParts = String(dateSrc).split('T');
+        topDate = (dateParts.length > 0) ? dateParts[0] : String(dateSrc).slice(0, 10);
+    }}
+    if (topDate) {{
+        anns.push({{
+            x: 0, xref: 'paper', xanchor: 'left',
+            y: 1.0, yref: 'paper', yanchor: 'bottom',
+            xshift: -100,
+            yshift: 27,
+            text: topDate,
+            showarrow: false,
+            font: {{size: 11, color: '#c0c0c0', family: 'monospace'}}
+        }});
+    }}
     var layout = {{
         xaxis: {{
             type:'date', showgrid:true, gridcolor:'rgba(80,80,80,0.6)',
-            side:'top', tickfont:{{color:'#c0c0c0', size:11}},
-            linecolor:'#555', range:[TD.xRangeMin, TD.xRangeMax]
+            side:'top', showline:true, linecolor:'#555',
+            ticks:'outside', ticklen:4, tickcolor:'#777',
+            showticklabels:true, tickfont:{{color:'#c0c0c0', size:11}},
+            ticklabelposition:'outside top',
+            ticklabelstandoff:15,
+            tickformat:'%H:%M',
+            automargin:true,
+            range:[TD.xRangeMin, TD.xRangeMax]
         }},
         yaxis: {{
             showticklabels:false,
@@ -458,8 +481,8 @@ function renderPlot(selId) {{
             range:[pd.totalH - 0.5, -0.5]
         }},
         shapes: pd.shapes,
-        annotations: pd.anns,
-        margin: {{l:180, r:100, t:28, b:10}},
+        annotations: anns,
+        margin: {{l:180, r:100, t:55, b:10}},
         hovermode: 'closest',
         hoverlabel: {{bgcolor:'#3a3a3a', bordercolor:'#666', font:{{color:'#e0e0e0'}}}},
         plot_bgcolor: '#2b2b2b',
@@ -482,29 +505,47 @@ function renderPlot(selId) {{
     }});
 }}
 
-// ── Find obs_id at a given data-Y coordinate ──
-function getObsIdAtY(dataY) {{
+// ── Find target index / obs_id at a given data-Y coordinate ──
+function getTargetIndexAtY(dataY) {{
+    if (!currentPos || currentPos.length === 0 || !TD.targets || TD.targets.length === 0) {{
+        return -1;
+    }}
     for (var i = 0; i < currentPos.length; i++) {{
         var p = currentPos[i];
         if (dataY >= p.center - p.height/2 && dataY <= p.center + p.height/2)
-            return TD.targets[i].obsId;
+            return i;
     }}
     // Fallback: nearest row
-    var best = Infinity, id = null;
+    var best = Infinity, idx = -1;
     for (var i = 0; i < currentPos.length; i++) {{
         var d = Math.abs(dataY - currentPos[i].center);
-        if (d < best) {{ best = d; id = TD.targets[i].obsId; }}
+        if (d < best) {{ best = d; idx = i; }}
     }}
-    return id;
+    return idx;
+}}
+
+function getObsIdAtY(dataY) {{
+    var idx = getTargetIndexAtY(dataY);
+    if (idx < 0 || idx >= TD.targets.length) return null;
+    return TD.targets[idx].obsId;
 }}
 
 function getObsIdFromEvent(evt) {{
+    var info = getTargetInfoFromEvent(evt);
+    return info ? info.obsId : null;
+}}
+
+function getTargetInfoFromEvent(evt) {{
     var plotDiv = document.getElementById('timeline');
     var drag = plotDiv.querySelector('.plotly .nsewdrag');
     if (!drag) return null;
     var bb = drag.getBoundingClientRect();
     var yaxis = plotDiv._fullLayout.yaxis;
-    return getObsIdAtY(yaxis.p2d(evt.clientY - bb.top));
+    var dataY = yaxis.p2d(evt.clientY - bb.top);
+    var idx = getTargetIndexAtY(dataY);
+    if (idx < 0 || idx >= TD.targets.length) return null;
+    var insertAbove = dataY < currentPos[idx].center;
+    return {{index: idx, obsId: TD.targets[idx].obsId, insertAbove: insertAbove}};
 }}
 
 // ── Event handlers ──
@@ -545,53 +586,136 @@ function setupEvents() {{
     // Drag-to-reorder (mousedown anywhere on a target row)
     var dragOverlay = null;
     var DRAG_THRESHOLD = 6;  // pixels before drag activates
-    plotDiv.addEventListener('mousedown', function(evt) {{
-        if (evt.button !== 0) return;
-        var obsId = getObsIdFromEvent(evt);
-        if (!obsId) return;
-        dragState = {{fromObsId: obsId, startY: evt.clientY, active: false}};
-    }});
+    var AUTO_SCROLL_EDGE = 48;      // px band at top/bottom that triggers auto-scroll
+    var AUTO_SCROLL_MAX_PX = 22;    // max pixels per tick
+    var autoScrollTimer = null;
 
-    document.addEventListener('mousemove', function(evt) {{
-        if (!dragState) return;
-        // Activate drag only after moving past threshold
-        if (!dragState.active) {{
-            if (Math.abs(evt.clientY - dragState.startY) < DRAG_THRESHOLD) return;
-            dragState.active = true;
-        }}
+    function updateDragTargetFromClientY(clientY) {{
         var plotDiv = document.getElementById('timeline');
         var drag = plotDiv.querySelector('.plotly .nsewdrag');
-        if (!drag) return;
+        if (!drag || !plotDiv._fullLayout || !plotDiv._fullLayout.yaxis) return;
+
         var bb = drag.getBoundingClientRect();
         var yaxis = plotDiv._fullLayout.yaxis;
-        var dataY = yaxis.p2d(evt.clientY - bb.top);
+        var dataY = yaxis.p2d(clientY - bb.top);
+
         if (!dragOverlay) {{
             dragOverlay = document.createElement('div');
             dragOverlay.style.cssText = 'position:fixed;height:2px;background:#5599ff;z-index:9999;pointer-events:none;';
             document.body.appendChild(dragOverlay);
         }}
-        var obsId = getObsIdAtY(dataY);
-        if (obsId) {{
-            for (var i = 0; i < TD.targets.length; i++) {{
-                if (TD.targets[i].obsId === obsId) {{
-                    var sepYdata = currentPos[i].center + currentPos[i].height / 2;
-                    var sepYpx = bb.top + yaxis.d2p(sepYdata);
-                    dragOverlay.style.top = sepYpx + 'px';
-                    dragOverlay.style.left = bb.left + 'px';
-                    dragOverlay.style.width = bb.width + 'px';
-                    break;
-                }}
-            }}
+
+        var idx = getTargetIndexAtY(dataY);
+        if (idx >= 0 && idx < TD.targets.length) {{
+            var insertAbove = dataY < currentPos[idx].center;
+            dragState.hoverIndex = idx;
+            dragState.insertAbove = insertAbove;
+            var sepYdata = insertAbove
+                ? (currentPos[idx].center - currentPos[idx].height / 2)
+                : (currentPos[idx].center + currentPos[idx].height / 2);
+            var sepYpx = bb.top + yaxis.d2p(sepYdata);
+            dragOverlay.style.top = sepYpx + 'px';
+            dragOverlay.style.left = bb.left + 'px';
+            dragOverlay.style.width = bb.width + 'px';
         }}
+    }}
+
+    function autoScrollDelta(clientY) {{
+        if (clientY < AUTO_SCROLL_EDGE) {{
+            var topFrac = (AUTO_SCROLL_EDGE - clientY) / AUTO_SCROLL_EDGE;
+            return -Math.max(1, Math.round(topFrac * AUTO_SCROLL_MAX_PX));
+        }}
+        var bottomBandStart = window.innerHeight - AUTO_SCROLL_EDGE;
+        if (clientY > bottomBandStart) {{
+            var botFrac = (clientY - bottomBandStart) / AUTO_SCROLL_EDGE;
+            return Math.max(1, Math.round(botFrac * AUTO_SCROLL_MAX_PX));
+        }}
+        return 0;
+    }}
+
+    function startAutoScrollLoop() {{
+        if (autoScrollTimer) return;
+        autoScrollTimer = window.setInterval(function() {{
+            if (!dragState || !dragState.active) return;
+            var clientY = (dragState.lastClientY !== undefined) ? dragState.lastClientY : dragState.startY;
+            var dy = autoScrollDelta(clientY);
+            if (dy !== 0) {{
+                window.scrollBy(0, dy);
+            }}
+            updateDragTargetFromClientY(clientY);
+        }}, 16);
+    }}
+
+    function stopAutoScrollLoop() {{
+        if (autoScrollTimer) {{
+            window.clearInterval(autoScrollTimer);
+            autoScrollTimer = null;
+        }}
+    }}
+
+    plotDiv.addEventListener('mousedown', function(evt) {{
+        if (evt.button !== 0) return;
+        var target = getTargetInfoFromEvent(evt);
+        if (!target || !target.obsId) return;
+        dragState = {{
+            fromObsId: target.obsId,
+            fromIndex: target.index,
+            startY: evt.clientY,
+            lastClientY: evt.clientY,
+            active: false,
+            hoverIndex: target.index,
+            insertAbove: false
+        }};
+    }});
+
+    document.addEventListener('mousemove', function(evt) {{
+        if (!dragState) return;
+        dragState.lastClientY = evt.clientY;
+        // Activate drag only after moving past threshold
+        if (!dragState.active) {{
+            if (Math.abs(evt.clientY - dragState.startY) < DRAG_THRESHOLD) return;
+            dragState.active = true;
+            startAutoScrollLoop();
+        }}
+
+        var dy = autoScrollDelta(evt.clientY);
+        if (dy !== 0) {{
+            window.scrollBy(0, dy);
+        }}
+        updateDragTargetFromClientY(evt.clientY);
     }});
 
     document.addEventListener('mouseup', function(evt) {{
         if (!dragState) return;
+        stopAutoScrollLoop();
         if (dragState.active) {{
             suppressClick = true;  // prevent click handler from rebuilding with stale data
-            var obsId = getObsIdFromEvent(evt);
-            if (obsId && obsId !== dragState.fromObsId && bridge) {{
-                bridge.onReorder(dragState.fromObsId, obsId);
+            var target = getTargetInfoFromEvent(evt);
+            var targetIndex = target ? target.index : dragState.hoverIndex;
+            var insertAbove = target ? target.insertAbove : !!dragState.insertAbove;
+            if (
+                bridge &&
+                targetIndex >= 0 &&
+                targetIndex < TD.targets.length &&
+                dragState.fromIndex >= 0 &&
+                dragState.fromIndex !== targetIndex
+            ) {{
+                var fromObs = dragState.fromObsId;
+                if (insertAbove) {{
+                    if (targetIndex === 0) {{
+                        bridge.onReorder(fromObs, '');
+                    }} else {{
+                        var prevObs = TD.targets[targetIndex - 1].obsId;
+                        if (prevObs && prevObs !== fromObs) {{
+                            bridge.onReorder(fromObs, prevObs);
+                        }}
+                    }}
+                }} else {{
+                    var toObs = TD.targets[targetIndex].obsId;
+                    if (toObs && toObs !== fromObs) {{
+                        bridge.onReorder(fromObs, toObs);
+                    }}
+                }}
             }}
         }}
         if (dragOverlay) {{ dragOverlay.remove(); dragOverlay = null; }}

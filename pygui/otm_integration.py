@@ -473,8 +473,17 @@ def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str,
         List of warning messages for skipped targets
     """
     # OTM CSV header - must match what OTM.py expects
+    include_nexp = any(
+        any(str(col).upper() == "NEXP" for col in target.keys())
+        for target in targets
+    )
+
     header = [
         'OBSERVATION_ID', 'name', 'RA', 'DECL', 'slitangle', 'slitwidth',
+    ]
+    if include_nexp:
+        header.append('NEXP')
+    header += [
         'exptime', 'notbefore', 'pointmode', 'ccdmode', 'airmass_max',
         'binspat', 'binspect', 'channel', 'wrange', 'mag', 'magsystem',
         'magfilter', 'srcmodel'
@@ -499,6 +508,12 @@ def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str,
         binspect = target.get('BINSPECT', '') or '1'
         channel = target.get('CHANNEL', '') or 'R'
         srcmodel = target.get('SRCMODEL', '') or ''
+        try:
+            nexp = int(float(target.get('NEXP', 1) or 1))
+        except (ValueError, TypeError):
+            nexp = 1
+        if nexp < 1:
+            nexp = 1
 
         # Filter by declination range
         dec_deg = parse_sexagesimal_dec(str(decl)) if decl else None
@@ -528,11 +543,19 @@ def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str,
         magfilter = _normalize_magfilter(str(target.get('MAGFILTER', '') or ''))
 
         row = [
-            obs_id, name, ra, decl, slitangle, slitwidth, exptime,
+            obs_id, name, ra, decl, slitangle, slitwidth,
+        ]
+        if include_nexp:
+            row.append(str(nexp))
+        row += [
+            exptime,
             notbefore, pointmode, ccdmode, airmass_max, binspat, binspect,
             channel, wrange, mag, magsystem, magfilter, srcmodel
         ]
-        rows.append(row)
+
+        # C++ parity: replicate each target row by NEXP.
+        for _ in range(nexp):
+            rows.append(list(row))
 
     # Write CSV
     with open(output_path, 'w', newline='') as f:
@@ -631,27 +654,93 @@ def parse_timeline_json(json_path: str) -> TimelineData:
         timeline.twilight_morning_12 = twilight.get('morning_12', '')
         timeline.twilight_morning_16 = twilight.get('morning_16', '')
 
-        # Parse targets
+        def _parse_iso_utc(ts: str):
+            text = str(ts or '').strip()
+            if not text:
+                return None
+            try:
+                dt = datetime.fromisoformat(text.replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except Exception:
+                return None
+
+        def _merge_flag_text(existing: str, incoming: str) -> str:
+            ordered = []
+            seen = set()
+            for text in (existing, incoming):
+                for token in str(text or '').split():
+                    token_upper = token.strip().upper()
+                    if not token_upper or token_upper in seen:
+                        continue
+                    seen.add(token_upper)
+                    ordered.append(token_upper)
+            return " ".join(ordered)
+
+        # Parse targets and merge duplicate OBSERVATION_ID entries (C++ parity).
+        target_index_by_key: Dict[str, int] = {}
         for target_data in data.get('targets', []):
             flag = target_data.get('flag', '')
             severity = otm_flag_severity(flag)
+            start_txt = target_data.get('start', '')
+            end_txt = target_data.get('end', '')
+            observed = bool(target_data.get('observed', False))
+            if not observed:
+                observed = _parse_iso_utc(start_txt) is not None and _parse_iso_utc(end_txt) is not None
 
             target = TimelineTarget(
                 obs_id=target_data.get('obs_id', ''),
                 name=target_data.get('name', ''),
                 ra=target_data.get('ra', ''),
                 dec=target_data.get('dec', ''),
-                start=target_data.get('start', ''),
-                end=target_data.get('end', ''),
+                start=start_txt,
+                end=end_txt,
                 slew_go=target_data.get('slew_go', ''),
                 flag=flag,
                 severity=severity,
                 wait_sec=target_data.get('wait_sec', 0.0),
-                observed=target_data.get('observed', False),
+                observed=observed,
                 airmass=target_data.get('airmass', []),
                 obs_order=target_data.get('obs_order', 0)
             )
-            timeline.targets.append(target)
+            key = target.obs_id or target.name
+            if not key:
+                continue
+
+            if key not in target_index_by_key:
+                target_index_by_key[key] = len(timeline.targets)
+                timeline.targets.append(target)
+                continue
+
+            existing = timeline.targets[target_index_by_key[key]]
+            if target.obs_id:
+                existing.obs_id = target.obs_id
+            if not existing.name:
+                existing.name = target.name
+            if not existing.airmass and target.airmass:
+                existing.airmass = target.airmass
+
+            start_new = _parse_iso_utc(target.start)
+            start_old = _parse_iso_utc(existing.start)
+            if start_new is not None and (start_old is None or start_new < start_old):
+                existing.start = target.start
+
+            end_new = _parse_iso_utc(target.end)
+            end_old = _parse_iso_utc(existing.end)
+            if end_new is not None and (end_old is None or end_new > end_old):
+                existing.end = target.end
+
+            if target.slew_go and not existing.slew_go:
+                existing.slew_go = target.slew_go
+
+            existing.wait_sec = max(existing.wait_sec, target.wait_sec)
+            existing.observed = bool(existing.observed or target.observed)
+            existing.severity = max(existing.severity, target.severity)
+            existing.flag = _merge_flag_text(existing.flag, target.flag)
+            if int(existing.obs_order or 0) <= 0 and int(target.obs_order or 0) > 0:
+                existing.obs_order = target.obs_order
 
         # Parse idle intervals
         for interval in data.get('idle_intervals', []):

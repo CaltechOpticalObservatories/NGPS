@@ -857,7 +857,9 @@ class LogicService:
 
 
         ls.load_target_button.setVisible(False)
-        table.setVisible(True)
+        # Legacy standalone table is intentionally kept hidden;
+        # DatabaseTab is the only supported target list view.
+        table.setVisible(False)
         ls.set_column_widths()
         ls.add_row_button.setEnabled(True)
 
