@@ -101,8 +101,10 @@ find_library(CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib)
 
 # ZeroMQ
 #
-find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
-find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
+              PATHS ${NGPS_ZMQ_SEARCH_PATHS} ${NGPS_ZMQ_FIND_MODE} )
+find_library( ZMQ_LIB NAMES zmq libzmq
+              PATHS ${NGPS_ZMQ_SEARCH_PATHS} ${NGPS_ZMQ_FIND_MODE} )
 
 find_package(Threads)
 

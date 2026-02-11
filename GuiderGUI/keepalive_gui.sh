@@ -14,6 +14,10 @@ echo ""
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
 
+# Clear any cached state so a fresh GUI launch redraws everything
+region_cache="/tmp/ngps_${camera}_regions.key"
+rm -f "$region_cache"
+
 until ds9 -png $startfile -title $id \
   -zoom to fit -cmap $cmap -scale linear -scale mode zscale \
   -preserve pan yes -preserve regions yes \

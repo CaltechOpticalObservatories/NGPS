@@ -9,9 +9,208 @@
  */
 
 #include "slicecam_interface.h"
+#include "ngps_acq_embed.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
+
+namespace {
+
+struct AutoacqRunContext {
+  Slicecam::Interface *iface;
+  std::string logfile;
+  std::mutex log_mtx;
+};
+
+std::string trim_copy( std::string value ) {
+  value.erase( value.begin(),
+               std::find_if( value.begin(), value.end(),
+                             [](unsigned char c){ return !std::isspace(c); } ) );
+  rtrim( value );
+  return value;
+}
+
+bool split_shell_words( const std::string &input, std::vector<std::string> &tokens, std::string &error ) {
+  tokens.clear();
+  error.clear();
+
+  std::string current;
+  char quote = '\0';
+  bool escape = false;
+
+  for ( const char ch : input ) {
+    if ( escape ) {
+      current.push_back( ch );
+      escape = false;
+      continue;
+    }
+
+    if ( ch == '\\' ) {
+      escape = true;
+      continue;
+    }
+
+    if ( quote != '\0' ) {
+      if ( ch == quote ) quote = '\0';
+      else current.push_back( ch );
+      continue;
+    }
+
+    if ( ch == '\'' || ch == '"' ) {
+      quote = ch;
+      continue;
+    }
+
+    if ( std::isspace( static_cast<unsigned char>(ch) ) ) {
+      if ( !current.empty() ) {
+        tokens.push_back( current );
+        current.clear();
+      }
+      continue;
+    }
+
+    current.push_back( ch );
+  }
+
+  if ( escape ) {
+    error = "unterminated escape in autoacq args";
+    return false;
+  }
+
+  if ( quote != '\0' ) {
+    error = "unterminated quoted string in autoacq args";
+    return false;
+  }
+
+  if ( !current.empty() ) tokens.push_back( current );
+  return true;
+}
+
+bool is_autoacq_program_token( const std::string &token ) {
+  auto slash = token.find_last_of( "/\\" );
+  std::string base = ( slash == std::string::npos ? token : token.substr( slash + 1 ) );
+  return ( base == "ngps_acq" || base == "ngps_acquire" );
+}
+
+int cb_tcs_set_native_units( void *user, int dry_run, int verbose ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+
+  if ( dry_run ) return 0;
+
+  std::string retstring;
+  if ( !ctx->iface->tcsd.client.is_open() && ctx->iface->tcs_init( "", retstring ) != NO_ERROR ) {
+    if ( verbose ) logwrite( "Slicecam::autoacq", "WARNING: unable to initialize tcsd client for autoacq" );
+    return 1;
+  }
+
+  if ( ctx->iface->tcsd.client.command( TCSD_NATIVE + " dra arcsec", retstring ) != NO_ERROR ) return 1;
+  if ( ctx->iface->tcsd.client.command( TCSD_NATIVE + " ddec arcsec", retstring ) != NO_ERROR ) return 1;
+  return 0;
+}
+
+int cb_tcs_move_arcsec( void *user, double dra_arcsec, double ddec_arcsec, int dry_run, int verbose ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+
+  if ( dry_run ) return 0;
+
+  std::string retstring;
+  if ( !ctx->iface->tcsd.client.is_open() && ctx->iface->tcs_init( "", retstring ) != NO_ERROR ) {
+    if ( verbose ) logwrite( "Slicecam::autoacq", "WARNING: unable to initialize tcsd client for autoacq move" );
+    return 1;
+  }
+
+  std::ostringstream cmd;
+  cmd << TCSD_NATIVE << " pt "
+      << std::fixed << std::setprecision(3) << dra_arcsec << " "
+      << std::fixed << std::setprecision(3) << ddec_arcsec;
+  return ( ctx->iface->tcsd.client.command( cmd.str(), retstring ) == NO_ERROR ) ? 0 : 1;
+}
+
+int cb_scam_putonslit_deg( void *user,
+                           double slit_ra_deg, double slit_dec_deg,
+                           double cross_ra_deg, double cross_dec_deg,
+                           int dry_run, int /*verbose*/ ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+
+  if ( dry_run ) return 0;
+
+  std::ostringstream args;
+  args << std::fixed << std::setprecision(10)
+       << slit_ra_deg << " " << slit_dec_deg << " "
+       << cross_ra_deg << " " << cross_dec_deg;
+
+  std::string retstring;
+  return ( ctx->iface->put_on_slit( args.str(), retstring ) == NO_ERROR ) ? 0 : 1;
+}
+
+int cb_acam_query_state( void *user, char *state, size_t state_sz, int /*verbose*/ ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface || !state || state_sz == 0 ) return 2;
+
+  bool is_guiding = false;
+  if ( ctx->iface->get_acam_guide_state( is_guiding ) != NO_ERROR ) return 1;
+
+  snprintf( state, state_sz, "%s", is_guiding ? "guiding" : "acquiring" );
+  return 0;
+}
+
+int cb_scam_framegrab_one( void *user, const char *outpath, int /*verbose*/ ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface || !outpath || !*outpath ) return 1;
+
+  std::string retstring;
+  std::string args = std::string("one ") + outpath;
+  return ( ctx->iface->framegrab( args, retstring ) == NO_ERROR ) ? 0 : 1;
+}
+
+int cb_scam_set_exptime( void *user, double exptime_sec, int dry_run, int /*verbose*/ ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+  if ( dry_run ) return 0;
+
+  std::ostringstream args;
+  args << std::fixed << std::setprecision(3) << exptime_sec;
+
+  std::string retstring;
+  return ( ctx->iface->exptime( args.str(), retstring ) == NO_ERROR ) ? 0 : 1;
+}
+
+int cb_scam_set_avgframes( void *user, int avgframes, int dry_run, int /*verbose*/ ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+  if ( dry_run ) return 0;
+
+  if ( avgframes < 1 ) avgframes = 1;
+  std::string retstring;
+  return ( ctx->iface->avg_frames( std::to_string(avgframes), retstring ) == NO_ERROR ) ? 0 : 1;
+}
+
+int cb_is_stop_requested( void *user ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !ctx->iface ) return 1;
+  return ctx->iface->autoacq_stop_requested() ? 1 : 0;
+}
+
+void cb_log_message( void *user, const char *line ) {
+  auto *ctx = static_cast<AutoacqRunContext*>( user );
+  if ( !ctx || !line || !*line ) return;
+
+  if ( !ctx->logfile.empty() ) {
+    std::lock_guard<std::mutex> lock( ctx->log_mtx );
+    std::ofstream logfile( ctx->logfile, std::ios::app );
+    if ( logfile.is_open() ) logfile << line;
+  }
+}
+
+}  // namespace
 
 namespace Slicecam {
 
@@ -1428,6 +1627,16 @@ namespace Slicecam {
         applied++;
       }
 
+      if ( config.param[entry] == "AUTOACQ_ARGS" || config.param[entry] == "AUTOACQ_CMD" ) {
+        this->autoacq_args = trim_copy( config.arg[entry] );
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        if ( config.param[entry] == "AUTOACQ_CMD" ) {
+          logwrite( function, "NOTICE AUTOACQ_CMD is deprecated; use AUTOACQ_ARGS" );
+        }
+        applied++;
+      }
+
       if ( starts_with( config.param[entry], "TCSD_PORT" ) ) {
         int port;
         try {
@@ -2425,6 +2634,330 @@ namespace Slicecam {
   /***** Slicecam::Interface::dothread_fpoffset *******************************/
 
 
+  /***** Slicecam::Interface::publish_autoacq_state ***************************/
+  /**
+   * @brief      publish auto-acquire state changes for sequencer
+   *
+   */
+  void Interface::publish_autoacq_state( const std::string &state, uint64_t run_id,
+                                         int exit_code, const std::string &message ) {
+    if ( !this->publisher ) return;
+
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = Slicecam::DAEMON_NAME;
+    jmessage_out["state"] = state;
+    jmessage_out["run_id"] = run_id;
+    jmessage_out["active"] = this->autoacq_running.load(std::memory_order_acquire);
+    jmessage_out["exit_code"] = exit_code;
+    jmessage_out["message"] = message;
+
+    try {
+      this->publisher->publish( jmessage_out, "slicecam_autoacq" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::publish_autoacq_state",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Slicecam::Interface::publish_autoacq_state ***************************/
+
+
+  /***** Slicecam::Interface::dothread_autoacq ********************************/
+  /**
+   * @brief      run embedded NGPS auto-acquire logic in a worker thread
+   *
+   */
+  void Interface::dothread_autoacq( std::string args, std::string logfile, uint64_t run_id ) {
+    const std::string function = "Slicecam::Interface::dothread_autoacq";
+
+    std::vector<std::string> tokenized_args;
+    std::string split_error;
+    if ( !split_shell_words( trim_copy(args), tokenized_args, split_error ) ) {
+      const std::string final_message = "invalid autoacq args: " + split_error;
+      {
+        std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+        this->autoacq_state = "failed";
+        this->autoacq_message = final_message;
+        this->autoacq_exit_code = 4;
+      }
+      this->autoacq_running.store( false, std::memory_order_release );
+      this->autoacq_abort_requested.store( false, std::memory_order_release );
+      logwrite( function, final_message );
+      this->publish_autoacq_state( "failed", run_id, 4, final_message );
+      return;
+    }
+
+    while ( !tokenized_args.empty() && is_autoacq_program_token( tokenized_args.front() ) ) {
+      tokenized_args.erase( tokenized_args.begin() );
+    }
+
+    if ( tokenized_args.empty() ) {
+      std::vector<std::string> default_tokens;
+      std::string default_error;
+      if ( !split_shell_words( trim_copy(this->autoacq_args), default_tokens, default_error ) ) {
+        const std::string final_message = "invalid configured AUTOACQ_ARGS: " + default_error;
+        {
+          std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+          this->autoacq_state = "failed";
+          this->autoacq_message = final_message;
+          this->autoacq_exit_code = 4;
+        }
+        this->autoacq_running.store( false, std::memory_order_release );
+        this->autoacq_abort_requested.store( false, std::memory_order_release );
+        logwrite( function, final_message );
+        this->publish_autoacq_state( "failed", run_id, 4, final_message );
+        return;
+      }
+
+      while ( !default_tokens.empty() && is_autoacq_program_token( default_tokens.front() ) ) {
+        default_tokens.erase( default_tokens.begin() );
+      }
+      tokenized_args = std::move( default_tokens );
+    }
+
+    if ( tokenized_args.empty() ) {
+      const std::string final_message = "AUTOACQ_ARGS is empty";
+      {
+        std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+        this->autoacq_state = "failed";
+        this->autoacq_message = final_message;
+        this->autoacq_exit_code = 4;
+      }
+      this->autoacq_running.store( false, std::memory_order_release );
+      this->autoacq_abort_requested.store( false, std::memory_order_release );
+      logwrite( function, final_message );
+      this->publish_autoacq_state( "failed", run_id, 4, final_message );
+      return;
+    }
+
+    std::vector<std::string> argv_storage;
+    argv_storage.reserve( tokenized_args.size() + 1 );
+    argv_storage.emplace_back( "ngps_acq" );
+    for ( const auto &token : tokenized_args ) argv_storage.push_back( token );
+
+    std::vector<char*> argv;
+    argv.reserve( argv_storage.size() );
+    for ( auto &token : argv_storage ) argv.push_back( const_cast<char*>( token.c_str() ) );
+
+    AutoacqRunContext ctx;
+    ctx.iface = this;
+    ctx.logfile = logfile;
+
+    if ( !ctx.logfile.empty() ) {
+      try {
+        auto parent = std::filesystem::path( ctx.logfile ).parent_path();
+        if ( !parent.empty() ) std::filesystem::create_directories( parent );
+      }
+      catch ( const std::exception &e ) {
+        logwrite( function, "WARNING: unable to create autoacq log path: " + std::string(e.what()) );
+      }
+      std::ofstream out( ctx.logfile, std::ios::app );
+      if ( out.is_open() ) {
+        out << "=== SLICECAMD AUTOACQ run_id=" << run_id << " start ===" << std::endl;
+      }
+    }
+
+    ngps_acq_hooks_t hooks {};
+    hooks.user = &ctx;
+    hooks.tcs_set_native_units = cb_tcs_set_native_units;
+    hooks.tcs_move_arcsec = cb_tcs_move_arcsec;
+    hooks.scam_putonslit_deg = cb_scam_putonslit_deg;
+    hooks.acam_query_state = cb_acam_query_state;
+    hooks.scam_framegrab_one = cb_scam_framegrab_one;
+    hooks.scam_set_exptime = cb_scam_set_exptime;
+    hooks.scam_set_avgframes = cb_scam_set_avgframes;
+    hooks.is_stop_requested = cb_is_stop_requested;
+    hooks.log_message = cb_log_message;
+
+    ngps_acq_set_hooks( &hooks );
+    ngps_acq_request_stop( 0 );
+    const int exit_code = ngps_acq_run_from_argv( static_cast<int>(argv.size()), argv.data() );
+    ngps_acq_request_stop( 0 );
+    ngps_acq_clear_hooks();
+
+    std::string final_state;
+    std::string final_message;
+    if ( this->autoacq_abort_requested.load(std::memory_order_acquire) ) {
+      final_state = "aborted";
+      final_message = "autoacq aborted";
+    }
+    else if ( exit_code == 0 ) {
+      final_state = "success";
+      final_message = "autoacq complete";
+    }
+    else {
+      final_state = "failed";
+      final_message = "autoacq failed with exit code " + std::to_string(exit_code);
+    }
+
+    {
+      std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+      this->autoacq_state = final_state;
+      this->autoacq_message = final_message;
+      this->autoacq_exit_code = exit_code;
+    }
+
+    this->autoacq_running.store( false, std::memory_order_release );
+    this->autoacq_abort_requested.store( false, std::memory_order_release );
+
+    if ( !ctx.logfile.empty() ) {
+      std::ofstream out( ctx.logfile, std::ios::app );
+      if ( out.is_open() ) {
+        out << "=== SLICECAMD AUTOACQ run_id=" << run_id
+            << " state=" << final_state
+            << " exit_code=" << exit_code
+            << " ===" << std::endl;
+      }
+    }
+
+    logwrite( function, final_message );
+    this->publish_autoacq_state( final_state, run_id, exit_code, final_message );
+  }
+  /***** Slicecam::Interface::dothread_autoacq ********************************/
+
+
+  /***** Slicecam::Interface::autoacq *****************************************/
+  /**
+   * @brief      controls in-process auto-acquire logic
+   *
+   */
+  long Interface::autoacq( std::string args, std::string &retstring ) {
+    const std::string function = "Slicecam::Interface::autoacq";
+    std::stringstream message;
+    std::vector<std::string> tokens;
+    Tokenize( args, tokens, " " );
+
+    std::string action = tokens.empty() ? "status" : tokens.at(0);
+
+    if ( action == "?" || action == "help" ) {
+      retstring = SLICECAMD_AUTOACQ;
+      retstring.append( " [ start [--log-file <path>] [<args>] | stop | status ]\n" );
+      retstring.append( "  Run or monitor in-process auto-acquire logic.\n" );
+      retstring.append( "  <args> override AUTOACQ_ARGS for this run.\n" );
+      retstring.append( "  Status returns state, run id, active state, and last exit code.\n" );
+      return HELP;
+    }
+
+    if ( action == "status" ) {
+      std::string state;
+      std::string state_message;
+      int exit_code;
+      {
+        std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+        state = this->autoacq_state;
+        state_message = this->autoacq_message;
+        exit_code = this->autoacq_exit_code;
+      }
+      retstring = "state="+state
+                + " run_id=" + std::to_string(this->autoacq_run_counter.load(std::memory_order_acquire))
+                + " active=" + std::string(this->autoacq_running.load(std::memory_order_acquire) ? "true" : "false")
+                + " exit_code=" + std::to_string(exit_code);
+      if ( !state_message.empty() ) retstring += " message=\"" + state_message + "\"";
+      return NO_ERROR;
+    }
+
+    if ( action == "stop" ) {
+      if ( !this->autoacq_running.load(std::memory_order_acquire) ) {
+        retstring = "not_running";
+        return NO_ERROR;
+      }
+
+      this->autoacq_abort_requested.store( true, std::memory_order_release );
+      ngps_acq_request_stop( 1 );
+      retstring = "stopping run_id=" + std::to_string(this->autoacq_run_counter.load(std::memory_order_acquire));
+      return NO_ERROR;
+    }
+
+    if ( action == "start" ) {
+      if ( this->autoacq_running.load(std::memory_order_acquire) ) {
+        retstring = "autoacq already running";
+        return BUSY;
+      }
+
+      std::string effective_args = trim_copy( this->autoacq_args );
+      std::string logfile;
+
+      auto pos = args.find_first_of( " \t" );
+      if ( pos != std::string::npos ) {
+        std::string trailing = trim_copy( args.substr( pos + 1 ) );
+        if ( !trailing.empty() ) {
+          std::vector<std::string> trailing_tokens;
+          std::string split_error;
+          if ( !split_shell_words( trailing, trailing_tokens, split_error ) ) {
+            retstring = "invalid autoacq args: " + split_error;
+            return ERROR;
+          }
+
+          std::vector<std::string> filtered_tokens;
+          for ( size_t i = 0; i < trailing_tokens.size(); ) {
+            if ( trailing_tokens.at(i) == "--log-file" ) {
+              if ( (i+1) >= trailing_tokens.size() ) {
+                retstring = "missing value for --log-file";
+                return ERROR;
+              }
+              logfile = trailing_tokens.at(i+1);
+              i += 2;
+              continue;
+            }
+            filtered_tokens.push_back( trailing_tokens.at(i) );
+            i++;
+          }
+
+          if ( !filtered_tokens.empty() ) {
+            std::ostringstream rebuilt;
+            for ( size_t i = 0; i < filtered_tokens.size(); i++ ) {
+              if ( i > 0 ) rebuilt << " ";
+              rebuilt << filtered_tokens.at(i);
+            }
+            effective_args = rebuilt.str();
+          }
+        }
+      }
+
+      std::vector<std::string> check_tokens;
+      std::string split_error;
+      if ( !split_shell_words( effective_args, check_tokens, split_error ) ) {
+        retstring = "invalid AUTOACQ_ARGS: " + split_error;
+        return ERROR;
+      }
+      if ( check_tokens.size() == 1 && is_autoacq_program_token( check_tokens.front() ) ) {
+        effective_args = trim_copy( this->autoacq_args );
+      }
+
+      if ( trim_copy(effective_args).empty() ) {
+        logwrite( function, "ERROR AUTOACQ_ARGS is empty" );
+        retstring = "AUTOACQ_ARGS is empty";
+        return ERROR;
+      }
+
+      uint64_t run_id = this->autoacq_run_counter.fetch_add( 1, std::memory_order_acq_rel ) + 1;
+      {
+        std::lock_guard<std::mutex> lock( this->autoacq_state_mtx );
+        this->autoacq_state = "running";
+        this->autoacq_message = "autoacq started";
+        this->autoacq_exit_code = 0;
+      }
+      this->autoacq_abort_requested.store( false, std::memory_order_release );
+      this->autoacq_running.store( true, std::memory_order_release );
+      ngps_acq_request_stop( 0 );
+
+      message.str(""); message << "NOTICE: starting autoacq run_id=" << run_id << " args=\"" << effective_args << "\"";
+      if ( !logfile.empty() ) message << " log=" << logfile;
+      logwrite( function, message.str() );
+
+      this->publish_autoacq_state( "running", run_id, 0, "autoacq started" );
+      std::thread( &Slicecam::Interface::dothread_autoacq, this, effective_args, logfile, run_id ).detach();
+
+      retstring = "started run_id=" + std::to_string(run_id);
+      return NO_ERROR;
+    }
+
+    retstring = "invalid_argument";
+    return ERROR;
+  }
+  /***** Slicecam::Interface::autoacq *****************************************/
+
+
   /***** Slicecam::Interface::get_acam_guide_state ****************************/
   /**
    * @brief      asks if ACAM is guiding
@@ -2574,8 +3107,18 @@ namespace Slicecam {
         return ERROR;
       }
     }
-    else
-    if ( !is_guiding && this->tcs_online.load(std::memory_order_acquire) && this->tcsd.client.is_open() ) {
+    else if ( !is_guiding ) {
+      // Ensure tcsd/tcs connection is available before issuing PT.
+      //
+      if ( !this->tcs_online.load(std::memory_order_acquire) || !this->tcsd.client.is_open() ) {
+        std::string tcsret;
+        if ( this->tcs_init( "", tcsret ) != NO_ERROR || !this->tcsd.client.is_open() ) {
+          logwrite( function, "ERROR not connected to tcsd" );
+          retstring="tcs_not_connected";
+          return ERROR;
+        }
+      }
+
       // offsets are in degrees, convert to arcsec (required for PT command)
       //
       ra_off  *= 3600.;
@@ -2588,11 +3131,6 @@ namespace Slicecam {
         retstring="tcs_error";
         return ERROR;
       }
-    }
-    else if ( !is_guiding ) {
-      logwrite( function, "ERROR not connected to tcsd" );
-      retstring="tcs_not_connected";
-      return ERROR;
     }
 
     message.str(""); message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";

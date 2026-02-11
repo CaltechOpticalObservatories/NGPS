@@ -99,6 +99,25 @@ class OtmSettingsDialog(QDialog):
         timeline_group.setLayout(timeline_layout)
         layout.addWidget(timeline_group)
 
+        # ETC flags group
+        etc_group = QGroupBox("ETC Flags")
+        etc_layout = QVBoxLayout()
+
+        self.etc_flags_edit = QLineEdit()
+        self.etc_flags_edit.setPlaceholderText("-noslicer -fastSNR")
+        self.etc_flags_edit.setToolTip(
+            "Extra command-line flags passed to the ETC.\n"
+            "Common flags:\n"
+            "  -noslicer    Only use center slit flux\n"
+            "  -fastSNR     Use 2 brightest pixels for SNR\n"
+            "  -hires       High-resolution SNR calculation\n"
+            "  -hires_solve Higher accuracy slit+exptime solve"
+        )
+        etc_layout.addWidget(self.etc_flags_edit)
+
+        etc_group.setLayout(etc_layout)
+        layout.addWidget(etc_group)
+
         # Script paths group
         paths_group = QGroupBox("Script Paths")
         paths_layout = QVBoxLayout()
@@ -167,6 +186,7 @@ class OtmSettingsDialog(QDialog):
         self.python_cmd_edit.setText(self.settings.python_cmd)
         self.otm_script_edit.setText(self.settings.otm_script_path)
         self.timeline_script_edit.setText(self.settings.timeline_script_path)
+        self.etc_flags_edit.setText(self.settings.etc_flags)
 
     def _save_settings(self):
         """Save UI fields to settings."""
@@ -179,6 +199,7 @@ class OtmSettingsDialog(QDialog):
         self.settings.python_cmd = self.python_cmd_edit.text()
         self.settings.otm_script_path = self.otm_script_edit.text()
         self.settings.timeline_script_path = self.timeline_script_edit.text()
+        self.settings.etc_flags = self.etc_flags_edit.text()
 
     def _browse_python_cmd(self):
         """Browse for Python interpreter."""

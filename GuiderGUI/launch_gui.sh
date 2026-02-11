@@ -20,6 +20,10 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 source "$CONFIG_FILE" "$camera"
 
+# Clear any cached state so a fresh GUI launch redraws everything
+region_cache="/tmp/ngps_${camera}_regions.key"
+rm -f "$region_cache"
+
 # Prefer the DS9 app binary (Homebrew wrapper drops args on macOS)
 if [ -x "/Applications/SAOImageDS9.app/Contents/MacOS/ds9" ]; then
   DS9_BIN="/Applications/SAOImageDS9.app/Contents/MacOS/ds9"
@@ -76,7 +80,6 @@ else
   if command -v notify-send >/dev/null 2>&1; then
     notify-send --urgency=normal -t 3000 "$id" "GUI (ds9) is launching.  Please wait..."
   fi
-
 
   LOGFILE="/tmp/ngps_${id}.ds9.log"
   "$DS9_BIN" -png "$startfile" -title "$id" -xpa "$id" \

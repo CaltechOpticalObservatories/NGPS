@@ -7,6 +7,10 @@
 
 #include "sequencer_interface.h"
 
+#include <cmath>
+#include <iomanip>
+#include <random>
+
 namespace Sequencer {
 
 
@@ -54,6 +58,10 @@ namespace Sequencer {
     this->name.clear();
     this->ra_hms.clear();
     this->dec_dms.clear();
+    this->sim_target_ra_hms_true.clear();
+    this->sim_target_dec_dms_true.clear();
+    this->sim_target_has_true = false;
+    this->sim_post_slew_applied = false;
     this->slitangle=NAN;
     this->casangle=NAN;
     this->pointmode.clear();
@@ -605,6 +613,7 @@ namespace Sequencer {
    *
    */
   long TargetInfo::parse_target_from_row( const mysqlx::Row &row ) {
+    const std::string function = "Sequencer::TargetInfo::parse_target_from_row";
     try {
       // To get the value of a field, call extract_column_from_row<T>( FIELD, row, [default] )
       // Call it with the explicit template instantiation type <T> to match the data type of
@@ -630,12 +639,70 @@ namespace Sequencer {
       this->owner          = extract_column_from_row<mysqlx::string>( "OWNER", row );
       this->obsid          = extract_column_from_row<int>( "OBSERVATION_ID", row );
       this->obsorder       = extract_column_from_row<int>( "OBS_ORDER", row );
-      this->targetnum      = extract_column_from_row<long>( "TARGET_NUMBER", row );
-      this->sequencenum    = extract_column_from_row<long>( "SEQUENCE_NUMBER", row );
+      this->targetnum      = extract_column_from_row<int64_t>( "TARGET_NUMBER", row );
+      this->sequencenum    = extract_column_from_row<int64_t>( "SEQUENCE_NUMBER", row );
       this->ra_hms         = extract_column_from_row<mysqlx::string>( "RA", row );
       this->dec_dms        = extract_column_from_row<mysqlx::string>( "DECL", row );
+      this->sim_target_ra_hms_true = this->ra_hms;
+      this->sim_target_dec_dms_true = this->dec_dms;
+      this->sim_target_has_true = ( !this->ra_hms.empty() && !this->dec_dms.empty() );
+      this->sim_post_slew_applied = false;
       this->offset_ra      = extract_column_from_row<double>( "OFFSET_RA", row );
       this->offset_dec     = extract_column_from_row<double>( "OFFSET_DEC", row );
+
+      if ( this->sim_target_perturb_arcsec > 0.0 && !this->ra_hms.empty() && !this->dec_dms.empty() ) {
+        double ra_h = radec_to_decimal( this->ra_hms );
+        double dec_d = radec_to_decimal( this->dec_dms );
+
+        if ( !std::isnan( ra_h ) && !std::isnan( dec_d ) ) {
+          std::uint64_t seq = this->sim_target_perturb_counter.fetch_add(1) + 1;
+          std::mt19937_64 rng;
+          if ( this->sim_target_perturb_seed != 0 ) {
+            rng.seed( this->sim_target_perturb_seed + seq );
+          }
+          else {
+            std::random_device rd;
+            rng.seed( (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd()) );
+          }
+
+          std::uniform_real_distribution<double> angdist( 0.0, 2.0 * std::acos(-1.0) );
+          double rmin = std::max( 0.0, this->sim_target_perturb_min_arcsec );
+          double rmax = this->sim_target_perturb_arcsec;
+          if ( rmax < rmin ) rmin = 0.0;
+          std::uniform_real_distribution<double> rdist( rmin, rmax );
+          double radius = rdist( rng );
+          double theta = angdist( rng );
+          double dra_arcsec = radius * std::cos( theta );
+          double ddec_arcsec = radius * std::sin( theta );
+          double cosdec = std::cos( dec_d * std::acos(-1.0) / 180.0 );
+          if ( std::abs( cosdec ) < 1e-6 ) cosdec = 1e-6;
+
+          double ra_deg = ra_h * 15.0;
+          ra_deg += ( dra_arcsec / 3600.0 ) / cosdec;
+          double dec_deg = dec_d + ( ddec_arcsec / 3600.0 );
+
+          ra_deg = std::fmod( ra_deg, 360.0 );
+          if ( ra_deg < 0.0 ) ra_deg += 360.0;
+          double ra_h_new = ra_deg / 15.0;
+
+          std::string ra_hms_new;
+          std::string dec_dms_new;
+          decimal_to_sexa( ra_h_new, ra_hms_new );
+          decimal_to_sexa( dec_deg, dec_dms_new );
+          if ( !ra_hms_new.empty() && ra_hms_new[0] == '+' ) ra_hms_new.erase(0, 1);
+
+          this->ra_hms = ra_hms_new;
+          this->dec_dms = dec_dms_new;
+
+          std::stringstream message;
+          message << "NOTICE: sim target perturb (pre-slew) dRA=" << std::fixed << std::setprecision(3) << dra_arcsec
+                  << " dDEC=" << ddec_arcsec << " arcsec";
+          logwrite( function, message.str() );
+        }
+        else {
+          logwrite( function, "WARNING: sim target perturb skipped due to NaN RA/DEC" );
+        }
+      }
 
       this->casangle       = extract_column_from_row<double>( "OTMcass", row );
       this->slitangle      = extract_column_from_row<double>( "OTMslitangle", row );
@@ -663,13 +730,118 @@ namespace Sequencer {
 //    this->airmasslimit = extract_column_from_row<double>( "AIRMASS_MAX", row, 99.0 );
     }
     catch ( const std::runtime_error &e ) {
-      logwrite( "Sequencer::TargetInfo::parse_target_from_row", "ERROR: "+std::string(e.what()) );
+      logwrite( function, "ERROR: "+std::string(e.what()) );
       return ERROR;
     }
 
     return NO_ERROR;
   }
   /***** Sequencer::TargetInfo::parse_target_from_row *************************/
+
+
+  /***** Sequencer::TargetInfo::apply_sim_post_slew_adjust ********************/
+  /**
+   * @brief      adjust target coords after ontarget to true coords plus a small perturbation
+   */
+  void TargetInfo::apply_sim_post_slew_adjust() {
+    const std::string function = "Sequencer::TargetInfo::apply_sim_post_slew_adjust";
+
+    if ( this->sim_post_slew_applied ) return;
+    if ( this->sim_post_slew_target_arcsec <= 0.0 ) return;
+    if ( !this->sim_target_has_true ) return;
+
+    const double pi = std::acos(-1.0);
+
+    // Current coords at this stage are the pre-slew perturbed target sent to TCS.
+    // Keep these so we can clamp the post-slew goal perturbation budget.
+    double pre_ra_h = radec_to_decimal( this->ra_hms );
+    double pre_dec_d = radec_to_decimal( this->dec_dms );
+    bool have_pre = ( !std::isnan( pre_ra_h ) && !std::isnan( pre_dec_d ) );
+
+    double ra_h = radec_to_decimal( this->sim_target_ra_hms_true );
+    double dec_d = radec_to_decimal( this->sim_target_dec_dms_true );
+
+    if ( std::isnan( ra_h ) || std::isnan( dec_d ) ) {
+      logwrite( function, "WARNING: post-slew adjust skipped due to NaN RA/DEC" );
+      return;
+    }
+
+    std::uint64_t seq = this->sim_post_slew_target_counter.fetch_add(1) + 1;
+    std::mt19937_64 rng;
+    if ( this->sim_post_slew_target_seed != 0 ) {
+      rng.seed( this->sim_post_slew_target_seed + seq );
+    }
+    else {
+      std::random_device rd;
+      rng.seed( (static_cast<std::uint64_t>(rd()) << 32) ^ static_cast<std::uint64_t>(rd()) );
+    }
+
+    std::uniform_real_distribution<double> angdist( 0.0, 2.0 * pi );
+    double rmin = std::max( 0.0, this->sim_post_slew_target_min_arcsec );
+    double rmax = this->sim_post_slew_target_arcsec;
+    if ( rmax < rmin ) rmin = 0.0;
+    std::uniform_real_distribution<double> rdist( rmin, rmax );
+    double radius = rdist( rng );
+    double theta = angdist( rng );
+    double dra_arcsec = radius * std::cos( theta );
+    double ddec_arcsec = radius * std::sin( theta );
+    double cosdec = std::cos( dec_d * pi / 180.0 );
+    if ( std::abs( cosdec ) < 1e-6 ) cosdec = 1e-6;
+
+    double ra_deg = ra_h * 15.0;
+    ra_deg += ( dra_arcsec / 3600.0 ) / cosdec;
+    double dec_deg = dec_d + ( ddec_arcsec / 3600.0 );
+
+    // Enforce a hard cap on effective acquisition perturbation relative to the
+    // pre-slew coordinate. This prevents post-slew adjustment from exceeding
+    // SIM_TARGET_PERTURB_ARCSEC due to independent random draws.
+    if ( have_pre && this->sim_target_perturb_arcsec > 0.0 ) {
+      double pre_ra_deg = pre_ra_h * 15.0;
+      double dra_deg = ra_deg - pre_ra_deg;
+      if ( dra_deg > 180.0 ) dra_deg -= 360.0;
+      if ( dra_deg < -180.0 ) dra_deg += 360.0;
+
+      double cosdec_pre = std::cos( pre_dec_d * pi / 180.0 );
+      if ( std::abs( cosdec_pre ) < 1e-6 ) cosdec_pre = 1e-6;
+
+      double dra_arcsec_from_pre  = dra_deg * cosdec_pre * 3600.0;
+      double ddec_arcsec_from_pre = ( dec_deg - pre_dec_d ) * 3600.0;
+      double sep_arcsec = std::hypot( dra_arcsec_from_pre, ddec_arcsec_from_pre );
+
+      if ( sep_arcsec > this->sim_target_perturb_arcsec ) {
+        double scale = this->sim_target_perturb_arcsec / sep_arcsec;
+        dra_arcsec_from_pre  *= scale;
+        ddec_arcsec_from_pre *= scale;
+        ra_deg = pre_ra_deg + ( dra_arcsec_from_pre / 3600.0 ) / cosdec_pre;
+        dec_deg = pre_dec_d + ( ddec_arcsec_from_pre / 3600.0 );
+
+        std::stringstream clampmsg;
+        clampmsg << "NOTICE: clamped post-slew adjust to " << std::fixed << std::setprecision(3)
+                 << this->sim_target_perturb_arcsec << " arcsec max from pre-slew target";
+        logwrite( function, clampmsg.str() );
+      }
+    }
+
+    ra_deg = std::fmod( ra_deg, 360.0 );
+    if ( ra_deg < 0.0 ) ra_deg += 360.0;
+    double ra_h_new = ra_deg / 15.0;
+
+    std::string ra_hms_new;
+    std::string dec_dms_new;
+    decimal_to_sexa( ra_h_new, ra_hms_new );
+    decimal_to_sexa( dec_deg, dec_dms_new );
+    if ( !ra_hms_new.empty() && ra_hms_new[0] == '+' ) ra_hms_new.erase(0, 1);
+
+    this->ra_hms = ra_hms_new;
+    this->dec_dms = dec_dms_new;
+    this->sim_post_slew_applied = true;
+
+    std::stringstream message;
+    message << "NOTICE: sim target adjust (post-slew) dRA=" << std::fixed << std::setprecision(3) << dra_arcsec
+            << " dDEC=" << ddec_arcsec << " arcsec";
+    logwrite( function, message.str() );
+  }
+  /***** Sequencer::TargetInfo::apply_sim_post_slew_adjust ********************/
 
 
   /***** Sequencer::TargetInfo::target_qc_check *******************************/

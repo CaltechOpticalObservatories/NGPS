@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
 
   // initialize the pub/sub handler
   //
-  if ( sequencerd.sequence.init_pubsub( {"camerad"} ) == ERROR ) {
+  if ( sequencerd.sequence.init_pubsub( {"camerad", "slicecam_autoacq"} ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }

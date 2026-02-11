@@ -27,9 +27,9 @@ endif()
 # ZeroMQ
 #
 find_library( ZMQPP_LIB NAMES zmqpp libzmqpp
-              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zmqpp/lib /opt/homebrew/opt/zmqpp/lib )
+              PATHS ${NGPS_ZMQ_SEARCH_PATHS} ${NGPS_ZMQ_FIND_MODE} )
 find_library( ZMQ_LIB NAMES zmq libzmq
-              PATHS /usr/local/lib /opt/homebrew/lib /usr/local/opt/zeromq/lib /opt/homebrew/opt/zeromq/lib )
+              PATHS ${NGPS_ZMQ_SEARCH_PATHS} ${NGPS_ZMQ_FIND_MODE} )
 
 # CFITSIO, CCfits
 #

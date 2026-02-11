@@ -15,6 +15,7 @@ import os
 import sys
 import re
 import math
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Set
 
@@ -29,7 +30,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QMessageBox, QDialog, QDialogButtonBox, QFormLayout, QScrollArea,
-    QMenu, QHeaderView, QProgressDialog, QInputDialog
+    QMenu, QHeaderView, QProgressDialog, QInputDialog, QCheckBox
 )
 from PyQt5.QtGui import QBrush, QColor
 
@@ -92,9 +93,9 @@ except ImportError:
 # Import OTM integration modules
 try:
     from otm_integration import (
-        OtmSettings, OtmRunner, OtmTimelineRunner,
-        generate_otm_input_csv, parse_otm_output_csv, parse_timeline_json,
-        otm_flag_severity, otm_flag_color
+        OtmSettings, OtmRunner, OtmTimelineRunner, parse_timeline_json,
+        generate_otm_input_csv, parse_otm_output_csv,
+        otm_flag_severity, otm_flag_color, OTM_CSV_TO_DB
     )
     from otm_settings_dialog import OtmSettingsDialog
     OTM_AVAILABLE = True
@@ -122,13 +123,23 @@ except ImportError as e:
     print(f"Warning: Coordinate utilities not available: {e}")
     COORDINATE_UTILS_AVAILABLE = False
 
-# Import timeline canvas
+# Import QWebEngineView and QWebChannel for Plotly timeline display
 try:
-    from timeline_canvas import TimelineCanvas
-    TIMELINE_CANVAS_AVAILABLE = True
+    from PyQt5.QtWebEngineWidgets import QWebEngineView
+    from PyQt5.QtWebChannel import QWebChannel
+    WEBENGINE_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: Timeline canvas not available: {e}")
-    TIMELINE_CANVAS_AVAILABLE = False
+    print(f"Warning: QWebEngineView not available: {e}")
+    WEBENGINE_AVAILABLE = False
+
+# Import timeline bridge and Plotly generator
+try:
+    from timeline_bridge import TimelineBridge
+    from plotly_timeline import generate_timeline_html
+    TIMELINE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Plotly timeline not available: {e}")
+    TIMELINE_AVAILABLE = False
 
 
 class DbClient:
@@ -327,6 +338,9 @@ class DatabaseTableWidget(QWidget):
     """Enhanced table widget with state persistence and normalization."""
 
     selection_changed = pyqtSignal(dict)
+    data_changed = pyqtSignal()
+    write_requested = pyqtSignal(dict, dict)    # (key_values, updates) for centralized DB write
+    views_need_refresh = pyqtSignal()            # DB was written internally, all views need refresh
 
     def __init__(
         self,
@@ -376,10 +390,8 @@ class DatabaseTableWidget(QWidget):
         top = QHBoxLayout()
         self.add_button = QPushButton("Add", self)
         self.delete_button = QPushButton("Delete", self)
-        self.refresh_button = QPushButton("Refresh", self)
         top.addWidget(self.add_button)
         top.addWidget(self.delete_button)
-        top.addWidget(self.refresh_button)
 
         # Grouping button (only for targets table)
         if self._is_targets_table() and COORDINATE_UTILS_AVAILABLE:
@@ -396,10 +408,42 @@ class DatabaseTableWidget(QWidget):
             top.addSpacing(12)
             top.addWidget(QLabel(f"Search {self._search_column}:", self))
             self.search_input = QLineEdit(self)
+            self.search_input.setMaximumWidth(150)
             top.addWidget(self.search_input)
             self.search_input.textChanged.connect(self.refresh)
+
+            # OTM start time field (Palomar local time)
+            top.addSpacing(12)
+            top.addWidget(QLabel("OTM time:", self))
+            self.otm_time_input = QLineEdit(self)
+            self.otm_time_input.setMaximumWidth(160)
+            self.otm_time_input.setPlaceholderText("YYYY-MM-DDTHH:MM:SS")
+            self.otm_time_input.setToolTip("OTM start time in Palomar local time (Pacific)")
+            top.addWidget(self.otm_time_input)
+
+            # "Live" checkbox — auto-updates the time field to current Palomar time
+            self.otm_live_checkbox = QCheckBox("Live", self)
+            self.otm_live_checkbox.setToolTip("Continuously update OTM time to current Palomar local time")
+            self.otm_live_checkbox.setChecked(True)
+            top.addWidget(self.otm_live_checkbox)
+
+            # Timer to update time field when Live is checked
+            self._otm_live_timer = QTimer(self)
+            self._otm_live_timer.setInterval(1000)
+            self._otm_live_timer.timeout.connect(self._update_otm_live_time)
+            self._otm_live_timer.start()
+
+            # When user unchecks Live, stop overwriting; when checked, resume
+            self.otm_live_checkbox.toggled.connect(
+                lambda checked: self._otm_live_timer.start() if checked else self._otm_live_timer.stop()
+            )
+
+            # Set initial value
+            self._update_otm_live_time()
         else:
             self.search_input = None
+            self.otm_time_input = None
+            self.otm_live_checkbox = None
 
         top.addStretch()
 
@@ -415,21 +459,6 @@ class DatabaseTableWidget(QWidget):
         self.column_vis_button.clicked.connect(self._column_visibility_dialog)
         top.addWidget(self.column_vis_button)
 
-        self.filter_button = QPushButton("Filter...", self)
-        self.filter_button.setToolTip("Advanced filtering")
-        self.filter_button.clicked.connect(self._advanced_filter_dialog)
-        top.addWidget(self.filter_button)
-
-        self.export_csv_button = QPushButton("Export CSV...", self)
-        self.export_csv_button.setToolTip("Export table to CSV file")
-        self.export_csv_button.clicked.connect(self._export_csv)
-        top.addWidget(self.export_csv_button)
-
-        self.import_csv_button = QPushButton("Import CSV...", self)
-        self.import_csv_button.setToolTip("Import data from CSV file")
-        self.import_csv_button.clicked.connect(self._import_csv)
-        top.addWidget(self.import_csv_button)
-
         layout.addLayout(top)
 
         # Table widget
@@ -437,6 +466,10 @@ class DatabaseTableWidget(QWidget):
         self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.SelectedClicked)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.horizontalHeader().setStyleSheet(
+            "QHeaderView::section { padding: 2px 4px; }"
+        )
+        self.table.horizontalHeader().setMinimumSectionSize(40)
         self.table.itemChanged.connect(self._on_item_changed)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
         self.table.cellClicked.connect(self._on_cell_clicked)
@@ -447,9 +480,21 @@ class DatabaseTableWidget(QWidget):
         self.table.customContextMenuRequested.connect(self._show_context_menu)
 
         # Connect signals
-        self.refresh_button.clicked.connect(self.refresh)
         self.add_button.clicked.connect(self._on_add_clicked)
         self.delete_button.clicked.connect(self._on_delete_clicked)
+
+    def _update_otm_live_time(self) -> None:
+        """Update the OTM time field with current Palomar local time."""
+        if not self.otm_time_input:
+            return
+        try:
+            from datetime import datetime
+            import pytz
+            palomar_tz = pytz.timezone("US/Pacific")
+            now_palomar = datetime.now(palomar_tz)
+            self.otm_time_input.setText(now_palomar.strftime("%Y-%m-%dT%H:%M:%S"))
+        except Exception:
+            pass
 
     def _setup_database(self) -> None:
         """Setup database connection and load schema."""
@@ -609,7 +654,7 @@ class DatabaseTableWidget(QWidget):
             self.table.setColumnHidden(col_idx, hidden)
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
-        """Handle item edit with normalization."""
+        """Handle item edit with normalization. Emits write_requested for centralized DB write."""
         if self._loading:
             return
         if not self._db or not self._db.is_open():
@@ -639,6 +684,9 @@ class DatabaseTableWidget(QWidget):
         else:
             new_value = new_text
 
+        key_vals = self._row_keys[row]
+        updates = {col_meta.name: new_value}
+
         # Apply normalization for target table
         if self._is_targets_table():
             row_values = self._current_row_values(row)
@@ -646,36 +694,15 @@ class DatabaseTableWidget(QWidget):
             norm_result = normalize_target_row(row_values)
 
             if norm_result.changed_columns:
-                # Show status message
                 parent_window = self.window()
                 if hasattr(parent_window, 'statusBar'):
                     parent_window.statusBar().showMessage(norm_result.message, 5000)
+                for changed_col in norm_result.changed_columns:
+                    if changed_col in row_values:
+                        updates[changed_col] = row_values[changed_col]
 
-                # Update all changed columns
-                try:
-                    for changed_col in norm_result.changed_columns:
-                        if changed_col in row_values:
-                            update_val = row_values[changed_col]
-                            key_vals = self._row_keys[row]
-                            self._db.update_record(self._table_name, key_vals, {changed_col: update_val})
-                            if changed_col in self._column_index:
-                                changed_col_idx = self._column_index[changed_col]
-                                self._loading = True
-                                self.table.item(row, changed_col_idx).setText(str(update_val))
-                                self._loading = False
-                except Exception as exc:
-                    QMessageBox.critical(self, "Error", f"Normalization failed: {exc}")
-                return
-
-        key_vals = self._row_keys[row]
-        try:
-            self._db.update_record(self._table_name, key_vals, {col_meta.name: new_value})
-            item.setData(Qt.UserRole, "" if new_value is None else str(new_value))
-        except Exception as exc:
-            QMessageBox.critical(self, "Error", f"Update failed: {exc}")
-            self._loading = True
-            item.setText(str(old_text))
-            self._loading = False
+        # Emit centralized write request instead of writing directly
+        self.write_requested.emit(dict(key_vals), updates)
 
     def _on_selection_changed(self) -> None:
         """Handle selection change."""
@@ -755,12 +782,10 @@ class DatabaseTableWidget(QWidget):
                 # Execute insert
                 table.insert(*columns).values(*values).execute()
 
-                # Refresh table
+                # Refresh table and notify
                 self.refresh()
-
-                # Show success message
-                if hasattr(self._parent_window, "statusBar"):
-                    self._parent_window.statusBar().showMessage("Record added successfully", 3000)
+                self.data_changed.emit()
+                self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to add record: {e}")
@@ -780,6 +805,8 @@ class DatabaseTableWidget(QWidget):
             QMessageBox.critical(self, "Error", f"Delete failed: {exc}")
             return
         self.refresh()
+        self.data_changed.emit()
+        self.views_need_refresh.emit()
 
     def _show_context_menu(self, pos) -> None:
         """Show context menu for target operations."""
@@ -896,11 +923,11 @@ class DatabaseTableWidget(QWidget):
             table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", target_order).bind("oid", current_obs_id).execute()
             table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", current_order).bind("oid", target_obs_id).execute()
 
-            # Refresh view
+            # Refresh view and notify
             self.refresh()
-
-            # Reselect the moved row
             self.table.selectRow(target_row)
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to move row: {e}")
@@ -952,11 +979,11 @@ class DatabaseTableWidget(QWidget):
             for new_order, r in enumerate(rows_data):
                 table.update().where("OBSERVATION_ID = :oid").set("OBS_ORDER", new_order).bind("oid", r["OBSERVATION_ID"]).execute()
 
-            # Refresh view
+            # Refresh view and notify
             self.refresh()
-
-            # Reselect the moved row
             self.table.selectRow(target_position)
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to move row: {e}")
@@ -1002,11 +1029,10 @@ class DatabaseTableWidget(QWidget):
             if columns:
                 table.insert(*columns).values(*values).execute()
 
-            # Refresh view
+            # Refresh view and notify
             self.refresh()
-
-            # Show success message
-            QMessageBox.information(self, "Success", "Row duplicated successfully")
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to duplicate row: {e}")
@@ -1074,12 +1100,10 @@ class DatabaseTableWidget(QWidget):
                 # Execute update
                 query.execute()
 
-                # Refresh table
+                # Refresh table and notify
                 self.refresh()
-
-                # Show success message
-                if hasattr(self._parent_window, "statusBar"):
-                    self._parent_window.statusBar().showMessage("Record updated successfully", 3000)
+                self.data_changed.emit()
+                self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to update record: {e}")
@@ -1134,13 +1158,10 @@ class DatabaseTableWidget(QWidget):
                 query = query.bind(key, val)
             query.execute()
 
-            # Refresh view
+            # Refresh view and notify
             self.refresh()
-
-            # Show success message
-            status_msg = f"Deleted {row_id}"
-            if hasattr(self._parent_window, "statusBar"):
-                self._parent_window.statusBar().showMessage(status_msg, 3000)
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to delete row: {e}")
@@ -1546,8 +1567,10 @@ class DatabaseTableWidget(QWidget):
                 f"Successfully updated {updates} rows."
             )
 
-            # Refresh table
+            # Refresh table and notify
             self.refresh()
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(
@@ -1845,8 +1868,10 @@ class DatabaseTableWidget(QWidget):
                 f"Successfully imported {inserted} rows."
             )
 
-            # Refresh table
+            # Refresh table and notify
             self.refresh()
+            self.data_changed.emit()
+            self.views_need_refresh.emit()
 
         except Exception as e:
             QMessageBox.critical(
@@ -1866,6 +1891,21 @@ class DatabaseTab(QWidget):
         self._db = DbClient()
         self._config = None
 
+        # Auto-run OTM state
+        self._current_set_id = None
+        self._timeline_stale = True
+        self._otm_running = False
+        self._otm_thread = None
+        self._otm_runner = None
+        self._timeline_thread = None
+        self._timeline_runner = None
+
+        # Debounce timer for auto-run OTM (1.5s after last data change)
+        self._otm_debounce_timer = QTimer(self)
+        self._otm_debounce_timer.setSingleShot(True)
+        self._otm_debounce_timer.setInterval(1500)
+        self._otm_debounce_timer.timeout.connect(self._auto_run_otm)
+
         self._init_ui()
         self._init_database()
 
@@ -1873,66 +1913,28 @@ class DatabaseTab(QWidget):
         """Initialize UI components."""
         layout = QVBoxLayout(self)
 
-        # Top toolbar
-        top = QHBoxLayout()
-        self.activate_set_btn = QPushButton("Activate Target Set", self)
-        top.addWidget(self.activate_set_btn)
-
-        if OTM_AVAILABLE:
-            top.addSpacing(12)
-            self.otm_settings_btn = QPushButton("OTM Settings...", self)
-            self.otm_settings_btn.setToolTip("Configure OTM scheduler settings")
-            top.addWidget(self.otm_settings_btn)
-
-            self.run_otm_btn = QPushButton("Run OTM", self)
-            self.run_otm_btn.setToolTip("Run Optimal Target scheduler")
-            top.addWidget(self.run_otm_btn)
-
-        top.addStretch()
-        self.conn_status = QLabel("Not connected", self)
-        top.addWidget(self.conn_status)
-        layout.addLayout(top)
-
         # Tab widget for sets and targets
         self.tabs = QTabWidget(self)
         layout.addWidget(self.tabs, 1)
-
-        # Connect signals
-        self.activate_set_btn.clicked.connect(self._activate_set)
-
-        if OTM_AVAILABLE:
-            self.otm_settings_btn.clicked.connect(self._show_otm_settings)
-            self.run_otm_btn.clicked.connect(self._run_otm)
 
     def _init_database(self) -> None:
         """Initialize database connection."""
         # Try to load config
         config_path = detect_default_config_path()
         if not config_path:
-            self.conn_status.setText("Config not found")
+            print("DatabaseTab: config not found")
             return
 
         self._config = load_config_file(config_path)
         if not self._config or not self._config.is_complete():
-            self.conn_status.setText("Incomplete config")
+            print("DatabaseTab: incomplete config")
             return
 
         try:
             self._db.connect(self._config)
-            self.conn_status.setText(
-                f"Connected: {self._config.user}@{self._config.host}:{self._config.port}/{self._config.schema}"
-            )
+            print(f"DatabaseTab: connected to {self._config.user}@{self._config.host}:{self._config.port}/{self._config.schema}")
 
-            # Create table widgets
-            self.sets_table = DatabaseTableWidget(
-                "Target Sets",
-                self,
-                self._db,
-                self._config,
-                self._config.table_sets,
-                allow_reorder=False,
-                search_column=None
-            )
+            # Create targets table widget
             self.targets_table = DatabaseTableWidget(
                 "Targets",
                 self,
@@ -1943,8 +1945,7 @@ class DatabaseTab(QWidget):
                 search_column="NAME"
             )
 
-            # Setup tables
-            self.sets_table.set_order_by("SET_ID")
+            # Setup table
             self.targets_table.set_order_by("OBS_ORDER")
             self.targets_table.set_hidden_columns([
                 "OBSERVATION_ID", "SET_ID", "OBS_ORDER",
@@ -1952,75 +1953,100 @@ class DatabaseTab(QWidget):
             ])
 
             # Add to tabs
-            self.tabs.addTab(self.sets_table, "Target Sets")
             self.tabs.addTab(self.targets_table, "Targets")
 
-            # Add Timeline tab if available
-            if TIMELINE_CANVAS_AVAILABLE:
-                self.timeline_canvas = TimelineCanvas(self)
-                self.timeline_canvas.target_selected.connect(self._on_timeline_target_selected)
-                self.tabs.addTab(self.timeline_canvas, "Timeline")
-            else:
-                self.timeline_canvas = None
+            # Add Timeline tab with QWebChannel bridge if available
+            if WEBENGINE_AVAILABLE:
+                self.timeline_view = QWebEngineView(self)
+                self.timeline_view.setMinimumHeight(400)
+                self.timeline_view.page().setBackgroundColor(QColor("#2b2b2b"))
 
-            # Connect signals
-            self.sets_table.selection_changed.connect(self._on_set_selected)
+                # Set up QWebChannel bridge for JS↔Python communication
+                if TIMELINE_AVAILABLE:
+                    self._timeline_bridge = TimelineBridge(self)
+                    self._timeline_channel = QWebChannel(self.timeline_view.page())
+                    self._timeline_channel.registerObject("bridge", self._timeline_bridge)
+                    self.timeline_view.page().setWebChannel(self._timeline_channel)
+
+                    # Connect bridge signals
+                    self._timeline_bridge.targetSelected.connect(self._on_timeline_target_selected)
+                    self._timeline_bridge.targetDoubleClicked.connect(self._on_timeline_exptime_edit)
+                    self._timeline_bridge.flagClicked.connect(self._on_timeline_flag_clicked)
+                    self._timeline_bridge.contextMenuRequested.connect(self._on_timeline_context_menu)
+                    self._timeline_bridge.targetReorderRequested.connect(self._on_timeline_reorder)
+
+                self.tabs.addTab(self.timeline_view, "Timeline")
+            else:
+                self.timeline_view = None
+
+            # Table→Timeline+ControlTab sync: when user selects a row in targets table,
+            # highlight corresponding target in timeline and populate control tab fields
+            self.targets_table.selection_changed.connect(self._on_targets_table_selection)
+
+            # Centralized DB write signals from table widget
+            self.targets_table.write_requested.connect(
+                lambda k, u: self._write_db(k, u, "table")
+            )
+            self.targets_table.views_need_refresh.connect(self._refresh_all_views)
+
+            # Auto-run OTM when data changes or timeline tab is selected
+            self.targets_table.data_changed.connect(self._on_targets_data_changed)
+            self.tabs.currentChanged.connect(self._on_tab_changed)
+
+            # Wire ControlTab editingFinished → refresh all views after live DB writes
+            main_window = self.window()
+            if main_window and hasattr(main_window, 'layout_service'):
+                ct = getattr(main_window.layout_service, 'control_tab', None)
+                if ct:
+                    for field in [ct.exposure_time_box, ct.slit_width_box, ct.slit_angle_box,
+                                  ct.num_of_exposures_box, ct.bin_spect_box, ct.bin_spat_box]:
+                        field.editingFinished.connect(self._on_control_tab_confirmed)
+
+                    # Wire OTM buttons from ControlTab
+                    if OTM_AVAILABLE and hasattr(ct, 'otm_settings_btn'):
+                        ct.otm_settings_btn.clicked.connect(self._show_otm_settings)
+                    if OTM_AVAILABLE and hasattr(ct, 'run_otm_btn'):
+                        ct.run_otm_btn.clicked.connect(self._run_otm)
 
             # Initial refresh
-            self.sets_table.refresh()
             self.targets_table.refresh()
 
+            # Wire OTM time field changes → re-run OTM
+            if hasattr(self.targets_table, 'otm_time_input') and self.targets_table.otm_time_input:
+                self.targets_table.otm_time_input.editingFinished.connect(self._on_otm_time_changed)
+
         except Exception as exc:
-            self.conn_status.setText(f"Connection failed: {exc}")
+            print(f"DatabaseTab: connection failed: {exc}")
             QMessageBox.critical(self, "Database Error", f"Failed to connect: {exc}")
 
-    def _on_set_selected(self, values: Dict[str, Any]) -> None:
-        """Handle target set selection."""
-        set_id = values.get("SET_ID")
-        if set_id is not None and set_id != "":
-            self.targets_table.set_fixed_filter("SET_ID", set_id)
+    def _get_otm_start_utc(self) -> str:
+        """Read the OTM time field (Palomar local) and return UTC string, or '' on error."""
+        local_time_str = ""
+        if hasattr(self, 'targets_table') and hasattr(self.targets_table, 'otm_time_input'):
+            inp = self.targets_table.otm_time_input
+            if inp:
+                local_time_str = inp.text().strip()
+        if not local_time_str:
+            return ""
+        try:
+            from datetime import datetime
+            import pytz
+            palomar_tz = pytz.timezone("US/Pacific")
+            naive_dt = datetime.strptime(local_time_str, "%Y-%m-%dT%H:%M:%S")
+            local_dt = palomar_tz.localize(naive_dt)
+            return local_dt.astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        except Exception as e:
+            print(f"OTM: invalid time format '{local_time_str}': {e}")
+            return ""
 
-    def _on_timeline_target_selected(self, obs_id: str) -> None:
-        """Handle target selection from timeline."""
-        # Update timeline canvas
-        if self.timeline_canvas:
-            self.timeline_canvas.set_selected_obs_id(obs_id)
-
-        # TODO: Sync selection with targets table
-        # This would require finding the row with matching OBSERVATION_ID
-        # and selecting it in the targets_table
-
-    def _activate_set(self) -> None:
-        """Activate selected target set by sending seq targetset command."""
-        # Get selected set from the sets table
-        set_selection = self.sets_table._current_row_values(self.sets_table.table.currentRow())
-        if not set_selection or not set_selection.get("SET_ID"):
-            QMessageBox.warning(
-                self,
-                "No Selection",
-                "Please select a target set from the Target Sets tab first."
-            )
-            return
-
-        set_id = set_selection.get("SET_ID")
-        set_name = set_selection.get("SET_NAME", f"Set {set_id}")
-
-        # Send sequencer command
-        main_window = self._parent_window
-        if hasattr(main_window, 'sequencer_service') and main_window.sequencer_service:
-            try:
-                command = f"seq targetset {set_id}"
-                main_window.sequencer_service.send_command(command)
-                if hasattr(main_window, 'statusBar'):
-                    main_window.statusBar().showMessage(f"Activated target set: {set_name} (ID={set_id})", 5000)
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to activate target set:\n{e}")
-        else:
-            QMessageBox.warning(
-                self,
-                "Sequencer Not Connected",
-                "Sequencer service is not available. Please check the connection."
-            )
+    def _on_otm_time_changed(self) -> None:
+        """Re-run OTM when the user manually changes the OTM time field."""
+        # Only re-run if Live is unchecked (manual edit) — Live changes are continuous
+        if hasattr(self.targets_table, 'otm_live_checkbox') and self.targets_table.otm_live_checkbox:
+            if self.targets_table.otm_live_checkbox.isChecked():
+                return
+        self._timeline_stale = True
+        self._otm_debounce_timer.start()
 
     def _show_otm_settings(self) -> None:
         """Show OTM settings dialog."""
@@ -2034,50 +2060,22 @@ class DatabaseTab(QWidget):
     def _run_otm(self) -> None:
         """Run OTM scheduler on selected target set."""
         if not OTM_AVAILABLE:
-            QMessageBox.warning(self, "OTM Not Available", "OTM integration modules not loaded.")
+            print("OTM: integration modules not loaded")
+            return
+        if self._otm_running:
+            print("OTM: already running, please wait")
             return
 
-        # Get selected set
-        set_selection = self.sets_table._current_row_values(self.sets_table.table.currentRow())
-        if not set_selection or not set_selection.get("SET_ID"):
-            QMessageBox.warning(
-                self,
-                "No Selection",
-                "Please select a target set from the Target Sets tab before running OTM."
-            )
+        # Get current set
+        set_id = self._current_set_id
+        if not set_id:
+            print("OTM: no target set selected")
             return
 
-        set_id = set_selection.get("SET_ID")
-        set_name = set_selection.get("SET_NAME", f"Set {set_id}")
-
-        # Confirm
-        reply = QMessageBox.question(
-            self,
-            "Run OTM",
-            f"Run OTM scheduler for target set: {set_name}?\n\n"
-            "This will:\n"
-            "1. Generate OTM input CSV from targets\n"
-            "2. Run OTM scheduler\n"
-            "3. Generate timeline JSON\n"
-            "4. Import OTM results to database\n\n"
-            "Existing OTM results will be overwritten.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-
-        if reply != QMessageBox.Yes:
-            return
-
-        # Get start time from user
-        start_utc, ok = QInputDialog.getText(
-            self,
-            "Start Time",
-            "Enter start time (UTC) in ISO format:\n\nExample: 2024-02-07T18:00:00",
-            QLineEdit.Normal,
-            "2024-02-07T18:00:00"
-        )
-
-        if not ok or not start_utc.strip():
+        # Read start time from the OTM time field (Palomar local → UTC)
+        start_utc = self._get_otm_start_utc()
+        if not start_utc:
+            print("OTM: no valid start time in the OTM time field")
             return
 
         try:
@@ -2086,27 +2084,17 @@ class DatabaseTab(QWidget):
 
             # Validate script paths
             if not settings.otm_script_path or not os.path.exists(settings.otm_script_path):
-                QMessageBox.warning(
-                    self,
-                    "OTM Not Configured",
-                    "OTM script path not configured.\n\n"
-                    "Please click 'OTM Settings' and configure the script paths."
-                )
+                print("OTM: script path not configured or missing")
                 return
 
             if not settings.timeline_script_path or not os.path.exists(settings.timeline_script_path):
-                QMessageBox.warning(
-                    self,
-                    "Timeline Script Not Configured",
-                    "Timeline script path not configured.\n\n"
-                    "Please click 'OTM Settings' and configure the script paths."
-                )
+                print("OTM: timeline script path not configured or missing")
                 return
 
             # Get targets for this set
             targets = self._get_targets_for_otm(set_id)
             if not targets:
-                QMessageBox.warning(self, "No Targets", "No targets found in selected set.")
+                print(f"OTM: no targets found in set {set_id}")
                 return
 
             # Create temporary files
@@ -2116,122 +2104,447 @@ class DatabaseTab(QWidget):
             output_csv = os.path.join(temp_dir, "otm_output.csv")
             timeline_json = os.path.join(temp_dir, "timeline.json")
 
-            # Generate input CSV
-            generate_otm_input_csv(targets, input_csv)
+            # Generate input CSV (filters targets outside observable DEC range)
+            skipped = generate_otm_input_csv(targets, input_csv)
+            if skipped:
+                print(f"OTM: {len(skipped)} target(s) skipped (DEC outside observable range): {skipped}")
 
-            # Create progress dialog
-            progress = QProgressDialog("Running OTM scheduler...", "Cancel", 0, 0, self)
-            progress.setWindowModality(Qt.WindowModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
+            # Verify we still have targets after filtering
+            with open(input_csv, 'r') as f:
+                line_count = sum(1 for _ in f) - 1  # subtract header
+            if line_count <= 0:
+                print("OTM: all targets filtered out (DEC outside observable range)")
+                return
 
-            # Run OTM in thread
+            # Show status bar message
+            parent_window = self.window()
+            if hasattr(parent_window, 'statusBar'):
+                parent_window.statusBar().showMessage("Running OTM scheduler...", 5000)
+
+            # Mark running and clean up old threads
+            self._otm_running = True
+            self._timeline_stale = False
+            self._cleanup_otm_threads()
+
+            # Run OTM in thread (no progress dialog)
             self._otm_thread = QThread()
             self._otm_runner = OtmRunner(settings, input_csv, output_csv, start_utc)
             self._otm_runner.moveToThread(self._otm_thread)
 
             # Connect signals
             self._otm_thread.started.connect(self._otm_runner.run)
-            self._otm_runner.progress.connect(lambda msg: progress.setLabelText(msg))
             self._otm_runner.finished.connect(
                 lambda success, msg: self._on_otm_finished(
-                    success, msg, input_csv, output_csv, timeline_json, set_id, start_utc, progress
+                    success, msg, input_csv, output_csv, timeline_json, set_id, start_utc,
+                    progress=None
                 )
             )
             self._otm_runner.finished.connect(self._otm_thread.quit)
-            progress.canceled.connect(self._otm_runner.cancel)
-            progress.canceled.connect(self._otm_thread.quit)
 
             # Start
             self._otm_thread.start()
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to run OTM: {e}")
+            print(f"OTM: failed to run: {e}")
 
     def _on_otm_finished(self, success: bool, message: str, input_csv: str, output_csv: str,
                          timeline_json: str, set_id: str, start_utc: str,
-                         progress: QProgressDialog) -> None:
-        """Handle OTM completion."""
+                         progress: QProgressDialog, silent: bool = False) -> None:
+        """Handle OTM completion: import results, run timeline subprocess, display Plotly chart."""
         if not success:
-            progress.cancel()
-            QMessageBox.critical(self, "OTM Failed", f"OTM scheduler failed:\n\n{message}")
+            if progress:
+                progress.cancel()
+            print(f"OTM: scheduler failed: {message}")
+            self._finish_otm_pipeline(silent)
             return
 
-        # Run timeline generation
-        progress.setLabelText("Generating timeline JSON...")
+        # Import OTM results to database
+        try:
+            if progress:
+                progress.setLabelText("Importing OTM results to database...")
+
+            otm_results = parse_otm_output_csv(output_csv)
+            self._import_otm_results(set_id, otm_results)
+
+            # Refresh tables — then suppress the data_changed → stale cascade
+            # since we're already inside the OTM pipeline
+            self.targets_table.refresh()
+            self._timeline_stale = False
+            self._otm_debounce_timer.stop()
+
+        except Exception as e:
+            if progress:
+                progress.cancel()
+            print(f"OTM: failed to import results: {e}")
+            self._finish_otm_pipeline(silent)
+            return
+
+        # Run timeline JSON generation subprocess (needs OTM venv / astropy)
+        if progress:
+            progress.setLabelText("Generating timeline data...")
         settings = OtmSettings.load()
 
+        self._cleanup_timeline_thread()
         self._timeline_thread = QThread()
         self._timeline_runner = OtmTimelineRunner(
             settings, input_csv, output_csv, timeline_json, start_utc
         )
         self._timeline_runner.moveToThread(self._timeline_thread)
 
-        # Connect signals
         self._timeline_thread.started.connect(self._timeline_runner.run)
-        self._timeline_runner.progress.connect(lambda msg: progress.setLabelText(msg))
+        if progress:
+            self._timeline_runner.progress.connect(lambda msg: progress.setLabelText(msg))
         self._timeline_runner.finished.connect(
-            lambda success, msg, json_path: self._on_timeline_finished(
-                success, msg, output_csv, json_path, set_id, progress
+            lambda ok, msg, json_path: self._on_timeline_finished(
+                ok, msg, json_path, len(otm_results), settings.airmass_max, progress, silent
             )
         )
         self._timeline_runner.finished.connect(self._timeline_thread.quit)
-        progress.canceled.connect(self._timeline_runner.cancel)
-        progress.canceled.connect(self._timeline_thread.quit)
+        if progress:
+            progress.canceled.connect(self._timeline_runner.cancel)
+            progress.canceled.connect(self._timeline_thread.quit)
 
-        # Start
         self._timeline_thread.start()
 
-    def _on_timeline_finished(self, success: bool, message: str, output_csv: str,
-                              json_path: str, set_id: str, progress: QProgressDialog) -> None:
-        """Handle timeline generation completion."""
-        progress.cancel()
+    def _on_timeline_finished(self, success: bool, message: str, json_path: str,
+                              num_results: int, airmass_limit: float,
+                              progress: QProgressDialog, silent: bool = False) -> None:
+        """Handle timeline JSON generation: parse, render Plotly HTML, display in WebView."""
+        auto_run = silent
 
         if not success:
-            QMessageBox.critical(self, "Timeline Failed", f"Timeline generation failed:\n\n{message}")
+            if progress:
+                progress.cancel()
+            print(f"OTM: timeline generation failed: {message}")
+            self._finish_otm_pipeline(auto_run)
             return
 
-        # Import OTM results to database
+        # Parse timeline JSON and generate Plotly HTML (in-process, no astropy needed)
         try:
-            progress.setLabelText("Importing OTM results to database...")
-            progress.show()
+            if progress:
+                progress.setLabelText("Rendering timeline chart...")
+            timeline_data = parse_timeline_json(json_path)
+            html_content = generate_timeline_html(timeline_data, airmass_limit)
 
-            otm_results = parse_otm_output_csv(output_csv)
-            self._import_otm_results(set_id, otm_results)
-
-            progress.cancel()
-
-            # Refresh tables
-            self.targets_table.refresh()
-
-            # Load timeline visualization
-            if self.timeline_canvas and TIMELINE_CANVAS_AVAILABLE:
-                try:
-                    timeline_data = parse_timeline_json(json_path)
-                    self.timeline_canvas.set_data(timeline_data)
-
-                    # Switch to timeline tab
-                    for i in range(self.tabs.count()):
-                        if self.tabs.widget(i) == self.timeline_canvas:
-                            self.tabs.setCurrentIndex(i)
-                            break
-
-                except Exception as e:
-                    print(f"Warning: Failed to load timeline visualization: {e}")
-
-            QMessageBox.information(
-                self,
-                "OTM Complete",
-                f"OTM scheduler completed successfully!\n\n"
-                f"Processed {len(otm_results)} targets.\n"
-                f"Timeline JSON: {json_path}\n\n"
-                f"Results have been imported to the database.\n"
-                f"Timeline visualization is now available in the Timeline tab."
-            )
+            # Write HTML to temp file (plotly.js is ~4.8MB, exceeds setHtml() limit)
+            import tempfile
+            html_fd, html_path = tempfile.mkstemp(prefix="ngps_timeline_", suffix=".html")
+            with os.fdopen(html_fd, 'w') as f:
+                f.write(html_content)
+            self._timeline_html_path = html_path
 
         except Exception as e:
+            if progress:
+                progress.cancel()
+            print(f"OTM: failed to generate timeline chart: {e}")
+            self._finish_otm_pipeline(auto_run)
+            return
+
+        if progress:
             progress.cancel()
-            QMessageBox.critical(self, "Import Failed", f"Failed to import OTM results:\n\n{e}")
+
+        # Load HTML into QWebEngineView (preserving scroll position)
+        if self.timeline_view and WEBENGINE_AVAILABLE:
+            try:
+                switch_to_tab = not silent
+                self._load_timeline_html(html_path, switch_to_tab=switch_to_tab)
+            except Exception as e:
+                print(f"OTM: failed to load timeline HTML: {e}")
+
+        print(f"OTM: completed, processed {num_results} targets")
+
+        self._finish_otm_pipeline(auto_run)
+
+    # ── Centralized DB write + view refresh ──
+
+    def _write_db(self, key_values, updates, source="") -> bool:
+        """Single entry point for all DB writes to the targets table.
+
+        After a successful write, refreshes the table, control tab fields,
+        and marks the timeline stale so all views stay in sync.
+        """
+        try:
+            self._db.update_record(self._config.table_targets, key_values, updates)
+        except Exception as exc:
+            print(f"DB write failed ({source}): {exc}")
+            return False
+        self._refresh_all_views()
+        return True
+
+    def _refresh_all_views(self):
+        """Refresh targets table, control tab fields, and mark timeline stale."""
+        self.targets_table.refresh()
+        row = self.targets_table.table.currentRow()
+        if row >= 0:
+            values = self.targets_table._current_row_values(row)
+            if values:
+                self._update_control_tab_fields(values)
+        self._mark_stale_and_debounce()
+
+    def _update_control_tab_fields(self, values: Dict[str, Any]) -> None:
+        """Sync the selected target's values to the ControlTab fields on the right."""
+        main_window = self.window()
+        if not main_window:
+            return
+
+        # Find the ControlTab — it's in layout_service.control_tab or parent's control_tab
+        ct = None
+        if hasattr(main_window, 'layout_service') and hasattr(main_window.layout_service, 'control_tab'):
+            ct = main_window.layout_service.control_tab
+        if ct is None:
+            return
+
+        # Store current observation ID on the main window for "Go" button etc.
+        obs_id = values.get("OBSERVATION_ID", "")
+        if obs_id:
+            main_window.current_observation_id = obs_id
+        main_window.current_ra = values.get("RA", "")
+        main_window.current_dec = values.get("DECL", "")
+        main_window.current_offset_ra = values.get("OFFSET_RA", "")
+        main_window.current_offset_dec = values.get("OFFSET_DEC", "")
+        main_window.current_bin_spect = values.get("BINSPECT", "")
+        main_window.current_bin_spat = values.get("BINSPAT", "")
+        main_window.num_of_exposures = values.get("NEXP", "")
+
+        # Update ControlTab fields — show full DB value including mode prefix
+        # (e.g. "SET 300", "SNR 50", "SET 1.5")
+        ct.exposure_time_box.setText(str(values.get("EXPTIME", "")))
+        ct.slit_width_box.setText(str(values.get("SLITWIDTH", "")))
+        ct.slit_angle_box.setText(str(values.get("SLITANGLE", "0")))
+        ct.bin_spect_box.setText(str(values.get("BINSPECT", "")))
+        ct.bin_spat_box.setText(str(values.get("BINSPAT", "")))
+        ct.num_of_exposures_box.setText(str(values.get("NEXP", "")))
+
+        # Update target name and RA/Dec labels
+        name = values.get("NAME", "")
+        ra = values.get("RA", "")
+        dec = values.get("DECL", "")
+        if name:
+            ct.target_name_label.setText(f"Selected Target: {name}")
+            ct.ra_dec_label.setText(f"RA: {ra}, Dec: {dec}")
+        else:
+            ct.target_name_label.setText("Selected Target: Not Selected")
+            ct.ra_dec_label.setText("RA: Not Set, Dec: Not Set")
+
+        # Sync button states now that target selection changed
+        if hasattr(main_window, 'layout_service'):
+            main_window.layout_service._sync_control_buttons()
+
+    def _on_control_tab_confirmed(self) -> None:
+        """Called after ControlTab writes to DB via its own path.
+
+        Delays the refresh slightly so the ControlTab's DB commits finish first.
+        """
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(200, self._refresh_all_views)
+
+    # ── Auto-run OTM helpers ──
+
+    def _cleanup_otm_threads(self) -> None:
+        """Wait for and clean up old OTM/timeline threads before starting new ones."""
+        self._cleanup_timeline_thread()
+        if self._otm_thread is not None:
+            if self._otm_thread.isRunning():
+                self._otm_thread.quit()
+                self._otm_thread.wait(3000)
+            self._otm_thread = None
+            self._otm_runner = None
+
+    def _cleanup_timeline_thread(self) -> None:
+        """Wait for and clean up old timeline thread."""
+        if self._timeline_thread is not None:
+            if self._timeline_thread.isRunning():
+                self._timeline_thread.quit()
+                self._timeline_thread.wait(3000)
+            self._timeline_thread = None
+            self._timeline_runner = None
+
+    def _finish_otm_pipeline(self, auto_run: bool) -> None:
+        """Clean up after OTM pipeline completes. Re-run if data changed while running."""
+        self._otm_running = False
+        if auto_run and self._timeline_stale:
+            # Data changed while OTM was running — re-run
+            self._otm_debounce_timer.start()
+
+    def _on_targets_data_changed(self) -> None:
+        """Handle data_changed from targets table: mark stale and restart debounce."""
+        self._timeline_stale = True
+        self._otm_debounce_timer.start()
+
+    def _on_tab_changed(self, index: int) -> None:
+        """Auto-run OTM when switching to the Timeline tab if data is stale."""
+        if not self._timeline_stale:
+            return
+        widget = self.tabs.widget(index)
+        if hasattr(self, 'timeline_view') and widget is self.timeline_view:
+            self._auto_run_otm()
+
+    def _mark_stale_and_debounce(self) -> None:
+        """Mark timeline as stale and restart the debounce timer."""
+        self._timeline_stale = True
+        self._otm_debounce_timer.start()
+
+    def _get_selected_obs_id(self) -> str:
+        """Return the OBSERVATION_ID of the currently selected row, or ''."""
+        row = self.targets_table.table.currentRow()
+        if row < 0:
+            return ""
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        if obs_col is None:
+            return ""
+        item = self.targets_table.table.item(row, obs_col)
+        return item.text() if item else ""
+
+    def _select_obs_id_in_table(self, obs_id: str) -> None:
+        """Select the row matching obs_id in the targets table."""
+        table = self.targets_table.table
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        if obs_col is None:
+            return
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if item and item.text() == str(obs_id):
+                table.selectRow(row)
+                table.scrollToItem(item)
+                values = self.targets_table._current_row_values(row)
+                if values:
+                    self._update_control_tab_fields(values)
+                break
+
+    def _load_timeline_html(self, html_path: str, switch_to_tab: bool = False) -> None:
+        """Load timeline HTML into QWebEngineView, preserving scroll and selection."""
+        from PyQt5.QtCore import QUrl
+
+        url = QUrl.fromLocalFile(html_path)
+
+        # Capture current selection before reload
+        selected_obs_id = self._get_selected_obs_id()
+
+        def _do_load(scroll_json=None):
+            """Load the URL and restore scroll + selection after load completes."""
+            scroll_x, scroll_y = 0, 0
+            if scroll_json:
+                try:
+                    import json
+                    pos = json.loads(scroll_json)
+                    scroll_x = pos.get("x", 0)
+                    scroll_y = pos.get("y", 0)
+                except Exception:
+                    pass
+
+            def _on_load_finished(ok):
+                try:
+                    self.timeline_view.loadFinished.disconnect(_on_load_finished)
+                except Exception:
+                    pass
+                if not ok:
+                    return
+                # First restore selection (rebuilds plot with expanded row),
+                # then restore scroll to override any auto-scroll from selection.
+                js_parts = []
+                if selected_obs_id:
+                    escaped = str(selected_obs_id).replace("'", "\\'")
+                    js_parts.append(
+                        f"if (typeof selectTargetInTimeline === 'function') "
+                        f"selectTargetInTimeline('{escaped}');"
+                    )
+                if scroll_x or scroll_y:
+                    js_parts.append(f"window.scrollTo({scroll_x}, {scroll_y});")
+                if js_parts:
+                    self.timeline_view.page().runJavaScript("\n".join(js_parts))
+
+            self.timeline_view.loadFinished.connect(_on_load_finished)
+            self.timeline_view.load(url)
+
+            if switch_to_tab:
+                for i in range(self.tabs.count()):
+                    if self.tabs.widget(i) == self.timeline_view:
+                        self.tabs.setCurrentIndex(i)
+                        break
+
+        # Capture current scroll position before loading new content
+        self.timeline_view.page().runJavaScript(
+            "JSON.stringify({x: window.scrollX || 0, y: window.scrollY || 0})",
+            _do_load
+        )
+
+    def _auto_run_otm(self) -> None:
+        """Silently run the full OTM pipeline (no dialogs, no user prompts)."""
+        if self._otm_running:
+            return
+        if not OTM_AVAILABLE:
+            return
+
+        set_id = self._current_set_id
+        if not set_id:
+            return
+
+        # Validate settings silently
+        try:
+            settings = OtmSettings.load()
+        except Exception:
+            return
+
+        if not settings.otm_script_path or not os.path.exists(settings.otm_script_path):
+            return
+        if not settings.timeline_script_path or not os.path.exists(settings.timeline_script_path):
+            return
+
+        # Get targets
+        targets = self._get_targets_for_otm(set_id)
+        if not targets:
+            return
+
+        # Generate input CSV
+        import tempfile
+        temp_dir = tempfile.mkdtemp(prefix="ngps_otm_auto_")
+        input_csv = os.path.join(temp_dir, "otm_input.csv")
+        output_csv = os.path.join(temp_dir, "otm_output.csv")
+        timeline_json = os.path.join(temp_dir, "timeline.json")
+
+        try:
+            generate_otm_input_csv(targets, input_csv)
+        except Exception:
+            return
+
+        # Verify we have targets after filtering
+        try:
+            with open(input_csv, 'r') as f:
+                line_count = sum(1 for _ in f) - 1
+            if line_count <= 0:
+                return
+        except Exception:
+            return
+
+        start_utc = self._get_otm_start_utc()
+        if not start_utc:
+            return
+
+        # Mark running and clear stale flag
+        self._otm_running = True
+        self._timeline_stale = False
+        self._cleanup_otm_threads()
+
+        # Show status bar message
+        parent_window = self.window()
+        if hasattr(parent_window, 'statusBar'):
+            parent_window.statusBar().showMessage("Auto-running OTM scheduler...", 5000)
+
+        # Run OTM in thread (silent — no progress dialog)
+        self._otm_thread = QThread()
+        self._otm_runner = OtmRunner(settings, input_csv, output_csv, start_utc)
+        self._otm_runner.moveToThread(self._otm_thread)
+
+        self._otm_thread.started.connect(self._otm_runner.run)
+        self._otm_runner.finished.connect(
+            lambda success, msg: self._on_otm_finished(
+                success, msg, input_csv, output_csv, timeline_json, set_id, start_utc,
+                progress=None, silent=True
+            )
+        )
+        self._otm_runner.finished.connect(self._otm_thread.quit)
+
+        self._otm_thread.start()
 
     def _get_targets_for_otm(self, set_id: str) -> List[Dict[str, Any]]:
         """Get all targets for a set in OTM format."""
@@ -2252,35 +2565,328 @@ class DatabaseTab(QWidget):
             return []
 
     def _import_otm_results(self, set_id: str, results: List) -> None:
-        """Import OTM results back to database."""
+        """Import OTM results back to database.
+
+        Maps OTM output CSV column names to database column names using
+        OTM_CSV_TO_DB mapping (matches C++ addUpdate calls).
+        """
         if not self._db.is_open():
             raise RuntimeError("Database not connected")
 
+        # Map from OTM CSV field name to OtmResult attribute name
+        csv_field_to_attr = {
+            "OTMstart": "otmstart",
+            "OTMend": "otmend",
+            "OTMslewgo": "otmslewgo",
+            "OTMflag": "otmflag",
+            "OTMlast": "otmlast",
+            "OTMwait": "otmwait",
+            "OTMdead": "otmdead",
+            "OTMslew": "otmslew",
+            "OTMexptime": "otmexptime",
+            "OTMslitwidth": "otmslitwidth",
+            "OTMpa": "otmpa",
+            "OTMslitangle": "otmslitangle",
+            "OTMcass": "otmcass",
+            "OTMSNR": "otmsnr",
+            "OTMres": "otmres",
+            "OTMseeing": "otmseeing",
+            "OTMairmass_start": "otmairmass_start",
+            "OTMairmass_end": "otmairmass_end",
+            "OTMsky": "otmsky",
+            "OTMmoon": "otmmoon",
+        }
+
         try:
-            schema = self._db.get_schema(self._config.schema)
-            table = schema.get_table(self._config.table_targets)
-
-            # Update each target with OTM results
             for result in results:
-                obs_id = result.observation_id
+                updates = {}
 
-                # Build update
-                updates = {
-                    "OTMstart": result.otmstart if result.otmstart else None,
-                    "OTMend": result.otmend if result.otmend else None,
-                    "OTMslewgo": result.otmslewgo if result.otmslewgo else None,
-                    "OTMflag": result.otmflag if result.otmflag else None,
-                    "OTMwait": result.otmwait,
-                    "OTMdead": result.otmdead,
-                    "OTMslew": result.otmslew,
-                    "OBS_ORDER": result.obs_order
+                # Map each OTM CSV column to its database column name
+                for csv_col, db_col in OTM_CSV_TO_DB.items():
+                    attr = csv_field_to_attr.get(csv_col)
+                    if not attr:
+                        continue
+                    val = getattr(result, attr, '')
+                    # Store empty strings as NULL
+                    updates[db_col] = val if val else None
+
+                # Always update OBS_ORDER
+                updates["OBS_ORDER"] = result.obs_order
+
+                key_values = {
+                    "OBSERVATION_ID": result.observation_id,
+                    "SET_ID": set_id,
                 }
 
-                # Execute update
-                query = table.update().where("OBSERVATION_ID = :oid AND SET_ID = :sid")
-                for key, val in updates.items():
-                    query = query.set(key, val)
-                query.bind("oid", obs_id).bind("sid", set_id).execute()
+                self._db.update_record(
+                    self._config.table_targets, key_values, updates
+                )
 
         except Exception as e:
             raise RuntimeError(f"Failed to import OTM results: {e}")
+
+    # ── Timeline bridge signal handlers ──
+
+    def _on_targets_table_selection(self, values: Dict[str, Any]) -> None:
+        """Sync table selection → control tab fields + timeline highlight."""
+        # Update the existing ControlTab fields on the right-hand side
+        self._update_control_tab_fields(values)
+
+        # Update timeline highlight
+        obs_id = values.get("OBSERVATION_ID", "")
+        if obs_id and self.timeline_view and WEBENGINE_AVAILABLE:
+            escaped = str(obs_id).replace("'", "\\'")
+            self.timeline_view.page().runJavaScript(
+                f"if (typeof selectTargetInTimeline === 'function') selectTargetInTimeline('{escaped}');"
+            )
+
+    def _on_timeline_target_selected(self, obs_id: str) -> None:
+        """Timeline click → select row in targets table."""
+        if not hasattr(self, 'targets_table') or not self.targets_table:
+            return
+        table = self.targets_table.table
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        if obs_col is None:
+            return
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if item and item.text() == str(obs_id):
+                table.selectRow(row)
+                table.scrollToItem(item)
+                break
+
+    def _on_timeline_exptime_edit(self, obs_id: str) -> None:
+        """Timeline double-click → edit exposure time dialog."""
+        if not self._db.is_open():
+            return
+
+        # Get current EXPTIME from the table
+        table = self.targets_table.table
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        exptime_col = self.targets_table._column_index.get("EXPTIME")
+        if obs_col is None or exptime_col is None:
+            return
+
+        current_exptime = ""
+        target_row = -1
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if item and item.text() == str(obs_id):
+                target_row = row
+                exp_item = table.item(row, exptime_col)
+                if exp_item:
+                    current_exptime = exp_item.text()
+                break
+
+        if target_row < 0:
+            return
+
+        new_val, ok = QInputDialog.getText(
+            self,
+            "Edit Exposure Time",
+            f"Exposure time for observation {obs_id}:\n\n"
+            "Format: 'SET <seconds>' or 'SNR <value>'",
+            QLineEdit.Normal,
+            current_exptime
+        )
+
+        if not ok or not new_val.strip():
+            return
+
+        # Get SET_ID for this row
+        set_col = self.targets_table._column_index.get("SET_ID")
+        set_id = ""
+        if set_col is not None:
+            set_item = table.item(target_row, set_col)
+            if set_item:
+                set_id = set_item.text()
+
+        key_values = {"OBSERVATION_ID": obs_id}
+        if set_id:
+            key_values["SET_ID"] = set_id
+        self._write_db(key_values, {"EXPTIME": new_val.strip()}, "timeline_exptime")
+
+    # Detailed OTM flag descriptions from Python/OTM/OTM.py
+    _OTM_FLAG_DESC = {
+        "DAY-0":   "Observation delayed until sunset (astronomical twilight).",
+        "DAY-0-1": "After waiting for target, sunrise has arrived. "
+                    "This target (and all remaining) cannot be observed tonight.",
+        "DAY-1":   "Exposure completes after sunrise — observation runs into daylight.",
+        "ALT-0":   "Target altitude is outside [6.5\u00b0, 90\u00b0] at start. "
+                    "Scheduler waits for target to reach valid altitude.",
+        "ALT-1":   "Target altitude goes outside [6.5\u00b0, 90\u00b0] by end of exposure.",
+        "AIR-0":   "Target airmass exceeds per-target maximum at start. "
+                    "Scheduler waits for airmass to improve.",
+        "AIR-1":   "Target airmass exceeds per-target maximum by end of exposure.",
+        "HA-0":    "Target hour angle is outside [\u2212100\u00b0, +100\u00b0] at start. "
+                    "Scheduler waits for target to reach valid HA.",
+        "HA-1":    "Target hour angle goes outside [\u2212100\u00b0, +100\u00b0] by end of exposure.",
+        "SKY":     "Target altitude below 19.5\u00b0 (airmass \u22483). "
+                    "Sky background simulation unreliable — estimate may be inaccurate.",
+        "EXPT":    "Exposure time \u2265 1000 s (16.7 min), which is unusually long.",
+    }
+
+    def _on_timeline_flag_clicked(self, obs_id: str, flag_text: str) -> None:
+        """Timeline flag click → show flag explanation dialog."""
+        from otm_integration import otm_flag_severity
+        severity = otm_flag_severity(flag_text)
+        severity_label = {0: "OK", 1: "Warning", 2: "Error"}.get(severity, "Unknown")
+
+        # Build per-flag explanations from the compound flag string
+        details = []
+        if flag_text:
+            for token in flag_text.strip().split():
+                desc = self._OTM_FLAG_DESC.get(token.upper())
+                if desc:
+                    details.append(f"  {token}:  {desc}")
+                else:
+                    details.append(f"  {token}:  (unknown flag)")
+        detail_block = "\n".join(details) if details else "  No flags — target scheduled without issues."
+
+        QMessageBox.information(
+            self,
+            f"OTM Flag — {severity_label}",
+            f"Observation: {obs_id}\n"
+            f"Flag: {flag_text}\n"
+            f"Severity: {severity_label}\n\n"
+            f"{detail_block}"
+        )
+
+    def _on_timeline_context_menu(self, obs_id: str, screen_x: int, screen_y: int) -> None:
+        """Timeline right-click → show context menu."""
+        from PyQt5.QtCore import QPoint
+        menu = QMenu(self)
+
+        edit_action = menu.addAction("Edit Exposure Time")
+        menu.addSeparator()
+        move_up_action = menu.addAction("Move Up")
+        move_down_action = menu.addAction("Move Down")
+
+        action = menu.exec_(QPoint(screen_x, screen_y))
+        if action == edit_action:
+            self._on_timeline_exptime_edit(obs_id)
+        elif action == move_up_action:
+            self._timeline_move_target(obs_id, -1)
+        elif action == move_down_action:
+            self._timeline_move_target(obs_id, +1)
+
+    def _timeline_move_target(self, obs_id: str, direction: int) -> None:
+        """Move a target up or down in OBS_ORDER."""
+        if not self._db.is_open():
+            return
+
+        # Find the target row and its neighbor
+        table = self.targets_table.table
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        order_col = self.targets_table._column_index.get("OBS_ORDER")
+        if obs_col is None or order_col is None:
+            return
+
+        target_row = -1
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if item and item.text() == str(obs_id):
+                target_row = row
+                break
+
+        if target_row < 0:
+            return
+
+        swap_row = target_row + direction
+        if swap_row < 0 or swap_row >= table.rowCount():
+            return
+
+        # Get OBS_ORDER and OBSERVATION_ID for both rows
+        cur_order_item = table.item(target_row, order_col)
+        swap_order_item = table.item(swap_row, order_col)
+        swap_obs_item = table.item(swap_row, obs_col)
+
+        if not all([cur_order_item, swap_order_item, swap_obs_item]):
+            return
+
+        cur_order = cur_order_item.text()
+        swap_order = swap_order_item.text()
+        swap_obs_id = swap_obs_item.text()
+
+        # Get SET_ID
+        set_col = self.targets_table._column_index.get("SET_ID")
+        set_id = ""
+        if set_col is not None:
+            set_item = table.item(target_row, set_col)
+            if set_item:
+                set_id = set_item.text()
+
+        key1 = {"OBSERVATION_ID": obs_id}
+        key2 = {"OBSERVATION_ID": swap_obs_id}
+        if set_id:
+            key1["SET_ID"] = set_id
+            key2["SET_ID"] = set_id
+
+        # Do both writes then one refresh
+        try:
+            self._db.update_record(self._config.table_targets, key1, {"OBS_ORDER": swap_order})
+            self._db.update_record(self._config.table_targets, key2, {"OBS_ORDER": cur_order})
+        except Exception as e:
+            print(f"DB write failed (timeline_move): {e}")
+            return
+        self._refresh_all_views()
+
+    def _on_timeline_reorder(self, from_obs_id: str, after_obs_id: str) -> None:
+        """Timeline drag-reorder → swap OBS_ORDER values in DB and refresh."""
+        if not self._db.is_open():
+            return
+
+        table = self.targets_table.table
+        obs_col = self.targets_table._column_index.get("OBSERVATION_ID")
+        order_col = self.targets_table._column_index.get("OBS_ORDER")
+        if obs_col is None or order_col is None:
+            return
+
+        # Find the rows
+        from_row = -1
+        after_row = -1
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if not item:
+                continue
+            if item.text() == str(from_obs_id):
+                from_row = row
+            if item.text() == str(after_obs_id):
+                after_row = row
+
+        if from_row < 0 or after_row < 0 or from_row == after_row:
+            return
+
+        # Swap OBS_ORDER values
+        from_order_item = table.item(from_row, order_col)
+        after_order_item = table.item(after_row, order_col)
+        if not from_order_item or not after_order_item:
+            return
+
+        from_order = from_order_item.text()
+        after_order = after_order_item.text()
+
+        set_col = self.targets_table._column_index.get("SET_ID")
+        set_id = ""
+        if set_col is not None:
+            set_item = table.item(from_row, set_col)
+            if set_item:
+                set_id = set_item.text()
+
+        key1 = {"OBSERVATION_ID": from_obs_id}
+        key2 = {"OBSERVATION_ID": after_obs_id}
+        if set_id:
+            key1["SET_ID"] = set_id
+            key2["SET_ID"] = set_id
+
+        # Do both writes then one refresh
+        try:
+            self._db.update_record(self._config.table_targets, key1, {"OBS_ORDER": after_order})
+            self._db.update_record(self._config.table_targets, key2, {"OBS_ORDER": from_order})
+        except Exception as e:
+            print(f"DB write failed (timeline_reorder): {e}")
+            return
+        self._refresh_all_views()
+
+        # Re-select the dragged target so timeline highlights the correct row
+        self._select_obs_id_in_table(from_obs_id)

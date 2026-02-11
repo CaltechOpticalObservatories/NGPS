@@ -3651,6 +3651,17 @@ namespace Andor {
 
     if ( is_emulated() ) {
       std::string simfile = generate_temp_filename( "skysim" );    // create a temporary filename for skysim output
+      const std::string simfile_base = simfile;
+
+      auto cleanup_simfile = [&]( const std::string &base ) {
+        if ( base.empty() ) return;
+        std::error_code ec;
+        std::filesystem::remove( base, ec );
+        std::filesystem::remove( base + ".fits", ec );
+        std::filesystem::remove( base + ".list", ec );
+        std::filesystem::remove( base + ".fits.list", ec );
+      };
+
       long error = emulator.skysim.generate_image( name_in, simfile,
                                                    emulator.get_exptime(),
                                                    ismex,
@@ -3666,32 +3677,32 @@ namespace Andor {
           if ( !std::filesystem::exists( simfile ) ) {
             message.str(""); message << "ERROR temp image " << simfile << " not found";
             logwrite( function, message.str() );
+            cleanup_simfile( simfile_base );
             return ERROR;
           }
           // Atomically replace the output FITS to avoid partial reads.
           // Prefer rename (same filesystem). Fall back to copy if needed.
           //
-          const std::string simfile_orig = simfile;
           const std::string tmpout = name_in + ".tmp";
           try {
             std::filesystem::copy_file( simfile, tmpout, std::filesystem::copy_options::overwrite_existing );
             std::filesystem::rename( tmpout, name_in );
-            std::filesystem::remove( simfile );                    // remove skysim file
           }
           catch (std::filesystem::filesystem_error &) {
             std::filesystem::copy_file( simfile, name_in, std::filesystem::copy_options::overwrite_existing );
-            std::filesystem::remove( simfile );                    // remove skysim file
           }
-          std::filesystem::remove( simfile_orig + ".list" );       // remove skysim byproduct file
+          cleanup_simfile( simfile_base );                         // remove skysim temp outputs
         }
         catch (std::filesystem::filesystem_error &e) {
           message.str(""); message << "ERROR removing temp image: " << e.what();
           logwrite( function, message.str() );
+          cleanup_simfile( simfile_base );
           return ERROR;
         }
       }
       else {
         logwrite( function, "ERROR generating skysim image" );
+        cleanup_simfile( simfile_base );
       }
       return error;
     }

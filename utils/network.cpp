@@ -254,6 +254,12 @@ namespace Network {
       logwrite( function, message.str() );
       return -1;
     }
+#ifdef SO_REUSEPORT
+    if ( setsockopt( fd, SOL_SOCKET, SO_REUSEPORT, (char*) &yes, sizeof(yes) ) < 0 ) {
+      message << "WARN: reusing PORT failed: " << strerror( errno );
+      logwrite( function, message.str() );
+    }
+#endif
 
     // set up the source address
     //
@@ -562,10 +568,6 @@ namespace Network {
       logwrite(function, errstm.str());
       return(-1);
     }
-
-    // prevent child processes from inheriting the listening socket
-    //
-    fcntl(this->listenfd, F_SETFD, FD_CLOEXEC);
 
     // allow re-binding to port while previous connection is in TIME_WAIT
     //

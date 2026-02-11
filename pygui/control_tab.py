@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QLineEdit, QFrame, QMessageBox, QDialog
+    QLineEdit, QFrame, QMessageBox, QDialog, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
@@ -32,7 +32,7 @@ class ControlTab(QDialog):
                 background-color: #4CAF50;
                 color: white;
                 font-weight: bold;
-                padding: 10px;
+                padding: 8px 16px;
                 border: none;
                 border-radius: 5px;
             }
@@ -47,7 +47,7 @@ class ControlTab(QDialog):
                 background-color: #D3D3D3;
                 color: black;
                 font-weight: bold;
-                padding: 10px;
+                padding: 8px 16px;
                 border: none;
                 border-radius: 5px;
             }
@@ -58,9 +58,11 @@ class ControlTab(QDialog):
         btn.setStyleSheet("""
             QPushButton {
                 background-color: #000000;
-                border: none;
                 color: white;
                 font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 5px;
             }
             QPushButton:hover   { background-color: #333333; }
             QPushButton:pressed { background-color: #555555; }
@@ -183,12 +185,6 @@ class ControlTab(QDialog):
         row2_layout.addLayout(bin_spect_layout)
         row2_layout.addLayout(num_of_exposures_layout)
 
-        # Confirm button
-        self.confirm_button = QPushButton("Confirm Changes")
-        self._style_disabled_gray(self.confirm_button)
-        self.confirm_button.clicked.connect(self.on_confirm_changes)
-        row2_layout.addWidget(self.confirm_button)
-
         row2_widget = QWidget()
         row2_widget.setLayout(row2_layout)
         return row2_widget
@@ -249,38 +245,63 @@ class ControlTab(QDialog):
         row5_layout.setSpacing(10)
 
         binning_layout = QVBoxLayout()
+        binning_layout.setSpacing(4)
         display_layout = QVBoxLayout()
+        display_layout.setSpacing(4)
         lamps_layout = QVBoxLayout()
+        lamps_layout.setSpacing(4)
 
         self.binning_button = QPushButton("Binning")
 
         self.etc_button = QPushButton("Run ETC")
         self.etc_button.clicked.connect(self.parent.open_etc_popup)
 
+        self.run_otm_btn = QPushButton("Run OTM")
+        self.run_otm_btn.setToolTip("Run Optimal Target scheduler")
+
         self.headers_button = QPushButton("Headers")
 
         self.calibration_button = QPushButton("Calibration")
         self.calibration_button.clicked.connect(self.parent.open_calibration_gui)
 
+        self.otm_settings_btn = QPushButton("OTM Settings...")
+        self.otm_settings_btn.setToolTip("Configure OTM scheduler settings")
+
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
-
-        binning_layout.addWidget(self.binning_button)
-        binning_layout.addWidget(self.etc_button)
-
-        display_layout.addWidget(self.headers_button)
-        display_layout.addWidget(self.calibration_button)
-
-        lamps_layout.addWidget(self.reset_button)
 
         self.startup_shutdown_button = QPushButton("Startup")
         self._apply_startup_style()
         self.startup_shutdown_button.clicked.connect(self.toggle_startup_shutdown)
-        lamps_layout.addWidget(self.startup_shutdown_button)
 
-        row5_layout.addLayout(binning_layout)
-        row5_layout.addLayout(display_layout)
-        row5_layout.addLayout(lamps_layout)
+        self.logout_button = QPushButton("Logout")
+        self.logout_button.clicked.connect(lambda: self.parent.on_logout())
+
+        # Uniform sizing for all row5 buttons
+        all_btns = [
+            self.binning_button, self.etc_button, self.run_otm_btn,
+            self.headers_button, self.calibration_button, self.otm_settings_btn,
+            self.reset_button, self.startup_shutdown_button, self.logout_button,
+        ]
+        for btn in all_btns:
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setFixedHeight(36)
+
+        binning_layout.addWidget(self.binning_button)
+        binning_layout.addWidget(self.etc_button)
+        binning_layout.addWidget(self.run_otm_btn)
+
+        display_layout.addWidget(self.headers_button)
+        display_layout.addWidget(self.calibration_button)
+        display_layout.addWidget(self.otm_settings_btn)
+
+        lamps_layout.addWidget(self.reset_button)
+        lamps_layout.addWidget(self.startup_shutdown_button)
+        lamps_layout.addWidget(self.logout_button)
+
+        row5_layout.addLayout(binning_layout, 1)
+        row5_layout.addLayout(display_layout, 1)
+        row5_layout.addLayout(lamps_layout, 1)
 
         row5_widget = QWidget()
         row5_widget.setLayout(row5_layout)
@@ -299,13 +320,13 @@ class ControlTab(QDialog):
         layout.addWidget(separator)
 
     def connect_input_fields(self):
-        """Enable Confirm when fields change."""
-        self.exposure_time_box.textChanged.connect(self.on_input_changed)
-        self.slit_width_box.textChanged.connect(self.on_input_changed)
-        self.slit_angle_box.textChanged.connect(self.on_input_changed)
-        self.num_of_exposures_box.textChanged.connect(self.on_input_changed)
-        self.bin_spect_box.textChanged.connect(self.on_input_changed)
-        self.bin_spat_box.textChanged.connect(self.on_input_changed)
+        """Wire editingFinished for live DB writes (fires on Enter or focus-out)."""
+        self.exposure_time_box.editingFinished.connect(self.on_exposure_time_changed)
+        self.slit_width_box.editingFinished.connect(self.on_slit_width_changed)
+        self.slit_angle_box.editingFinished.connect(self.on_slit_angle_changed)
+        self.num_of_exposures_box.editingFinished.connect(self.num_of_exposures_changed)
+        self.bin_spect_box.editingFinished.connect(self.bin_spect_changed)
+        self.bin_spat_box.editingFinished.connect(self.bin_spat_changed)
 
     # -----------------------------
     # Button slots / actions
@@ -365,9 +386,6 @@ class ControlTab(QDialog):
         print(f"Sending command to SequencerService: {cmd}")
         self.parent.send_command(cmd)
         self._style_disabled_gray(self.offset_to_target_button)
-
-    def on_input_changed(self):
-        self._style_enabled_green(self.confirm_button)
 
     def on_go_button_click(self):
         """Send target start command; disable Go and show waiting popup."""
@@ -441,81 +459,53 @@ class ControlTab(QDialog):
     # -----------------------------
     # DB update helpers (unchanged logic)
     # -----------------------------
-    def on_confirm_changes(self):
-        """Confirm input changes and push updates; also enables Go button."""
-        exposure_time = self.exposure_time_box.text()
-        slit_width = self.slit_width_box.text()
-        slit_angle = self.slit_angle_box.text()
-        num_of_exposures = self.num_of_exposures_box.text()
-        bin_spect = self.bin_spect_box.text()
-        bin_spat = self.bin_spat_box.text()
+    @staticmethod
+    def _parse_mode_value(text):
+        """Parse a field value that may contain a mode prefix (SET, SNR, etc.).
 
-        if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
-                  f"Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
-            self.on_exposure_time_changed()
-            self.on_slit_width_changed()
-            self.on_slit_angle_changed()
-            self.num_of_exposures_changed()
-            self.bin_spect_changed()
-            self.bin_spat_changed()
-            self._style_disabled_gray(self.confirm_button)
+        Returns (db_value, numeric_part):
+          - db_value: the full string to store in the DB column (e.g. "SET 300", "SNR 50")
+          - numeric_part: the number portion only (e.g. "300", "50")
 
-        elif exposure_time and slit_width:
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
-            self.on_exposure_time_changed()
-            self.on_slit_width_changed()
-            QSound.play("sound/exposure_slit_width_set.wav")
-            self._style_disabled_gray(self.confirm_button)
-
-        elif exposure_time:
-            print(f"Confirmed Exposure Time: {exposure_time}")
-            self.on_exposure_time_changed()
-            QSound.play("sound/exposure_set.wav")
-            self._style_disabled_gray(self.confirm_button)
-
-        elif slit_width:
-            print(f"Confirmed Slit Width: {slit_width}")
-            self.on_slit_width_changed()
-            QSound.play("sound/slit_width_set.wav")
-            self._style_disabled_gray(self.confirm_button)
-
-        elif slit_angle:
-            print(f"Confirmed Slit Angle: {slit_angle}")
-            self.on_slit_angle_changed()
-            self._style_disabled_gray(self.confirm_button)
-
-        else:
-            print("Please enter valid values for all fields.")
-
-        if getattr(self.parent, "current_target_list_name", None):
-            print(f"Current target list: {self.parent.current_target_list_name}")
-            self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
-
-        self._style_enabled_green(self.go_button)
+        If the user typed a bare number like "300", it's treated as "SET 300".
+        """
+        text = text.strip()
+        parts = text.split(None, 1)
+        known_modes = {"SET", "SNR", "LOSS", "RES", "AUTO"}
+        if len(parts) == 2 and parts[0].upper() in known_modes:
+            return text, parts[1]
+        # Bare number → default to "SET <number>"
+        return "SET " + text, text
 
     def on_exposure_time_changed(self):
-        exposure_time = self.exposure_time_box.text()
+        exposure_time = self.exposure_time_box.text().strip()
+        if not exposure_time:
+            return
         if self.parent.current_observation_id:
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
+            db_val, numeric = self._parse_mode_value(exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", numeric)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", db_val)
 
     def on_slit_width_changed(self):
-        slit_width = self.slit_width_box.text()
+        slit_width = self.slit_width_box.text().strip()
+        if not slit_width:
+            return
         if self.parent.current_observation_id:
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
+            db_val, numeric = self._parse_mode_value(slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", numeric)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", db_val)
 
     def on_slit_angle_changed(self):
-        slit_angle = self.slit_angle_box.text()
+        slit_angle = self.slit_angle_box.text().strip()
         if slit_angle == "PA":
             slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             print(f"Parallactic Angle: {slit_angle}")
             self.slit_angle_box.setText(slit_angle)
 
         if self.parent.current_observation_id:
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
+            db_val, numeric = self._parse_mode_value(slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", numeric)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", db_val)
 
     def num_of_exposures_changed(self):
         num_of_exposures = self.num_of_exposures_box.text()

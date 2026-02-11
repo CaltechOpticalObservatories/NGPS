@@ -460,6 +460,126 @@ namespace Sequencer {
         applied++;
       }
 
+      // SIM_TARGET_PERTURB_ARCSEC
+      if (config.param[entry] == "SIM_TARGET_PERTURB_ARCSEC") {
+        double arcsec=0;
+        try {
+          arcsec = std::stod( config.arg[entry] );
+          if ( arcsec < 0 ) {
+            message.str(""); message << "ERROR: SIM_TARGET_PERTURB_ARCSEC " << arcsec << " out of range (>=0)";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_TARGET_PERTURB_ARCSEC: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.target.sim_target_perturb_arcsec = arcsec;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SIM_TARGET_PERTURB_MIN_ARCSEC
+      if (config.param[entry] == "SIM_TARGET_PERTURB_MIN_ARCSEC") {
+        double arcsec=0;
+        try {
+          arcsec = std::stod( config.arg[entry] );
+          if ( arcsec < 0 ) {
+            message.str(""); message << "ERROR: SIM_TARGET_PERTURB_MIN_ARCSEC " << arcsec << " out of range (>=0)";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_TARGET_PERTURB_MIN_ARCSEC: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.target.sim_target_perturb_min_arcsec = arcsec;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SIM_POST_SLEW_TARGET_ARCSEC
+      if (config.param[entry] == "SIM_POST_SLEW_TARGET_ARCSEC") {
+        double arcsec=0;
+        try {
+          arcsec = std::stod( config.arg[entry] );
+          if ( arcsec < 0 ) {
+            message.str(""); message << "ERROR: SIM_POST_SLEW_TARGET_ARCSEC " << arcsec << " out of range (>=0)";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_POST_SLEW_TARGET_ARCSEC: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.target.sim_post_slew_target_arcsec = arcsec;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SIM_POST_SLEW_TARGET_MIN_ARCSEC
+      if (config.param[entry] == "SIM_POST_SLEW_TARGET_MIN_ARCSEC") {
+        double arcsec=0;
+        try {
+          arcsec = std::stod( config.arg[entry] );
+          if ( arcsec < 0 ) {
+            message.str(""); message << "ERROR: SIM_POST_SLEW_TARGET_MIN_ARCSEC " << arcsec << " out of range (>=0)";
+            this->sequence.async.enqueue_and_log( function, message.str() );
+            return ERROR;
+          }
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_POST_SLEW_TARGET_MIN_ARCSEC: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        this->sequence.target.sim_post_slew_target_min_arcsec = arcsec;
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SIM_POST_SLEW_TARGET_SEED
+      if (config.param[entry] == "SIM_POST_SLEW_TARGET_SEED") {
+        try {
+          this->sequence.target.sim_post_slew_target_seed = static_cast<std::uint64_t>( std::stoull( config.arg[entry] ) );
+          this->sequence.target.sim_post_slew_target_counter.store(0);
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_POST_SLEW_TARGET_SEED: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      // SIM_TARGET_PERTURB_SEED
+      if (config.param[entry] == "SIM_TARGET_PERTURB_SEED") {
+        try {
+          this->sequence.target.sim_target_perturb_seed = static_cast<std::uint64_t>( std::stoull( config.arg[entry] ) );
+          this->sequence.target.sim_target_perturb_counter.store(0);
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing SIM_TARGET_PERTURB_SEED: " << e.what();
+          this->sequence.async.enqueue_and_log( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->sequence.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
       // TCS_WHICH -- which TCS to connect to, defults to real if not specified
       if ( config.param[entry] == "TCS_WHICH" ) {
         if ( config.arg[entry] != "sim" && config.arg[entry] != "real" ) {

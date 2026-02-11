@@ -1,7 +1,7 @@
 import sys
 import subprocess
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QFileDialog, QMessageBox, QDialog, QDesktopWidget, QHBoxLayout, QInputDialog, QStatusBar, QSizePolicy
-from PyQt5.QtCore import Qt, pyqtSlot, QTimer
+from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QSettings
 from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
@@ -128,6 +128,9 @@ class NgpsGUI(QMainWindow):
         # Start polling local processes to update daemon states
         self._init_daemon_polling()
 
+        # Restore previous login session if available
+        self._restore_session()
+
     def init_ui(self):
         # Set up Menu
         menubar = self.menuBar()
@@ -242,7 +245,52 @@ class NgpsGUI(QMainWindow):
             self.current_owner = self.login_dialog.owner
             self.all_targets = self.login_dialog.all_targets
 
+            # Persist session
+            settings = QSettings("NGPS", "ngps_gui")
+            settings.setValue("session/owner", self.current_owner)
+
             # Show the database tab filtered by logged-in owner
+            self.layout_service.show_database_tab(self.current_owner)
+
+    def on_logout(self):
+        """Clear saved session and reset to logged-out state."""
+        settings = QSettings("NGPS", "ngps_gui")
+        settings.remove("session/owner")
+
+        self.current_owner = None
+        self.user_set_data = {}
+        self.all_targets = None
+        self.logged_in = False
+        self.current_observation_id = None
+
+        # Hide database tab, show login prompt
+        ls = self.layout_service
+        if ls.database_tab_widget:
+            ls.database_tab_widget.setVisible(False)
+        ls.load_target_button.setVisible(True)
+
+        # Clear target list dropdown
+        if hasattr(ls, 'target_list_name'):
+            ls.target_list_name.blockSignals(True)
+            ls.target_list_name.clear()
+            ls.target_list_name.blockSignals(False)
+
+        # Reset control tab fields
+        ct = ls.control_tab
+        if ct:
+            ct.target_name_label.setText("Selected Target: Not Selected")
+            ct.ra_dec_label.setText("RA: Not Set, Dec: Not Set")
+            for box in [ct.exposure_time_box, ct.slit_width_box, ct.slit_angle_box,
+                        ct.num_of_exposures_box, ct.bin_spect_box, ct.bin_spat_box]:
+                box.setText("")
+            ls._sync_control_buttons()
+
+    def _restore_session(self):
+        """Restore login session from saved settings if available."""
+        settings = QSettings("NGPS", "ngps_gui")
+        saved_owner = settings.value("session/owner", None)
+        if saved_owner:
+            self.current_owner = saved_owner
             self.layout_service.show_database_tab(self.current_owner)
 
     def load_mysql_data(self, all_targets):

@@ -15,6 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
+#include <cstdint>
 #include <sys/types.h>
 #include <map>
 #include <cmath>
@@ -289,7 +290,7 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
-      std::atomic<pid_t> fine_tune_pid{0};       ///< fine tune process pid (process group leader)
+      std::atomic<bool> fine_tune_active{false}; ///< fine tune running state reported by slicecamd autoacq
       std::atomic<bool> offset_active{false};    ///< tracks offset operation in progress
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
@@ -344,7 +345,9 @@ namespace Sequencer {
 
             topic_handlers = {
               { "_snapshot", std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { "slicecam_autoacq", std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slicecam_autoacq(msg); } ) }
             };
           }
 
@@ -379,8 +382,8 @@ namespace Sequencer {
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       int acq_automatic_mode;     ///< acquisition automation mode (1=legacy, 2=semi-auto, 3=auto)
-      std::string acq_fine_tune_cmd; ///< fine-tune command to run after guiding
-      bool acq_fine_tune_log;     ///< log fine-tune output to /tmp/ngps_acq.log
+      std::string acq_fine_tune_cmd; ///< optional fine-tune args override passed to slicecamd autoacq
+      bool acq_fine_tune_log;     ///< log fine-tune output to /data/<datedir>/logs/ngps_acq_<datedir>.log
       double acq_offset_settle;   ///< seconds to wait after automatic offset
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
@@ -395,6 +398,12 @@ namespace Sequencer {
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
+      std::mutex fine_tune_mtx;
+      std::condition_variable fine_tune_cv;
+      bool fine_tune_done{false};
+      bool fine_tune_success{false};
+      uint64_t fine_tune_run_id{0};
+      std::string fine_tune_message;
       std::mutex monitor_mtx;
 
       std::map<int, std::string> sequence_states;
@@ -461,6 +470,7 @@ namespace Sequencer {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_slicecam_autoacq( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();

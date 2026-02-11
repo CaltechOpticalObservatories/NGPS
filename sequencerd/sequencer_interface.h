@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 
 #include <vector>
+#include <cstdint>
 #include <mysqlx/xdevapi.h>
 #include <mysqlx/devapi/collection_crud.h>
 
@@ -221,7 +222,18 @@ namespace Sequencer {
                                        "AIRMASS_MAX" },
                      targetset_cols  { "SET_ID",
                                        "SET_NAME" },
-                     offset_threshold(0), max_tcs_offset(0) { init_record(); }
+                     sim_target_has_true(false),
+                     sim_target_perturb_arcsec(0.0),
+                     sim_target_perturb_min_arcsec(0.0),
+                     sim_target_perturb_seed(0),
+                     sim_target_perturb_counter(0),
+                     sim_post_slew_target_arcsec(0.0),
+                     sim_post_slew_target_min_arcsec(0.0),
+                     sim_post_slew_target_seed(0),
+                     sim_post_slew_target_counter(0),
+                     sim_post_slew_applied(false),
+                     offset_threshold(0),
+                     max_tcs_offset(0) { init_record(); }
 
       std::unique_ptr<Database::Database> database;
 
@@ -393,14 +405,26 @@ namespace Sequencer {
 
       std::vector<std::string> targetlist_cols;  ///< target list fields, used for accessing the target table, which accepts a variadic param
       std::vector<std::string> targetset_cols;   ///< target set fields, used for accessing the table of target sets
+      std::string sim_target_ra_hms_true;        ///< unperturbed target RA (from DB)
+      std::string sim_target_dec_dms_true;       ///< unperturbed target DEC (from DB)
+      bool sim_target_has_true;                  ///< true if unperturbed coords are available
+      double sim_target_perturb_arcsec;          ///< random RA/DEC perturbation max applied when targets are read (arcsec)
+      double sim_target_perturb_min_arcsec;      ///< optional minimum perturbation radius (arcsec)
+      std::uint64_t sim_target_perturb_seed;     ///< optional seed for perturbations (0=random)
+      std::atomic<std::uint64_t> sim_target_perturb_counter; ///< sequence counter for deterministic seeds
+      double sim_post_slew_target_arcsec;        ///< random RA/DEC perturbation max applied after ontarget (arcsec)
+      double sim_post_slew_target_min_arcsec;    ///< optional minimum perturbation radius (arcsec)
+      std::uint64_t sim_post_slew_target_seed;   ///< optional seed for post-slew perturbations (0=random)
+      std::atomic<std::uint64_t> sim_post_slew_target_counter; ///< sequence counter for post-slew seeds
+      bool sim_post_slew_applied;                ///< true once post-slew adjust applied for current target
 
       mysqlx::string owner;               ///< target table owner
       int            obsid;               ///< current target observation ID (DB internal, used for record-checking)
       int            setid;               ///< ID of the set to get from the targets table
       mysqlx::string setname;             ///< set name associated with setid
       int            obsorder;            ///< observation order (DB internal)
-      long           targetnum;           ///< ??
-      long           sequencenum;         ///< ??
+      int64_t        targetnum;           ///< target number from DB
+      int64_t        sequencenum;         ///< sequence number from DB
       bool           iscal;               ///< is this a calibration target?
       std::string    imgtype;             ///< image type. camerad will use this to fill IMGTYPE keyword
       mysqlx::string name;                ///< name of astronomical target or calibration
@@ -450,6 +474,7 @@ namespace Sequencer {
       TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
+      void apply_sim_post_slew_adjust();       ///< apply optional simulator post-slew perturbation
       long parse_target_from_row( const mysqlx::Row &row );  ///< fills target class using cols from DB row
       long target_qc_check( std::string &status );                   ///< target info quality control check
       long add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,

@@ -1,4 +1,15 @@
- run/ngps stop
-  run/emulator stop all
-  run/emulator start all
-  run/ngps start
+run/ngps stop
+run/emulator stop all
+sleep 0.5
+run/emulator start all
+sleep 0.5
+run/ngps start
+sleep 1
+seq startup
+sleep 0.5
+GuiderGUI/launch_gui.sh guider
+sleep 0.5
+GuiderGUI/launch_gui.sh slicev
+seq-progress &
+xlisten & 
+tools/ngps_db_gui/build/ngps_db_gui &

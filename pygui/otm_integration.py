@@ -15,10 +15,19 @@ import sys
 import subprocess
 import json
 import csv
+import logging
 import tempfile
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+
+from coordinate_utils import parse_sexagesimal_dec
+
+logger = logging.getLogger(__name__)
+
+# Palomar Observatory declination limits (degrees)
+PALOMAR_DEC_MIN = -40.0
+PALOMAR_DEC_MAX = 89.0
 
 from PyQt5.QtCore import Qt, QObject, pyqtSignal, QThread, QSettings
 from PyQt5.QtWidgets import (
@@ -45,6 +54,7 @@ class OtmSettings:
     otm_script_path: str = ""  # Path to OTM.py
     timeline_script_path: str = ""  # Path to otm_timeline.py
     step_minutes: float = 5.0  # Minutes per airmass sample
+    etc_flags: str = "-noslicer -fastSNR"  # Extra flags passed to ETC
 
     def save(self) -> None:
         """Save settings to QSettings."""
@@ -58,6 +68,7 @@ class OtmSettings:
         settings.setValue("otm_script_path", self.otm_script_path)
         settings.setValue("timeline_script_path", self.timeline_script_path)
         settings.setValue("step_minutes", self.step_minutes)
+        settings.setValue("etc_flags", self.etc_flags)
 
     @staticmethod
     def load() -> 'OtmSettings':
@@ -72,7 +83,8 @@ class OtmSettings:
             python_cmd=settings.value("python_cmd", "python3"),
             otm_script_path=settings.value("otm_script_path", ""),
             timeline_script_path=settings.value("timeline_script_path", ""),
-            step_minutes=float(settings.value("step_minutes", 5.0))
+            step_minutes=float(settings.value("step_minutes", 5.0)),
+            etc_flags=settings.value("etc_flags", "-noslicer -fastSNR")
         )
 
 
@@ -104,16 +116,59 @@ class OtmTarget:
 
 @dataclass
 class OtmResult:
-    """OTM output data for a single target."""
+    """OTM output data for a single target.
+
+    Field names match OTM output CSV columns. Use csv_to_db_mapping()
+    to get the mapping from these fields to database column names.
+    """
     observation_id: str
-    otmstart: str  # ISO timestamp
-    otmend: str  # ISO timestamp
-    otmslewgo: str  # ISO timestamp
-    otmflag: str  # Status flag (e.g., "DAY-0", "DAY-1", "SKY", etc.)
-    otmwait: float  # Wait time in seconds
-    otmdead: float  # Dead time in seconds
-    otmslew: float  # Slew time in seconds
-    obs_order: int  # New order based on schedule
+    otmstart: str = ""        # ISO timestamp → DB: OTMexp_start
+    otmend: str = ""          # ISO timestamp → DB: OTMexp_end
+    otmslewgo: str = ""       # ISO timestamp → DB: OTMslewgo
+    otmflag: str = ""         # Status flag   → DB: OTMflag
+    otmlast: str = ""         # Last flag     → DB: OTMlast
+    otmwait: str = ""         # Wait time     → DB: OTMwait
+    otmdead: str = ""         # Dead time     → DB: OTMdead
+    otmslew: str = ""         # Slew time     → DB: OTMslew
+    otmexptime: str = ""      # Exposure time → DB: OTMexpt
+    otmslitwidth: str = ""    # Slit width    → DB: OTMslitwidth
+    otmpa: str = ""           # Position angle→ DB: OTMpa
+    otmslitangle: str = ""    # Slit angle    → DB: OTMslitangle
+    otmcass: str = ""         # Cass angle    → DB: OTMcass
+    otmsnr: str = ""          # SNR           → DB: OTMSNR
+    otmres: str = ""          # Resolution    → DB: OTMres
+    otmseeing: str = ""       # Seeing        → DB: OTMseeing
+    otmairmass_start: str = ""  # Airmass start → DB: OTMairmass_start
+    otmairmass_end: str = ""    # Airmass end   → DB: OTMairmass_end
+    otmsky: str = ""          # Sky mag       → DB: OTMsky
+    otmmoon: str = ""         # Moon          → DB: OTMmoon
+    obs_order: int = 0        # New order     → DB: OBS_ORDER
+
+
+# Mapping from OTM output CSV column names to database column names.
+# Based on C++ addUpdate() calls in main.cpp lines 7269-7288.
+OTM_CSV_TO_DB = {
+    "OTMstart":        "OTMexp_start",
+    "OTMend":          "OTMexp_end",
+    "OTMexptime":      "OTMexpt",
+    "OTMslitwidth":    "OTMslitwidth",
+    "OTMpa":           "OTMpa",
+    "OTMslitangle":    "OTMslitangle",
+    "OTMcass":         "OTMcass",
+    "OTMwait":         "OTMwait",
+    "OTMflag":         "OTMflag",
+    "OTMlast":         "OTMlast",
+    "OTMslewgo":       "OTMslewgo",
+    "OTMslew":         "OTMslew",
+    "OTMdead":         "OTMdead",
+    "OTMairmass_start":"OTMairmass_start",
+    "OTMairmass_end":  "OTMairmass_end",
+    "OTMsky":          "OTMsky",
+    "OTMmoon":         "OTMmoon",
+    "OTMSNR":          "OTMSNR",
+    "OTMres":          "OTMres",
+    "OTMseeing":       "OTMseeing",
+}
 
 
 @dataclass
@@ -181,6 +236,9 @@ class OtmRunner(QObject):
 
             if not self.settings.use_sky_sim:
                 args.append("-noskysim")
+
+            if self.settings.etc_flags and self.settings.etc_flags.strip():
+                args.append("-etc_flags=" + self.settings.etc_flags.strip())
 
             self.progress.emit(f"Executing: {' '.join(args)}")
 
@@ -299,50 +357,180 @@ class OtmTimelineRunner(QObject):
             self.progress.emit("Timeline generation cancelled")
 
 
-def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str) -> None:
+def _normalize_slitwidth(val: str) -> str:
+    """Normalize slitwidth value (matches C++ normalizeSlitwidthValue).
+
+    Bare numbers become 'SET <num>'. Valid modes: SET, SNR, RES, LOSS, AUTO.
+    """
+    v = val.strip()
+    if not v:
+        return "SET 1.0"
+    parts = v.split()
+    if len(parts) == 1:
+        upper = parts[0].upper()
+        if upper == "AUTO":
+            return "AUTO"
+        try:
+            num = float(parts[0])
+            if num > 0:
+                return f"SET {num}"
+        except ValueError:
+            pass
+        return "SET 1.0"
+    key = parts[0].upper()
+    if key == "AUTO":
+        return "AUTO"
+    if key in ("SET", "SNR", "RES", "LOSS"):
+        try:
+            num = float(parts[1])
+            if num > 0:
+                return f"{key} {num}"
+        except (ValueError, IndexError):
+            pass
+    return "SET 1.0"
+
+
+def _normalize_exptime(val: str) -> str:
+    """Normalize exptime value (matches C++ normalizeExptimeValue).
+
+    Bare numbers become 'SET <num>'. 'EXPTIME' keyword treated as 'SET'.
+    """
+    v = val.strip()
+    if not v:
+        return "SET 5"
+    parts = v.split()
+    if len(parts) == 1:
+        try:
+            num = float(parts[0])
+            if num > 0:
+                return f"SET {num}"
+        except ValueError:
+            pass
+        return "SET 5"
+    key = parts[0].upper()
+    if key == "EXPTIME":
+        key = "SET"
+    if key in ("SET", "SNR"):
+        try:
+            num = float(parts[1])
+            if num > 0:
+                return f"{key} {num}"
+        except (ValueError, IndexError):
+            pass
+    return "SET 5"
+
+
+def _normalize_magsystem(val: str) -> str:
+    """Normalize magsystem value (matches C++ normalizeMagsystemValue)."""
+    v = val.strip().upper()
+    if v in ("AB", "VEGA"):
+        return v
+    return "AB"
+
+
+def _normalize_magfilter(val: str) -> str:
+    """Normalize magfilter value (matches C++ normalizeMagfilterValue)."""
+    v = val.strip()
+    if not v:
+        return "match"
+    upper = v.upper()
+    if upper in ("G", "MATCH", "--"):
+        return "match"
+    if upper == "USER":
+        return "user"
+    if upper in ("U", "B", "V", "R", "I", "J", "K"):
+        return upper
+    return "match"
+
+
+# Default wavelength range center by channel (nm)
+_CHANNEL_CENTER_NM = {"U": 380.0, "G": 475.0, "R": 635.0, "I": 830.0}
+_DEFAULT_WRANGE_HALF_NM = 15.0  # +/- 150 Angstrom
+
+
+def _default_wrange(channel: str) -> Tuple[float, float]:
+    """Get default wavelength range for a channel."""
+    center = _CHANNEL_CENTER_NM.get(channel.strip().upper(), _CHANNEL_CENTER_NM["R"])
+    return (center - _DEFAULT_WRANGE_HALF_NM, center + _DEFAULT_WRANGE_HALF_NM)
+
+
+def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str,
+                           dec_min: float = PALOMAR_DEC_MIN,
+                           dec_max: float = PALOMAR_DEC_MAX) -> List[str]:
     """
     Generate OTM input CSV from target data.
+
+    Targets with declinations outside the observable range are filtered out.
+    Column names and value normalization match the C++ implementation.
 
     Args:
         targets: List of target dictionaries from database
         output_path: Path to write CSV file
+        dec_min: Minimum declination in degrees (default: Palomar limit)
+        dec_max: Maximum declination in degrees (default: Palomar limit)
+
+    Returns:
+        List of warning messages for skipped targets
     """
-    # Define CSV header
+    # OTM CSV header - must match what OTM.py expects
     header = [
         'OBSERVATION_ID', 'name', 'RA', 'DECL', 'slitangle', 'slitwidth',
         'exptime', 'notbefore', 'pointmode', 'ccdmode', 'airmass_max',
-        'binspat', 'binspect', 'channel', 'wrange_low', 'wrange_high',
-        'magnitude', 'magfilter', 'magsystem', 'srcmodel'
+        'binspat', 'binspect', 'channel', 'wrange', 'mag', 'magsystem',
+        'magfilter', 'srcmodel'
     ]
 
     rows = []
+    skipped = []
     for target in targets:
-        # Extract values with defaults
+        # Extract values with defaults matching C++ implementation
         obs_id = target.get('OBSERVATION_ID', '')
         name = target.get('NAME', '')
         ra = target.get('RA', '')
         decl = target.get('DECL', '')
-        slitangle = target.get('SLITANGLE', 'PA')
-        slitwidth = target.get('SLITWIDTH', 'SET 1.5')
-        exptime = target.get('EXPTIME', 'SET 300')
-        notbefore = target.get('NOTBEFORE', '')
-        pointmode = target.get('POINTMODE', 'SLIT')
-        ccdmode = 'default'
-        airmass_max = target.get('AIRMASS_MAX', '4.0')
-        binspat = target.get('BINSPAT', '1')
-        binspect = target.get('BINSPECT', '1')
-        channel = target.get('CHANNEL', 'R')
-        wrange_low = target.get('WRANGE_LOW', '650')
-        wrange_high = target.get('WRANGE_HIGH', '680')
-        magnitude = target.get('MAGNITUDE', '18.0')
-        magfilter = target.get('MAGFILTER', 'G')
-        magsystem = target.get('MAGSYSTEM', 'AB')
-        srcmodel = target.get('SRCMODEL', '')
+        slitangle = target.get('SLITANGLE', '') or 'PA'
+        slitwidth = _normalize_slitwidth(str(target.get('SLITWIDTH', '') or ''))
+        exptime = _normalize_exptime(str(target.get('EXPTIME', '') or ''))
+        notbefore = target.get('NOTBEFORE', '') or '1999-12-31T12:34:56'
+        pointmode = target.get('POINTMODE', '') or 'SLIT'
+        ccdmode = target.get('CCDMODE', '') or 'default'
+        airmass_max = target.get('AIRMASS_MAX', '') or '4.0'
+        binspat = target.get('BINSPAT', '') or '1'
+        binspect = target.get('BINSPECT', '') or '1'
+        channel = target.get('CHANNEL', '') or 'R'
+        srcmodel = target.get('SRCMODEL', '') or ''
+
+        # Filter by declination range
+        dec_deg = parse_sexagesimal_dec(str(decl)) if decl else None
+        if dec_deg is not None and (dec_deg < dec_min or dec_deg > dec_max):
+            msg = f"Skipped {name} (obs {obs_id}): DEC {decl} ({dec_deg:.2f} deg) outside [{dec_min}, {dec_max}]"
+            logger.warning(msg)
+            skipped.append(msg)
+            continue
+
+        # Combine WRANGE_LOW and WRANGE_HIGH into single "wrange" column
+        try:
+            low = float(target.get('WRANGE_LOW', 0) or 0)
+            high = float(target.get('WRANGE_HIGH', 0) or 0)
+            if low <= 0 or high <= 0 or high <= low:
+                low, high = _default_wrange(channel)
+        except (ValueError, TypeError):
+            low, high = _default_wrange(channel)
+        wrange = f"{low} {high}"
+
+        # Normalize magnitude fields to match OTM expected names/values
+        mag_raw = str(target.get('MAGNITUDE', '') or '')
+        try:
+            mag = str(float(mag_raw)) if mag_raw else '19.0'
+        except ValueError:
+            mag = '19.0'
+        magsystem = _normalize_magsystem(str(target.get('MAGSYSTEM', '') or ''))
+        magfilter = _normalize_magfilter(str(target.get('MAGFILTER', '') or ''))
 
         row = [
             obs_id, name, ra, decl, slitangle, slitwidth, exptime,
             notbefore, pointmode, ccdmode, airmass_max, binspat, binspect,
-            channel, wrange_low, wrange_high, magnitude, magfilter, magsystem, srcmodel
+            channel, wrange, mag, magsystem, magfilter, srcmodel
         ]
         rows.append(row)
 
@@ -351,6 +539,8 @@ def generate_otm_input_csv(targets: List[Dict[str, Any]], output_path: str) -> N
         writer = csv.writer(f)
         writer.writerow(header)
         writer.writerows(rows)
+
+    return skipped
 
 
 def parse_otm_output_csv(output_path: str) -> List[OtmResult]:
@@ -369,19 +559,43 @@ def parse_otm_output_csv(output_path: str) -> List[OtmResult]:
         with open(output_path, 'r', newline='') as f:
             reader = csv.DictReader(f)
             for idx, row in enumerate(reader):
-                # Normalize keys (case-insensitive)
-                row_lower = {k.strip().lower(): v for k, v in row.items()}
+                # Build case-insensitive lookup
+                row_ci = {k.strip(): v.strip() if v else '' for k, v in row.items()}
+                # Also build lowercase version for fallback
+                row_lower = {k.lower(): v for k, v in row_ci.items()}
+
+                def get(key):
+                    """Get value by key, trying exact case first then lowercase."""
+                    val = row_ci.get(key, '')
+                    if not val:
+                        val = row_lower.get(key.lower(), '')
+                    if val and val.lower() == 'none':
+                        return ''
+                    return val
 
                 result = OtmResult(
-                    observation_id=row_lower.get('observation_id', ''),
-                    otmstart=row_lower.get('otmstart', ''),
-                    otmend=row_lower.get('otmend', ''),
-                    otmslewgo=row_lower.get('otmslewgo', ''),
-                    otmflag=row_lower.get('otmflag', ''),
-                    otmwait=float(row_lower.get('otmwait', 0.0) or 0.0),
-                    otmdead=float(row_lower.get('otmdead', 0.0) or 0.0),
-                    otmslew=float(row_lower.get('otmslew', 0.0) or 0.0),
-                    obs_order=idx
+                    observation_id=get('OBSERVATION_ID'),
+                    otmstart=get('OTMstart'),
+                    otmend=get('OTMend'),
+                    otmslewgo=get('OTMslewgo'),
+                    otmflag=get('OTMflag'),
+                    otmlast=get('OTMlast'),
+                    otmwait=get('OTMwait'),
+                    otmdead=get('OTMdead'),
+                    otmslew=get('OTMslew'),
+                    otmexptime=get('OTMexptime'),
+                    otmslitwidth=get('OTMslitwidth'),
+                    otmpa=get('OTMpa'),
+                    otmslitangle=get('OTMslitangle'),
+                    otmcass=get('OTMcass'),
+                    otmsnr=get('OTMSNR'),
+                    otmres=get('OTMres'),
+                    otmseeing=get('OTMseeing'),
+                    otmairmass_start=get('OTMairmass_start'),
+                    otmairmass_end=get('OTMairmass_end'),
+                    otmsky=get('OTMsky'),
+                    otmmoon=get('OTMmoon'),
+                    obs_order=idx,
                 )
                 results.append(result)
 

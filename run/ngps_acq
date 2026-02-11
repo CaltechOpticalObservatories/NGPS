@@ -1,1 +1,0 @@
-ngps_acquire --input /tmp/slicecam.fits --goal-x 151.25 --goal-y 115.25 --bg-x1 80 --bg-x2 200 --bg-y1 30 --bg-y2 210 --pixel-origin 1 --max-dist 40 --snr 10 --min-adj 4 --centroid-hw 6 --loop 1 --cadence-sec 2 --prec-arcsec 0.15 --goal-arcsec 0.15 --dry-run 0 --tcs-set-units 0 --use-putonslit 1 --verbose 1 --debug 1 --reject-after-move 3 --gain 1.0 --wait-guiding 1

@@ -31,6 +31,9 @@ class LayoutService:
         # Create the database tab instance
         self.database_tab = None  # Will be initialized after DB connection
 
+        # Tracked system state for button sync
+        self._current_system_status = "stopped"
+
         
     def get_screen_size_ratio(self):
         # Get the user's screen size
@@ -280,9 +283,10 @@ class LayoutService:
 
     def update_system_status(self, status):
         """
-        Update the system status and make only the relevant widget visible.
-        Hide all other status widgets.
+        Update the system status display and sync all control buttons.
         """
+        self._current_system_status = status
+
         # Hide all status widgets
         for status_key, status_info in self.status_widgets.items():
             status_info['widget'].setVisible(False)
@@ -290,6 +294,41 @@ class LayoutService:
         # Show the widget corresponding to the current status
         if status in self.status_widgets:
             self.status_widgets[status]['widget'].setVisible(True)
+
+        # Sync control buttons to match system state
+        self._sync_control_buttons()
+
+    def _sync_control_buttons(self):
+        """Sync Go / Continue / Offset button states based on system status and target selection."""
+        ct = self.control_tab
+        if not ct or not hasattr(ct, 'go_button'):
+            return
+        status = self._current_system_status
+        has_target = getattr(self.parent, 'current_observation_id', None) is not None
+
+        if status == "idle":
+            # Idle: Go enabled if target selected, Continue/Offset disabled
+            if has_target:
+                ct._style_enabled_green(ct.go_button)
+            else:
+                ct._style_disabled_gray(ct.go_button)
+            ct._style_disabled_gray(ct.continue_button)
+            ct._style_disabled_gray(ct.offset_to_target_button)
+        elif status == "user":
+            # Waiting for user: Continue/Offset enabled, Go disabled
+            ct._style_disabled_gray(ct.go_button)
+            ct._style_enabled_green(ct.continue_button)
+            ct._style_enabled_green(ct.offset_to_target_button)
+        elif status == "stopped":
+            # System stopped: everything disabled
+            ct._style_disabled_gray(ct.go_button)
+            ct._style_disabled_gray(ct.continue_button)
+            ct._style_disabled_gray(ct.offset_to_target_button)
+        else:
+            # Busy states (exposing, readout, acquire, focus, calib): all disabled
+            ct._style_disabled_gray(ct.go_button)
+            ct._style_disabled_gray(ct.continue_button)
+            ct._style_disabled_gray(ct.offset_to_target_button)
 
     def create_tcs_status_group(self):
         tcs_status_group = QGroupBox("TCS Status")
@@ -638,10 +677,8 @@ class LayoutService:
         self.load_target_button.setVisible(False)
         self.database_tab_widget.setVisible(True)
 
-        # Filter target sets by owner if provided
-        if owner and hasattr(self.database_tab_widget, 'sets_table'):
-            self.database_tab_widget.sets_table.set_fixed_filter("OWNER", owner)
-            self.database_tab_widget.sets_table.refresh()
+        # Reload target list dropdown now that current_owner is set
+        self.load_target_lists()
 
     def show_column_toggle_dialog(self):
         table = self.target_list_display
@@ -862,13 +899,13 @@ class LayoutService:
                 if header == 'EXPTIME':
                     exposure_time = value  # Store the exposure time
                     print(f"Found Exposure Time: {exposure_time}")  # Print the found exposure time
-                    self.control_tab.exposure_time_box.setText(re.sub(r'[a-zA-Z\s]', '', exposure_time))
+                    self.control_tab.exposure_time_box.setText(exposure_time)
 
                 # Check if the header is 'Slit Width' and extract its value
                 if header == 'SLITWIDTH':
                     slit_width = value  # Store the slit width
                     print(f"Found Slit Width: {slit_width}")  # Print the found slit width
-                    self.control_tab.slit_width_box.setText(re.sub(r'[a-zA-Z\s]', '', slit_width))
+                    self.control_tab.slit_width_box.setText(slit_width)
 
                 # Check if the header is 'RA' and extract its value
                 if header == 'OFFSET_RA':
@@ -1415,38 +1452,30 @@ class LayoutService:
 
         # Real selection → remember name and filter from DB
         self.parent.current_target_list_name = text
-        self.logic_service.filter_target_list()
-        self.hide_default_columns()
 
-    def on_target_set_changed(self, *_):
-        combo = self.target_list_name
-        idx   = combo.currentIndex()
-        text  = combo.currentText().strip()
+        # Resolve set name to SET_ID and filter DatabaseTab + activate in sequencer
+        # user_set_data is {SET_ID: SET_NAME}, so reverse-lookup by name
+        set_id = None
+        for sid, sname in getattr(self.parent, 'user_set_data', {}).items():
+            if str(sname) == text:
+                set_id = sid
+                break
 
-        # enable Add Row only on real sets
-        self.add_row_button.setEnabled(text not in ("Upload new target list", "Create empty target list", "No Target Lists Available", ""))
-
-        last_real = max(0, combo.count() - 3)
-
-        if text == "Upload new target list":
-            with QSignalBlocker(combo):
-                combo.setCurrentIndex(last_real)
-            self.upload_new_target_list()
-            return
-
-        if text == "Create empty target list":
-            with QSignalBlocker(combo):
-                combo.setCurrentIndex(last_real)
-            name, ok = QInputDialog.getText(self.parent, "Create empty target list", "Target list name:")
-            if ok and name.strip():
-                # create empty set; UI refreshes to show the newest (empty) set
-                self.logic_service.create_empty_target_set(name.strip())
-            return
-
-        # Real selection → remember name and filter from DB
-        self.parent.current_target_list_name = text
-        self.logic_service.filter_target_list()
-        self.hide_default_columns()
+        if set_id is not None and self.database_tab_widget and hasattr(self.database_tab_widget, 'targets_table'):
+            # DatabaseTab handles its own filtering — skip the legacy table path
+            self.database_tab_widget._current_set_id = set_id
+            self.database_tab_widget.targets_table.set_fixed_filter("SET_ID", set_id)
+            self.database_tab_widget._timeline_stale = True
+            # Send sequencer command
+            if hasattr(self.parent, 'sequencer_service') and self.parent.sequencer_service:
+                try:
+                    self.parent.sequencer_service.send_command(f"seq targetset {set_id}")
+                except Exception as e:
+                    print(f"Failed to send targetset command: {e}")
+        else:
+            # Fallback: legacy table path (before login / DatabaseTab not ready)
+            self.logic_service.filter_target_list()
+            self.hide_default_columns()
 
     def create_right_planning_column(self):
         right_planning_column = QVBoxLayout()

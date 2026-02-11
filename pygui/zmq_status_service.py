@@ -242,14 +242,26 @@ class ZmqStatusService(QObject):
             self.logger.warning("AIRMASS data is not available.")
 
     def _status_from_seq_waitstate(self, flags: Dict[str, bool]) -> str:
-        f = {k: bool(v) for k, v in (flags or {}).items()}
+        f = {}
+        for k, v in (flags or {}).items():
+            if k == "source":
+                continue
+            # Guard against string "false"/"true" from non-standard payloads
+            if isinstance(v, str):
+                f[k] = v.lower() not in ("false", "0", "")
+            else:
+                f[k] = bool(v)
 
         if f.get("READOUT"):  return "readout"
         if f.get("EXPOSE"):   return "exposing"
         if f.get("ACQUIRE"):  return "acquire"
+        if f.get("TCSOP"):    return "acquire"
+        if f.get("GUIDE"):    return "acquire"
         if f.get("FOCUS"):    return "focus"
-        if f.get("CALIB"):    return "calib" 
-        if f.get("USER"):     return "user" 
+        if f.get("CALIB"):    return "calib"
+        if f.get("USER"):     return "user"
+        # If any daemon wait bit is set (ACAM, TCS, SLIT, etc.) system is busy
+        if any(f.values()):   return "acquire"
         return "idle"
 
 

@@ -10,31 +10,34 @@ fname=$2
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source $SCRIPT_DIR/gui.config $camera
 
-# Preserve crosshair position before loading new image (DS9 resets it on load)
+region_key_version=1
+region_cache="/tmp/ngps_${camera}_regions.key"
+xpaset -p $id preserve regions yes >/dev/null 2>&1
+
+# Preserve crosshair position before loading new image (DS9 resets it on load).
 crosshair_img=""
+mode=$(xpaget $id mode 2>/dev/null)
 crosshair_img=$(xpaget $id crosshair image 2>/dev/null)
-if [ $? -ne 0 ]; then
-	crosshair_img=""
+
+# Temporarily hide crosshair while loading to avoid center flash
+if [ "$mode" = "crosshair" ]; then
+	xpaset -p $id mode none
 fi
 
 # Push the image to frame 1
 xpaset -p $id frame 1
 cat $fname | xpaset $id $fitstype
 
-# Force crosshair mode
-xpaset -p $id mode crosshair;
-
 # Restore crosshair position if we were able to capture it
 if [ -n "$crosshair_img" ]; then
 	xpaset -p $id crosshair $crosshair_img image 2>/dev/null
+elif [ "$mode" = "crosshair" ]; then
+	# Keep crosshair mode if it was active but position was unavailable
+	xpaset -p $id mode crosshair
 fi
 
-# parameters to prevent editing the regions; need delete to refresh them
+# parameters to prevent editing the regions
 notouch="edit=0 move=0 rotate=0 delete=1" 
-
-# clear all regions
-xpaset -p $id region delete all
-
 
 # Update headsup display for GUIDER
 if [[ "$camera" == "guider" ]]; then
@@ -59,38 +62,56 @@ if [[ "$camera" == "guider" ]]; then
 	XCENTER=$(($NAXIS1 / 2))
 	pixscale=`xpaget $id fits header keyword PIXSCALE`
 
-	# Camera settings
-	YCENTER=$((30/$vbin))
-	echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   FILTER=${filter}   N_AVG=${navg}} \
-	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold} group=headsup" \
-	  | xpaset $id region 2>&1
-
-	# Camera status
-	YCENTER_STATUS=$(($NAXIS2 - $YCENTER))
-	xpaset -p $id region group status new
-	echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}          FOCUS=${focus}} \
-	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
-	  | xpaset $id region 2>&1
-
 	# Slit/Scale graphic
 	scale_arcsec=30
 	slitw_arcsec=1
 	slit_angle=18 # deg
 
-	YCENTER=$(($NAXIS2 / 2))
-	slitl=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
-	slitw=`awk "BEGIN { print ($slitw_arcsec/$pixscale) }"`
-
-	scalereg="image; box($XCENTER,$YCENTER,4,$slitl,$slit_angle) # color=${headsup_fontcolor} fill=1 \
-		$notouch text={$scale_arcsec\"   }"
-	echo "$scalereg" | xpaset $id region
-
 	# TCS marker
 	TELRA_hr=`xpaget $id fits header keyword TELRA`
 	TELRA_deg=`awk "BEGIN { print ($TELRA_hr*15) }"`
 	TELDEC_deg=`xpaget $id fits header keyword TELDEC`
-	markerreg="icrs; point $TELRA_deg $TELDEC_deg # point=x 20 $notouch text={TCS}"
-	echo "$markerreg" | xpaset $id region
+
+	regions_key=$(printf "v%s|guider|gain=%s|filter=%s|exptime=%s|focus=%s|navg=%s|status=%s|vbin=%s|NAXIS1=%s|NAXIS2=%s|pixscale=%s|scale_arcsec=%s|slitw_arcsec=%s|slit_angle=%s|TELRA_deg=%s|TELDEC_deg=%s" \
+		"$region_key_version" "$gain" "$filter" "$exptime" "$focus" "$navg" "$status" "$vbin" "$NAXIS1" "$NAXIS2" "$pixscale" \
+		"$scale_arcsec" "$slitw_arcsec" "$slit_angle" "$TELRA_deg" "$TELDEC_deg")
+
+	cached_key=""
+	if [ -s "$region_cache" ]; then
+		cached_key="$(cat "$region_cache")"
+	fi
+
+	if [ "$regions_key" != "$cached_key" ]; then
+		xpaset -p $id region delete all
+
+		# Camera settings
+		YCENTER=$((30/$vbin))
+		echo "image; text $XCENTER $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   FILTER=${filter}   N_AVG=${navg}} \
+		  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold} group=headsup" \
+		  | xpaset $id region 2>&1
+
+		# Camera status
+		YCENTER_STATUS=$(($NAXIS2 - $YCENTER))
+		xpaset -p $id region group status new
+		echo "image; text $XCENTER $YCENTER_STATUS # text={STATUS=${status}          FOCUS=${focus}} \
+		  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}" \
+		  | xpaset $id region 2>&1
+
+		# Slit/Scale graphic
+		YCENTER=$(($NAXIS2 / 2))
+		slitl=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
+		slitw=`awk "BEGIN { print ($slitw_arcsec/$pixscale) }"`
+
+		scalereg="image; box($XCENTER,$YCENTER,4,$slitl,$slit_angle) # color=${headsup_fontcolor} fill=1 \
+			$notouch text={$scale_arcsec\"   }"
+		echo "$scalereg" | xpaset $id region
+
+		# TCS marker
+		markerreg="icrs; point $TELRA_deg $TELDEC_deg # point=x 20 $notouch text={TCS}"
+		echo "$markerreg" | xpaset $id region
+
+		printf "%s" "$regions_key" > "$region_cache"
+	fi
 fi
 
 # Update headsup display for SLICEVIEW
@@ -126,47 +147,66 @@ if [[ "$camera" == "slicev" ]]; then
 		exit 0
 	fi
 
-	# Camera settings
-	YCENTER=$((40/$vbin))
-	fontsize=$((${headsup_fontsize}-$vbin))
-	font="{$headsup_font $fontsize $headsup_fontstyle}"   ### NOT WORKING
-	echo $font
-
-	reg="image; text $xslit $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   BIN=${vbin}   N_AVG=${navg}    } \
-	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}"
-	echo "$reg" | xpaset $id region 2>&1
-
-	# Slit graphic
-	slitw_px=`awk "BEGIN { print ($slitw_arcsec/$pixscale) }"`
-	slitl_px=`awk "BEGIN { print ( 10 / $pixscale ) }"` # constant 10" high
-	reg="image; box($xslit,$yslit,$slitw_px,$slitl_px,0) # color=$graphic_color $notouch tag={slitcenter}"
-	echo "$reg" | xpaset $id region
-
-	# circle around slit
-	radius=`awk "BEGIN { print ($slitw_px*1.5) }"`
-	reg="image; circle($xslit,$yslit,$radius) # color=$graphic_color $notouch"
-	echo "$reg" | xpaset $id region
-
-	# Slit/Slice labels
-  YCENTER=$(($NAXIS2 - 36/$vbin))
-	reg="image; text $xslit $YCENTER # text={TOP SLICE        SLIT=${slitw_arcsec}\"       BOTTOM SLICE   } \
-	  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}"
-	echo "$reg" | xpaset $id region
-
-	# Scale graphic
-	scale_arcsec=5
-	scalex=$((240/$vbin))
-	scaley=$((NAXIS2/2))
-	scalel=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
-	reg="image; box($scalex,$scaley,1,$scalel,0) # color=${headsup_fontcolor} fill=1 \
-		$notouch text={$scale_arcsec\"}"
-	echo "$reg" | xpaset $id region
-
 	# TCS marker
 	TELRA_hr=`xpaget $id fits header 1 keyword TELRA`
 	TELRA_deg=`awk "BEGIN { print ($TELRA_hr*15) }"`
 	TELDEC_deg=`xpaget $id fits header 1 keyword TELDEC`
-	reg="icrs; point($TELRA_deg, $TELDEC_deg) # point=x 20 color=$graphic_color $notouch text={    TCS}"
-	echo "$reg" | xpaset $id region
+
+	slitw_px=`awk "BEGIN { print ($slitw_arcsec/$pixscale) }"`
+	slitl_px=`awk "BEGIN { print ( 10 / $pixscale ) }"` # constant 10" high
+	radius=`awk "BEGIN { print ($slitw_px*1.5) }"`
+
+	scale_arcsec=5
+	scalex=$((240/$vbin))
+	scaley=$((NAXIS2/2))
+	scalel=`awk "BEGIN { print ($scale_arcsec/$pixscale) }"`
+
+	regions_key=$(printf "v%s|slicev|gain=%s|exptime=%s|slitw_arcsec=%s|navg=%s|vbin=%s|xslit=%s|yslit=%s|pixscale=%s|NAXIS2=%s|TELRA_deg=%s|TELDEC_deg=%s|slitw_px=%s|slitl_px=%s|radius=%s|scalex=%s|scaley=%s|scalel=%s|graphic_color=%s|headsup_fontsize=%s|headsup_fontcolor=%s" \
+		"$region_key_version" "$gain" "$exptime" "$slitw_arcsec" "$navg" "$vbin" "$xslit" "$yslit" "$pixscale" "$NAXIS2" "$TELRA_deg" "$TELDEC_deg" \
+		"$slitw_px" "$slitl_px" "$radius" "$scalex" "$scaley" "$scalel" "$graphic_color" "$headsup_fontsize" "$headsup_fontcolor")
+
+	cached_key=""
+	if [ -s "$region_cache" ]; then
+		cached_key="$(cat "$region_cache")"
+	fi
+
+	if [ "$regions_key" != "$cached_key" ]; then
+		xpaset -p $id region delete all
+
+		# Camera settings
+		YCENTER=$((40/$vbin))
+		fontsize=$((${headsup_fontsize}-$vbin))
+		font="{$headsup_font $fontsize $headsup_fontstyle}"   ### NOT WORKING
+		echo $font
+
+		reg="image; text $xslit $YCENTER # text={EXPTIME=${exptime}   EMGAIN=${gain}   BIN=${vbin}   N_AVG=${navg}    } \
+		  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}"
+		echo "$reg" | xpaset $id region 2>&1
+
+		# Slit graphic
+		reg="image; box($xslit,$yslit,$slitw_px,$slitl_px,0) # color=$graphic_color $notouch tag={slitcenter}"
+		echo "$reg" | xpaset $id region
+
+		# circle around slit
+		reg="image; circle($xslit,$yslit,$radius) # color=$graphic_color $notouch"
+		echo "$reg" | xpaset $id region
+
+		# Slit/Slice labels
+	  YCENTER=$(($NAXIS2 - 36/$vbin))
+		reg="image; text $xslit $YCENTER # text={TOP SLICE        SLIT=${slitw_arcsec}\"       BOTTOM SLICE   } \
+		  color=${headsup_fontcolor} width=2 $notouch font={helvetica ${headsup_fontsize} bold}"
+		echo "$reg" | xpaset $id region
+
+		# Scale graphic
+		reg="image; box($scalex,$scaley,1,$scalel,0) # color=${headsup_fontcolor} fill=1 \
+			$notouch text={$scale_arcsec\"}"
+		echo "$reg" | xpaset $id region
+
+		# TCS marker
+		reg="icrs; point($TELRA_deg, $TELDEC_deg) # point=x 20 color=$graphic_color $notouch text={    TCS}"
+		echo "$reg" | xpaset $id region
+
+		printf "%s" "$regions_key" > "$region_cache"
+	fi
 
 fi

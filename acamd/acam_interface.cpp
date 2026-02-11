@@ -1743,6 +1743,7 @@ namespace Acam {
     }
 
     this->astrometry.solver_args.clear();
+    this->camera.clear_skysim_args();
 
     // loop through the entries in the configuration file, stored in config class
     //
@@ -1772,6 +1773,31 @@ namespace Acam {
             logwrite(function, "ERROR configuring SOLVER_ARGS: requested tokens out of range");
             error |= ERROR;
           }
+        }
+      }
+
+      if ( starts_with( config.param[entry], "SKYSIM_ARGS" ) ) {
+        std::vector<std::string> tokens;
+        int size = Tokenize( config.arg[entry], tokens, "=" );
+        if ( size == 0 ) continue;
+        if ( size != 2 ) {
+          message.str(""); message << "ERROR: bad entry for SKYSIM_ARGS: " << config.arg[entry]
+                                   << ": expected (key=value)";
+          logwrite( function, message.str() );
+          error |= ERROR;
+          continue;
+        }
+        try {
+          this->camera.set_skysim_arg( tokens.at(0), tokens.at(1) );
+          message.str(""); message << "CONFIG:" << config.param[entry] << "=" << config.arg[entry];
+          logwrite( function, message.str() );
+          this->async.enqueue( message.str() );
+          applied++;
+        }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR configuring SKYSIM_ARGS: " << e.what();
+          logwrite( function, message.str() );
+          error |= ERROR;
         }
       }
 
@@ -3668,7 +3694,7 @@ logwrite( function, message.str() );
 
       // Finally, check the requested offset against this putonslit-modified max allowed offset
       //
-      if ( offset >= maxoffset ) {
+      if ( offset > ( maxoffset + 1e-6 ) ) {
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );

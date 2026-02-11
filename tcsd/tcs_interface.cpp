@@ -287,7 +287,16 @@ namespace TCS {
 
     TcsIO &tcs = *(tcsloc->second);
 
-    tcs.initialize_sockets();
+    error = tcs.initialize_sockets();
+    if ( error != NO_ERROR ) {
+      message.str(""); message << "ERROR opening socket connections to TCS " << tcsloc->first;
+      logwrite( function, message.str() );
+      this->name.clear();
+      retstring = "connection_failed";
+      std::string dontcare;
+      this->isopen( dontcare );             // broadcast offline status
+      return ERROR;
+    }
 
     this->name = tcs.getname();             // save the name of the opened tcs
 
@@ -1594,9 +1603,15 @@ namespace TCS {
     std::string sbuf;
 
     if ( this->name.empty() ) {
-      message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to the TCS" ;
+      std::string openret;
+      message.str(""); message << "NOTICE no TCS open while sending \"" << cmd << "\"; attempting default open";
       logwrite( function, message.str() );
-      return ERROR;
+      if ( this->open( "", openret ) != NO_ERROR ) {
+        message.str(""); message << "ERROR sending \"" << cmd << "\": no connection open to the TCS";
+        logwrite( function, message.str() );
+        retstring = "tcs_not_open";
+        return ERROR;
+      }
     }
 
     // Find the currently opened TCS (this->name) in the tcsmap.
@@ -1618,8 +1633,14 @@ namespace TCS {
 
 message.str(""); message << "DEBUG] sending cmd=" << cmd << " with type=" << (conn_type==TCS::FAST_RESPONSE?"fast":"slow") << " and to=" << to;
 logwrite(function,message.str());
-    tcs.execute_command( cmd, reply, conn_type, to );
+    long send_error = tcs.execute_command( cmd, reply, conn_type, to );
 logwrite(function,"[DEBUG] back from cmd="+cmd+" with reply="+reply);
+    if ( send_error != NO_ERROR ) {
+      message.str(""); message << "ERROR sending \"" << cmd << "\" to TCS " << this->name;
+      logwrite( function, message.str() );
+      retstring = "tcs_command_failed";
+      return ERROR;
+    }
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.
