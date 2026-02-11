@@ -1694,9 +1694,8 @@ namespace Sequencer {
       // send actuators to default positions
       logwrite( function, "setting default positions" );
       if ( this->focusd.command_timeout( FOCUSD_DEFAULTPOS, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log(function, "ERROR setting focus ");
-          throw std::runtime_error("focus "+FOCUSD_DEFAULTPOS+" returned: "+reply);
-        }
+        this->async.enqueue_and_log(function, "ERROR setting focus ");
+        throw std::runtime_error("focus "+FOCUSD_DEFAULTPOS+" returned: "+reply);
       }
     }
 
