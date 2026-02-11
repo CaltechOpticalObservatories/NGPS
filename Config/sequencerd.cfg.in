@@ -59,8 +59,8 @@ CAMERA_PROLOGUE=(native G ERS 1000 1000)
 CAMERA_PROLOGUE=(imsize I 1220 4114 0 100 1 1)
 CAMERA_PROLOGUE=(imsize R 1220 4114 0 100 1 1)
 CAMERA_PROLOGUE=(imsize G 1220 4114 0 100 1 1)
-CAMERA_PROLOGUE=(imsize U 4202 2148 0 100 1 1)
-#CAMERA_PROLOGUE=(bin row 2)
+CAMERA_PROLOGUE=(imsize U 2198 4202 0 100 1 1)
+CAMERA_PROLOGUE=(bin spat 2)
 CAMERA_PROLOGUE=(native I WRM 0x400004 2040)
 CAMERA_PROLOGUE=(native R WRM 0x400004 2040)
 CAMERA_PROLOGUE=(native G WRM 0x400004 2040)
@@ -120,12 +120,12 @@ VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 # The names used here must have a matching NPS_PLUG name defined in power.cfg
 #
 POWER_SLIT=SLIT
-POWER_CAMERA=(SHUTTER LEACH_R LEACH_I LEACH_G LEACH_U)
+POWER_CAMERA=(SHUTTER LEACH_R LEACH_I LEACH_U LEACH_G)
 POWER_CALIB=(CAL_MOT LAMP_MOD)
 POWER_LAMP=(LAMPTHAR LAMPFEAR LAMPBLUC LAMPREDC)
-POWER_FLEXURE=(FLEX_I FLEX_R FLEX_G)
+POWER_FLEXURE=(FLEX_I FLEX_R FLEX_U FLEX_G)
 POWER_FILTER=ACAM_MOT
-POWER_FOCUS=(FOCUS_IR FOCUS_G)
+POWER_FOCUS=(FOCUS_IR FOCUS_G FOCUS_U)
 POWER_TELEM=CR1000
 POWER_THERMAL=(LKS_IG LKS_UR CR1000)
 POWER_ACAM=(ACAM ACAM_MOT)
@@ -162,24 +162,29 @@ ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful a
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
 # Calibration Settings
-# CAL_TARGET=(name caldoor calcover lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
+# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
 #
 # where name must be "DEFAULT" or start with "CAL_"
 #       caldoor  = open | close
 #       calcover = open | close
-#       lamp* = on | off
-#       mod*  = on | off
-# for a total of 15 required parameters
+#       U,G,R,I = on | off        # indicates which channels to enable/disable
+#       lamp* = on | off          # lamp power
+#       mod*  = on | off          # lamp modulator
+# for a total of 19 required parameters
 # name=SCIENCE defines science target operation
 #
-CAL_TARGET=(CAL_THAR   open  close on  off off off off off off off off off off on )
-CAL_TARGET=(CAL_FEAR   open  close off off on  off off off on  off off off off off)
-CAL_TARGET=(CAL_CONT   open  close off off off on  off off off off off on  off off)
-CAL_TARGET=(CAL_ETALON open  close off off off on  off off off off on  off off off)
-CAL_TARGET=(CAL_DOME   close open  off off off off off on  off off off off off off)
-CAL_TARGET=(CAL_BIAS   close close off off off off off off off off off off off off)
-CAL_TARGET=(CAL_DARK   close close off off off off off off off off off off off off)
-CAL_TARGET=(SCIENCE    close open  off off off off off off off off off off off off)
+#           name        door  cover U   G   R   I   thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6
+CAL_TARGET=(CAL_THAR    open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on )
+CAL_TARGET=(CAL_FEAR    open  close on  on  on  on  on   on   on   on   off  off  on   off  off  off  off  off)
+CAL_TARGET=(CAL_THAR_UG open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  on )
+CAL_TARGET=(CAL_FEAR_UG open  close on  on  off off on   on   on   on   off  off  on   off  off  off  off  off)
+CAL_TARGET=(CAL_CONTR   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  on   off  off)
+CAL_TARGET=(CAL_CONTB   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  on   off)
+CAL_TARGET=(CAL_DOME    close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off)
+CAL_TARGET=(CAL_DOME_UG close open  on  on  off off off  off  off  off  off  on   off  off  off  off  off  off)
+CAL_TARGET=(CAL_BIAS    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
+CAL_TARGET=(CAL_DARK    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
+CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
 
 # miscellaneous
 #

@@ -32,10 +32,12 @@ EMULATOR_PORT=@FOCUSD_EMULATOR@
 MOTOR_CONTROLLER="I PI @IP_ETS8P@ @ETS8P_FOCUS@ 1 1"
 MOTOR_CONTROLLER="R PI @IP_ETS8P@ @ETS8P_FOCUS@ 2 1"
 MOTOR_CONTROLLER="G PI @IP_ETS8P@ @ETS8P_FOCUS@ 3 1"
-MOTOR_CONTROLLER="U GALIL @IP_UFOCUS@ 1111 0 1"  # U-channel has no addr
-#MOTOR_CONTROLLER="I localhost @FOCUSD_EMULATOR@ 1 1"  # emulator
-#MOTOR_CONTROLLER="R localhost @FOCUSD_EMULATOR@ 2 1"  # emulator
-#MOTOR_CONTROLLER="G localhost @FOCUSD_EMULATOR@ 3 1"  # emulator
+#MOTOR_CONTROLLER="U GALIL @IP_ETS8P@ @ETS8P_FOCUS@ 0 1"     # U-channel has no addr
+
+#MOTOR_CONTROLLER="I PI localhost @FOCUSD_EMULATOR@ 1 1"     # emulator
+#MOTOR_CONTROLLER="R PI localhost @FOCUSD_EMULATOR@ 2 1"     # emulator
+#MOTOR_CONTROLLER="G PI localhost @FOCUSD_EMULATOR@ 3 1"     # emulator
+#MOTOR_CONTROLLER="U GALIL localhost @FOCUSD_EMULATOR@ 0 1"  # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<motname> <axis> <min> <max> <zero> <ref> [ <default> ]"
@@ -44,8 +46,13 @@ MOTOR_CONTROLLER="U GALIL @IP_UFOCUS@ 1111 0 1"  # U-channel has no addr
 #
 MOTOR_AXIS="I 1 0 7.6 0 ref 4.75"
 MOTOR_AXIS="R 1 0 6.7 0 ref 2.45"
+<<<<<<< HEAD
 MOTOR_AXIS="G 1 0 7.8 0 ref 0.00"
 MOTOR_AXIS="U 1 0 7.8 0 na  0.00"  # U-channel axis 1=A
+=======
+MOTOR_AXIS="G 1 0 7.8 0 ref 3.35"
+#MOTOR_AXIS="U 1 0 7.8 0 ref 0.00"
+>>>>>>> main
 
 # Specify nominal focus positions for each actuator
 # MOTOR_POS="<name> <ID> <pos> <posname>"
@@ -57,5 +64,5 @@ MOTOR_AXIS="U 1 0 7.8 0 na  0.00"  # U-channel axis 1=A
 #
 MOTOR_POS="I 1 0 4.75 nominal"
 MOTOR_POS="R 1 0 2.45 nominal"
-MOTOR_POS="G 1 0 0.00 nominal"
-MOTOR_POS="U 1 0 0.00 nominal"
+MOTOR_POS="G 1 0 3.35 nominal"
+#MOTOR_POS="U 1 0 0.00 nominal"

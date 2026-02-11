@@ -12,6 +12,7 @@
  */
 
 #include "sequence.h"
+#include "message_keys.h"
 
 namespace Sequencer {
 
@@ -38,6 +39,23 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
+
+
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /**
+   * @brief      handles camerad telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    if (jmessage.contains(Key::Camerad::READY)) {
+      int isready = jmessage[Key::Camerad::READY].get<bool>();
+      this->can_expose.store(isready, std::memory_order_relaxed);
+      std::lock_guard<std::mutex> lock(camerad_mtx);
+      this->camerad_cv.notify_all();
+    }
+  }
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -723,12 +741,58 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
+    // wait until camera is ready to expose
+    //
+    std::unique_lock<std::mutex> lock(this->camerad_mtx);
+    if (!this->can_expose.load()) {
+
+      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
+
+      this->camerad_cv.wait( lock, [this]() {
+        return( this->can_expose.load() || this->cancel_flag.load() );
+      } );
+
+      if (this->cancel_flag.load()) {
+        logwrite(function, "sequence cancelled");
+        return NO_ERROR;
+      }
+    }
+
     logwrite( function, "setting camera parameters");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
+
+    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
+    // indexed by name. Calibration targets use target.name for the index, or
+    // use "SCIENCE" index for all science targets.
+    //
+    std::ostringstream activechans, deactivechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    // build up lists of (de)activate chans
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      (active ? activechans : deactivechans) << " " << chan;
+    }
+
+    // send two commands, one for each
+    if (!activechans.str().empty()) {
+      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
+    if (!deactivechans.str().empty()) {
+      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
 
     // send the EXPTIME command to camerad
     //
@@ -743,15 +807,13 @@ namespace Sequencer {
     }
 
     // send binning parameters
-    // this is only good for I/R and will have to change to be more general
-    // because not all detectors will be oriented the same!
     //
-    camcmd.str(""); camcmd << CAMERAD_BIN << " row " << this->target.binspat;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spat " << this->target.binspat;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
-    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spec " << this->target.binspect;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
@@ -2110,34 +2172,21 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
-    // name will index the caltarget map
-    //
-    std::string name(this->target.name);
-
-    if ( this->target.iscal ) {
-      name = this->target.name;
-      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
-    }
-    else {
-      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
-      name="SCIENCE";  // override for indexing the map
-    }
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
     //
-    auto calinfo = this->caltarget.get_info(name);
-    if (!calinfo) {
-      logwrite( function, "ERROR unrecognized calibration target: "+name );
-      throw std::runtime_error("unrecognized calibration target: "+name);
-    }
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    this->async.enqueue_and_log(function, "NOTICE: configuring calibrator for "+calname);
 
     // set the calib door and cover
     //
     std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
+                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
     if ( !this->cancel_flag.load() &&
@@ -2148,7 +2197,7 @@ namespace Sequencer {
 
     // set the internal calibration lamps
     //
-    for ( const auto &[lamp,state] : calinfo->lamp ) {
+    for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
@@ -2164,7 +2213,7 @@ namespace Sequencer {
 //
 //  // set the dome lamps
 //  //
-//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
+//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
 //    if ( this->cancel_flag.load() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
@@ -2175,7 +2224,7 @@ namespace Sequencer {
 
     // set the lamp modulators
     //
-    for ( const auto &[mod,state] : calinfo->lampmod ) {
+    for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
@@ -2399,7 +2448,7 @@ namespace Sequencer {
     message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
 //  if ( this->camerad.async( message.str() ) != NO_ERROR ) {
 //  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
-    if ( this->camerad.command_timeout( message.str(), reply, 12000 ) != NO_ERROR ) {
+    if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR sending camera "+message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
@@ -2769,7 +2818,6 @@ namespace Sequencer {
             if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
               async.enqueue_and_log( function, "ERROR switching off acam camera" );
               __error=ERROR;
-              break;
             }
             logwrite(function, "acam camera powered off");
 
@@ -2785,6 +2833,7 @@ namespace Sequencer {
             __error=ERROR;
           }
         }
+	break;
       }
       catch (const std::exception &e) {
         logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
@@ -3974,6 +4023,10 @@ namespace Sequencer {
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
+      this->async.enqueue_and_log( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
+      message.str(""); message << "NOTICE: camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 

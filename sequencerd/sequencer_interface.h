@@ -132,12 +132,14 @@ namespace Sequencer {
   class CalibrationTarget {
     public:
       CalibrationTarget() :
+        chans { "U", "G", "R", "I" },
         lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
         domelampnames { "LOLAMP", "HILAMP" } { }
 
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
         std::string name;                  // calibration target name
+        std::map<std::string, bool> channel_active;  // true=on
         bool caldoor;                      // true=open
         bool calcover;                     // true=open
         std::map<std::string, bool> lamp;  // true=on
@@ -152,14 +154,17 @@ namespace Sequencer {
       const std::unordered_map<std::string, calinfo_t> &getmap() const { return calmap; };
 
       ///< returns just the map contents for specified targetname key
-      const calinfo_t* get_info( const std::string &_name ) const {
+      const calinfo_t &get_info( const std::string &_name ) const {
         auto it = calmap.find(_name);
-        if ( it != calmap.end() ) return &it->second;
-        return nullptr;
+        if ( it == calmap.end() ) {
+          throw std::runtime_error("calinfo not found for: "+_name);
+        }
+        return it->second;
       }
 
     private:
       std::unordered_map<std::string, calinfo_t> calmap;
+      std::vector<std::string> chans;
       std::vector<std::string> lampnames;
       std::vector<std::string> domelampnames;
   };
