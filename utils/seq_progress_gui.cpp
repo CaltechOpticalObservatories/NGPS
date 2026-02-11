@@ -1,5 +1,5 @@
 // Small X11 sequencer progress popup with ontarget/usercontinue controls.
-// Listens to sequencerd async multicast and updates a phase progress bar.
+// Uses ZMQ telemetry and TCP polling fallback.
 
 #define Time X11Time
 #include <X11/Xlib.h>
@@ -7,13 +7,13 @@
 #include <X11/keysym.h>
 #undef Time
 
-#include <arpa/inet.h>
 #include <sys/select.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <csignal>
@@ -54,9 +54,6 @@ struct Options {
   std::string config_path;
   std::string host = "127.0.0.1";
   int nbport = 0;
-  int msgport = 0;
-  std::string msggroup = "239.1.1.234";
-  bool msggroup_set = false;
   std::string acam_config_path;
   std::string acam_host;
   int acam_nbport = 0;
@@ -73,12 +70,8 @@ struct SequenceState {
   bool offset_applicable = false;
   bool waiting_for_user = false;
   bool waiting_for_tcsop = false;
-  bool user_wait_after_failure = false;
-  bool user_gate_action_polled = false;
-  std::string user_gate_action = "NONE";  // NONE|ACQUIRE|EXPOSE|OFFSET_EXPOSE
   bool ontarget = false;
   bool guiding_on = false;
-  bool guiding_failed = false;
   double exposure_progress = 0.0;
   double exposure_elapsed = 0.0;
   double exposure_total = 0.0;
@@ -105,12 +98,8 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
-    user_wait_after_failure = false;
-    user_gate_action_polled = false;
-    user_gate_action = "NONE";
     ontarget = false;
     guiding_on = false;
-    guiding_failed = false;
     exposure_progress = 0.0;
     exposure_elapsed = 0.0;
     exposure_total = 0.0;
@@ -134,12 +123,8 @@ struct SequenceState {
     offset_applicable = false;
     waiting_for_user = false;
     waiting_for_tcsop = false;
-    user_wait_after_failure = false;
-    user_gate_action_polled = false;
-    user_gate_action = "NONE";
     ontarget = false;
     guiding_on = false;
-    guiding_failed = false;
     exposure_progress = 0.0;
     exposure_elapsed = 0.0;
     exposure_total = 0.0;
@@ -190,16 +175,6 @@ static std::vector<std::string> split_state_tokens(const std::string &s) {
   return out;
 }
 
-static int parse_int_after_colon(const std::string &s) {
-  auto pos = s.find(':');
-  if (pos == std::string::npos) return 0;
-  try {
-    return std::stoi(s.substr(pos + 1));
-  } catch (...) {
-    return 0;
-  }
-}
-
 static Options parse_args(int argc, char **argv) {
   Options opt;
   if (const char *env_host = std::getenv("NGPS_HOST"); env_host && *env_host) {
@@ -213,11 +188,6 @@ static Options parse_args(int argc, char **argv) {
       opt.host = argv[++i];
     } else if (arg == "--nbport" && i + 1 < argc) {
       opt.nbport = std::stoi(argv[++i]);
-    } else if (arg == "--msgport" && i + 1 < argc) {
-      opt.msgport = std::stoi(argv[++i]);
-    } else if (arg == "--group" && i + 1 < argc) {
-      opt.msggroup = argv[++i];
-      opt.msggroup_set = true;
     } else if (arg == "--acam-config" && i + 1 < argc) {
       opt.acam_config_path = argv[++i];
     } else if (arg == "--acam-host" && i + 1 < argc) {
@@ -233,7 +203,7 @@ static Options parse_args(int argc, char **argv) {
     } else if (arg == "--poll-ms" && i + 1 < argc) {
       opt.poll_ms = std::stoi(argv[++i]);
     } else if (arg == "--help" || arg == "-h") {
-      std::cout << "Usage: seq_progress_gui [--config <path>] [--host <ip>] [--nbport <port>] [--msgport <port>] [--group <mcast>]\n"
+      std::cout << "Usage: seq_progress_gui [--config <path>] [--host <ip>] [--nbport <port>]\n"
                    "                        [--acam-config <path>] [--acam-host <ip>] [--acam-nbport <port>]\n"
                    "                        [--pub-endpoint <zmq>] [--sub-endpoint <zmq>] [--poll-ms <ms>]\n";
       std::exit(0);
@@ -249,10 +219,6 @@ static void load_config(const std::string &path, Options &opt) {
   for (int i = 0; i < cfg.n_entries; ++i) {
     if (cfg.param[i] == "NBPORT" && opt.nbport <= 0) {
       opt.nbport = std::stoi(cfg.arg[i]);
-    } else if (cfg.param[i] == "MESSAGEPORT" && opt.msgport <= 0) {
-      opt.msgport = std::stoi(cfg.arg[i]);
-    } else if (cfg.param[i] == "MESSAGEGROUP" && !opt.msggroup_set) {
-      opt.msggroup = cfg.arg[i];
     } else if (cfg.param[i] == "PUB_ENDPOINT" && !opt.pub_endpoint_set) {
       opt.pub_endpoint = cfg.arg[i];
     } else if (cfg.param[i] == "SUB_ENDPOINT" && !opt.sub_endpoint_set) {
@@ -306,7 +272,6 @@ class SeqProgressGui {
  public:
   SeqProgressGui(const Options &opt)
       : options_(opt),
-        udp_(static_cast<uint16_t>(options_.msgport), options_.msggroup),
         cmd_iface_("sequencer", options_.host, static_cast<uint16_t>(options_.nbport)),
         acam_iface_("acam", options_.acam_host, static_cast<uint16_t>(options_.acam_nbport)) {}
 
@@ -335,21 +300,6 @@ class SeqProgressGui {
     load_font();
     compute_layout();
 
-    bool use_udp = options_.sub_endpoint.empty();
-    std::cerr << "DEBUG: use_udp=" << use_udp << " msgport=" << options_.msgport
-              << " msggroup=" << options_.msggroup << "\n";
-    if (use_udp && options_.msgport > 0 && !options_.msggroup.empty() && to_upper_copy(options_.msggroup) != "NONE") {
-      udp_fd_ = udp_.Listener();
-      if (udp_fd_ < 0) {
-        std::cerr << "ERROR starting UDP listener\n";
-        return false;
-      }
-      std::cerr << "DEBUG: UDP listener started on port " << options_.msgport
-                << " group " << options_.msggroup << " fd=" << udp_fd_ << "\n";
-    } else {
-      std::cerr << "DEBUG: UDP listener NOT started\n";
-    }
-
     init_zmq();
 
     if (options_.nbport > 0) {
@@ -367,7 +317,6 @@ class SeqProgressGui {
 
   void run() {
     const int xfd = ConnectionNumber(display_);
-    const int ufd = udp_fd();
     bool running = true;
     bool need_redraw = true;
     auto last_blink = std::chrono::steady_clock::now();
@@ -378,10 +327,6 @@ class SeqProgressGui {
       FD_ZERO(&fds);
       FD_SET(xfd, &fds);
       int maxfd = xfd;
-      if (ufd >= 0) {
-        FD_SET(ufd, &fds);
-        maxfd = std::max(maxfd, ufd);
-      }
 
       struct timeval tv;
       tv.tv_sec = 0;
@@ -389,15 +334,6 @@ class SeqProgressGui {
 
       int ret = select(maxfd + 1, &fds, nullptr, nullptr, &tv);
       if (ret > 0) {
-        if (ufd >= 0 && FD_ISSET(ufd, &fds)) {
-          std::string msg;
-          udp_.Receive(msg);
-          if (msg.find("EXPTIME:") != std::string::npos) {
-            std::cerr << "DEBUG UDP received: " << msg.substr(0, 80) << "\n";
-          }
-          handle_message(msg);
-          need_redraw = true;
-        }
         if (FD_ISSET(xfd, &fds)) {
           while (XPending(display_)) {
             XEvent ev;
@@ -447,14 +383,12 @@ class SeqProgressGui {
   const int kWinH = 220;
 
   Options options_;
-  Network::UdpSocket udp_;
   Network::Interface cmd_iface_;
   Network::Interface acam_iface_;
   zmqpp::context zmq_context_;
   std::unique_ptr<Common::PubSub> zmq_sub_;
   std::unique_ptr<Common::PubSub> zmq_pub_;
   SequenceState state_;
-  int udp_fd_ = -1;
   std::chrono::steady_clock::time_point last_zmq_seqstate_;
   std::chrono::steady_clock::time_point last_zmq_waitstate_;
   std::chrono::steady_clock::time_point last_zmq_any_;
@@ -489,8 +423,6 @@ class SeqProgressGui {
   unsigned long color_wait_ = 0;
 
   XFontStruct *font_ = nullptr;
-
-  int udp_fd() const { return udp_fd_; }
 
   void init_zmq() {
     if (!options_.sub_endpoint.empty()) {
@@ -716,27 +648,73 @@ class SeqProgressGui {
     XDrawString(display_, window_, gc_, tx, ty, label, std::strlen(label));
   }
 
+  enum class UserGateIntent {
+    CONTINUE,
+    ACQUIRE,
+    EXPOSE,
+    OFFSET_EXPOSE
+  };
+
+  bool has_pending_target_offset() const {
+    return state_.offset_applicable ||
+           std::fabs(state_.offset_ra) > 1.0e-6 ||
+           std::fabs(state_.offset_dec) > 1.0e-6;
+  }
+
+  bool is_pre_acquire_gate() const {
+    if (!state_.waiting_for_user) return false;
+    if (state_.acqmode != 2) return false;
+    return !state_.phase_active[PHASE_SOLVE] &&
+           !state_.phase_complete[PHASE_SOLVE] &&
+           !state_.phase_active[PHASE_FINE] &&
+           !state_.phase_complete[PHASE_FINE] &&
+           !state_.phase_active[PHASE_OFFSET] &&
+           !state_.phase_complete[PHASE_OFFSET] &&
+           !state_.phase_active[PHASE_EXPOSE] &&
+           state_.current_frame == 0 &&
+           !state_.guiding_on;
+  }
+
+  UserGateIntent infer_user_gate_intent() const {
+    if (!state_.waiting_for_user) return UserGateIntent::CONTINUE;
+    if (is_pre_acquire_gate()) return UserGateIntent::ACQUIRE;
+    if (has_pending_target_offset()) return UserGateIntent::OFFSET_EXPOSE;
+    if (state_.acqmode == 2 || state_.acqmode == 3) return UserGateIntent::EXPOSE;
+    return UserGateIntent::CONTINUE;
+  }
+
+  const char *continue_label() const {
+    switch (infer_user_gate_intent()) {
+      case UserGateIntent::ACQUIRE:      return "ACQUIRE";
+      case UserGateIntent::EXPOSE:       return "EXPOSE";
+      case UserGateIntent::OFFSET_EXPOSE:return "OFFSET & EXPOSE";
+      default:                           return "CONTINUE";
+    }
+  }
+
   void draw_user_instruction() {
     if (!state_.waiting_for_user) return;
     if (!blink_on_) return;  // blink the instruction for visibility
 
     char instruction[256];
-    if (!state_.user_gate_action_polled || state_.user_gate_action == "NONE") {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click CONTINUE <<<");
-    } else if (state_.user_gate_action == "ACQUIRE") {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click ACQUIRE to start acquisition <<<");
-    } else if (state_.user_gate_action == "OFFSET_EXPOSE") {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click OFFSET & EXPOSE to apply offset (RA=%.2f\" DEC=%.2f\") then expose <<<",
-               state_.offset_ra, state_.offset_dec);
-    } else if (state_.user_gate_action == "EXPOSE") {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Click EXPOSE to begin exposure (no target offset) <<<");
-    } else {
-      snprintf(instruction, sizeof(instruction),
-               ">>> Waiting for sequencer USER action details... <<<");
+    switch (infer_user_gate_intent()) {
+      case UserGateIntent::ACQUIRE:
+        snprintf(instruction, sizeof(instruction),
+                 ">>> Click ACQUIRE to start acquisition <<<");
+        break;
+      case UserGateIntent::OFFSET_EXPOSE:
+        snprintf(instruction, sizeof(instruction),
+                 ">>> Click OFFSET & EXPOSE to apply offset (RA=%.2f\" DEC=%.2f\") then expose <<<",
+                 state_.offset_ra, state_.offset_dec);
+        break;
+      case UserGateIntent::EXPOSE:
+        snprintf(instruction, sizeof(instruction),
+                 ">>> Click EXPOSE to begin exposure <<<");
+        break;
+      default:
+        snprintf(instruction, sizeof(instruction),
+                 ">>> Click CONTINUE <<<");
+        break;
     }
 
     XSetForeground(display_, gc_, color_wait_);  // red bold
@@ -745,17 +723,7 @@ class SeqProgressGui {
 
   void draw_buttons() {
     draw_button(ontarget_btn_, "ONTARGET", state_.waiting_for_tcsop);
-    const char *continue_label = "CONTINUE";
-    if (state_.waiting_for_user && state_.user_gate_action_polled) {
-      if (state_.user_gate_action == "ACQUIRE") {
-        continue_label = "ACQUIRE";
-      } else if (state_.user_gate_action == "OFFSET_EXPOSE") {
-        continue_label = "OFFSET & EXPOSE";
-      } else if (state_.user_gate_action == "EXPOSE") {
-        continue_label = "EXPOSE";
-      }
-    }
-    draw_button(continue_btn_, continue_label, state_.waiting_for_user);
+    draw_button(continue_btn_, continue_label(), state_.waiting_for_user);
   }
 
   void draw_ontarget_indicator() {
@@ -956,21 +924,6 @@ class SeqProgressGui {
         if (jmessage.contains("acqmode") && jmessage["acqmode"].is_number()) {
           state_.acqmode = jmessage["acqmode"].get<int>();
         }
-        if (jmessage.contains("user_gate_action") && jmessage["user_gate_action"].is_string()) {
-          std::string gate = to_upper_copy(jmessage["user_gate_action"].get<std::string>());
-          if (gate != "ACQUIRE" && gate != "EXPOSE" && gate != "OFFSET_EXPOSE" && gate != "NONE") {
-            gate = "NONE";
-          }
-          if (state_.waiting_for_user) {
-            if (gate != "NONE") {
-              state_.user_gate_action = gate;
-              state_.user_gate_action_polled = true;
-            }
-          } else {
-            state_.user_gate_action = gate;
-            state_.user_gate_action_polled = false;
-          }
-        }
         if (jmessage.contains("nexp") && jmessage["nexp"].is_number()) {
           int new_nexp = jmessage["nexp"].get<int>();
           if (new_nexp != state_.nexp) {
@@ -1054,8 +1007,7 @@ class SeqProgressGui {
     const bool allow_tcp_poll = !have_zmq || (zmq_quiet && stale_seq);
 
     if (options_.poll_ms > 0) {
-      // During USER wait, keep polling snapshots until gate action arrives.
-      if (have_zmq && zmq_pub_ && state_.waiting_for_user && !state_.user_gate_action_polled &&
+      if (have_zmq && zmq_pub_ && state_.waiting_for_user &&
           std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= 1000) {
         request_snapshot();
         updated = true;
@@ -1110,7 +1062,10 @@ class SeqProgressGui {
       return;
     }
 
-    if (cmd_iface_.send_command("wstate") != 0 && !cmd_iface_.isopen()) {
+    reply.clear();
+    if (cmd_iface_.send_command("wstate", reply, 200) == 0 && !reply.empty()) {
+      handle_waitstate(reply);
+    } else if (!cmd_iface_.isopen()) {
       cmd_iface_.reconnect();
       return;
     }
@@ -1136,7 +1091,6 @@ class SeqProgressGui {
       std::string lower = to_lower_copy(reply);
       if (lower.find("guiding") != std::string::npos) {
         state_.guiding_on = true;
-        state_.guiding_failed = false;
       } else if (lower.find("stopped") != std::string::npos || lower.find("acquir") != std::string::npos) {
         state_.guiding_on = false;
       }
@@ -1167,7 +1121,6 @@ class SeqProgressGui {
   }
 
   void handle_waitstate(const std::string &waitstate) {
-    bool was_waiting_for_user = state_.waiting_for_user;
     state_.waitstate = waitstate;
     last_waitstate_update_ = std::chrono::steady_clock::now();
     auto tokens = split_ws(waitstate);
@@ -1180,16 +1133,8 @@ class SeqProgressGui {
 
     state_.waiting_for_tcsop = has_tcsop;
     state_.waiting_for_user = has_user;
-    if (has_user && !was_waiting_for_user) {
-      // New USER gate: default to CONTINUE until explicit gate action is polled.
-      state_.user_gate_action = "NONE";
-      state_.user_gate_action_polled = false;
+    if (has_user) {
       request_snapshot();
-    }
-    if (!has_user) {
-      // USER gate action applies only while WAITSTATE includes USER.
-      state_.user_gate_action = "NONE";
-      state_.user_gate_action_polled = false;
     }
 
     if (!has_tcsop && (has_acquire || has_guide || has_expose || has_readout || has_user)) {
@@ -1243,55 +1188,7 @@ class SeqProgressGui {
       }
     } else if (starts_with_local(msg, "WAITSTATE:")) {
       handle_waitstate(trim_copy(msg.substr(10)));
-    } else if (starts_with_local(msg, "EXPTIME:")) {
-      // Parse EXPTIME:remaining total percent
-      auto parts = split_ws(msg.substr(8)); // Skip "EXPTIME:"
-      std::cerr << "DEBUG EXPTIME parsing, parts.size=" << parts.size() << "\n";
-      if (parts.size() >= 3) {
-        try {
-          int remaining_ms = std::stoi(parts[0]);
-          int total_ms = std::stoi(parts[1]);
-          int percent = std::stoi(parts[2]);
-          std::cerr << "DEBUG EXPTIME parsed: remaining=" << remaining_ms
-                    << " total=" << total_ms << " percent=" << percent << "\n";
-          if (total_ms > 0) {
-            int elapsed_ms = total_ms - remaining_ms;
-            state_.exposure_elapsed = elapsed_ms / 1000.0;
-            state_.exposure_total = total_ms / 1000.0;
-            // Smooth the percentage (exponential moving average to handle multiple cameras)
-            double new_progress = std::min(1.0, percent / 100.0);
-            if (state_.exposure_progress > 0.0) {
-              state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
-            } else {
-              state_.exposure_progress = new_progress;
-            }
-            std::cerr << "DEBUG exposure_progress now: " << state_.exposure_progress
-                      << " (from percent=" << percent << ")\n";
-            set_phase(PHASE_EXPOSE);
-          }
-        } catch (const std::exception &e) {
-          std::cerr << "DEBUG EXPTIME parse exception: " << e.what() << "\n";
-        }
-      }
-    } else if (starts_with_local(msg, "ELAPSEDTIME")) {
-      auto parts = split_ws(msg);
-      if (parts.size() >= 2) {
-        int elapsed_ms = parse_int_after_colon(parts[0]);
-        int total_ms = parse_int_after_colon(parts[1]);
-        if (total_ms > 0) {
-          state_.exposure_elapsed = elapsed_ms / 1000.0;
-          state_.exposure_total = total_ms / 1000.0;
-          state_.exposure_progress = std::min(1.0, state_.exposure_elapsed / state_.exposure_total);
-          set_phase(PHASE_EXPOSE);
-        }
-      }
-    }
-
-    if (msg.find("NOTICE: waiting for TCS operator") != std::string::npos) {
-      state_.waiting_for_tcsop = true;
-      set_phase(PHASE_SLEW);
-    }
-    if (starts_with_local(msg, "TARGETSTATE:")) {
+    } else if (starts_with_local(msg, "TARGETSTATE:")) {
       std::string upper = to_upper_copy(msg);
       int obsid = -1;
       auto pos = upper.find("OBSID:");
@@ -1319,57 +1216,6 @@ class SeqProgressGui {
         }
       }
     }
-    if (msg.find("NOTICE: received ontarget") != std::string::npos) {
-      state_.ontarget = true;
-      state_.phase_complete[PHASE_SLEW] = true;
-      clear_phase_active(PHASE_SLEW);
-      state_.waiting_for_tcsop = false;
-      state_.last_ontarget = std::chrono::steady_clock::now();
-    }
-    if (msg.find("NOTICE: waiting for USER") != std::string::npos) {
-      // USER gate intent is driven by seq_waitstate + seq_progress.user_gate_action.
-      // Ignore async NOTICE text so UDP/non-ZMQ paths cannot override ZMQ truth.
-      // Detect if this is a failure-based user wait
-      if (msg.find("guiding failed") != std::string::npos ||
-          msg.find("fine tune failed") != std::string::npos) {
-        state_.user_wait_after_failure = true;
-      }
-    }
-    if (msg.find("NOTICE: received continue") != std::string::npos) {
-      state_.user_wait_after_failure = false;
-    }
-    if (msg.find("NOTICE: waiting for ACAM guiding") != std::string::npos) {
-      state_.guiding_on = false;
-      state_.guiding_failed = false;
-      set_phase(PHASE_SOLVE);
-    }
-    if (msg.find("failed to reach guiding state") != std::string::npos ||
-        msg.find("guiding failed") != std::string::npos) {
-      state_.guiding_failed = true;
-      state_.guiding_on = false;
-    }
-    if (msg.find("NOTICE: running fine tune command") != std::string::npos) {
-      state_.guiding_on = true;
-      state_.guiding_failed = false;
-      set_phase(PHASE_FINE);
-    }
-    if (msg.find("NOTICE: fine tune complete") != std::string::npos) {
-      state_.guiding_on = true;
-      state_.guiding_failed = false;
-      state_.phase_complete[PHASE_FINE] = true;
-      clear_phase_active(PHASE_FINE);
-    }
-    if (msg.find("NOTICE: applying target offset") != std::string::npos) {
-      state_.offset_applicable = true;
-      set_phase(PHASE_OFFSET);
-    }
-    if (msg.find("NOTICE: waiting for offset settle") != std::string::npos) {
-      set_phase(PHASE_OFFSET);
-    }
-    if (msg.find("NOTICE: running fine tune command") != std::string::npos &&
-        state_.phase_complete[PHASE_SOLVE]) {
-      clear_phase_active(PHASE_SOLVE);
-    }
   }
 };
 
@@ -1393,8 +1239,8 @@ int main(int argc, char **argv) {
     std::cerr << "ERROR: NBPORT not set (check sequencerd.cfg)\n";
     return 1;
   }
-  if (opt.msgport <= 0 && opt.sub_endpoint.empty()) {
-    std::cerr << "WARNING: MESSAGEPORT not set and SUB_ENDPOINT empty; only polling will be available\n";
+  if (opt.sub_endpoint.empty()) {
+    std::cerr << "WARNING: SUB_ENDPOINT not set; seq-progress will run in polling-only mode\n";
   }
 
   SeqProgressGui gui(opt);

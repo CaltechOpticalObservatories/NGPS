@@ -7,4 +7,4 @@ SCRIPT_DIR="$(cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd)"
 export NGPS_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 CONFIG="${NGPS_ROOT}/Config/sequencerd.cfg"
-exec "${NGPS_ROOT}/bin/seq_progress_gui" --config "${CONFIG}" --group NONE --msgport 0 --poll-ms 10000
+exec "${NGPS_ROOT}/bin/seq_progress_gui" --config "${CONFIG}" --poll-ms 10000
