@@ -950,13 +950,8 @@ class SeqProgressGui {
         }
         if (jmessage.contains("exptime_percent") && jmessage["exptime_percent"].is_number()) {
           int percent = jmessage["exptime_percent"].get<int>();
-          double new_progress = std::min(1.0, percent / 100.0);
-          // Smooth the percentage (exponential moving average)
-          if (state_.exposure_progress > 0.0) {
-            state_.exposure_progress = 0.7 * state_.exposure_progress + 0.3 * new_progress;
-          } else {
-            state_.exposure_progress = new_progress;
-          }
+          percent = std::max(0, std::min(100, percent));
+          state_.exposure_progress = percent / 100.0;
           set_phase(PHASE_EXPOSE);
         }
       } else if (topic == "acamd") {
