@@ -22,6 +22,9 @@ SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
 #
 TCSD_PORT=@TCSD_BLK_PORT@
 ACAMD_PORT=@ACAMD_BLK_PORT@
+# AUTOACQ_ARGS defines defaults for slicecamd in-process ngps_acq.
+# This line intentionally includes all supported ngps_acq options.
+AUTOACQ_ARGS="--frame-mode stream --input /tmp/slicecam.fits --goal-x 150.0 --goal-y 115.5 --bg-x1 80 --bg-x2 165 --bg-y1 30 --bg-y2 210 --pixel-origin 1 --max-dist 40 --snr 3 --min-adj 4 --centroid-hw 4 --centroid-sigma 1.2 --loop 1 --cadence-sec 4 --prec-arcsec 0.4 --goal-arcsec 0.3 --gain 1.0 --dry-run 0 --tcs-set-units 0 --verbose 1 --debug 1 --use-putonslit 1 --adaptive 1 --adaptive-bright 40000 --adaptive-bright-goal 10000"
 
 # ANDOR=( <name> [emulate] <sn> <scale> <hflip> <vflip> <rot> <temp> <hbin> <vbin> )
 # For each slice camera specify:

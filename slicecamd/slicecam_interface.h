@@ -10,6 +10,8 @@
 
 #include <future>
 #include <cmath>
+#include <cstdint>
+#include <map>
 #include <cpython.h>
 #include "network.h"
 #include "logentry.h"
@@ -18,6 +20,7 @@
 #include "atmcdLXd.h"
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include "slicecam_fits.h"
 #include "config.h"
 #include "tcsd_commands.h"
@@ -239,6 +242,13 @@ namespace Slicecam {
       std::chrono::steady_clock::time_point framegrab_time;
       std::mutex framegrab_mtx;
       std::condition_variable cv;
+      std::atomic<bool> autoacq_running;
+      std::atomic<bool> autoacq_abort_requested;
+      std::atomic<uint64_t> autoacq_run_counter;
+      std::mutex autoacq_state_mtx;
+      std::string autoacq_state;
+      std::string autoacq_message;
+      int autoacq_exit_code;
 
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
@@ -287,6 +297,12 @@ namespace Slicecam {
         : context(),
           tcs_online(false),
           err(false),
+          autoacq_running(false),
+          autoacq_abort_requested(false),
+          autoacq_run_counter(0),
+          autoacq_state("idle"),
+          autoacq_message(""),
+          autoacq_exit_code(0),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false),
@@ -294,7 +310,8 @@ namespace Slicecam {
           is_framegrab_running(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
-          snapshot_status { { "slitd", false }, {"tcsd", false} }
+          snapshot_status { { "slitd", false }, {"tcsd", false} },
+          autoacq_args("--frame-mode stream --input /tmp/slicecam.fits --goal-x 150.0 --goal-y 115.5 --bg-x1 80 --bg-x2 165 --bg-y1 30 --bg-y2 210 --pixel-origin 1 --max-dist 40 --snr 3 --min-adj 4 --centroid-hw 4 --centroid-sigma 1.2 --loop 1 --cadence-sec 4 --prec-arcsec 0.4 --goal-arcsec 0.3 --gain 1.0 --dry-run 0 --tcs-set-units 0 --verbose 1 --debug 1 --use-putonslit 1 --adaptive 1 --adaptive-bright 40000 --adaptive-bright-goal 10000")
       {
         topic_handlers = {
           { "_snapshot", std::function<void(const nlohmann::json&)>(
@@ -329,6 +346,7 @@ namespace Slicecam {
       Common::DaemonClient acamd { "acamd" };  /// for communicating with acamd
 
       SkyInfo::FPOffsets fpoffsets;            /// for calling Python fpoffsets, defined in ~/Software/common/skyinfo.h
+      std::string autoacq_args;                /// default arguments for in-process auto-acquire
 
       // publish/subscribe functions
       //
@@ -359,6 +377,7 @@ namespace Slicecam {
       long framegrab( std::string args );                            /// wrapper to control Andor frame grabbing
       long framegrab( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
       long framegrab_fix( std::string args, std::string &retstring );    /// wrapper to control Andor frame grabbing
+      long autoacq( std::string args, std::string &retstring );      /// run/monitor fine-acquire helper
       long image_quality( std::string args, std::string &retstring );  /// wrapper for Astrometry::image_quality
       long put_on_slit( std::string args, std::string &retstring );  /// put target on slit
       long solve( std::string args, std::string &retstring );  /// wrapper for Astrometry::solve
@@ -371,6 +390,9 @@ namespace Slicecam {
       long gain( std::string args, std::string &retstring );
 
       long get_acam_guide_state( bool &is_guiding );
+      bool autoacq_stop_requested() const {
+        return this->autoacq_abort_requested.load(std::memory_order_acquire);
+      }
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 
@@ -380,6 +402,9 @@ namespace Slicecam {
 
       static void dothread_fpoffset( Slicecam::Interface &iface );
       void dothread_framegrab( const std::string whattodo, const std::string sourcefile );
+      void dothread_autoacq( std::string args, std::string logfile, uint64_t run_id );
+      void publish_autoacq_state( const std::string &state, uint64_t run_id,
+                                  int exit_code, const std::string &message );
       void preserve_framegrab();
       long collect_header_info_threaded();
   };

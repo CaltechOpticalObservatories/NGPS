@@ -12,7 +12,8 @@
  */
 
 #include "sequence.h"
-#include "message_keys.h"
+
+#include <fstream>
 
 namespace Sequencer {
 
@@ -41,21 +42,55 @@ namespace Sequencer {
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
 
 
-  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /***** Sequencer::Sequence::handletopic_slicecam_autoacq ********************/
   /**
-   * @brief      handles camerad telemetry
-   * @param[in]  jmessage  subscribed-received JSON message
+   * @brief      handles slicecamd autoacq status updates
+   * @param[in]  jmessage_in  subscribed-received JSON message
    *
    */
-  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
-    if (jmessage.contains(Key::Camerad::READY)) {
-      int isready = jmessage[Key::Camerad::READY].get<bool>();
-      this->can_expose.store(isready, std::memory_order_relaxed);
-      std::lock_guard<std::mutex> lock(camerad_mtx);
-      this->camerad_cv.notify_all();
+  void Sequence::handletopic_slicecam_autoacq( const nlohmann::json &jmessage_in ) {
+    if ( !jmessage_in.contains("state") ) return;
+    if ( jmessage_in.contains("source") &&
+         jmessage_in.at("source").is_string() &&
+         jmessage_in.at("source").get<std::string>() != "slicecamd" ) return;
+
+    std::string state = jmessage_in.value( "state", "" );
+    std::string message = jmessage_in.value( "message", "" );
+    uint64_t run_id = jmessage_in.value( "run_id", static_cast<uint64_t>(0) );
+
+    bool should_notify = false;
+    bool should_publish = false;
+    {
+      std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+
+      // Ignore stale messages when waiting on a specific run_id.
+      if ( this->fine_tune_run_id != 0 && run_id != 0 && run_id != this->fine_tune_run_id ) return;
+
+      if ( state == "running" ) {
+        this->fine_tune_active.store( true, std::memory_order_release );
+        this->fine_tune_done = false;
+        this->fine_tune_success = false;
+        this->fine_tune_message = message;
+        should_publish = true;
+      }
+      else if ( state == "success" || state == "failed" || state == "aborted" ) {
+        this->fine_tune_active.store( false, std::memory_order_release );
+        this->fine_tune_done = true;
+        this->fine_tune_success = ( state == "success" );
+        this->fine_tune_message = message;
+        should_notify = true;
+        should_publish = true;
+      }
+      else if ( state == "idle" ) {
+        this->fine_tune_active.store( false, std::memory_order_release );
+        should_publish = true;
+      }
     }
+
+    if ( should_publish ) this->publish_progress();
+    if ( should_notify ) this->fine_tune_cv.notify_all();
   }
-  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /***** Sequencer::Sequence::handletopic_slicecam_autoacq ********************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -73,6 +108,7 @@ namespace Sequencer {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_progress();
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
@@ -193,6 +229,65 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::publish_threadstate *****************************/
+
+
+  /***** Sequencer::Sequence::publish_progress ********************************/
+  /**
+   * @brief      publishes progress information with topic "seq_progress"
+   * @details    publishes fine-grained progress tracking for seq-progress GUI
+   *
+   */
+  void Sequence::publish_progress() {
+    nlohmann::json jmessage_out;
+    jmessage_out["source"] = Sequencer::DAEMON_NAME;
+
+    // Track fine-tune status from slicecamd autoacq state
+    jmessage_out["fine_tune_active"] = this->fine_tune_active.load(std::memory_order_acquire);
+
+    // Track offset status
+    jmessage_out["offset_active"] = this->offset_active.load();
+
+    // offset_settle is true when we're waiting after applying offset
+    // (determined by caller context - set before calling publish_progress)
+    jmessage_out["offset_settle"] = this->offset_active.load();  // same as offset_active for simplicity
+
+    // ontarget status
+    jmessage_out["ontarget"] = this->is_ontarget.load();
+
+    // Current target info
+    jmessage_out["obsid"] = this->target.obsid;
+    jmessage_out["target_state"] = this->target.state;
+
+    // Target offset values (arcsec)
+    jmessage_out["offset_ra"] = this->target.offset_ra;
+    jmessage_out["offset_dec"] = this->target.offset_dec;
+
+    // Number of exposures for this target
+    jmessage_out["nexp"] = this->target.nexp;
+
+    // Current acquisition mode
+    jmessage_out["acqmode"] = this->acq_automatic_mode;
+
+    // Explicit USER gate action for GUI button labeling
+    std::string user_gate_action = "NONE";
+    switch ( this->user_gate_action.load() ) {
+      case USER_GATE_ACQUIRE:      user_gate_action = "ACQUIRE"; break;
+      case USER_GATE_EXPOSE:       user_gate_action = "EXPOSE"; break;
+      case USER_GATE_OFFSET_EXPOSE:user_gate_action = "OFFSET_EXPOSE"; break;
+      default:                     user_gate_action = "NONE"; break;
+    }
+    jmessage_out["user_gate_action"] = user_gate_action;
+
+    try {
+      this->publisher->publish( jmessage_out, "seq_progress" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Sequencer::Sequence::publish_progress",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Sequencer::Sequence::publish_progress ********************************/
 
 
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
@@ -324,6 +419,36 @@ namespace Sequencer {
           }
         }
 
+        // --------------------------------------------------------------
+        // Republish EXPTIME messages to ZMQ for seq-progress GUI
+        // Parse EXPTIME:remaining total percent and publish to seq_progress
+        // Rate-limited: only publish when percent changes to reduce message spam
+        // --------------------------------------------------------------
+        //
+        if ( statstr.compare( 0, 8, "EXPTIME:" ) == 0 ) {                           // async message tag EXPTIME:
+          // Parse "EXPTIME:remaining total percent"
+          std::string vals = statstr.substr(8);  // Skip "EXPTIME:"
+          std::istringstream iss(vals);
+          int remaining, total, percent;
+          if (iss >> remaining >> total >> percent) {
+            static int last_published_percent = -1;
+            // Only publish when percentage changes (rate limiting)
+            if (percent != last_published_percent) {
+              nlohmann::json jmessage;
+              jmessage["source"] = Sequencer::DAEMON_NAME;
+              jmessage["exptime_remaining_ms"] = remaining;
+              jmessage["exptime_total_ms"] = total;
+              jmessage["exptime_percent"] = percent;
+              try {
+                seq.publisher->publish( jmessage, "seq_progress" );
+                last_published_percent = percent;
+              } catch (...) {
+                // Ignore publish errors
+              }
+            }
+          }
+        }
+
         // ------------------------------------------------------------------
         // Set READOUT flag and clear EXPOSE flag when pixels start coming in
         // ------------------------------------------------------------------
@@ -336,11 +461,30 @@ namespace Sequencer {
 
         // ---------------------------------------------
         // clear READOUT flag on the end-of-frame signal
+        // Parse and publish frame count for seq-progress GUI
         // ---------------------------------------------
         //
         if ( statstr.compare( 0, 10, "FRAMECOUNT" ) == 0 ) {                        // async message tag FRAMECOUNT
           if ( seq.wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
             seq.wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+          }
+          // Parse frame number from "FRAMECOUNT_<dev>:<framenum> rows=X cols=Y"
+          size_t colon_pos = statstr.find(':');
+          if (colon_pos != std::string::npos) {
+            size_t space_pos = statstr.find(' ', colon_pos);
+            try {
+              std::string frame_str = statstr.substr(colon_pos + 1,
+                                                     space_pos == std::string::npos ? std::string::npos : space_pos - colon_pos - 1);
+              int framenum = std::stoi(frame_str);
+              // Publish frame count to seq_progress topic
+              nlohmann::json jmessage;
+              jmessage["source"] = Sequencer::DAEMON_NAME;
+              jmessage["current_frame"] = framenum;
+              jmessage["nexp"] = seq.target.nexp;
+              seq.publisher->publish(jmessage, "seq_progress");
+            } catch (...) {
+              // Ignore parse errors
+            }
           }
         }
 
@@ -481,6 +625,7 @@ namespace Sequencer {
         //
         message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
         this->async.enqueue( message.str() );
+        this->publish_progress();  // Publish new target info (obsid, target_state)
 #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] target found, starting threads" );
 #endif
@@ -578,40 +723,331 @@ namespace Sequencer {
  *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
  ***/
 
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target then handle acquisition automation
       //
       if ( !this->target.iscal ) {
-
-        // waiting for user signal (or cancel)
-        //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
         {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
-
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        std::stringstream mode_msg;
+        mode_msg << "NOTICE: acquisition automation mode " << this->acq_automatic_mode;
+        this->async.enqueue_and_log( function, mode_msg.str() );
         }
 
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
+        auto wait_for_user = [&](const std::string &notice, UserGateAction action) -> bool {
+          this->is_usercontinue.store(false);
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+          this->user_gate_action.store( action );
+          this->publish_progress();
+          this->async.enqueue_and_log( function, "NOTICE: "+notice );
+          while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+            std::unique_lock<std::mutex> lock(cv_mutex);
+            this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+          }
+          this->async.enqueue_and_log( function, "NOTICE: received "
+                                                 +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                                 +" signal!" );
+          this->user_gate_action.store( USER_GATE_NONE );
+          this->publish_progress();
+          if ( this->cancel_flag.load() ) return false;
+          this->is_usercontinue.store(false);
+          return true;
+        };
 
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-          return;
+        auto wait_for_guiding = [&]() -> long {
+          ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_GUIDE );
+          this->async.enqueue_and_log( function, "NOTICE: waiting for ACAM guiding" );
+          auto start_time = std::chrono::steady_clock::now();
+          const bool use_timeout = ( this->acquisition_timeout > 0 );
+          const auto timeout = std::chrono::duration<double>( this->acquisition_timeout );
+          while ( !this->cancel_flag.load() ) {
+            std::string reply;
+            if ( this->acamd.command( ACAMD_ACQUIRE, reply ) != NO_ERROR ) {
+              logwrite( function, "ERROR reading ACAM acquire state" );
+              return ERROR;
+            }
+            if ( reply.find( "guiding" ) != std::string::npos ) return NO_ERROR;
+            if ( reply.find( "stopped" ) != std::string::npos ) return ERROR;
+            if ( use_timeout && std::chrono::steady_clock::now() > ( start_time + timeout ) ) return TIMEOUT;
+            std::this_thread::sleep_for( std::chrono::milliseconds(500) );
+          }
+          return ERROR;
+        };
+
+        auto run_fine_tune = [&]() -> long {
+          if ( this->acq_fine_tune_cmd.empty() ) return NO_ERROR;
+          std::string cmd_to_run = this->acq_fine_tune_cmd;
+          std::string acq_logfile;
+          if ( this->acq_fine_tune_log ) {
+            std::string datedir = get_latest_datedir( "/data" );
+            if ( !datedir.empty() ) {
+              std::stringstream logfilename;
+              logfilename << "/data/" << datedir << "/logs/ngps_acq_" << datedir << ".log";
+              acq_logfile = logfilename.str();
+            }
+            else {
+              acq_logfile = "/tmp/ngps_acq.log";
+              this->async.enqueue_and_log( function, "NOTICE: /data datedir not found, logging fine tune output to "+acq_logfile );
+            }
+          }
+
+          auto append_fine_tune_log = [&]( const std::string &line ) {
+            if ( !this->acq_fine_tune_log || acq_logfile.empty() ) return;
+            std::ofstream logfile( acq_logfile, std::ios::app );
+            if ( logfile.is_open() ) {
+              logfile << "=== SEQUENCER: " << line << " ===" << std::endl;
+            }
+          };
+
+          if ( this->acq_fine_tune_log && !acq_logfile.empty() ) {
+            this->async.enqueue_and_log( function, "NOTICE: logging fine tune output to "+acq_logfile );
+          }
+
+          this->async.enqueue_and_log( function, "NOTICE: starting slicecamd autoacq: "+cmd_to_run );
+
+          {
+            std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+            this->fine_tune_done = false;
+            this->fine_tune_success = false;
+            this->fine_tune_run_id = 0;
+            this->fine_tune_message.clear();
+          }
+
+          std::string start_reply;
+          std::string start_cmd = SLICECAMD_AUTOACQ + " start";
+          if ( !acq_logfile.empty() ) start_cmd += " --log-file " + acq_logfile;
+          if ( !cmd_to_run.empty() ) start_cmd += " " + cmd_to_run;
+          this->fine_tune_active.store( true, std::memory_order_release );
+          this->publish_progress();
+
+          if ( this->slicecamd.command( start_cmd, start_reply ) != NO_ERROR ) {
+            this->fine_tune_active.store( false, std::memory_order_release );
+            this->publish_progress();
+            this->async.enqueue_and_log( function, "ERROR failed to start slicecamd autoacq" );
+            append_fine_tune_log( "failed to start slicecamd autoacq" );
+            return ERROR;
+          }
+
+          auto runpos = start_reply.find( "run_id=" );
+          if ( runpos != std::string::npos ) {
+            try {
+              std::string runid_str = start_reply.substr( runpos + 7 );
+              std::vector<std::string> tokens;
+              Tokenize( runid_str, tokens, " " );
+              if ( !tokens.empty() ) {
+                std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                this->fine_tune_run_id = std::stoull( tokens.at(0) );
+              }
+            }
+            catch ( const std::exception & ) { }
+          }
+
+          bool sent_stop = false;
+          bool timed_out = false;
+          auto stop_deadline = std::chrono::steady_clock::time_point::min();
+          auto next_status_poll = std::chrono::steady_clock::now();
+          const bool use_timeout = ( this->acquisition_timeout > 0 );
+          const auto fine_tune_timeout = std::chrono::duration<double>( this->acquisition_timeout );
+          const auto fine_tune_start = std::chrono::steady_clock::now();
+          while ( true ) {
+            {
+              std::unique_lock<std::mutex> lock( this->fine_tune_mtx );
+              if ( this->fine_tune_cv.wait_for( lock, std::chrono::milliseconds(200),
+                                                [this](){ return this->fine_tune_done || this->cancel_flag.load(); } ) ) {
+                if ( this->fine_tune_done ) break;
+              }
+            }
+
+            // Fallback in case status topic messages are delayed or dropped.
+            if ( std::chrono::steady_clock::now() >= next_status_poll ) {
+              next_status_poll = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+              std::string status_reply;
+              if ( this->slicecamd.command( SLICECAMD_AUTOACQ + " status", status_reply ) == NO_ERROR ) {
+                auto pos = status_reply.find( "state=" );
+                if ( pos != std::string::npos ) {
+                  std::string statestr = status_reply.substr( pos + 6 );
+                  std::vector<std::string> tokens;
+                  Tokenize( statestr, tokens, " " );
+                  if ( !tokens.empty() ) {
+                    if ( tokens.at(0) == "success" || tokens.at(0) == "failed" || tokens.at(0) == "aborted" ) {
+                      std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                      this->fine_tune_done = true;
+                      if ( timed_out ) {
+                        this->fine_tune_success = false;
+                        this->fine_tune_message = "fine tune timeout";
+                      }
+                      else {
+                        this->fine_tune_success = ( tokens.at(0) == "success" );
+                        this->fine_tune_message = "fine tune " + tokens.at(0);
+                      }
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+
+            if ( use_timeout && !timed_out &&
+                 std::chrono::steady_clock::now() > ( fine_tune_start + fine_tune_timeout ) ) {
+              timed_out = true;
+              this->async.enqueue_and_log( function,
+                                           "ERROR: fine tune timed out after "
+                                           +std::to_string(this->acquisition_timeout)
+                                           +" s; stopping slicecamd autoacq" );
+              {
+                std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+                this->fine_tune_success = false;
+                this->fine_tune_message = "fine tune timeout";
+              }
+              if ( !sent_stop ) {
+                this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+                sent_stop = true;
+                stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+              }
+            }
+
+            if ( timed_out && stop_deadline != std::chrono::steady_clock::time_point::min() &&
+                 std::chrono::steady_clock::now() > stop_deadline ) {
+              std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+              this->fine_tune_done = true;
+              this->fine_tune_success = false;
+              if ( this->fine_tune_message.empty() ) this->fine_tune_message = "fine tune timeout";
+              break;
+            }
+
+            if ( this->cancel_flag.load() ) {
+              if ( !sent_stop ) {
+                this->async.enqueue_and_log( function, "NOTICE: abort requested; stopping slicecamd autoacq" );
+                this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+                sent_stop = true;
+                stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+              }
+              else
+              if ( stop_deadline != std::chrono::steady_clock::time_point::min() &&
+                   std::chrono::steady_clock::now() > stop_deadline ) {
+                break;
+              }
+            }
+          }
+
+          bool success = false;
+          std::string fine_tune_message;
+          {
+            std::lock_guard<std::mutex> lock( this->fine_tune_mtx );
+            success = this->fine_tune_success;
+            fine_tune_message = this->fine_tune_message;
+            this->fine_tune_run_id = 0;
+          }
+
+          this->fine_tune_active.store( false, std::memory_order_release );
+          this->publish_progress();
+
+          if ( success ) {
+            this->async.enqueue_and_log( function, "NOTICE: fine tune complete" );
+            append_fine_tune_log( "fine tune complete" );
+            return NO_ERROR;
+          }
+
+          if ( fine_tune_message.empty() ) fine_tune_message = "fine tune failed";
+          this->async.enqueue_and_log( function, "ERROR: "+fine_tune_message );
+          append_fine_tune_log( fine_tune_message );
+          return ERROR;
+        };
+
+        if ( this->acq_automatic_mode == 1 ) {
+          if ( !wait_for_user( "waiting for USER to send \"continue\" signal", USER_GATE_EXPOSE ) ) {
+            this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+            return;
+          }
         }
+        else {
+          if ( this->acq_automatic_mode == 2 ) {
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to start acquisition", USER_GATE_ACQUIRE ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
+          }
 
-        this->is_usercontinue.store(false);
+          this->async.enqueue_and_log( function, "NOTICE: starting acquisition" );
+          std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
 
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+          long acqerr = wait_for_guiding();
+          if ( acqerr != NO_ERROR ) {
+            std::string reason = ( acqerr == TIMEOUT ? "timeout" : "error" );
+            this->async.enqueue_and_log( function, "WARNING: failed to reach guiding state ("+reason+"); falling back to manual continue" );
+            UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                         ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+            if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (guiding failed)", gate_action ) ) {
+              this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+              return;
+            }
+            // Apply offset if target has one, even though guiding failed
+            if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              // Zero TCS offsets first so observer sees only the target offset
+              this->async.enqueue_and_log( function, "NOTICE: zeroing TCS offsets before applying target offset" );
+              error |= this->tcsd.command( TCSD_NATIVE + " z" );
+              this->async.enqueue_and_log( function, "NOTICE: applying target offset" );
+              this->offset_active.store(true);
+              this->publish_progress();
+              error |= this->target_offset();
+              this->offset_active.store(false);
+              if ( error != NO_ERROR ) {
+                this->thread_error_manager.set( THR_ACQUISITION );
+                this->publish_progress();
+                return;
+              }
+              if ( this->acq_offset_settle > 0 ) {
+                this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+              }
+              this->publish_progress();
+            }
+          }
+          else {
+            bool fine_tune_ok = ( run_fine_tune() == NO_ERROR );
+            if ( !fine_tune_ok ) {
+              this->async.enqueue_and_log( function, "WARNING: fine tune failed; waiting for USER continue to apply offset and expose" );
+              UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                           ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose (fine tune failed)", gate_action ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
+              }
+            }
+
+            // acqmode 2: wait for user before offset (only if fine-tune succeeded)
+            if ( fine_tune_ok && this->acq_automatic_mode == 2 ) {
+              UserGateAction gate_action = ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 )
+                                           ? USER_GATE_OFFSET_EXPOSE : USER_GATE_EXPOSE;
+              if ( !wait_for_user( "waiting for USER to send \"continue\" signal to apply offset and expose", gate_action ) ) {
+                this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+                return;
+              }
+            }
+
+            // Apply offset for both acqmode 2 and 3, regardless of fine-tune success
+            // If target has offset defined, apply it before exposing
+            if ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) {
+              // Zero TCS offsets first so observer sees only the target offset
+              this->async.enqueue_and_log( function, "NOTICE: zeroing TCS offsets before applying target offset" );
+              error |= this->tcsd.command( TCSD_NATIVE + " z" );
+              std::string mode_str = (this->acq_automatic_mode == 3 && fine_tune_ok) ? "automatically " : "";
+              this->async.enqueue_and_log( function, "NOTICE: applying target offset " + mode_str );
+              this->offset_active.store(true);
+              this->publish_progress();  // Publish offset_active=true
+              error |= this->target_offset();
+              this->offset_active.store(false);
+              if ( error != NO_ERROR ) {
+                this->thread_error_manager.set( THR_ACQUISITION );
+                this->publish_progress();  // Publish with offset error state
+                return;
+              }
+              if ( this->acq_offset_settle > 0 ) {
+                this->async.enqueue_and_log( function, "NOTICE: waiting for offset settle time" );
+                std::this_thread::sleep_for( std::chrono::duration<double>( this->acq_offset_settle ) );
+              }
+              this->publish_progress();  // Publish offset complete
+            }
+          }
+        }
 
         // Ensure slit offset is in "expose" position
         //
@@ -700,6 +1136,7 @@ namespace Sequencer {
       //
       message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
       this->async.enqueue( message.str() );
+      this->publish_progress();  // Publish target completion state
 
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
@@ -741,58 +1178,12 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
-    // wait until camera is ready to expose
-    //
-    std::unique_lock<std::mutex> lock(this->camerad_mtx);
-    if (!this->can_expose.load()) {
-
-      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
-
-      this->camerad_cv.wait( lock, [this]() {
-        return( this->can_expose.load() || this->cancel_flag.load() );
-      } );
-
-      if (this->cancel_flag.load()) {
-        logwrite(function, "sequence cancelled");
-        return NO_ERROR;
-      }
-    }
-
     logwrite( function, "setting camera parameters");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
-
-    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
-    // indexed by name. Calibration targets use target.name for the index, or
-    // use "SCIENCE" index for all science targets.
-    //
-    std::ostringstream activechans, deactivechans;
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
-    const auto &calinfo = this->caltarget.get_info(calname);
-
-    // build up lists of (de)activate chans
-    for (const auto &[chan,active] : calinfo.channel_active) {
-      (active ? activechans : deactivechans) << " " << chan;
-    }
-
-    // send two commands, one for each
-    if (!activechans.str().empty()) {
-      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
-        throw std::runtime_error("camera returned "+reply);
-      }
-    }
-    if (!deactivechans.str().empty()) {
-      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
-        throw std::runtime_error("camera returned "+reply);
-      }
-    }
 
     // send the EXPTIME command to camerad
     //
@@ -855,12 +1246,7 @@ namespace Sequencer {
         modestr = "EXPOSE";
         break;
       case Sequencer::VSM_ACQUIRE:
-        // uses virtual-mode width and offset for acquire,
-        // but only for new targets
-        if ( this->target.ra_hms == this->last_ra_hms &&
-             this->target.dec_dms == this->last_dec_dms ) {
-          return NO_ERROR;
-        }
+        // uses virtual-mode width and offset for acquire
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
@@ -2175,14 +2561,24 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    // name will index the caltarget map
+    //
+    std::string name(this->target.name);
+
+    if ( this->target.iscal ) {
+      name = this->target.name;
+      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
+    }
+    else {
+      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
+      name="SCIENCE";  // override for indexing the map
+    }
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
+    // get_info() throws exception if not found, so no need to check for null.
     //
-    const auto &calinfo = this->caltarget.get_info(calname);
-
-    this->async.enqueue_and_log(function, "NOTICE: configuring calibrator for "+calname);
+    const auto &calinfo = this->caltarget.get_info(name);
 
     // set the calib door and cover
     //
@@ -2216,7 +2612,7 @@ namespace Sequencer {
 //
 //  // set the dome lamps
 //  //
-//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
+//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
 //    if ( this->cancel_flag.load() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
@@ -2272,6 +2668,15 @@ namespace Sequencer {
     //
     this->cancel_flag.store(true);
     this->cv.notify_all();
+
+    // request slicecamd to stop autoacq if it is running
+    //
+    if ( this->fine_tune_active.load(std::memory_order_acquire) ) {
+      logwrite( function, "NOTICE: stopping slicecamd autoacq" );
+      this->slicecamd.command( SLICECAMD_AUTOACQ + " stop" );
+      this->fine_tune_active.store( false, std::memory_order_release );
+      this->publish_progress();
+    }
 
     // drop into do-one to prevent auto increment to next target
     //
@@ -4047,10 +4452,6 @@ namespace Sequencer {
 
       message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
       this->async.enqueue_and_log( function, message.str() );
-      retstring.append( message.str() ); retstring.append( "\n" );
-
-      message.str(""); message << "NOTICE: camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
-      this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 
       error = NO_ERROR;
@@ -4628,13 +5029,16 @@ namespace Sequencer {
     else
 
     // ---------------------------------------------------------
-    // clearlasttarget -- clear the last target name, allowing repointing
-    //                    to the same target (otherwise move_to_target won't
-    //                    repoint the telescope if the name is the same)
+    // clearlasttarget -- clear the last target name and coordinates, allowing
+    //                    full re-acquisition of the same target (otherwise
+    //                    move_to_target and acquisition will skip if coords match)
     // ---------------------------------------------------------
     //
     if ( testname == "clearlasttarget" ) {
       this->last_target="";
+      this->last_ra_hms="";
+      this->last_dec_dms="";
+      this->async.enqueue_and_log( function, "cleared last target coordinates" );
       error=NO_ERROR;
     }
     else

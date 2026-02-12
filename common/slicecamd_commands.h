@@ -10,6 +10,7 @@
 #pragma once
 
 const std::string SLICECAMD_AVGFRAMES= "avgframes"; ///< set/get camera binning
+const std::string SLICECAMD_AUTOACQ  = "autoacq";   ///< run/monitor in-process auto-acquire logic
 const std::string SLICECAMD_BIN      = "bin";       ///< set/get camera binning
 const std::string SLICECAMD_CLOSE    = "close";     ///< *** close connection to all devices
 const std::string SLICECAMD_CONFIG   = "config";    ///< reload configuration, apply what can be applied
@@ -69,6 +70,7 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_SPEED+" [ ? | <hori> <vert> ]",
                                                 SLICECAMD_TEMP+" [ ? | <setpoint> ]",
                                                 "  OTHER:",
+                                                SLICECAMD_AUTOACQ+" [ ? | start [--log-file <path>] [<args>] | stop | status ]",
                                                 SLICECAMD_PUTONSLIT+" [ ? | <slitra> <slitdec> <crossra> <crossdec> ]",
                                                 SLICECAMD_SAVEFRAMES+" [ ? | <nsave> <nskip> ]",
                                                 SLICECAMD_SHUTDOWN+" [ ? ]",
