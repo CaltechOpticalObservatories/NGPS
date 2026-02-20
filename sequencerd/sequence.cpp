@@ -818,6 +818,13 @@ namespace Sequencer {
       this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
+    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
+      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      throw std::runtime_error( "camera returned "+reply );
+    }
+
+    this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 
     this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 

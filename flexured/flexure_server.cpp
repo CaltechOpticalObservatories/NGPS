@@ -9,6 +9,7 @@
 
 namespace Flexure {
 
+  Server* Server::instance = nullptr;
 
   /***** Flexure::Server::exit_cleanly ****************************************/
   /**
@@ -24,6 +25,41 @@ namespace Flexure {
   /***** Flexure::Server::exit_cleanly ****************************************/
 
 
+  /***** Flexure::Server::handle_signal ***************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  signo
+   *
+   */
+  void Server::handle_signal(int signo) {
+    const std::string function("Flexure::Server::handle_signal");
+    std::ostringstream message;
+
+    switch (signo) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite(function, "received termination signal");
+        message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        Server::instance->exit_cleanly();                      // shutdown the daemon
+        break;
+      case SIGHUP:
+        logwrite(function, "ignored SIGHUP");
+        break;
+      case SIGPIPE:
+        logwrite(function, "ignored SIGPIPE");
+        break;
+      default:
+        message << "received unknown signal " << strsignal(signo);
+        logwrite( function, message.str() );
+        message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        break;
+    }
+  }
+  /***** Flexure::Server::handle_signal ***************************************/
+
+
   /***** Flexure::Server::configure_flexured **********************************/
   /**
    * @brief      read and apply the configuration file for the flexure daemon
@@ -33,7 +69,7 @@ namespace Flexure {
   long Server::configure_flexured() {
     std::string function = "Flexure::Server::configure_flexured";
     std::stringstream message;
-    int applied=0;
+    int numapplied=0, lastapplied=0;
     long error;
 
     // Clear the motormap map before loading new information from the config file
@@ -43,6 +79,8 @@ namespace Flexure {
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      lastapplied=numapplied;
 
       // NBPORT -- nonblocking listening port for the flexure daemon
       //
@@ -60,10 +98,9 @@ namespace Flexure {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // BLKPORT -- blocking listening port for the flexure daemon
       //
@@ -81,10 +118,9 @@ namespace Flexure {
           return(ERROR);
         }
         this->blkport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCPORT -- asynchronous broadcast message port for the flexure daemon
       //
@@ -102,29 +138,42 @@ namespace Flexure {
           return(ERROR);
         }
         this->asyncport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // ASYNCGROUP -- asynchronous broadcast group for the flexure daemon
       //
       if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
         this->asyncgroup = config.arg[entry];
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //                     Each CONTROLLER is stored in an STL map indexed by motorname
       //
       if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
         if ( this->interface.motorinterface.load_controller_config( config.arg[entry] ) == NO_ERROR ) {
-          message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
+      }
+      else
+
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic = DAEMON_NAME;   // default publish topic is my name
+        numapplied++;
+      }
+      else
+
+      // SUB_ENDPOINT
+      //
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        numapplied++;
       }
 
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
@@ -145,9 +194,7 @@ namespace Flexure {
 
         if ( loc != _motormap.end() ) {
           this->interface.motorinterface.add_axis( AXIS );
-          message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
+          numapplied++;
         }
         else {
           message.str(""); message << "ERROR motor name \"" << AXIS.motorname << "\" "
@@ -160,6 +207,29 @@ namespace Flexure {
           break;
         }
       }
+      else
+
+      // POSITION_COEFFICIENTS
+      //
+      if ( config.param[entry] == "POSITION_COEFFICIENTS" ) {
+        error=interface.compensator.load_vector_from_config(config.arg[entry], VectorType::POSITION_COEFFICIENTS);
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
+
+      // FLEXURE_POLYNOMIALS
+      //
+      if ( config.param[entry] == "FLEXURE_POLYNOMIALS" ) {
+        error=interface.compensator.load_vector_from_config(config.arg[entry], VectorType::FLEXURE_POLYNOMIALS);
+        if (error==NO_ERROR) {
+          numapplied++;
+        }
+        else return ERROR;
+      }
+      else
 
       // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
       //
@@ -181,22 +251,27 @@ namespace Flexure {
           logwrite( function, message.str() );
           return ERROR;
         }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-        applied++;
+        numapplied++;
       }
 
+      if (numapplied>lastapplied) {
+        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
+      }
     } // end loop through the entries in the configuration file
 
+//logwrite(function, "will start subscriber thread");
+//    this->interface.start_subscriber_thread();
+
     message.str("");
-    if (applied==0) {
+    if (numapplied==0) {
       message << "ERROR: ";
       error = ERROR;
     }
     else {
       error = NO_ERROR;
     }
-    message << "applied " << applied << " configuration lines to flexured";
+    message << "applied " << numapplied << " configuration lines to flexured";
     logwrite(function, message.str());
 
     if ( error == NO_ERROR ) error = this->interface.initialize_class();
@@ -554,7 +629,7 @@ namespace Flexure {
       // Don't append anything nor log the reply if the command was just requesting help.
       //
       if (ret != NOTHING) {
-        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( ! retstring.empty() && ret != HELP ) retstring.append( " " );
         if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
         if ( ret == JSON ) {

@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <climits>
+#include <cstddef>
 #include <sstream>
 #include <queue>
 #include <string>
@@ -218,6 +220,13 @@ namespace Common {
 
         for ( const auto &topic : topics ) {
           iface.subscriber_topics.push_back(topic);
+        }
+
+        // check subscriber initialization (this would be a programming error)
+        //
+        if (!iface.subscriber) {
+          logwrite(function, "ERROR subscriber object is not initialized");
+          return ERROR;
         }
 
         try {
