@@ -214,7 +214,4 @@ namespace AstroCam {
   }
   /***** AstroCam::Interface::native ****************8*************************/
 
-  long Interface::_image_size( std::string args, std::string &retstring, const bool save_as_default ) {
-    return this->image_size( args, retstring, save_as_default );
-  }
 }

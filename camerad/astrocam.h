@@ -1001,10 +1001,12 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
           int skiprows;
           int skipcols;
 
-          int defcols;                     //!< number of detector columns (unchanged by binning)
-          int defrows;                     //!< number of detector rows (unchanged by binning)
-          int defoscols;                   //!< requested number of overscan rows
-          int defosrows;                   //!< requested number of overscan columns
+          int defcols;                     //!< default number of detector columns
+          int defrows;                     //!< default number of detector rows
+          int defoscols;                   //!< default number of overscan rows
+          int defosrows;                   //!< default number of overscan columns
+          int defbincols;                  //!< default number of overscan rows
+          int defbinrows;                  //!< default number of overscan columns
 
           std::string imsize_args;         ///< IMAGE_SIZE arguments read from config file, used to restore default
 
@@ -1032,6 +1034,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
           // Functions
           //
+          bool has_boi() const { return !info.interest_bands.empty(); }
           inline uint32_t get_bufsize() { return this->bufsize; };
           inline uint32_t set_bufsize( uint32_t sz ) { this->bufsize=sz; return this->bufsize; };
           long alloc_workbuf();
@@ -1082,6 +1085,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       // Functions
       //
+      void get_logical(Controller* pcontroller,
+                       int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec);
       long camera_active_state(const std::string &args, std::string &retstring, AstroCam::ActiveState cmd);
       Controller* get_controller(const int dev);
       Controller* get_active_controller(const int dev);
@@ -1117,6 +1122,12 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long load_firmware(std::string &retstring);                          ///< wrapper for load_firmware
       long load_firmware(std::string timlodfile, std::string &retstring);  ///< wrapper for load_firmware
       long band_of_interest( std::string args, std::string &retstring );   ///< set/get interest bands
+      long load_boi_pairs(Controller* pcontroller, int dev,
+                          const std::string &chan, const std::string &args,
+                          std::string &retstring);
+      long reset_boi_full(Controller* pcontroller, int dev,
+                          const std::string &chan, std::string &retstring);
+      std::string print_bands_of_interest(Controller* pcontroller);
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
       long do_exptime(std::string exptime_in, std::string &retstring);
@@ -1128,8 +1139,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long shutter(std::string shutter_in, std::string& shutter_out);
       long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
-      long image_size( std::string args, std::string &retstring, const bool save_as_default=false );
-      long _image_size( std::string args, std::string &retstring, const bool save_as_default=false );
+      long image_size( std::string args, std::string &retstring );
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);

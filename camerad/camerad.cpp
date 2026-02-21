@@ -662,7 +662,7 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_IMSIZE ) {
-                    ret = server._image_size(args, retstring);
+                    ret = server.image_size(args, retstring);
                     }
     else
     if ( cmd == CAMERAD_READOUT ) {
