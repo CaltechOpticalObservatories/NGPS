@@ -1122,11 +1122,11 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long load_firmware(std::string &retstring);                          ///< wrapper for load_firmware
       long load_firmware(std::string timlodfile, std::string &retstring);  ///< wrapper for load_firmware
       long band_of_interest( std::string args, std::string &retstring );   ///< set/get interest bands
-      long load_boi_pairs(Controller* pcontroller, int dev,
-                          const std::string &chan, const std::string &args,
-                          std::string &retstring);
+      long parse_boi_pairs(Controller* pcontroller, const std::string &args);
+      long load_boi_pairs(Controller* pcontroller);
       long reset_boi_full(Controller* pcontroller, int dev,
                           const std::string &chan, std::string &retstring);
+      long adjust_boi_for_binning(Controller* pcontroller, int nskip, int nread, std::pair<int,int> &adj);
       std::string print_bands_of_interest(Controller* pcontroller);
       long set_camera_mode(std::string mode);
       long exptime(std::string exptime_in, std::string &retstring);
@@ -1165,6 +1165,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long do_native(std::vector<int> selectdev, std::string cmdstr);    ///< specified by vector
       long do_native(std::vector<int> selectdev, std::string cmdstr, std::string &retstring);  ///< specified by vector
       long do_native(int dev, std::string cmdstr, std::string &retstring);  ///< specified by devnum
+      long do_native(int dev, std::string cmdstr);  ///< specified by devnum
 
       long write_frame( int expbuf, int devnum, const std::string chan, int fpbcount );
 

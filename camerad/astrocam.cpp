@@ -846,6 +846,7 @@ namespace AstroCam {
     return( NO_ERROR );
   }
 
+
   /***** AstroCam::Interface::do_bin ******************************************/
   /**
    * @brief      set/get binning factor
@@ -934,40 +935,40 @@ namespace AstroCam {
           auto pcontroller = this->get_active_controller(dev);
           if (!pcontroller) continue;
 
-          // determine which physical axis corresponds to the requested logical axis
-          int physical_axis;
-          if (logical_axis == "spec") {
-            physical_axis = pcontroller->spec_physical_axis();
+          // For Bands of Interest this will recompute the BOI table and set the image size
+          if (pcontroller->has_boi() && logical_axis=="spec") {
+            error = this->load_boi_pairs(pcontroller);
           }
           else {
-            physical_axis = pcontroller->spat_physical_axis();
+            // Make a local copy of the class' binning for both (physical) axes
+            //
+            int _binning[2];
+            _binning[_ROW_] = pcontroller->info.binning[_ROW_];
+            _binning[_COL_] = pcontroller->info.binning[_COL_];
+            // determine which physical axis corresponds to the requested logical axis
+            int physical_axis = logical_axis=="spec" ? pcontroller->spec_physical_axis()
+                                                     : pcontroller->spat_physical_axis();
+            // then override only the axis requested here.
+            _binning[physical_axis] = binfactor;
+
+            // call image_size() with logical coordinates
+            int spat, spec, osspat, osspec, binspat, binspec;
+            pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
+                                             spat, spec);
+            pcontroller->physical_to_logical(pcontroller->osrows0, pcontroller->oscols0,
+                                             osspat, osspec);
+            pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
+                                             binspat, binspec);
+            message.str("");
+            message << dev     << " "
+                    << spat    << " "
+                    << spec    << " "
+                    << osspat  << " "
+                    << osspec  << " "
+                    << binspat << " "
+                    << binspec;
+            error = this->image_size( message.str(), retstring );  // this retstring only used on error
           }
-
-          // Make a local copy of the class' binning for both (physical) axes
-          //
-          int _binning[2];
-          _binning[_ROW_] = pcontroller->info.binning[_ROW_];
-          _binning[_COL_] = pcontroller->info.binning[_COL_];
-          // then override only the axis requested here.
-          _binning[physical_axis] = binfactor;
-
-          // call image_size() with logical coordinates
-          int spat, spec, osspat, osspec, binspat, binspec;
-          pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                           spat, spec);
-          pcontroller->physical_to_logical(pcontroller->osrows0, pcontroller->oscols0,
-                                           osspat, osspec);
-          pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
-                                           binspat, binspec);
-          message.str("");
-          message << dev     << " "
-                  << spat    << " "
-                  << spec    << " "
-                  << osspat  << " "
-                  << osspec  << " "
-                  << binspat << " "
-                  << binspec;
-          error = this->image_size( message.str(), retstring );  // this retstring only used on error
           if (error != NO_ERROR) break;
         }
       }
@@ -1646,6 +1647,10 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
+  long Interface::do_native(int dev, std::string cmdstr) {
+    std::string dontcare;
+    return this->do_native(dev, cmdstr, dontcare);
+  }
   long Interface::do_native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<int> selectdev;
     if ( this->controller.at(dev).active ) selectdev.push_back( dev );
@@ -3966,7 +3971,7 @@ for ( const auto &dev : selectdev ) {
    *             number of rows to read. Each successive skip picks up where the
    *             last read left off. This makes use of firmware from NGPS / SWIFT
    *             commit 8080c66aeeae5aafccfd861771e5143ec114e81a
-   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1>]
+   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1> ... ]
    * @param[out] retstring  reference to a string for return values
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -4063,7 +4068,8 @@ for ( const auto &dev : selectdev ) {
     //
     else
     if (!readonly) {
-      error = this->load_boi_pairs(pcontroller, dev, chan, args, retstring);
+      error = this->parse_boi_pairs(pcontroller, args);
+      if (error==NO_ERROR) error = this->load_boi_pairs(pcontroller);
     }
 
     // always return the current table
@@ -4075,23 +4081,15 @@ for ( const auto &dev : selectdev ) {
   /***** AstroCam::Interface::band_of_interest ********************************/
 
 
-  /***** AstroCam::Interface::load_boi_pairs **********************************/
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
   /**
-   * @brief      parses the args for nskip,nread pairs and loads them into the controller
+   * @brief      parses the args for nskip,nread pairs and stores them in the class
    * @param[in]  pcontroller  pointer to Controller object
-   * @param[in]  dev          dev number
-   * @param[in]  chan         channel for this dev
-   * @param[in]  args         input args list
-   * @param[out] retstring    return string
+   * @param[in]  args         expected: <chan>|<dev#> [full|<nskip1> <nread1> ... ]
    *
    */
-  long Interface::load_boi_pairs(Controller* pcontroller,
-                                 int dev,
-                                 const std::string &chan,
-                                 const std::string &args,
-                                 std::string &retstring) {
-    const std::string function = "AstroCam::Interface::load_boi_pairs";
-    std::ostringstream message;
+  long Interface::parse_boi_pairs(Controller* pcontroller, const std::string &args) {
+    const std::string function = "AstroCam::Interface::parse_boi_pairs";
 
     std::istringstream iss(args);
     std::vector<std::pair<int,int>> boi_table;
@@ -4099,17 +4097,16 @@ for ( const auto &dev : selectdev ) {
     std::string dummy;
     iss >> dummy;       // skip the first token which is chan|dev
 
-    // loop through args string, validating and creating a boi_table
+    // loop through args string, validating and creating a vector of the BOI table
+    // expecting pairs: nskip nread
     //
     while (iss >> nskip >> nread) {
       if (nread <= 0) {
         logwrite(function, "ERROR nread must be greater than 0");
-        retstring="invalid_argument";
         return ERROR;
       }
       if (nskip < 0) {
         logwrite(function, "ERROR nskip cannot be negative");
-        retstring="invalid_argument";
         return ERROR;
       }
       boi_table.emplace_back(nskip, nread);
@@ -4120,37 +4117,58 @@ for ( const auto &dev : selectdev ) {
     // non-int or odd number of values leaves the input stream before EOF
     if (!iss.eof() || boi_table.empty()) {
       logwrite( function, "ERROR expected pairs of integer values <nskip> <nread>" );
-      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    // overwrite class vector on success
+    pcontroller->info.interest_bands = boi_table;
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
+
+
+  /***** AstroCam::Interface::load_boi_pairs **********************************/
+  /**
+   * @brief      loads the interest_bands table into the controller, applying binning
+   * @param[in]  pcontroller  pointer to Controller object
+   *
+   */
+  long Interface::load_boi_pairs(Controller* pcontroller) {
+    const std::string function = "AstroCam::Interface::load_boi_pairs";
+
+    auto chan = pcontroller->channel;
+    auto dev  = pcontroller->devnum;
+
+    if (!pcontroller->has_boi()) {
+      logwrite(function, "ERROR chan "+chan+" BOI table empty");
       return ERROR;
     }
 
     // initialize BOI table in controller firmware
-    if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
+    if ( this->do_native( dev, "BOI 0 0 0" ) != NO_ERROR ) return ERROR;
 
-    // and clear the class table
-    pcontroller->info.interest_bands.clear();
-
-    // the total number spatial lines in the image will be the sum of all the nreads
+    // the total number spatial lines in the image will be the sum of all nreads of all bands
     int spat_total = 0;
 
-    // send the BOI table to the controller firmware, one pair at a time
-    //
-    for (const auto &[nskipval, nreadval] : boi_table) {
+    // loop through the class interest bands table
+    // adjust nskip,nread for binning and write the adjusted values
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      if (adjust_boi_for_binning(pcontroller, nskip, nread, adj)==ERROR) {
+        logwrite( function, "ERROR BOI too small for current binning");
+        return ERROR;
+      }
+
       // Load this interest band into a table on the controller.
       // Firmware requires a non-zero 3rd arg here.
-      //
       std::ostringstream cmd;
-      cmd << "BOI " << nskipval << " " << nreadval << " " << 0xFFFF;
-      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      cmd << "BOI " << adj.first << " " << adj.second << " " << 0xFFFF;
+      if ( this->do_native( dev, cmd.str() ) != NO_ERROR ) return ERROR;
       logwrite(function, "chan "+chan+": "+cmd.str());
 
-      // add this spatial line to the interest_bands table for this controller
-      //
-      pcontroller->info.interest_bands.emplace_back( nskipval, nreadval );
-
       // running summation of spatial lines of each band in the table
-      //
-      spat_total += nreadval;
+      spat_total += adj.second;
     }
 
     // Before updating the image size, translate the current dimensions (rows/cols)
@@ -4178,11 +4196,47 @@ for ( const auto &dev : selectdev ) {
         << osspec_current  << " "  // don't change original spectral overscans
         << binspat_current << " "  // don't change spatial binning
         << binspec_current;        // don't change spectral binning
-    if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
-    return NO_ERROR;
+    std::string retstring;
+    return this->image_size( cmd.str(), retstring );
   }
   /***** AstroCam::Interface::load_boi_pairs **********************************/
+
+
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
+  /**
+   * @brief      applies binning factor to BOI table in controller
+   * @details    BOI table is in unbinned units. This applies current binning
+   *             factor to ensure band contains an integral number of pixels and
+   *             ends on the requested unbinned pixel. The band is shortened by
+   *             the number of pixels to make it evenly divisible, which are added
+   *             into the skip portion.
+   * @param[in]  pcontroller   pointer to Controller object
+   * @param[in]  nskip         unbinned number to skip
+   * @param[in]  nread         unbinned number to read
+   * @param[out] <nskip,nread> pair adjusted for binning
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::adjust_boi_for_binning(Controller* pcontroller,
+                                         int nskip,
+                                         int nread,
+                                         std::pair<int,int> &adj) {
+    const std::string function = "AstroCam::Interface::adjust_boi_for_binning";
+
+    // bands of interest are always in the spatial axis
+    int spat_bin = pcontroller->info.binning[pcontroller->spat_physical_axis()];
+
+    // ensure nread is evenly divisible by binfactor
+    int modulus   = nread % spat_bin;
+
+    // remove the modulus from nread and add it to nskip
+    adj.first  = nskip + modulus;
+    adj.second = nskip - modulus;
+
+    return (adj.second > 0 ? NO_ERROR : ERROR);
+  }
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
 
 
   /***** AstroCam::Interface::reset_boi_full **********************************/
@@ -4252,8 +4306,10 @@ for ( const auto &dev : selectdev ) {
     if (!pcontroller->has_boi()) return "full";
     int boinum=0;
     std::ostringstream oss;
-    for ( const auto &[nskip,nread] : pcontroller->info.interest_bands ) {
-      oss << ++boinum << ": " << nskip << " " << nread << "\n";
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      adjust_boi_for_binning(pcontroller, nskip, nread, adj);
+      oss << ++boinum << ": " << adj.first << " " << adj.second << "\n";
     }
     return oss.str();
   }
