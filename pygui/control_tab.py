@@ -1,133 +1,192 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QFrame, QMessageBox
+from PyQt5.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QLineEdit, QFrame, QMessageBox, QDialog
+)
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtMultimedia import QSound
 from logic_service import LogicService
-import astropy.units as u
 import subprocess
 
-class ControlTab(QWidget):
+
+class ControlTab(QDialog):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
+
+        # state flags
+        self.is_paused = False
+
+        # build UI
         self.create_control_tab()
+
+        # services
         self.logic_service = LogicService(self.parent)
 
+    # -----------------------------
+    # Style helpers (centralized)
+    # -----------------------------
+    def _style_enabled_green(self, btn: QPushButton):
+        btn.setEnabled(True)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover   { background-color: #388E3C; }
+            QPushButton:pressed { background-color: #2C6B2F; }
+        """)
+
+    def _style_disabled_gray(self, btn: QPushButton):
+        btn.setEnabled(False)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #D3D3D3;
+                color: black;
+                font-weight: bold;
+                padding: 10px;
+                border: none;
+                border-radius: 5px;
+            }
+        """)
+
+    def _style_black(self, btn: QPushButton):
+        btn.setEnabled(True)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                border: none;
+                color: white;
+                font-weight: bold;
+            }
+            QPushButton:hover   { background-color: #333333; }
+            QPushButton:pressed { background-color: #555555; }
+        """)
+
+    def _apply_startup_style(self):
+        self.startup_shutdown_button.setText("Startup")
+        self._style_enabled_green(self.startup_shutdown_button)
+
+    def _apply_shutdown_style(self):
+        self.startup_shutdown_button.setText("Shutdown")
+        self._style_black(self.startup_shutdown_button)
+
+    # -----------------------------
+    # UI construction
+    # -----------------------------
     def create_control_tab(self):
-        # Create the main layout for the Control tab
         control_layout = QVBoxLayout()
 
-        # Row 1: Target Name Label and Refresh Button
-        row1_widget = self.create_row1()
-        control_layout.addWidget(row1_widget)
-
-        # Add a thin gray line between rows
+        control_layout.addWidget(self.create_row1())
         self.add_separator_line(control_layout)
 
-        # Row 2: Exposure Time, Slit Width, and Confirm Button
-        row2_widget = self.create_row2()
-        control_layout.addWidget(row2_widget)
-
-        # Add a thin gray line between rows
+        control_layout.addWidget(self.create_row2())
         self.add_separator_line(control_layout)
 
-        # Row 3: Go Button
-        row3_widget = self.create_row3()
-        control_layout.addWidget(row3_widget)
-
-        # Add a thin gray line between rows
+        control_layout.addWidget(self.create_row3())
         self.add_separator_line(control_layout)
 
-        # Row 4: Pause, Stop Now, and Expose Buttons
-        row4_widget = self.create_row4()
-        control_layout.addWidget(row4_widget)
-
-        # Add a thin gray line between rows
+        control_layout.addWidget(self.create_row4())
         self.add_separator_line(control_layout)
 
-        # Row 5: Binning, Headers, Display, Temp, Lamps, and Startup Buttons
-        row5_widget = self.create_row5()
-        control_layout.addWidget(row5_widget)
+        control_layout.addWidget(self.create_row5())
 
-        # Set the layout for the control tab
         self.setLayout(control_layout)
-
-        # Connect the input fields to methods for handling changes
         self.connect_input_fields()
 
     def create_row1(self):
-        """Create Row 1 layout with Target Name Label and Refresh Button"""
-        row1_layout = QHBoxLayout()
+        """Row 1: Target Name & RA/Dec (stacked)"""
+        row1_layout = QVBoxLayout()
         row1_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Create the QLabel with default text
         self.target_name_label = QLabel("Selected Target: Not Selected")
         self.target_name_label.setAlignment(Qt.AlignCenter)
 
+        self.ra_dec_label = QLabel("RA: Not Set, Dec: Not Set")
+        self.ra_dec_label.setAlignment(Qt.AlignCenter)
+
         row1_layout.addWidget(self.target_name_label)
+        row1_layout.addWidget(self.ra_dec_label)
 
         row1_widget = QWidget()
         row1_widget.setLayout(row1_layout)
         return row1_widget
 
     def create_row2(self):
-        """Create Row 2 layout with Exposure Time, Slit Width, and Confirm Button"""
+        """Row 2: Exposure, Slit Width/Angle, Binning, #Exposures, Confirm"""
         row2_layout = QVBoxLayout()
         row2_layout.setContentsMargins(0, 0, 0, 0)
         row2_layout.setSpacing(5)
 
-        # Exposure Time and Slit Width fields
+        # Exposure time
         self.exposure_time_label = QLabel("Exposure Time:")
         self.exposure_time_box = QLineEdit()
         self.exposure_time_box.setPlaceholderText("Enter Exposure Time")
         self.exposure_time_box.setFixedWidth(120)
-
         exposure_time_layout = QHBoxLayout()
         exposure_time_layout.addWidget(self.exposure_time_label)
         exposure_time_layout.addWidget(self.exposure_time_box)
 
+        # Slit width
         self.slit_width_label = QLabel("Slit Width:")
         self.slit_width_box = QLineEdit()
         self.slit_width_box.setPlaceholderText("Enter Slit Width")
         self.slit_width_box.setFixedWidth(120)
-
         slit_width_layout = QHBoxLayout()
         slit_width_layout.addWidget(self.slit_width_label)
         slit_width_layout.addWidget(self.slit_width_box)
 
+        # Slit angle
         self.slit_angle_label = QLabel("Slit Angle:")
         self.slit_angle_box = QLineEdit()
-        self.slit_angle_box.setPlaceholderText("Enter Slit Width")
+        self.slit_angle_box.setPlaceholderText("Enter Slit Angle")
         self.slit_angle_box.setFixedWidth(120)
-
         slit_angle_layout = QHBoxLayout()
         slit_angle_layout.addWidget(self.slit_angle_label)
         slit_angle_layout.addWidget(self.slit_angle_box)
 
+        # Binning (spectral/spatial)
+        self.bin_spect_label = QLabel("Bin Spectral:")
+        self.bin_spect_box = QLineEdit()
+        self.bin_spect_box.setPlaceholderText("Enter Value")
+        self.bin_spect_box.setFixedWidth(120)
 
+        self.bin_spat_label = QLabel("Bin Spatial:")
+        self.bin_spat_box = QLineEdit()
+        self.bin_spat_box.setPlaceholderText("Enter Value")
+        self.bin_spat_box.setFixedWidth(120)
+
+        bin_spect_layout = QHBoxLayout()
+        bin_spect_layout.addWidget(self.bin_spect_label)
+        bin_spect_layout.addWidget(self.bin_spect_box)
+        bin_spat_layout = QHBoxLayout()
+        bin_spat_layout.addWidget(self.bin_spat_label)
+        bin_spat_layout.addWidget(self.bin_spat_box)
+
+        # Number of exposures
+        self.num_of_exposures_label = QLabel("Number of Exposures:")
+        self.num_of_exposures_box = QLineEdit()
+        self.num_of_exposures_box.setPlaceholderText("Enter Number of Exposures")
+        self.num_of_exposures_box.setFixedWidth(120)
+        num_of_exposures_layout = QHBoxLayout()
+        num_of_exposures_layout.addWidget(self.num_of_exposures_label)
+        num_of_exposures_layout.addWidget(self.num_of_exposures_box)
+
+        # Assemble
         row2_layout.addLayout(exposure_time_layout)
         row2_layout.addLayout(slit_width_layout)
         row2_layout.addLayout(slit_angle_layout)
+        row2_layout.addLayout(bin_spat_layout)
+        row2_layout.addLayout(bin_spect_layout)
+        row2_layout.addLayout(num_of_exposures_layout)
 
-        # Confirm Button
+        # Confirm button
         self.confirm_button = QPushButton("Confirm Changes")
-        self.confirm_button.setEnabled(False)
+        self._style_disabled_gray(self.confirm_button)
         self.confirm_button.clicked.connect(self.on_confirm_changes)
-        self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-            """)
         row2_layout.addWidget(self.confirm_button)
 
         row2_widget = QWidget()
@@ -135,26 +194,23 @@ class ControlTab(QWidget):
         return row2_widget
 
     def create_row3(self):
-        """Create Row 3 layout with Go Button and Offset To Target Button"""
+        """Row 3: Go / Offset / Expose"""
         row3_layout = QHBoxLayout()
         row3_layout.setContentsMargins(0, 0, 0, 0)
         row3_layout.setSpacing(10)
 
-        # Go Button
         self.go_button = QPushButton("Go")
         self.go_button.clicked.connect(self.on_go_button_click)
-        self.go_button.setEnabled(False)
+        self._style_disabled_gray(self.go_button)
 
-        # Offset To Target Button
         self.offset_to_target_button = QPushButton("Offset")
         self.offset_to_target_button.clicked.connect(self.on_offset_to_target_click)
-        self.offset_to_target_button.setEnabled(False)
+        self._style_disabled_gray(self.offset_to_target_button)
 
-        # Continue Target Button
-        self.continue_button = QPushButton("Continue")
+        self.continue_button = QPushButton("Expose")
         self.continue_button.clicked.connect(self.on_continue_button_click)
-        self.continue_button.setEnabled(False)
-        
+        self._style_disabled_gray(self.continue_button)
+
         row3_layout.addWidget(self.go_button)
         row3_layout.addWidget(self.offset_to_target_button)
         row3_layout.addWidget(self.continue_button)
@@ -164,17 +220,15 @@ class ControlTab(QWidget):
         return row3_widget
 
     def create_row4(self):
-        """Create Row 4 layout with Pause, Stop Now, and Expose Buttons"""
+        """Row 4: Repeat / Pause / Stop Now / Abort"""
         row4_layout = QHBoxLayout()
         row4_layout.setSpacing(10)
 
-        # Buttons
         self.repeat_button = QPushButton("Repeat")
         self.pause_button = QPushButton("Pause")
         self.abort_button = QPushButton("Abort")
         self.stop_now_button = QPushButton("Stop Now")
 
-        # Connect the buttons to their corresponding slots
         self.repeat_button.clicked.connect(self.on_repeat_button_click)
         self.pause_button.clicked.connect(self.on_pause_button_click)
         self.abort_button.clicked.connect(self.on_abort_button_click)
@@ -189,68 +243,41 @@ class ControlTab(QWidget):
         row4_widget.setLayout(row4_layout)
         return row4_widget
 
-    def on_repeat_button_click(self):
-        """Handle Stop Now button click."""
-        print("Repeating now...")
-        command = f"repeat\n"
-        self.parent.send_command(command)
-
-    def on_pause_button_click(self):
-        """Toggle between Pause and Resume when the Pause button is clicked."""
-        if hasattr(self, 'is_paused') and self.is_paused:
-            # If currently paused, resume and change button text to "Pause"
-            self.is_paused = False
-            self.pause_button.setText("Pause")
-            print("Resuming action...")
-            command = f"resume\n"
-            self.parent.send_command(command)
-        else:
-            # If not paused, pause and change button text to "Resume"
-            self.is_paused = True
-            self.pause_button.setText("Resume")
-            print("Pausing action...")
-            command = f"pause\n"
-            self.parent.send_command(command)
-
-    def on_stop_now_button_click(self):
-        """Handle Stop Now button click."""
-        print("Stopping now...")
-        command = f"stop\n"
-        self.parent.send_command(command)
-
     def create_row5(self):
-        """Create Row 5 layout with Binning, Headers, Display, Temp, Lamps, and Startup Buttons"""
+        """Row 5: Binning / Headers & Calibration / Reset & Startup"""
         row5_layout = QHBoxLayout()
         row5_layout.setSpacing(10)
 
-        # Create vertical layouts for each pair of buttons
         binning_layout = QVBoxLayout()
-        headers_layout = QVBoxLayout()
         display_layout = QVBoxLayout()
-        temp_layout = QVBoxLayout()
         lamps_layout = QVBoxLayout()
 
-        # Create the buttons
         self.binning_button = QPushButton("Binning")
+
+        self.etc_button = QPushButton("Run ETC")
+        self.etc_button.clicked.connect(self.parent.open_etc_popup)
+
         self.headers_button = QPushButton("Headers")
-        self.display_button = QPushButton("Display")
-        self.temp_button = QPushButton("Temp")
-        self.startup_button = QPushButton("Lamps")
-        self.shutdown_button = QPushButton("Reset")
-        self.startup_button.clicked.connect(self.on_lamps_button_click)
-        self.shutdown_button.clicked.connect(self.on_reset_button_click)
 
-        # Add buttons to each vertical layout
+        self.calibration_button = QPushButton("Calibration")
+        self.calibration_button.clicked.connect(self.parent.open_calibration_gui)
+
+        self.reset_button = QPushButton("Reset")
+        self.reset_button.clicked.connect(self.on_reset_button_click)
+
         binning_layout.addWidget(self.binning_button)
-        binning_layout.addWidget(self.headers_button)
+        binning_layout.addWidget(self.etc_button)
 
-        display_layout.addWidget(self.display_button)
-        display_layout.addWidget(self.temp_button)
+        display_layout.addWidget(self.headers_button)
+        display_layout.addWidget(self.calibration_button)
 
-        lamps_layout.addWidget(self.startup_button)
-        lamps_layout.addWidget(self.shutdown_button)
+        lamps_layout.addWidget(self.reset_button)
 
-        # Add the vertical layouts to the main row layout
+        self.startup_shutdown_button = QPushButton("Startup")
+        self._apply_startup_style()
+        self.startup_shutdown_button.clicked.connect(self.toggle_startup_shutdown)
+        lamps_layout.addWidget(self.startup_shutdown_button)
+
         row5_layout.addLayout(binning_layout)
         row5_layout.addLayout(display_layout)
         row5_layout.addLayout(lamps_layout)
@@ -259,9 +286,11 @@ class ControlTab(QWidget):
         row5_widget.setLayout(row5_layout)
         return row5_widget
 
-
+    # -----------------------------
+    # Utility wiring
+    # -----------------------------
     def add_separator_line(self, layout):
-        """ Helper method to add a thin light gray line (separator) between rows. """
+        """Thin divider line between rows."""
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
@@ -270,388 +299,235 @@ class ControlTab(QWidget):
         layout.addWidget(separator)
 
     def connect_input_fields(self):
-        """Connect input fields (Exposure Time and Slit Width) to change methods"""
+        """Enable Confirm when fields change."""
         self.exposure_time_box.textChanged.connect(self.on_input_changed)
         self.slit_width_box.textChanged.connect(self.on_input_changed)
         self.slit_angle_box.textChanged.connect(self.on_input_changed)
+        self.num_of_exposures_box.textChanged.connect(self.on_input_changed)
+        self.bin_spect_box.textChanged.connect(self.on_input_changed)
+        self.bin_spat_box.textChanged.connect(self.on_input_changed)
 
-    def on_continue_button_click(self):
-        """Handle the 'Expose' button click and check for 'USER' in command output"""
-        print("On Continue button clicked!")
-        
-        # Send the usercontinue command
-        command = f"usercontinue\n"
-        self.parent.send_command(command)
-        
-        try:
-            # Running the 'seq state' command and capturing its output
-            result = subprocess.check_output(['seq', 'state'], text=True)
-            print(result)  # Optional: print the output for debugging
-            
-            # Check if 'USER' is in the output
-            if 'USER' in result:
-                # Enable button if 'USER' is found
-                self.continue_button.setEnabled(True)
-                self.continue_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #4CAF50;  /* Green when enabled */
-                        color: white;
-                        font-weight: bold;
-                        padding: 10px;
-                        border: none;
-                        border-radius: 5px;
-                    }
-                    QPushButton:hover {
-                        background-color: #45a049;
-                    }
-                    QPushButton:pressed {
-                        background-color: #3e8e41;
-                    }
-                """)
-            else:
-                # Disable button if 'USER' is not found
-                self.continue_button.setEnabled(False)
-                self.continue_button.setStyleSheet("""
-                    QPushButton {
-                        background-color: #D3D3D3;  /* Light gray when disabled */
-                        color: black;
-                        font-weight: bold;
-                        padding: 10px;
-                        border: none;
-                        border-radius: 5px;
-                    }
-                    QPushButton:hover {
-                        background-color: #D3D3D3;  /* No hover effect when disabled */
-                    }
-                    QPushButton:pressed {
-                        background-color: #D3D3D3;  /* No pressed effect when disabled */
-                    }
-                """)
-        except subprocess.CalledProcessError as e:
-            print(f"Error running command: {e}")
-            # Disable button in case of an error
-            self.continue_button.setEnabled(False)
-            self.continue_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-            """)
-        
-    def on_abort_button_click(self):
-        """Handle the 'Expose' button click"""
-        print("Abort button clicked!")
-        command = f"abort\n"
-        self.parent.send_command(command)
-        self.continue_button.setEnabled(False)
-        self.continue_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-        """)
+    # -----------------------------
+    # Button slots / actions
+    # -----------------------------
+    def on_repeat_button_click(self):
+        print("Repeating now...")
+        self.parent.send_command("repeat\n")
 
-    def on_lamps_button_click(self):
-        """Handle the 'Startup' button click"""
-        print("Startup button clicked!")
-        # command = f"startup\n"
-        # self.parent.send_command(command)
+    def on_pause_button_click(self):
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_button.setText("Pause")
+            print("Resuming action...")
+            self.parent.send_command("resume\n")
+        else:
+            self.is_paused = True
+            self.pause_button.setText("Resume")
+            print("Pausing action...")
+            self.parent.send_command("pause\n")
+            self.parent.layout_service.update_system_status("paused")
+
+    def on_stop_now_button_click(self):
+        print("Stopping now...")
+        self.parent.send_command("stop\n")
+        self._style_disabled_gray(self.go_button)
+        self._style_disabled_gray(self.offset_to_target_button)
+        self._style_disabled_gray(self.continue_button)
 
     def on_reset_button_click(self):
-        """Handle the 'Startup' button click"""
         print("Reset button clicked!")
         self.logic_service.refresh_table()
 
+    def toggle_startup_shutdown(self):
+        current_text = self.startup_shutdown_button.text()
+        if current_text == "Startup":
+            self._apply_shutdown_style()
+            print("Startup button clicked!")
+            self.parent.send_command("startup\n")
+        else:
+            confirm = QMessageBox.question(
+                self,
+                "Confirm System Shutdown",
+                "Are you sure you want to shut down the system?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if confirm == QMessageBox.Yes:
+                self._apply_startup_style()
+                print("Shutdown button clicked!")
+                self.parent.send_command("shutdown\n")
+            else:
+                print("Shutdown canceled.")
+
     def on_offset_to_target_click(self):
-        """Handle the Offset To Target button click event"""
         print("Offset To Target button clicked!")
-        command = f"targetoffset\n"
-        print(f"Sending command to SequencerService: {command}")  # Print the command being sent
-        # Call send_command method from SequencerService
-        self.parent.send_command(command)
-        self.offset_to_target_button.setEnabled(False)
-        self.offset_to_target_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-        """)
+        cmd = "targetoffset\n"
+        print(f"Sending command to SequencerService: {cmd}")
+        self.parent.send_command(cmd)
+        self._style_disabled_gray(self.offset_to_target_button)
 
     def on_input_changed(self):
-        """Enable the Confirm button when the user modifies input fields"""
-        self.confirm_button.setEnabled(True)
-        self.confirm_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)
+        self._style_enabled_green(self.confirm_button)
 
     def on_go_button_click(self):
-        """Slot to handle 'Go' button click and send the target command."""
+        """Send target start command; disable Go and show waiting popup."""
         if self.parent.current_observation_id is not None:
+            self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
             observation_id = self.parent.current_observation_id
             print(f"Sending command: seq startone {observation_id}")
+            self.parent.layout_service.update_slit_info_fields()
             self.send_target_command(observation_id)
             QSound.play("sound/go_button_clicked.wav")
-            self.go_button.setEnabled(False)
-            # Disable the button immediately after the user clicks it
-            self.go_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #D3D3D3;  /* Light gray when disabled */
-                    color: black;
-                    font-weight: bold;
-                    padding: 10px;
-                    border: none;
-                    border-radius: 5px;  /* Optional: Round corners */
-                }
-                QPushButton:hover {
-                    background-color: #D3D3D3;  /* No hover effect when disabled */
-                }
-                QPushButton:pressed {
-                    background-color: #D3D3D3;  /* No pressed effect when disabled */
-                }
-            """)
-
-            # Show a popup message
+            self._style_disabled_gray(self.go_button)
+            self.logic_service.set_active_target(observation_id)
             self.show_waiting_popup()
-            self.offset_to_target_button.setEnabled(True)
-            self.offset_to_target_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)            
-            self.continue_button.setEnabled(True)
-            self.continue_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)
-
-            # Start a QTimer to re-enable the button after 60 seconds
-            # self.timer = QTimer(self)
-            # self.timer.setSingleShot(True)  # Ensure the timer only runs once
-            # self.timer.timeout.connect(self.enable_go_button)
-            # self.timer.start(60000)  # Timeout after 60 seconds (60000 ms)
-
         else:
             print("No observation ID available.")
 
+    def enable_continue_and_offset_button(self):
+        self._style_enabled_green(self.continue_button)
+        self._style_enabled_green(self.offset_to_target_button)
+
     def show_waiting_popup(self):
-        """Show a popup message with a 'Close' button."""
+        """Show a popup message with a 'Close' button (auto-closes after 5s)."""
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Information)
         msg_box.setText("Waiting for TCS Operator...")
         msg_box.setWindowTitle("Information")
-        
-        # Add an "Ok" button (or "Close" if you prefer)
         msg_box.setStandardButtons(QMessageBox.Ok)
-        
-        # Set a QTimer to close the message box after 5 seconds, but keep the "Ok" button available
         QTimer.singleShot(5000, msg_box.close)
-        
-        # Execute the message box, the user can close it manually by clicking "Ok"
         msg_box.exec_()
-        
+
     def enable_go_button(self):
-        """Method to re-enable the 'Go' button after 60 seconds."""
-        print("60 seconds have passed. Re-enabling 'Go' button.")
-        
-        # Re-enable the button and reset its appearance
-        self.go_button.setEnabled(True)
-        self.go_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;  /* Green when enabled */
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border: none;
-                border-radius: 5px;  /* Optional: Round corners */
-            }
-            QPushButton:hover {
-                background-color: #388E3C;  /* Darker green when hovered */
-            }
-            QPushButton:pressed {
-                background-color: #2C6B2F;  /* Even darker green when pressed */
-            }
-        """)
-            
+        """Re-enable 'Go' button (kept for external timer hooks if you re-enable later)."""
+        print("Re-enabling 'Go' button.")
+        self._style_enabled_green(self.go_button)
+
     def send_target_command(self, observation_id):
-        """ Method to send the command to the SequencerService """
         if observation_id:
-            # Build the command string
             command = f"startone {observation_id}\n"
-            print(f"Sending command to SequencerService: {command}")  # Print the command being sent
-            # Call send_command method from SequencerService
+            print(f"Sending command to SequencerService: {command}")
             self.parent.send_command(command)
-            print(f"Command sent: {command}")  # Print confirmation of command sent
+            print(f"Command sent: {command}")
         else:
-            print("No OBSERVATION_ID to send the command.")  # Print if no observation ID is found
+            print("No OBSERVATION_ID to send the command.")
 
+    def on_continue_button_click(self):
+        """Send 'usercontinue' and enable Expose button only if seq state shows USER."""
+        print("On Continue button clicked!")
+        self.offset_to_target_button.setEnabled(False)
+        self.parent.zmq_status_service.subscribe_to_topic("slitd")
+        self.parent.send_command("usercontinue\n")
 
+        try:
+            result = subprocess.check_output(['seq', 'state'], text=True)
+            print(result)
+            if 'USER' in result:
+                self._style_enabled_green(self.continue_button)
+            else:
+                self._style_disabled_gray(self.continue_button)
+        except subprocess.CalledProcessError as e:
+            print(f"Error running command: {e}")
+            self._style_disabled_gray(self.continue_button)
+
+    def on_abort_button_click(self):
+        """Abort sequence; re-enable/disable buttons appropriately."""
+        print("Abort button clicked!")
+        self.parent.send_command("abort\n")
+        self._style_enabled_green(self.go_button)
+        self._style_disabled_gray(self.offset_to_target_button)
+        self._style_disabled_gray(self.continue_button)
+
+    # -----------------------------
+    # DB update helpers (unchanged logic)
+    # -----------------------------
     def on_confirm_changes(self):
-        """Handle the confirmation of changes made to the input fields"""
+        """Confirm input changes and push updates; also enables Go button."""
         exposure_time = self.exposure_time_box.text()
         slit_width = self.slit_width_box.text()
         slit_angle = self.slit_angle_box.text()
-        
-        if exposure_time and slit_width and slit_angle:
-            # Handle the confirmed changes, e.g., update internal state or UI
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
+        num_of_exposures = self.num_of_exposures_box.text()
+        bin_spect = self.bin_spect_box.text()
+        bin_spat = self.bin_spat_box.text()
+
+        if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
+            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
+                  f"Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
-            self.on_slit_angle_changed()  # Handle slit angle change as well
-            
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: lightgray;
-                }
-            """)
+            self.on_slit_angle_changed()
+            self.num_of_exposures_changed()
+            self.bin_spect_changed()
+            self.bin_spat_changed()
+            self._style_disabled_gray(self.confirm_button)
+
         elif exposure_time and slit_width:
-            # Handle the confirmed changes, e.g., update internal state or UI
             print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             QSound.play("sound/exposure_slit_width_set.wav")
-            
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: lightgray;
-                }
-            """)            
+            self._style_disabled_gray(self.confirm_button)
+
         elif exposure_time:
-            # Handle the confirmed changes for exposure time
             print(f"Confirmed Exposure Time: {exposure_time}")
             self.on_exposure_time_changed()
             QSound.play("sound/exposure_set.wav")
-            
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: lightgray;
-                }
-            """)
+            self._style_disabled_gray(self.confirm_button)
 
         elif slit_width:
-            # Handle the confirmed changes for slit width
             print(f"Confirmed Slit Width: {slit_width}")
             self.on_slit_width_changed()
             QSound.play("sound/slit_width_set.wav")
-            
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: lightgray;
-                }
-            """)
+            self._style_disabled_gray(self.confirm_button)
 
         elif slit_angle:
-            # Handle the confirmed changes for slit angle
             print(f"Confirmed Slit Angle: {slit_angle}")
             self.on_slit_angle_changed()
-            
-            # Disable the button again after confirmation
-            self.confirm_button.setEnabled(False)
-            self.confirm_button.setStyleSheet("""
-                QPushButton {
-                    background-color: lightgray;
-                }
-            """)  
+            self._style_disabled_gray(self.confirm_button)
 
         else:
-            # Handle the case where one or more fields are empty
             print("Please enter valid values for all fields.")
 
+        if getattr(self.parent, "current_target_list_name", None):
+            print(f"Current target list: {self.parent.current_target_list_name}")
+            self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
+
+        self._style_enabled_green(self.go_button)
+
     def on_exposure_time_changed(self):
-        # Retrieve the exposure time and send the query to the database
         exposure_time = self.exposure_time_box.text()
-        if (self.parent.current_observation_id):
+        if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
 
     def on_slit_width_changed(self):
-        # Retrieve the slit width and send the query to the database
         slit_width = self.slit_width_box.text()
-        if (self.parent.current_observation_id):
+        if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
 
     def on_slit_angle_changed(self):
-        # Retrieve the slit width and send the query to the database
         slit_angle = self.slit_angle_box.text()
-        if(slit_angle == "PA"):
+        if slit_angle == "PA":
             slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             print(f"Parallactic Angle: {slit_angle}")
             self.slit_angle_box.setText(slit_angle)
 
-        if (self.parent.current_observation_id):
+        if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
+
+    def num_of_exposures_changed(self):
+        num_of_exposures = self.num_of_exposures_box.text()
+        if self.parent.current_observation_id:
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "nexp", num_of_exposures)
+
+    def bin_spect_changed(self):
+        bin_spect = self.bin_spect_box.text()
+        if self.parent.current_observation_id:
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "BINSPECT", bin_spect)
+
+    def bin_spat_changed(self):
+        bin_spat = self.bin_spat_box.text()
+        if self.parent.current_observation_id:
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "BINSPAT", bin_spat)

@@ -29,16 +29,9 @@ camera exptime 10000
 #
 
 # 3. Camera BOI
-camera boi R 410 200
+camera boi R 420 200
 camera boi I 580 200
-
-# 3.5 Get some information from the camera and set some information
-imnum0=(`camera imnum`[1])
-basename=(`camera basename`[1])
-
-focusbase="focus_internal_`date +%g%m%d_%H%M%S`"
-
-camera basename $focusbase
+#
 
 # 4. Turn on lamp and wait
 fociI=( 4.4 4.5 4.6 4.7 4.8 4.9 5.0 5.1 5.2 5.3 5.4 5.5 )
@@ -53,8 +46,8 @@ for fp in $focpos; do
     focus set R  ${fociR[$fp]}
     echo
     sleep 4
-    imnum1=(`camera imnum`[1])
-    exposen 1
+    
+    exposen 1 
 done
 #
 # Turn off lamp
@@ -66,8 +59,6 @@ done
 #
 
 
-camera basename $basename
-
 power lampthar off
 calib lampmod 6 0 1000
 calib set door=close
@@ -75,17 +66,5 @@ calib set door=close
 # revert BOI
 camera boi R full
 camera boi I full
-
-# now run the analysis script.
-
-# now display the results
-
-
-allfiles="$focusbase*.fits"
-cd /home/observer/focus/
-/home/developer/Software/run/focus_spec.py /data/latest/$allfiles -fa x -fk FOCUS --range $imnum0 $imnum1
-
-
-eog focus_spec_*.png
 
 echo "Done."

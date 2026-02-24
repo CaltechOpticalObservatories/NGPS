@@ -38,8 +38,13 @@ class MenuService:
 
         # Tools Menu
         tools_menu = self.menubar.addMenu('Tools')
-        settings_action = QAction('Settings', self.menubar)
+        settings_action = QAction('Calibration', self.menubar)
+        settings_action.triggered.connect(self.parent.open_calibration_gui)
         tools_menu.addAction(settings_action)
+        
+        etc_action = QAction('ETC', self.menubar)
+        etc_action.triggered.connect(self.parent.open_etc_popup)
+        tools_menu.addAction(etc_action)    
         
         # User Menu
         user_menu = self.menubar.addMenu('User')
@@ -56,6 +61,11 @@ class MenuService:
 
         # Targets Menu
         targets_menu = self.menubar.addMenu('Target List')
+
+        # Delete Target List Action
+        delete_target_list_action = QAction('Delete Target List', self.menubar)
+        delete_target_list_action.triggered.connect(self.parent.on_delete_target_list)
+        targets_menu.addAction(delete_target_list_action)
 
         # Help Menu
         help_menu = self.menubar.addMenu('Help')
