@@ -4977,7 +4977,6 @@ logwrite(function, message.str());
     int dev=-1;
     std::string chan;
     bool readonly=false;
-    bool useinit=false;
     if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
 
     // If no args beyond chan then retstring is empty so this is a read-only request
@@ -5013,17 +5012,17 @@ logwrite(function, message.str());
       return NO_ERROR;
     }
 
-    // parse the input stream
-    if (!useinit && !(iss >> spat >> spec >> osspat >> osspec >> binspat >> binspec)) {
+    // if init requested then image size comes from the class
+    if (args.find("init") != std::string::npos) {
+      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+    }
+    // otherwise parse the input stream
+    else
+    if (!(iss >> spat >> spec >> osspat >> osspec >> binspat >> binspec)) {
       logwrite(function,
-        "ERROR invalid number of arguments. expected integer <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
+        "ERROR invalid arguments '"+retstring+"':  expected integer <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
       retstring="invalid_argument";
       return ERROR;
-    }
-    else
-    // if init requested then overwrite with values from the class
-    if (useinit) {
-      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
     }
 
     // Check image size
