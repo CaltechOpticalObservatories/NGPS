@@ -487,8 +487,8 @@ namespace AstroCam {
     this->controller[dev].defrows = this->controller[dev].detrows;
     this->controller[dev].defoscols = this->controller[dev].oscols;
     this->controller[dev].defosrows = this->controller[dev].osrows;
-    this->controller[dev].defbincols = this->controller[dev].info.binning[_ROW_];
-    this->controller[dev].defbinrows = this->controller[dev].info.binning[_COL_];
+    this->controller[dev].defbincols = this->controller[dev].info.binning[_COL_];
+    this->controller[dev].defbinrows = this->controller[dev].info.binning[_ROW_];
 
     return error;
   }
@@ -794,14 +794,6 @@ namespace AstroCam {
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( const auto &con : this->controller ) {
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] con.first=" << con.first
-                               << " con.second.channel=" << con.second.channel
-                               << " .devnum=" << con.second.devnum
-                               << " .configured=" << (con.second.configured?"T":"F")
-                               << " .active=" << (con.second.active?"T":"F");
-      logwrite( function, message.str() );
-#endif
       if (!con.second.configured) continue;  // skip controllers not configured
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
@@ -917,6 +909,13 @@ namespace AstroCam {
         }
       }
 
+      if ( tokens.size() > 2 ) {
+        message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
+        logwrite( function, message.str() );
+        retstring="bad_arguments";
+        return ERROR;
+      }
+
       if ( tokens.size() == 2 ) {
         binfactor = std::stoi( tokens.at(1) );
 
@@ -971,12 +970,6 @@ namespace AstroCam {
           }
           if (error != NO_ERROR) break;
         }
-      }
-      else if ( tokens.size() > 2 ) {
-        message.str(""); message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
-        logwrite( function, message.str() );
-        retstring="bad_arguments";
-        return( ERROR );
       }
 
       // return binning for the requested logical axis
