@@ -935,8 +935,8 @@ namespace AstroCam {
           auto pcontroller = this->get_active_controller(dev);
           if (!pcontroller) continue;
 
-          // For Bands of Interest this will recompute the BOI table and set the image size
-          if (pcontroller->has_boi() && logical_axis=="spec") {
+          // With Bands Of Interest (spatial) recompute BOI table and set image size
+          if (pcontroller->has_boi() && logical_axis=="spat") {
             error = this->load_boi_pairs(pcontroller);
           }
           else {
@@ -4131,7 +4131,12 @@ for ( const auto &dev : selectdev ) {
   /***** AstroCam::Interface::load_boi_pairs **********************************/
   /**
    * @brief      loads the interest_bands table into the controller, applying binning
+   * @details    This reads from the Information class interest_bands vector,
+   *             adjusts the nskip,nread pairs for binning, and writes them to
+   *             the controller. The BOI table in the controller is re-written and
+   *             the image_size will be updated.
    * @param[in]  pcontroller  pointer to Controller object
+   * @return     ERROR|NO_ERROR
    *
    */
   long Interface::load_boi_pairs(Controller* pcontroller) {
@@ -4232,7 +4237,7 @@ for ( const auto &dev : selectdev ) {
 
     // remove the modulus from nread and add it to nskip
     adj.first  = nskip + modulus;
-    adj.second = nskip - modulus;
+    adj.second = nread - modulus;
 
     return (adj.second > 0 ? NO_ERROR : ERROR);
   }
