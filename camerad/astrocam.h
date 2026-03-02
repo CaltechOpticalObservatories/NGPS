@@ -1123,7 +1123,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long load_firmware(std::string timlodfile, std::string &retstring);  ///< wrapper for load_firmware
       long band_of_interest( std::string args, std::string &retstring );   ///< set/get interest bands
       long parse_boi_pairs(Controller* pcontroller, const std::string &args);
-      long load_boi_pairs(Controller* pcontroller);
+      long load_boi_pairs(Controller* pcontroller, int &spat_total);
       long reset_boi_full(Controller* pcontroller, int dev,
                           const std::string &chan, std::string &retstring);
       long adjust_boi_for_binning(Controller* pcontroller, int nskip, int nread, std::pair<int,int> &adj);
@@ -1140,6 +1140,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long frame_transfer_mode( std::string args );
       long frame_transfer_mode( std::string args, std::string &retstring );
       long image_size( std::string args, std::string &retstring );
+      long set_image_size(Controller* pcontroller, int spat, int spec, int osspat, int osspec, int binspat, int binspec);
       long geometry(std::string args, std::string &retstring);
       long do_geometry(std::string args, std::string &retstring);
       long bias(std::string args, std::string &retstring);
