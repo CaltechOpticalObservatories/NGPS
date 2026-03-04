@@ -7,6 +7,7 @@
 cmake_minimum_required( VERSION 3.12 )
 
 set( SLICECAMD_DIR ${PROJECT_BASE_DIR}/slicecamd )
+set( AUTOACQ_SRC ${SLICECAMD_DIR}/ngps_acq.c )
 
 set( CMAKE_CXX_STANDARD 17 )
 
@@ -25,6 +26,7 @@ find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 #
 find_library( CCFITS_LIB CCfits NAMES libCCfits PATHS /usr/local/lib )
 find_library( CFITS_LIB cfitsio NAMES libcfitsio  PATHS /usr/local/lib )
+find_library( WCS_LIB wcs NAMES libwcs PATHS /usr/local/lib /opt/homebrew/lib )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/Andor )
@@ -38,8 +40,11 @@ add_executable(slicecamd
         ${SLICECAMD_DIR}/slicecam_server.cpp 
         ${SLICECAMD_DIR}/slicecam_interface.cpp 
         ${SLICECAMD_DIR}/slicecam_fits.cpp
+        ${AUTOACQ_SRC}
         ${PYTHON_DEV}
         )
+set_source_files_properties( ${AUTOACQ_SRC}
+                             PROPERTIES COMPILE_FLAGS "-x c -std=gnu11" )
 
 target_link_libraries(slicecamd
         andor
@@ -55,10 +60,12 @@ target_link_libraries(slicecamd
         ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}
+        ${WCS_LIB}
         ${CMAKE_THREAD_LIBS_INIT}
         )
 
 target_compile_options(slicecamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)
+target_compile_definitions(slicecamd PRIVATE NGPS_ACQ_EMBEDDED=1)
 
 # -- External Definitions ------------------------------------------------------
 #

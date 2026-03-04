@@ -107,7 +107,7 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITW_ACQUIRE=0.4   # slit width during acquire
 VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
 VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
@@ -155,11 +155,15 @@ TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify 
 
 # ACAM Target acquisition
 #
-ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
+ACQUIRE_TIMEOUT=120                  # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
 ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
+ACQ_AUTOMATIC_MODE=1                 # 1=legacy, 2=semi-auto, 3=auto
+ACQ_FINE_TUNE_CMD=ngps_acq           # command to run after guiding for final fine tune
+ACQ_FINE_TUNE_LOG=1                  # log fine tune output to /data/<datedir>/logs/ngps_acq_<datedir>.log (0/1)
+ACQ_OFFSET_SETTLE=3                  # seconds to wait after automatic offset
 
 # Calibration Settings
 # CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
