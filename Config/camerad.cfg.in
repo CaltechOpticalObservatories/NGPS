@@ -36,8 +36,6 @@ ARCSIM_NUMDEV=0
 #       FIRMWARE  the default firmware to load
 #       READOUT   the default readout amplifier {U1,L1,U2,L2,SPLIT1,SPLIT2,QUAD,FT1,FT2}
 #
-#CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2-20241115.lod U2)
-#CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
 CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/260127-1318/sg2.lod U2)
 CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/260127-1318/engg.lod U1)
 CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/260127-1318/dbspr.lod L1)
@@ -46,24 +44,26 @@ CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 # -----------------------------------------------------------------------------
 # This defines the detector geometry for each controller.
 #
-# DETECTOR_GEOMETRY=(CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
+# DETECTOR_GEOMETRY=(CHAN PHYSSPAT PHYSSPEC SPATSTART NSPAT NSPEC OSSPAT OSSPEC BINSPAT BINSPEC)
 #
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
 #       PHYSSPAT  physical spatial axis {ROW|COL}
 #       PHYSSPEC  physical spectral axis {ROW|COL}
-#       SPAT      size in spatial dimension
-#       SPEC      size in spectral dimension
-#       OSSPAT    number of spatial overscans
-#       OSSPEC    number of spectral overscans
+#       SPATSTART starting row|col of spatial dimension readout
+#       NSPAT     size in spatial dimension to read from SPATSTART
+#       NSPEC     size in spectral dimension to read from physical edge
+#       OSSPAT    number of spatial overscans (added to NSPAT)
+#       OSSPEC    number of spectral overscans (added to NSPEC)
 #       BINSPAT   spatial bin factor
 #       BINSPEC   spectral bin factor
+#
 # For the PHYSSPAT and PHYSSPEC parameters, ROW|COL refers to the spatial and
 # spectral alignment with the physical readout, I.E. ROW=parallel, COL=serial
 #
-DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
-DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
-DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
-DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
+DETECTOR_GEOMETRY=(I ROW COL    1 1220 4114 0 100 2 1)
+DETECTOR_GEOMETRY=(R ROW COL    1 1220 4114 0 100 2 1)
+DETECTOR_GEOMETRY=(G ROW COL    1 1220 4114 0 100 2 1)
+DETECTOR_GEOMETRY=(U COL ROW  721 1080 4102 0 100 2 1)
 
 # -----------------------------------------------------------------------------
 # Spectral Information configuration

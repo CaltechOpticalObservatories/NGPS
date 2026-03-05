@@ -439,31 +439,29 @@ namespace AstroCam {
    */
   long Interface::parse_det_geometry( std::string args ) {
     const std::string function("AstroCam::Interface::parse_det_geometry");
-    std::ostringstream message;
-    std::vector<std::string> tokens;
+    std::istringstream iss(args);
 
-    Tokenize( args, tokens, " " );
+    std::string chan, spat_axis, spec_axis;
+    int dev, spat_start, nspat, nspec, osspat, osspec, binspat, binspec;
 
-    if ( tokens.size() != 9 ) {
-      logwrite(function, "ERROR invalid number of args. expected CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS");
+    if (!(iss >> chan >> spat_axis >> spec_axis >> spat_start >> nspat >> nspec >> osspat >> osspec >> binspat >> binspec)) {
+      logwrite(function,
+               "ERROR expected <chan> <physspat> <physspec> <spatstart> <nspat> <nspec> <osspat> <osspec> <binspat> <binspec>");
       return ERROR;
     }
 
-    int dev;
     try {
       // validate channel
-      dev = devnum_from_chan(tokens.at(0));
-      std::string spat = to_uppercase(tokens.at(1));
-      std::string spec = to_uppercase(tokens.at(2));
+      dev = devnum_from_chan(chan);
 
       // require physical axis args be "ROW" or "COL" and unique
-      if ( ((spat != "ROW") && (spat != "COL")) || ((spec != "ROW") && (spec != "COL")) ) {
+      if ( ((spat_axis != "ROW") && (spat_axis != "COL")) || ((spec_axis != "ROW") && (spec_axis != "COL")) ) {
         throw std::runtime_error("expected ROW|COL");
       }
-      if (spec==spat) throw std::runtime_error("PHYSSPAT/PHYSSPEC must be unique");
+      if (spec_axis==spat_axis) throw std::runtime_error("<PHYSSPAT> / <PHYSSPEC> must be unique");
 
-      this->controller.at(dev).spat_axis = (spat=="ROW" ? Controller::ROW : Controller::COL);
-      this->controller.at(dev).spec_axis = (spec=="ROW" ? Controller::ROW : Controller::COL);
+      this->controller.at(dev).spat_axis = (spat_axis=="ROW" ? Controller::ROW : Controller::COL);
+      this->controller.at(dev).spec_axis = (spec_axis=="ROW" ? Controller::ROW : Controller::COL);
     }
     catch(const std::exception &e) {
       logwrite(function, "ERROR parsing DETECTOR_GEOMETRY config: "+std::string(e.what()));
@@ -4999,15 +4997,6 @@ logwrite(function, message.str());
       return ERROR;
     }
 
-    // Check image size
-    if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
-      message << "ERROR invalid image size " << spat << " " << spec << " "
-              << osspat << " " << osspec << " " << binspat << " " << binspec;
-      logwrite( function, message.str() );
-      retstring="invalid_argument";
-      return ERROR;
-    }
-
     // set image size
     //
     long error = this->set_image_size(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
@@ -5032,6 +5021,9 @@ logwrite(function, message.str());
    *             given device|channel. This calls geometry() and buffer() to
    *             set the image geometry on the controller and allocate a PCI buffer.
    *             For internal use.
+   *             Overscans are not a specific value known by the controller, they
+   *             are simply added to the rows/cols to read. They are a distinct
+   *             value here so that they can be used for BIASSEC, etc.
    * @param[in]  pcontroller  pointer to Controller object
    * @param[in]  spat         spatial pixel dimension
    * @param[in]  spec         spectral pixel dimension
@@ -5042,12 +5034,21 @@ logwrite(function, message.str());
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::set_image_size(Controller* pcontroller,
+  long Interface::set_image_size(Controller* pcontroller, int spat_start,
                                  int spat,    int spec,
                                  int osspat,  int osspec,
                                  int binspat, int binspec) {
     const std::string function("AstroCam::Interface::set_image_size");
     std::ostringstream message;
+
+    // Check image size
+    if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
+      message << "ERROR invalid image size " << spat << " " << spec << " "
+              << osspat << " " << osspec << " " << binspat << " " << binspec;
+      logwrite(function, message.str());
+      retstring="invalid_argument";
+      return ERROR;
+    }
 
     // If binned by a non-evenly-divisible factor then skip modulo that
     // many at the start. These will be removed from the image.
@@ -5103,6 +5104,8 @@ logwrite(function, message.str());
 
     // Now that the rows/cols and osrows/oscols have been adjusted for
     // binning, store them in the class as detector_pixels for this controller.
+    // Overscans are not a separate thing, they simply extend the readout
+    // dimension here.
     //
     pcontroller->info.detector_pixels[_COL_] = cols + oscols;
     pcontroller->info.detector_pixels[_ROW_] = rows + osrows;
