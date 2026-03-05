@@ -384,6 +384,7 @@ namespace Slicecam {
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long shutdown( std::string args, std::string &retstring );
+      long shutter(const std::string args, std::string &retstring);
       long test( std::string args, std::string &retstring );
       long exptime( std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
