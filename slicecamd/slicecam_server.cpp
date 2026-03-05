@@ -594,6 +594,10 @@ namespace Slicecam {
                       ret = NO_ERROR;  // init_names() returns void, never fails
       }
       else
+      if ( cmd == SLICECAMD_SHUTTER ) {
+                      ret = this->interface.shutter(args, retstring);
+      }
+      else
 
       // shutdown
       //
