@@ -427,14 +427,14 @@ namespace Flexure {
    */
   long Interface::compensate( std::string args, std::string &retstring ) {
     const std::string function="Flexure::Interface::compensate";
-    std::stringstream message;
 
     if ( args == "?" || args == "help" ) {
       retstring = FLEXURED_COMPENSATE;
       retstring.append( " <chan> [ <chan> ...] [ --dryrun ]\n" );
       retstring.append( "   Performs the flexure compensation on one or more specified channels.\n" );
       retstring.append( "   If the optional --dryrun argument is supplied then perform the calcuations\n" );
-      retstring.append( "   and show the actions that would be taken without actually moving anything.\n" );
+      retstring.append( "   and show the actions that would be taken without actually moving anything,\n" );
+      retstring.append( "   returning the delta X,Y that would be applied.\n" );
       return HELP;
     }
 
@@ -445,6 +445,7 @@ namespace Flexure {
     if (pos != std::string::npos) {  // if switch in the args
       args.erase(pos, 8);            // then remove it
       is_dryrun = true;              // and set is_dryrun
+      retstring="dryrun:";
     }
 
     // args can contain a space-delimited list of channels
@@ -467,6 +468,11 @@ namespace Flexure {
         this->validate_tcs_telemetry();
         this->compensator.calculate_compensation(chan, delta);
         this->offset_tiptilt(chan, delta, is_dryrun);
+        if (is_dryrun) {
+	  std::ostringstream oss;
+	  oss << " " << chan << " " << delta.first << "," << delta.second;
+	  retstring += oss.str();
+	}
       }
       catch (const std::exception &e) {
         logwrite(function, "ERROR: "+std::string(e.what()));
@@ -820,7 +826,8 @@ namespace Flexure {
     //
     if (testname == "shift") {
       if (tokens.size() != 3) {
-        logwrite(function, "ERROR expected <chan> <axis>");
+        retstring="expected <chan> <axis>";
+        logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
       message.str("");
@@ -841,7 +848,8 @@ namespace Flexure {
     //
     if (testname == "comp") {
       if (tokens.size() != 2) {
-        logwrite(function, "ERROR expected <chan>");
+        retstring="expected <chan>";
+        logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
 
@@ -876,7 +884,8 @@ namespace Flexure {
     //
     if (testname=="ishift") {
       if (tokens.size()!=6) {
-        logwrite(function, "ERROR expected <zenangle> <casangle> <pa> <chan> <axis>");
+        retstring="expected <zenangle> <casangle> <pa> <chan> <axis>";
+        logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
       try {
@@ -903,7 +912,8 @@ namespace Flexure {
     //
     if (testname=="icomp") {
       if (tokens.size()!=5) {
-        logwrite(function, "ERROR expected <zenangle> <casangle> <pa> <chan>");
+        retstring="expected <zenangle> <casangle> <pa> <chan>";
+        logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
       try {
@@ -921,7 +931,8 @@ namespace Flexure {
         this->offset_tiptilt(tokens[4], delta, true); // true = dry run
       }
       catch (const std::exception &e) {
-        logwrite(function, "ERROR: "+std::string(e.what()));
+        retstring=std::string(e.what());
+        logwrite(function, "ERROR: "+retstring);
         return ERROR;
       }
     }
