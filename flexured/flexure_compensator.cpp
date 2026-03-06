@@ -128,6 +128,10 @@ namespace Flexure {
       throw std::out_of_range("not enough flexure polynomial coefficients");
     }
 
+    if (this->flexure_polynomials.find(which)==this->flexure_polynomials.end()) {
+      throw std::out_of_range("invaid chan,axis '"+which.first+","+which.second+"'");
+    }
+
     // a + bx + cx^2 + dx^3 + ex^4
     //
     return this->flexure_polynomials.at(which)[offset + 0]
@@ -155,6 +159,10 @@ namespace Flexure {
     const std::string function("Flexure::Compensator::calculate_shift");
     double zenangle = this->tcs_info.get_zenangle();
     double equivalentcass = this->tcs_info.get_equivalentcass();
+
+    if (this->flexure_polynomials.find(which)==this->flexure_polynomials.end()) {
+      throw std::out_of_range("invaid chan,axis '"+which.first+","+which.second+"'");
+    }
 
     try {
       double c     = this->flexure_polynomial_fit(which, zenangle,  0);

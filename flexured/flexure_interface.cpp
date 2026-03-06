@@ -824,8 +824,15 @@ namespace Flexure {
         return ERROR;
       }
       message.str("");
-      message << this->compensator.calculate_shift({tokens[1], tokens[2]});
-      retstring = message.str();
+      try {
+        message << this->compensator.calculate_shift({tokens[1], tokens[2]});
+        retstring = message.str();
+      }
+      catch (const std::exception &e) {
+	retstring=std::string(e.what());
+	logwrite(function, "ERROR: "+retstring);
+	return ERROR;
+      }
     }
     else
 
