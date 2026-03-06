@@ -31,7 +31,7 @@ namespace MotionController {
 
     Network::TcpSocket* socket=nullptr;
 
-    std::unique_lock<std::mutex> lock( *this->controller_mutex );
+    std::unique_lock<std::mutex> lock( this->controller_mutex );
 
     try {
       socket = &this->get_socket(name);   // includes check of motorname

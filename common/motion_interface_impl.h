@@ -377,15 +377,16 @@ namespace MotionController {
     std::string function = "MotionController::Interface::load_controller_config";
 
     std::istringstream iss(input);
-    std::string tryname, tryhost;
+    std::string tryname, type, tryhost;
     int tryport, tryaddr, trynaxes;
 
     if (!(iss >> tryname
+              >> type
               >> tryhost
               >> tryport
               >> tryaddr
               >> trynaxes)) {
-      logwrite(function, "ERROR: bad config input. Expected { <motorname> <host> <port> <addr> <naxes> }" );
+      logwrite(function, "ERROR: bad config input. Expected { <motorname> <type> <host> <port> <addr> <naxes> }" );
       return ERROR;
     }
 

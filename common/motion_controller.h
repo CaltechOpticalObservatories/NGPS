@@ -209,12 +209,12 @@ namespace MotionController {
     protected:
       bool is_initialized;
       std::string name;        ///< a name for info purposes
-      std::unique_ptr<std::mutex> controller_mutex;
+      std::mutex controller_mutex;
       int move_timeout;
       int home_timeout;
       float tolerance;
-      volatile std::atomic<int> motors_running;
-      volatile std::atomic<long> thread_error;
+      std::atomic<int> motors_running;
+      std::atomic<long> thread_error;
 
       // map of sockets allows use of multiple socket connections, indexed by {host,port}
       std::map<std::pair<std::string, int>, Network::TcpSocket> socketmap;
@@ -255,7 +255,7 @@ namespace MotionController {
       long open();
       long close();
       long load_controller_config(const std::string &input);
-      inline void clear_motormap() { this->motormap.clear(); }
+      inline void clear_motormap() { std::lock_guard<std::mutex> lock(controller_mutex); this->motormap.clear(); }
 
       long open(const std::string &name) override;
       long close(const std::string &name) override;
@@ -270,21 +270,21 @@ namespace MotionController {
                         const std::string &cmd,
                         std::string* retstring=nullptr) override;
       bool get_initialized() { return this->is_initialized; };
-      std::map<std::string, ControllerInfo<ControllerType>> &get_motormap() const { return motormap; }
+      const std::map<std::string, ControllerInfo<ControllerType>> &get_motormap() const { return motormap; }
 
       Network::TcpSocket &get_socket(const std::string &motorname);
 
       // Default constructor
       //
       Interface()
-        : is_initialized(false), name(""), controller_mutex(std::make_unique<std::mutex>()),
+        : is_initialized(false), name(""),
           move_timeout(60000), home_timeout(60000), tolerance(0.001),
           motors_running(0), thread_error(NO_ERROR) { }
 
       // Constructor initializes move and home timeouts
       //
       Interface(int TO_move, int TO_home, float tol)
-        : is_initialized(false), name(""), controller_mutex(std::make_unique<std::mutex>()),
+        : is_initialized(false), name(""),
           move_timeout(TO_move), home_timeout(TO_home), tolerance(tol),
           motors_running(0), thread_error(NO_ERROR) { }
 
@@ -293,12 +293,12 @@ namespace MotionController {
       Interface( const Interface &other )
         : is_initialized(other.is_initialized),
           name(other.name),
-          controller_mutex(std::make_unique<std::mutex>()),
+          controller_mutex(),
           move_timeout(other.move_timeout),
           home_timeout(other.home_timeout),
           tolerance(other.tolerance),
-          motors_running(other.motors_running),
-          thread_error(other.thread_error),
+          motors_running(other.motors_running.load()),
+          thread_error(other.thread_error.load()),
           socketmap(other.socketmap),
           motormap(other.motormap) {}
 
@@ -308,7 +308,6 @@ namespace MotionController {
         if ( this != &other ) {
           is_initialized = other.is_initialized;
           name = other.name;
-          controller_mutex = std::make_unique<std::mutex>();  // Create a new mutex for the copy
           move_timeout = other.move_timeout;
           home_timeout = other.home_timeout;
           tolerance = other.tolerance;
@@ -325,7 +324,7 @@ namespace MotionController {
       Interface( Interface &&other ) noexcept
         : is_initialized(other.is_initialized),
           name(std::move(other.name)),
-          controller_mutex(std::move(other.controller_mutex)),
+          controller_mutex(),
           move_timeout(std::move(other.move_timeout)),
           home_timeout(std::move(other.home_timeout)),
           tolerance(std::move(other.tolerance)),
@@ -340,7 +339,6 @@ namespace MotionController {
         if ( this != &other ) {
           is_initialized = other.is_initialized;
           name = std::move( other.name );
-          controller_mutex = std::move( other.controller_mutex );
           move_timeout = std::move( other.move_timeout );
           home_timeout = std::move( other.home_timeout );
           tolerance = std::move( other.tolerance );

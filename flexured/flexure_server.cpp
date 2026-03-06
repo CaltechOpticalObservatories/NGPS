@@ -36,9 +36,10 @@ namespace Flexure {
     int applied=0;
     long error;
 
-    // Clear the motormap map before loading new information from the config file
+    // In case this is a reload,
+    // clear the motormap map before loading new information from the config file.
     //
-    this->interface.pi_interface->clear_motormap();
+    if (this->interface.pi_interface) this->interface.pi_interface->clear_motormap();
 
     // loop through the entries in the configuration file, stored in config class
     //
