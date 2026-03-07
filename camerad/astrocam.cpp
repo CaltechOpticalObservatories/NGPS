@@ -449,9 +449,10 @@ namespace AstroCam {
       return ERROR;
     }
 
+    int dev;
     try {
       // validate channel
-      int dev = devnum_from_chan(tokens.at(0));
+      dev = devnum_from_chan(tokens.at(0));
       std::string spat = to_uppercase(tokens.at(1));
       std::string spec = to_uppercase(tokens.at(2));
 
@@ -477,8 +478,17 @@ namespace AstroCam {
       if (!line.empty()) line += ' ';
       line += tokens[i];
     }
-    bool save_as_default = true;
-    long error = this->image_size(line, retstring, save_as_default);
+
+    long error = this->image_size(line, retstring);
+
+    // save these as the defaults
+    //
+    this->controller[dev].defcols = this->controller[dev].detcols;
+    this->controller[dev].defrows = this->controller[dev].detrows;
+    this->controller[dev].defoscols = this->controller[dev].oscols;
+    this->controller[dev].defosrows = this->controller[dev].osrows;
+    this->controller[dev].defbincols = this->controller[dev].info.binning[_COL_];
+    this->controller[dev].defbinrows = this->controller[dev].info.binning[_ROW_];
 
     return error;
   }
@@ -784,14 +794,6 @@ namespace AstroCam {
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( const auto &con : this->controller ) {
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] con.first=" << con.first
-                               << " con.second.channel=" << con.second.channel
-                               << " .devnum=" << con.second.devnum
-                               << " .configured=" << (con.second.configured?"T":"F")
-                               << " .active=" << (con.second.active?"T":"F");
-      logwrite( function, message.str() );
-#endif
       if (!con.second.configured) continue;  // skip controllers not configured
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
@@ -836,6 +838,7 @@ namespace AstroCam {
     return( NO_ERROR );
   }
 
+
   /***** AstroCam::Interface::do_bin ******************************************/
   /**
    * @brief      set/get binning factor
@@ -849,7 +852,7 @@ namespace AstroCam {
    */
   long Interface::do_bin( std::string args, std::string &retstring ) {
     std::string function = "AstroCam::Interface::do_bin";
-    std::stringstream message;
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -879,12 +882,12 @@ namespace AstroCam {
     //
     if ( this->exposure_pending() ) {
       std::vector<int> pending = this->exposure_pending_list();
-      message.str(""); message << "ERROR: cannot change binning while exposure is pending for chan";
+      message << "ERROR: cannot change binning while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( const auto &dev : pending ) message << this->controller.at(dev).channel << " ";
       this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
       retstring="exposure_in_progress";
-      return(ERROR);
+      return ERROR;
     }
 
     // Tokenize args to get the axis and possible binning factor. There
@@ -906,6 +909,13 @@ namespace AstroCam {
         }
       }
 
+      if ( tokens.size() > 2 ) {
+        message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
+        logwrite( function, message.str() );
+        retstring="bad_arguments";
+        return ERROR;
+      }
+
       if ( tokens.size() == 2 ) {
         binfactor = std::stoi( tokens.at(1) );
 
@@ -925,47 +935,30 @@ namespace AstroCam {
           if (!pcontroller) continue;
 
           // determine which physical axis corresponds to the requested logical axis
-          int physical_axis;
-          if (logical_axis == "spec") {
-            physical_axis = pcontroller->spec_physical_axis();
-          }
-          else {
-            physical_axis = pcontroller->spat_physical_axis();
-          }
+          int physical_axis = logical_axis=="spec" ? pcontroller->spec_physical_axis()
+                                                   : pcontroller->spat_physical_axis();
 
-          // Make a local copy of the class' binning for both (physical) axes
-          //
-          int _binning[2];
-          _binning[_ROW_] = pcontroller->info.binning[_ROW_];
-          _binning[_COL_] = pcontroller->info.binning[_COL_];
-          // then override only the axis requested here.
-          _binning[physical_axis] = binfactor;
+          // update the binning factor in the info class for this axis
+          pcontroller->info.binning[physical_axis] = binfactor;
 
-          // call image_size() with logical coordinates
+          // get the logical coordinates from the class
           int spat, spec, osspat, osspec, binspat, binspec;
-          pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                           spat, spec);
-          pcontroller->physical_to_logical(pcontroller->osrows0, pcontroller->oscols0,
-                                           osspat, osspec);
-          pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
-                                           binspat, binspec);
-          message.str("");
-          message << dev     << " "
-                  << spat    << " "
-                  << spec    << " "
-                  << osspat  << " "
-                  << osspec  << " "
-                  << binspat << " "
-                  << binspec;
-          error = this->image_size( message.str(), retstring );  // this retstring only used on error
+          this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+
+          // when requested axis is spatial and a BOI is defined,
+          // spat is sum of BOI bands and osspat is removed
+          if (logical_axis=="spat" && pcontroller->has_boi()) {
+            error = this->load_boi_pairs(pcontroller, spat);
+            osspat = 0;
+          }
+
+          if (error==NO_ERROR) error = this->set_image_size(pcontroller,
+                                                            spat,    spec,
+                                                            osspat,  osspec,
+                                                            binspat, binspec);
+
           if (error != NO_ERROR) break;
         }
-      }
-      else if ( tokens.size() > 2 ) {
-        message.str(""); message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
-        logwrite( function, message.str() );
-        retstring="bad_arguments";
-        return( ERROR );
       }
 
       // return binning for the requested logical axis
@@ -973,20 +966,19 @@ namespace AstroCam {
         int dev = this->active_devnums[0];
         int physical_axis = (logical_axis=="spec") ? this->controller.at(dev).spec_physical_axis() :
                                                      this->controller.at(dev).spat_physical_axis();
-        message.str(""); message << this->controller.at(dev).info.binning[physical_axis];
+        message << this->controller.at(dev).info.binning[physical_axis];
         if ( error == NO_ERROR ) retstring = message.str();
       }
     }
-    catch ( std::exception &e ) {
-      message.str(""); message << "ERROR: parsing \"" << args << "\": " << e.what();
-      logwrite( function, message.str() );
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR parsing '"+args+"': "+std::string(e.what()));
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     logwrite( function, message.str() );
 
-    return( error );
+    return error;
   }
   /***** AstroCam::Interface::do_bin ******************************************/
 
@@ -1636,6 +1628,10 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
+  long Interface::do_native(int dev, std::string cmdstr) {
+    std::string dontcare;
+    return this->do_native(dev, cmdstr, dontcare);
+  }
   long Interface::do_native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<int> selectdev;
     if ( this->controller.at(dev).active ) selectdev.push_back( dev );
@@ -3956,7 +3952,7 @@ for ( const auto &dev : selectdev ) {
    *             number of rows to read. Each successive skip picks up where the
    *             last read left off. This makes use of firmware from NGPS / SWIFT
    *             commit 8080c66aeeae5aafccfd861771e5143ec114e81a
-   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1>]
+   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1> ... ]
    * @param[out] retstring  reference to a string for return values
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -3964,7 +3960,6 @@ for ( const auto &dev : selectdev ) {
   long Interface::band_of_interest( std::string args, std::string &retstring ) {
     const std::string function = "AstroCam::Interface::band_of_interest";
     std::stringstream message;
-    std::stringstream cmd;
 
     // Help
     //
@@ -4017,7 +4012,7 @@ for ( const auto &dev : selectdev ) {
     if ( !this->is_camera_idle() ) {
       logwrite( function, "ERROR: all exposure activity must be stopped before changing image parameters" );
       retstring="camera_busy";
-      return( ERROR );
+      return ERROR;
     }
 
     // Get the requested dev# and channel from supplied args.
@@ -4026,172 +4021,274 @@ for ( const auto &dev : selectdev ) {
     //
     int dev=-1;
     std::string chan;
+    bool readonly=false;
     if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
+
+    // If no args beyond chan then retstring is empty so this is a read-only request
+    //
+    if (retstring.empty()) readonly=true;
 
     Controller* pcontroller = this->get_active_controller(dev);
 
     if (!pcontroller) {
       logwrite(function, "ERROR: controller not available for channel "+chan);
+      retstring="invalid_channel";
       return ERROR;
     }
+
+    long error=NO_ERROR;
 
     // "full" will erase the interest band table and restore the IMAGE_SIZE that
     // was specified in the config file
     //
     if ( args.find("full") != std::string::npos ) {
-      pcontroller->info.interest_bands.clear();
-      // This native 3-letter command with three zeros "BOI 0 0 0" will initialize
-      // the Y:NBOXES address which disables band-of-interest skips/reads in the firmware.
-      // It's the 3rd zero that triggers the initialization.
-      //
-      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
-
-      // restore the image size from the config file, which was stored in the class
-      // when the config file was read
-      //
-      int spat_default, spec_default,
-          osspat_default, osspec_default,
-          binspat_default, binspec_default;
-
-      pcontroller->physical_to_logical(pcontroller->defrows, pcontroller->defcols,
-                                       spat_default, spec_default);
-      pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
-                                       osspat_default, osspec_default);
-      pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                       binspat_default, binspec_default);
-
-      cmd.str("");
-      cmd << chan << " "
-          << spat_default << " "
-          << spec_default << " "
-          << osspat_default << " "
-          << osspec_default << " "
-          << binspat_default << " "
-          << binspec_default;
-      if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      error = this->reset_boi_full(pcontroller, dev, chan, retstring);
     }
-    // if the only thing passed-in is the chan, then extract_dev_chan will
-    // return an empty retstring (which means read-only). If not then there
-    // are args to parse...
+
+    // anything else (other than empty) gets parsed and loaded into the BOI table
     //
-    else if ( !retstring.empty() ) {
+    else
+    if (!readonly) {
+      // parse the args into class interest bands vector
+      error = this->parse_boi_pairs(pcontroller, args);
 
-      // Any args(s) other than "full" are parsed here.
-      // I'm expecting pairs of <nskip> <nread> ...
-      //
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
+      // load class interest bands vector into controller
+      int boi_spat;
+      if (error==NO_ERROR) error = this->load_boi_pairs(pcontroller, boi_spat);
 
-      // args must come in pairs so check for an even number of tokens
-      // after removing one token for the dev argument
-      //
-      if ( (tokens.size()-1) % 2 != 0 ) {
-        logwrite( function, "ERROR expected pairs of values <nskip> <nread>" );
-        retstring="invalid_argument";
+      // get the logical coordinates
+      int spat, spec, ospat, ospec, bspat, bspec;
+      this->get_logical(pcontroller, spat, spec, ospat, ospec, bspat, bspec);
+
+      // set the new image size, overriding spatial with boi_spat,
+      // overriding overscan spatial with 0
+      if (error==NO_ERROR) error = this->set_image_size(pcontroller,
+                                                        boi_spat, spec,
+                                                        0, ospec,
+                                                        bspat, bspec);
+    }
+
+    // always return the current table
+    //
+    retstring = print_bands_of_interest(pcontroller);
+
+    return error;
+  }
+  /***** AstroCam::Interface::band_of_interest ********************************/
+
+
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
+  /**
+   * @brief      parses the args for nskip,nread pairs and stores them in the class
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  args         expected: <chan>|<dev#> [full|<nskip1> <nread1> ... ]
+   *
+   */
+  long Interface::parse_boi_pairs(Controller* pcontroller, const std::string &args) {
+    const std::string function = "AstroCam::Interface::parse_boi_pairs";
+
+    std::istringstream iss(args);
+    std::vector<std::pair<int,int>> boi_table;
+    int nskip, nread;
+    std::string dummy;
+    iss >> dummy;       // skip the first token which is chan|dev
+
+    // loop through args string, validating and creating a vector of the BOI table
+    // expecting pairs: nskip nread
+    //
+    while (iss >> nskip >> nread) {
+      if (nread <= 0) {
+        logwrite(function, "ERROR nread must be greater than 0");
         return ERROR;
       }
-
-      // initialize the table before writing
-      //
-      pcontroller->info.interest_bands.clear();
-      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
-
-      // the total number spatial lines in the image will be the sum of all the nreads
-      // which is initialized here and summed in the loop
-      //
-      int spat_total = 0;
-
-      try {
-        // This loops through the tokens (which have already been checked to be
-        // in pairs). It writes each pair to the BOI table in the controller and
-        // places each pair into the vector of interest_bands.
-        //
-        for ( size_t i=1; i<tokens.size(); i+=2 ) {
-          int nskip = std::stoi( tokens.at(i) );
-          int nread = std::stoi( tokens.at(i+1) );
-
-          // must read at least 1 spatial line
-          //
-          if ( nread<=0 ) {
-            logwrite( function, "ERROR nread must be greater than 0" );
-            retstring="invalid_argument";
-            return ERROR;
-          }
-
-          // don't have to skip but it can't be negative
-          //
-          if ( nskip<0 ) {
-            logwrite( function, "ERROR nskip cannot be negative" );
-            retstring="invalid_argument";
-            return ERROR;
-          }
-
-          // Load this interest band into a table on the controller.
-          // Supply a non-zero 3rd value because the 3rd value = 0 is used
-          // to initialize the number of spatial lines in the firmware.
-          //
-          cmd.str(""); cmd << "BOI " << nskip << " " << nread << " " << 0xFFFF;
-          if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-          logwrite( function, "chan "+chan+": "+cmd.str() );
-
-          // add this spatial line to the interest_bands table for this controller
-          //
-          pcontroller->info.interest_bands.emplace_back( nskip, nread );
-
-          // running summation of spatial lines of each band in the table
-          //
-          spat_total += nread;
-        }
-
-        // Before updating the image size, translate the current dimensions (rows/cols)
-        // to logical (spat/spec).
-        //
-        int spec_current, spat_current;
-        pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                         spat_current, spec_current);
-
-        int osspat_current, osspec_current;
-        pcontroller->physical_to_logical(pcontroller->osrows, pcontroller->oscols,
-                                         osspat_current, osspec_current);
-
-        int binspat_current, binspec_current;
-        pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                         binspat_current, binspec_current);
-
-        // Now update the image size
-        //
-        cmd.str("");
-        cmd << chan            << " "  // this channel
-            << spat_total      << " "  // new spatial dimension is sum of all bands
-            << spec_current    << " "  // don't change original spectral dimension
-            << 0               << " "  // force no spatial overscans
-            << osspec_current  << " "  // don't change original spectral overscans
-            << binspat_current << " "  // don't change spatial binning
-            << binspec_current;        // don't change spectral binning
-        if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-      }
-      catch( const std::exception &e ) {
-        message.str(""); message << "ERROR parsing skip/read pairs: " << e.what();
-        logwrite( function, message.str() );
-        retstring="parsing_exception";
+      if (nskip < 0) {
+        logwrite(function, "ERROR nskip cannot be negative");
         return ERROR;
       }
-    } // end if args != full
-
-    // Whether setting boi or not, the retstring contains the list of
-    // interest bands.
-    //
-    retstring.clear();
-    int boinum=0;
-    for ( const auto &[nskip,nread] : pcontroller->info.interest_bands ) {
-      message.str(""); message << ++boinum << ": " << nskip << " " << nread << "\n";
-      retstring.append( message.str() );
+      boi_table.emplace_back(nskip, nread);
     }
-    if ( boinum==0 ) retstring="full";
+    // clear any remaining whitespace from input stream
+    iss >> std::ws;
+
+    // non-int or odd number of values leaves the input stream before EOF
+    if (!iss.eof() || boi_table.empty()) {
+      logwrite( function, "ERROR expected pairs of integer values <nskip> <nread>" );
+      return ERROR;
+    }
+
+    // overwrite class vector on success
+    pcontroller->info.interest_bands = boi_table;
 
     return NO_ERROR;
   }
-  /***** AstroCam::Interface::band_of_interest ********************************/
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
+
+
+  /***** AstroCam::Interface::load_boi_pairs **********************************/
+  /**
+   * @brief      loads the interest_bands table into the controller, applying binning
+   * @details    This reads from the Information class interest_bands vector,
+   *             adjusts the nskip,nread pairs for binning, and writes them to
+   *             the controller. The BOI table in the controller is re-written and
+   *             the image_size will be updated.
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[out] spat_total   reference to total number of spatial lines (sum of all bands)
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::load_boi_pairs(Controller* pcontroller, int &spat_total) {
+    const std::string function = "AstroCam::Interface::load_boi_pairs";
+
+    auto chan = pcontroller->channel;
+    auto dev  = pcontroller->devnum;
+
+    if (!pcontroller->has_boi()) {
+      logwrite(function, "ERROR chan "+chan+" BOI table empty");
+      return ERROR;
+    }
+
+    // initialize BOI table in controller firmware
+    if ( this->do_native( dev, "BOI 0 0 0" ) != NO_ERROR ) return ERROR;
+
+    // the total number spatial lines in the image will be the sum of all nreads of all bands
+    spat_total = 0;
+
+    // loop through the class interest bands table
+    // adjust nskip,nread for binning and write the adjusted values
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      if (adjust_boi_for_binning(pcontroller, nskip, nread, adj)==ERROR) {
+        logwrite( function, "ERROR BOI too small for current binning");
+        return ERROR;
+      }
+
+      // Load this interest band into a table on the controller.
+      // Firmware requires a non-zero 3rd arg here.
+      std::ostringstream cmd;
+      cmd << "BOI " << adj.first << " " << adj.second << " " << 0xFFFF;
+      if ( this->do_native( dev, cmd.str() ) != NO_ERROR ) return ERROR;
+      logwrite(function, "chan "+chan+": "+cmd.str());
+
+      // running summation of spatial lines of each band in the table
+      spat_total += adj.second;
+    }
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::load_boi_pairs **********************************/
+
+
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
+  /**
+   * @brief      applies binning factor to BOI table in controller
+   * @details    BOI table is in unbinned units. This applies current binning
+   *             factor to ensure band contains an integral number of pixels and
+   *             ends on the requested unbinned pixel. The band is shortened by
+   *             the number of pixels to make it evenly divisible, which are added
+   *             into the skip portion.
+   * @param[in]  pcontroller   pointer to Controller object
+   * @param[in]  nskip         unbinned number to skip
+   * @param[in]  nread         unbinned number to read
+   * @param[out] <nskip,nread> pair adjusted for binning
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::adjust_boi_for_binning(Controller* pcontroller,
+                                         int nskip,
+                                         int nread,
+                                         std::pair<int,int> &adj) {
+    const std::string function = "AstroCam::Interface::adjust_boi_for_binning";
+
+    // bands of interest are always in the spatial axis
+    int spat_bin = pcontroller->info.binning[pcontroller->spat_physical_axis()];
+
+    // ensure nread is evenly divisible by binfactor
+    int modulus   = nread % spat_bin;
+
+    // remove the modulus from nread and add it to nskip
+    adj.first  = nskip + modulus;
+    adj.second = nread - modulus;
+
+    return (adj.second > 0 ? NO_ERROR : ERROR);
+  }
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
+
+
+  /***** AstroCam::Interface::reset_boi_full **********************************/
+  /**
+   * @brief      erases BOI table and return to full frame defined in the config file
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  dev          dev number
+   * @param[in]  chan         channel for this dev
+   * @param[out] retstring    return string
+   *
+   */
+  long Interface::reset_boi_full(Controller* pcontroller,
+                                 int dev,
+                                 const std::string &chan,
+                                 std::string &retstring) {
+    const std::string function = "AstroCam::Interface::reset_boi_full";
+
+    // erase the vector containing my copy of the BOI table
+    pcontroller->info.interest_bands.clear();
+
+    // This native 3-letter command with three zeros "BOI 0 0 0" will disable
+    // the BOI table in the controller firmware.
+    //
+    if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
+
+    // restore the image size from the config file, which was stored in the class
+    // when the config file was read
+    //
+    int spat_default, spec_default,
+        osspat_default, osspec_default,
+        binspat_default, binspec_default;
+
+    // convert physical coords to logical coords
+    //
+    pcontroller->physical_to_logical(pcontroller->defrows, pcontroller->defcols,
+                                     spat_default, spec_default);
+    pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
+                                     osspat_default, osspec_default);
+    pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
+                                     binspat_default, binspec_default);
+
+    // use logical coords to set the new image size
+    //
+    std::ostringstream cmd;
+    cmd << chan << " "
+        << spat_default << " "
+        << spec_default << " "
+        << osspat_default << " "
+        << osspec_default << " "
+        << binspat_default << " "
+        << binspec_default;
+    if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::reset_boi_full **********************************/
+
+
+  /***** AstroCam::Interface::print_bands_of_interest *************************/
+  /**
+   * @brief      returns current BOI table as a string
+   * @param[in]  pcontroller  pointer to Controller object
+   * @return     string
+   *
+   */
+  std::string Interface::print_bands_of_interest(Controller* pcontroller) {
+    if (!pcontroller->has_boi()) return "full";
+    int boinum=0;
+    std::ostringstream oss;
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      adjust_boi_for_binning(pcontroller, nskip, nread, adj);
+      oss << ++boinum << ": " << adj.first << " " << adj.second << "\n";
+    }
+    return oss.str();
+  }
+  /***** AstroCam::Interface::print_bands_of_interest *************************/
 
 
   /***** AstroCam::Interface::set_camera_mode *********************************/
@@ -4801,7 +4898,7 @@ logwrite(function, message.str());
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::image_size( std::string args, std::string &retstring, const bool save_as_default ) {
+  long Interface::image_size( std::string args, std::string &retstring ) {
     const std::string function("AstroCam::Interface::image_size");
     std::ostringstream message;
 
@@ -4820,7 +4917,6 @@ logwrite(function, message.str());
       retstring.append( "  Camera controller connection must first be open.\n" );
       retstring.append( "  If no args are supplied then the current parameters for dev|chan are returned.\n" );
       retstring.append( "  Specify <chan> from { " );
-      message.str("");
       for ( const auto &con : this->controller ) {
         // skip unconfigured and inactive controllers
         if (!con.second.configured || !con.second.active) continue;
@@ -4854,13 +4950,14 @@ logwrite(function, message.str());
     //
     int dev=-1;
     std::string chan;
+    bool readonly=false;
     if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
 
-    // retstring now should contain [ ROWS COLS OSROWS OSCOLS BINROWS BINCOLS ]
-    // It can contain 0 or 6 tokens.
+    // If no args beyond chan then retstring is empty so this is a read-only request
     //
-    std::vector<std::string> tokens;
-    Tokenize( retstring, tokens, " " );
+    if (retstring.empty()) readonly=true;
+
+    std::istringstream iss(retstring);
 
     // Just need to get a configured controller here,
     // it doesn't need to be active or connected at this stage.
@@ -4871,79 +4968,117 @@ logwrite(function, message.str());
 
     if (!pcontroller) {
       logwrite(function, "ERROR: controller not available for channel "+chan);
+      retstring="invalid_channel";
       return ERROR;
     }
 
     int spat=-1, spec=-1, osspat=-1, osspec=-1, binspat=-1, binspec=-1;
-    // start by loading the values in the class
-    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                      binspat, binspec );
 
     // no args returns current settings only
     //
-    if (tokens.empty()) {
-      message.str(""); message << "spat spec osspat osspec binspat binspec = ";
+    if (readonly) {
+      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+      message << "spat spec osspat osspec binspat binspec = ";
       message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
               << ( pcontroller->connected ? "" : " [inactive]" );
       logwrite( function, message.str() );
       retstring = message.str();
       return NO_ERROR;
     }
-    else
 
-    // tokens not empty, first tok is "init" will use the values in the class
-    if (tokens[0]=="init") {
-      // use the values from the class gotten above
+    // if init requested then image size comes from the class
+    if (args.find("init") != std::string::npos) {
+      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
     }
+    // otherwise parse the input stream
     else
-
-    // check for complete set of args
-    if (tokens.size()==6) {
-      try {
-        spat    = std::stoi( tokens.at(0) );
-        spec    = std::stoi( tokens.at(1) );
-        osspat  = std::stoi( tokens.at(2) );
-        osspec  = std::stoi( tokens.at(3) );
-        binspat = std::stoi( tokens.at(4) );
-        binspec = std::stoi( tokens.at(5) );
-      }
-      catch (const std::exception &e ) {
-        logwrite(function, "ERROR parsing \"" + retstring + "\": " + std::string(e.what()));
-        retstring="invalid_argument";
-        return ERROR;
-      }
-    }
-    else {
+    if (!(iss >> spat >> spec >> osspat >> osspec >> binspat >> binspec)) {
       logwrite(function,
-          "ERROR invalid number of arguments. expected <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
+        "ERROR invalid arguments '"+retstring+"':  expected integer <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
       retstring="invalid_argument";
       return ERROR;
     }
 
-    // If we got here then spat,spec,etc. have been set,
-    // either from the class or the supplied arg list
-
     // Check image size
-    //
     if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
-      message.str(""); message << "ERROR invalid image size " << spat << " " << spec << " "
-                               << osspat << " " << osspec << " " << binspat << " " << binspec;
+      message << "ERROR invalid image size " << spat << " " << spec << " "
+              << osspat << " " << osspec << " " << binspat << " " << binspec;
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
+    // set image size
+    //
+    long error = this->set_image_size(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+
+    // Return the physical values stored in the class as logical (spat/spec)
+    //
+    this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+    message << "spat spec osspat osspec binspat binspec = ";
+    message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
+            << ( pcontroller->connected ? "" : " [inactive]" );
+    logwrite( function, message.str() );
+    retstring = message.str();
+    return error;
+  }
+  /***** AstroCam::Interface::image_size **************************************/
+
+
+  /***** AstroCam::Interface::set_image_size **********************************/
+  /**
+   * @brief      set image size parameters and allocate PCI memory
+   * @details    Sets ROWS COLS OSROWS OSCOLS BINROWS BINCOLS for a
+   *             given device|channel. This calls geometry() and buffer() to
+   *             set the image geometry on the controller and allocate a PCI buffer.
+   *             For internal use.
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  spat         spatial pixel dimension
+   * @param[in]  spec         spectral pixel dimension
+   * @param[in]  osspat       spatial overscans
+   * @param[in]  osspec       spectral overscans
+   * @param[in]  binspat      spatial binning factor
+   * @param[in]  binspec      spectral binning factor
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::set_image_size(Controller* pcontroller,
+                                 int spat,    int spec,
+                                 int osspat,  int osspec,
+                                 int binspat, int binspec) {
+    const std::string function("AstroCam::Interface::set_image_size");
+    std::ostringstream message;
+
+    // If binned by a non-evenly-divisible factor then skip modulo that
+    // many at the start. These will be removed from the image.
+    //
+    int skipspat = spat % binspat;
+    int skipspec = spec % binspec;
+
+    // But this does not apply to BOI because Interface::band_of_interest
+    // automatically adjusts the skip for each band to accommodate
+    // non-integral binning.
+    //
+    if (pcontroller->has_boi()) { skipspat = 0; }
+
+    // Remove those skipped pixels from the image size
+    spat -= skipspat;
+    spec -= skipspec;
+
+    // adjust overscans for binning
+    osspat -= ( osspat % binspat );
+    osspec -= ( osspec % binspec );
+
+    // negative overscan is non-sensical
+    if (osspat < 0) osspat=0;
+    if (osspec < 0) osspec=0;
+
     // Translate supplied (logical) to physical (row/col) coordinates
-    int rows, cols, osrows, oscols, binrows, bincols;
+    int rows, cols, osrows, oscols, binrows, bincols, skiprows, skipcols;
     pcontroller->logical_to_physical(spat, spec, rows, cols);
     pcontroller->logical_to_physical(osspat, osspec, osrows, oscols);
     pcontroller->logical_to_physical(binspat, binspec, binrows, bincols);
-
-//  message.str(""); message << "[DEBUG] input imsize: " << rows << " " << cols << " "
-//                           << osrows << " " << oscols << " " << binrows << " " << bincols;
-//  logwrite( function, message.str() );
+    pcontroller->logical_to_physical(skipspat, skipspec, skiprows, skipcols);
 
     // Store the geometry in the class. This is the new detector geometry,
     // unchanged by binning, so that when reverting to binning=1 from some
@@ -4953,6 +5088,8 @@ logwrite(function, message.str());
     pcontroller->detcols = cols;
     pcontroller->osrows0 = osrows;
     pcontroller->oscols0 = oscols;
+    pcontroller->skipcols = skipcols;
+    pcontroller->skiprows = skiprows;
 
     // Binning is the same for all devices so it's stored in the camera info class.
     //
@@ -4963,30 +5100,6 @@ logwrite(function, message.str());
     //
     pcontroller->info.binning[_ROW_] = binrows;
     pcontroller->info.binning[_COL_] = bincols;
-
-    // If binned by a non-evenly-divisible factor then skip modulo that
-    // many at the start. These will be removed from the image.
-    //
-    pcontroller->skipcols = cols % bincols;
-    pcontroller->skiprows = rows % binrows;
-
-//  message.str(""); message << "[DEBUG] skipcols=" << this->controller.at(dev).skipcols << " skiprows=" << this->controller.at(dev).skiprows;
-//  logwrite( function, message.str() );
-
-    cols -= pcontroller->skipcols;
-    rows -= pcontroller->skiprows;
-
-//  message.str(""); message << "[DEBUG] cols=" << cols << " rows=" << rows;
-//  logwrite( function, message.str() );
-
-    // Adjust the number of overscans to make them evenly divisible
-    // by the binning factor.
-    //
-    oscols -= ( oscols % bincols );
-    osrows -= ( osrows % binrows );
-
-//  message.str(""); message << "[DEBUG] oscols=" << oscols << " osrows=" << osrows;
-//  logwrite( function, message.str() );
 
     // Now that the rows/cols and osrows/oscols have been adjusted for
     // binning, store them in the class as detector_pixels for this controller.
@@ -5018,9 +5131,9 @@ logwrite(function, message.str());
     // the PCI buffer with buffer().
     //
     if ( pcontroller->info.set_axes() != NO_ERROR ) {
-      message.str(""); message << "ERROR setting axes for device " << dev;
+      message << "ERROR setting axes for chan " << pcontroller->channel;
       this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
-      return( ERROR );
+      return ERROR;
     }
 
     // because set_axes() doesn't scale overscan
@@ -5033,18 +5146,6 @@ logwrite(function, message.str());
     pcontroller->osrows = osrows;
     pcontroller->oscols = oscols;
 
-    // if requested, store the imsize values as a string in the class for default recovery
-    //
-    if ( save_as_default ) {
-      message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
-      pcontroller->imsize_args = message.str();
-      pcontroller->defrows = rows;
-      pcontroller->defcols = cols;
-      pcontroller->defosrows = osrows;
-      pcontroller->defoscols = oscols;
-      logwrite( function, "saved as default for chan "+chan+": "+message.str() );
-    }
-
     // This is as far as we can get without a connected controller.
     // If not connected then all we've done is save this info to the class,
     // which will be used after the controller is connected.
@@ -5055,7 +5156,7 @@ logwrite(function, message.str());
       //
       std::stringstream geostring;
       std::string retstring;
-      geostring << dev << " "
+      geostring << pcontroller->devnum << " "
                 << pcontroller->info.axes[_ROW_] << " "
                 << pcontroller->info.axes[_COL_];
 
@@ -5065,8 +5166,8 @@ logwrite(function, message.str());
 //    logwrite( function, message.str() );
 
       if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) {
-        message.str(""); message << "ERROR: allocating buffer for chan " << pcontroller->channel
-                                 << " " << pcontroller->devname;
+        message << "ERROR allocating buffer for chan " << pcontroller->channel
+                << " " << pcontroller->devname;
         logwrite( function, message.str() );
         return ERROR;
       }
@@ -5075,7 +5176,7 @@ logwrite(function, message.str());
 //    logwrite(function, message.str());
 
       if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) {
-        message.str(""); message << "ERROR: setting geometry for chan " << pcontroller->channel;
+        message << "ERROR setting geometry for chan " << pcontroller->channel;
         logwrite( function, message.str() );
         return ERROR;
       }
@@ -5089,39 +5190,21 @@ logwrite(function, message.str());
           << pcontroller->skiprows << " "
           << pcontroller->info.binning[_COL_] << " "
           << pcontroller->skipcols;
-      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      if ( this->do_native( pcontroller->devnum, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
       // finally can set this
       pcontroller->is_imsize_set = true;
     }
     else {
-      message.str(""); message << "saved but not sent to controller because chan " << pcontroller->channel
-                               << (!pcontroller->connected ? " not connected ":"")
-                               << (!pcontroller->firmwareloaded ? " firmware not loaded" :"");
+      message << "saved but not sent to controller because chan " << pcontroller->channel
+              << (!pcontroller->connected ? " not connected ":"")
+              << (!pcontroller->firmwareloaded ? " firmware not loaded" :"");
       logwrite( function, message.str() );
     }
 
-    // Return the physical values stored in the class as logical (spat/spec)
-    //
-    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                      binspat, binspec );
-
-    message.str(""); message << "spat spec osspat osspec binspat binspec = ";
-    message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
-            << ( pcontroller->connected ? "" : " [inactive]" );
-    logwrite( function, message.str() );
-
-    retstring = message.str();
-
-    message.str(""); message << "[DEBUG] physical rows=" << pcontroller->detrows
-                             << " cols=" << pcontroller->detcols;
-    logwrite( function, message.str() );
-
-    return( NO_ERROR );
+    return NO_ERROR;
   }
-  /***** AstroCam::Interface::image_size **************************************/
+  /***** AstroCam::Interface::set_image_size **********************************/
 
 
   /***** AstroCam::Interface::do_geometry *************************************/
@@ -5734,6 +5817,30 @@ logwrite(function, message.str());
     this->framethreadcount = 0;
   }
   /***** AstroCam::Interface::init_framethread_count **************************/
+
+
+  /***** AstroCam::Interface::get_logical *************************************/
+  /**
+   * @brief      return the class physical coords in logical coords
+   * @details    This is for internal use.
+   * @param[in]  pcontroller pointer to Controller object
+   * @param[out] spat        reference to spat
+   * @param[out] spec        reference to spec
+   * @param[out] osspat      reference to osspat
+   * @param[out] osspec      reference to osspec
+   * @param[out] binspat     reference to binspat
+   * @param[out] binspec     reference to binspec
+   *
+   */
+  void Interface::get_logical(Controller* pcontroller,
+                              int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
+    if (!pcontroller) return;
+    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
+    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
+                                      binspat, binspec );
+  }
+  /***** AstroCam::Interface::get_logical *************************************/
 
 
   /***** AstroCam::Interface::Controller::logical_to_physical *****************/
