@@ -75,7 +75,7 @@ class EtcPopup(QDialog):
         self.channel_dropdown.currentTextChanged.connect(self.update_channel_range)
         self.spatial_dropdown = combo(["1", "2", "4", "6"])
         self.spectral_dropdown = combo(["1", "2", "4", "6"])
-        self.extract_dropdown = combo(["PSF", "2px", "4px", "6px", "8px", "10px"])
+        self.extract_dropdown = combo(["PSF", "1px", "2px", "3px", "4px", "5px"])
 
         self.range_start = line()
         self.range_end = line()
@@ -91,7 +91,7 @@ class EtcPopup(QDialog):
 
         self.magnitude_input = line()
         self.abvega_dropdown = combo(["AB", "VEGA"])
-        self.filter_dropdown = combo(["U", "V", "R", "I"])
+        self.filter_dropdown = combo(["match", "U", "V", "R", "I"])
 
         self.extended_checkbox = QCheckBox("Extended Source")
         self.extended_checkbox.setMinimumHeight(self.FIELD_HEIGHT)
@@ -485,6 +485,12 @@ class EtcPopup(QDialog):
         # binning options
         cmd.extend(["-binspect", self.spectral_dropdown.currentText()])
         cmd.extend(["-binspat", self.spatial_dropdown.currentText()])
+        # extract aperture -> fastSNR option
+        extract_mode = self.extract_dropdown.currentText()
+
+        if extract_mode != "PSF":
+            fastsnr_value = extract_mode.replace("px", "")
+            cmd.extend(["-fastSNR", fastsnr_value])
 
         # expert option
         expert = self.expert_field.text().strip()
