@@ -2272,6 +2272,11 @@ namespace Sequencer {
     this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
 
+    // If camera was already open we may have missed the ZMQ ready publish,
+    // so assume camera is ready to expose after a successful init.
+    //
+    this->can_expose.store(true, std::memory_order_relaxed);
+
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::camera_init *************************************/
