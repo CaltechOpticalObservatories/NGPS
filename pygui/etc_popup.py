@@ -75,7 +75,7 @@ class EtcPopup(QDialog):
         self.channel_dropdown.currentTextChanged.connect(self.update_channel_range)
         self.spatial_dropdown = combo(["1", "2", "4", "6"])
         self.spectral_dropdown = combo(["1", "2", "4", "6"])
-        self.extract_dropdown = combo(["PSF", "1px", "2px", "3px", "4px", "5px"])
+        self.extract_dropdown = combo(["PSF", "2px", "4px", "6px", "8px", "10px"])
 
         self.range_start = line()
         self.range_end = line()
@@ -110,6 +110,7 @@ class EtcPopup(QDialog):
         
         self.snr_mode.currentIndexChanged.connect(self.update_exptime_mode)
         self.res_mode.currentIndexChanged.connect(self.update_resolution_mode)
+        self.extract_dropdown.currentTextChanged.connect(self.update_extract_mode)
 
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("""
@@ -126,7 +127,9 @@ class EtcPopup(QDialog):
         
         # Default ETC values
         self.channel_dropdown.setCurrentText("R")
-        self.filter_dropdown.setCurrentText("R")
+        self.filter_dropdown.setCurrentText("match")
+        self.extract_dropdown.setCurrentText("8px")
+        self.spatial_dropdown.setCurrentText("2")
 
         self.seeing_input.setText("1.5")
         self.seeing_wavelength.setText("6400")
@@ -226,10 +229,10 @@ class EtcPopup(QDialog):
 
         chan.addWidget(self.no_slicer_checkbox, 2, 0)
 
-        chan.addWidget(QLabel("CCD Spatial"), 0, 2)
+        chan.addWidget(QLabel("Bin Spatial"), 0, 2)
         chan.addWidget(self.spatial_dropdown, 0, 3)
 
-        chan.addWidget(QLabel("CCD Spectral"), 1, 2)
+        chan.addWidget(QLabel("Bin Spectral"), 1, 2)
         chan.addWidget(self.spectral_dropdown, 1, 3)
 
         chan.addWidget(QLabel("Extract Spatial"), 2, 2)
@@ -342,6 +345,10 @@ class EtcPopup(QDialog):
 
             self.range_start.setText(start)
             self.range_end.setText(end) 
+
+    def update_extract_mode(self, mode):
+        if mode != "PSF":
+            self.no_slicer_checkbox.setChecked(False)
             
     def validate_inputs(self):
         """Validate numeric inputs and highlight invalid fields."""
@@ -489,8 +496,8 @@ class EtcPopup(QDialog):
         extract_mode = self.extract_dropdown.currentText()
 
         if extract_mode != "PSF":
-            fastsnr_value = extract_mode.replace("px", "")
-            cmd.extend(["-fastSNR", fastsnr_value])
+            fastsnr_value = int(extract_mode.replace("px", "")) // 2
+            cmd.extend(["-fastSNR", str(fastsnr_value)])
 
         # expert option
         expert = self.expert_field.text().strip()
