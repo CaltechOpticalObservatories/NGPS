@@ -22,6 +22,13 @@ class EtcPopup(QDialog):
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(20, 20, 20, 20)
         self.main_layout.setSpacing(14)
+        
+        self.channel_ranges = {
+            "U": ("3250", "4330"),
+            "G": ("4330", "5850"),
+            "R": ("5850", "7600"),
+            "I": ("7700", "9340"),
+        }
 
         self.init_widgets()
         self.init_layout()
@@ -65,6 +72,7 @@ class EtcPopup(QDialog):
         self.res_mode.setMinimumHeight(self.FIELD_HEIGHT)
 
         self.channel_dropdown = combo(["R", "I", "U", "G"])
+        self.channel_dropdown.currentTextChanged.connect(self.update_channel_range)
         self.spatial_dropdown = combo(["1", "2", "4", "6"])
         self.spectral_dropdown = combo(["1", "2", "4", "6"])
         self.extract_dropdown = combo(["PSF", "2px", "4px", "6px", "8px", "10px"])
@@ -105,6 +113,17 @@ class EtcPopup(QDialog):
         # initialize state
         self.update_exptime_mode()
         self.update_resolution_mode()
+        
+        # Default ETC values
+        self.channel_dropdown.setCurrentText("R")
+        self.filter_dropdown.setCurrentText("R")
+
+        self.seeing_input.setText("1.5")
+        self.airmass_input.setText("1")
+        self.sky_mag_input.setText("21.4")
+        self.magnitude_input.setText("18")
+
+        self.update_channel_range(self.channel_dropdown.currentText())
 
     def label(self, text):
         l = QLabel(text)
@@ -283,6 +302,15 @@ class EtcPopup(QDialog):
         else:  # AUTO
             self.slit_width_input.setEnabled(False)
             self.resolution_input.setEnabled(False)
+ 
+    def update_channel_range(self, channel):
+
+        if channel in self.channel_ranges:
+
+            start, end = self.channel_ranges[channel]
+
+            self.range_start.setText(start)
+            self.range_end.setText(end) 
             
     def validate_inputs(self):
         """Validate numeric inputs and highlight invalid fields."""
@@ -366,8 +394,8 @@ class EtcPopup(QDialog):
 
         channel = self.channel_dropdown.currentText()
 
-        wrange_start = self.range_start.text()
-        wrange_end = self.range_end.text()
+        wrange_start = str(float(self.range_start.text()) / 10)
+        wrange_end = str(float(self.range_end.text()) / 10)
 
         mag = self.magnitude_input.text()
         magsystem = self.abvega_dropdown.currentText()
@@ -443,6 +471,8 @@ class EtcPopup(QDialog):
 
             exptime_match = re.search(r"EXPTIME=([0-9.]+)", output)
             res_match = re.search(r"RESOLUTION=([0-9.]+)", output)
+            snr_match = re.search(r"SNR=([0-9.]+)", output)
+            slitwidth_match = re.search(r"SLITWIDTH=([0-9.]+)", output)
 
             if exptime_match:
                 exptime = round(float(exptime_match.group(1)))
@@ -451,6 +481,14 @@ class EtcPopup(QDialog):
             if res_match:
                 resolution = round(float(res_match.group(1)))
                 self.resolution_input.setText(str(resolution))
+
+            if snr_match:
+                snr = round(float(snr_match.group(1)))
+                self.snr_input.setText(str(snr))
+
+            if slitwidth_match:
+                slitwidth = round(float(slitwidth_match.group(1)))
+                self.slit_width_input.setText(str(slitwidth))
 
         except subprocess.CalledProcessError as e:
 

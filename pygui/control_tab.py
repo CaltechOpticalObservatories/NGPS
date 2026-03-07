@@ -438,11 +438,10 @@ class ControlTab(QDialog):
         self._style_disabled_gray(self.offset_to_target_button)
         self._style_disabled_gray(self.continue_button)
 
-    # -----------------------------
-    # DB update helpers (unchanged logic)
-    # -----------------------------
+
     def on_confirm_changes(self):
-        """Confirm input changes and push updates; also enables Go button."""
+        """Confirm input changes, update DB, update GUI row, enable Go button."""
+
         exposure_time = self.exposure_time_box.text()
         slit_width = self.slit_width_box.text()
         slit_angle = self.slit_angle_box.text()
@@ -450,9 +449,14 @@ class ControlTab(QDialog):
         bin_spect = self.bin_spect_box.text()
         bin_spat = self.bin_spat_box.text()
 
+        # -----------------------------
+        # DB Updates
+        # -----------------------------
         if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
-                  f"Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}")
+            print(
+                f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
+                f"Slit Angle: {slit_angle}, Number of Exposures: {num_of_exposures}"
+            )
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             self.on_slit_angle_changed()
@@ -462,7 +466,10 @@ class ControlTab(QDialog):
             self._style_disabled_gray(self.confirm_button)
 
         elif exposure_time and slit_width:
-            print(f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, Slit Angle: {slit_angle}")
+            print(
+                f"Confirmed Exposure Time: {exposure_time}, "
+                f"Slit Width: {slit_width}, Slit Angle: {slit_angle}"
+            )
             self.on_exposure_time_changed()
             self.on_slit_width_changed()
             QSound.play("sound/exposure_slit_width_set.wav")
@@ -488,10 +495,43 @@ class ControlTab(QDialog):
         else:
             print("Please enter valid values for all fields.")
 
-        if getattr(self.parent, "current_target_list_name", None):
-            print(f"Current target list: {self.parent.current_target_list_name}")
-            self.logic_service.update_target_table_with_list(self.parent.current_target_list_name)
+        # -----------------------------
+        # Update the selected row in the table (no refresh)
+        # -----------------------------
+        table = self.parent.layout_service.target_list_display
+        selected = table.selectionModel().selectedRows()
 
+        if selected:
+            row = selected[0].row()
+
+            headers = [
+                table.horizontalHeaderItem(i).text()
+                for i in range(table.columnCount())
+            ]
+
+            if "EXPTIME" in headers and exposure_time:
+                col = headers.index("EXPTIME")
+                table.item(row, col).setText("SET " + exposure_time)
+
+            if "SLITWIDTH" in headers and slit_width:
+                col = headers.index("SLITWIDTH")
+                table.item(row, col).setText("SET " + slit_width)
+
+            if "NEXP" in headers and num_of_exposures:
+                col = headers.index("NEXP")
+                table.item(row, col).setText(num_of_exposures)
+
+            if "BINSPECT" in headers and bin_spect:
+                col = headers.index("BINSPECT")
+                table.item(row, col).setText(bin_spect)
+
+            if "BINSPAT" in headers and bin_spat:
+                col = headers.index("BINSPAT")
+                table.item(row, col).setText(bin_spat)
+
+        # -----------------------------
+        # Enable Go button
+        # -----------------------------
         self._style_enabled_green(self.go_button)
 
     def on_exposure_time_changed(self):

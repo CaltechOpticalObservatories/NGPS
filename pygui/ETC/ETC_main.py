@@ -32,12 +32,11 @@ skyFilter = SpectralElement.from_filter('johnson_v')
 # Load telescope throughput
 throughput_telescope = LoadCSVSpec(throughputFile_telescope)
 
-# Load throughputs and detector QE for all spectrograph channels
+# Load throughputs for all spectrograph channels
 throughput_spectrograph = { k : LoadCSVSpec(throughputFile_spectrograph[k]) for k in channels }
-QE = { k : LoadCSVSpec(QEFile[k]) for k in channels }
 
 # Combine spectra with all throughputs except for slit/slicer
-TP = { k : throughput_spectrograph[k]*QE[k]*throughput_telescope for k in channels }
+TP = { k : throughput_spectrograph[k]*throughput_telescope for k in channels }
 
 # Load throughput for slicer optics (either side of slit)
 throughput_slicerOptics = LoadCSVSpec(throughputFile_slicer)
@@ -301,7 +300,8 @@ def main(args ,quiet=False ,ETCextras=False ,plotSNR=False ,plotslit=False, skys
         print(  '  '.join(['%s=%s' % (k.upper(),v.round(3)) for (k,v) in result.items()])  )
 
     if args.plotSNR:
-        result['plotSNR'] = computeSNR(t, slitw_result ,args, SSSfocalplane, allChans=True)
+        result['plotSNR'] = computeSNR(res_exptime, res_slitw ,args, SSSfocalplane, allChans=True)
+        result['SSSfocalplane'] = SSSfocalplane
 
     # return extra functions and data for plotting
     if ETCextras: return result, efffunc, SNRfunc
@@ -371,16 +371,49 @@ if __name__ == "__main__":
         result_plot = main(args ,quiet=True ,plotSNR=True)
         SNR1 = result_plot['plotSNR']
 
-        fig, ax = plt.subplots(figsize=(15,4))
+        SSSfocalplane = result_plot['SSSfocalplane'] # signal, background, sharpness
+        # Access SIGNAL ct/s as e.g.  SSSfocalplane(args.slit)[0]['R']['center']
+        # breakpoint()
 
         binCenters = makeBinCenters(args.binspect)
+
+        fig, axes = plt.subplots(3, 1, figsize=(15,9), sharex=True)
+        title = f'EXPTIME={result["exptime"].round(3)}  ;  SLIT={result["slitwidth"].round(3)}  ;  '
+        title += f'BINSPECT={args.binspect}  ;  BINSPAT={args.binspat}' 
+        # plt.suptitle('EXPTIME = '+str(result['exptime'].round(3)))
+        plt.suptitle(title)
+
+        # SNR
+        ax = axes[0]
         for k in channels:
             ax.plot(binCenters[k], SNR1[k] ,color=channelColor[k] ,label=k)
 
-        plt.ylabel('SNR / wavelength bin')
-        plt.legend()
+        ax.set_ylabel('SNR / wavelength bin')
+        ax.legend()
         ax.axvspan(args.wrange[0], args.wrange[1], alpha=0.2, color='grey') # shade user range
-        plt.title('EXPTIME = '+str(result['exptime'].round(3)))
+
+        # Counts
+        ax = axes[1]
+        for k in channels:
+            y = SSSfocalplane(args.slit)[0][k]['center']*args.ETCfixed # total counts in center slit
+            ax.plot(binCenters[k], y ,color=channelColor[k] ,label=k)
+
+        ax.set_ylabel('Center signal e-')
+        ax.legend()
+        ax.axvspan(args.wrange[0], args.wrange[1], alpha=0.2, color='grey') # shade user range
+
+        # Background
+        ax = axes[2]
+        for k in channels:
+            y = SSSfocalplane(args.slit)[1][k]['center']*args.ETCfixed*args.binspat # total counts per background pixel
+            ax.plot(binCenters[k], y ,color=channelColor[k] ,label=k)
+
+        ax.set_ylabel('Center background e-')
+        ax.legend()
+        ax.axvspan(args.wrange[0], args.wrange[1], alpha=0.2, color='grey') # shade user range
+
+        # Save
+        plt.tight_layout()
         plt.savefig('plotSNR.png')
         print('Wrote', 'plotSNR.png')
 
