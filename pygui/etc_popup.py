@@ -100,7 +100,7 @@ class EtcPopup(QDialog):
         self.expert_field.setPlaceholderText("Advanced parameters (for power users)")
 
         self.run_button = QPushButton("Run ETC")
-        self.save_button = QPushButton("Save")
+        self.save_button = QPushButton("Apply to Target")
 
         self.run_button.setFixedSize(160, 50)
         self.save_button.setFixedSize(160, 50)
@@ -280,29 +280,43 @@ class EtcPopup(QDialog):
         mode = self.snr_mode.currentText()
 
         if mode == "Fixed EXPTIME":
-            self.exptime_input.setEnabled(True)
-            self.snr_input.setEnabled(False)
+            self.set_field_state(self.exptime_input, True)
+            self.set_field_state(self.snr_input, False)
 
         else:
-            self.exptime_input.setEnabled(False)
-            self.snr_input.setEnabled(True)
+            self.set_field_state(self.exptime_input, False)
+            self.set_field_state(self.snr_input, True)
             
     def update_resolution_mode(self):
 
         mode = self.res_mode.currentText()
 
         if mode == "Fixed slit width":
-            self.slit_width_input.setEnabled(True)
-            self.resolution_input.setEnabled(False)
+            self.set_field_state(self.slit_width_input, True)
+            self.set_field_state(self.resolution_input, False)
 
         elif mode == "RES":
-            self.slit_width_input.setEnabled(False)
-            self.resolution_input.setEnabled(True)
+            self.set_field_state(self.slit_width_input, False)
+            self.set_field_state(self.resolution_input, True)
 
         else:  # AUTO
-            self.slit_width_input.setEnabled(False)
-            self.resolution_input.setEnabled(False)
- 
+            self.set_field_state(self.slit_width_input, False)
+            self.set_field_state(self.resolution_input, False)
+
+    def set_field_state(self, field, enabled):
+
+        field.setEnabled(enabled)
+
+        if enabled:
+            field.setStyleSheet("")
+        else:
+            field.clear()
+            field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #cccccc;
+                }
+            """)
+
     def update_channel_range(self, channel):
 
         if channel in self.channel_ranges:
@@ -454,6 +468,11 @@ class EtcPopup(QDialog):
         cmd.extend(["-binspect", self.spectral_dropdown.currentText()])
         cmd.extend(["-binspat", self.spatial_dropdown.currentText()])
 
+        # expert option
+        expert = self.expert_field.text().strip()
+        if expert:
+            cmd.extend(expert.split())
+
         print("Running ETC command:")
         print(" ".join(cmd))
 
@@ -475,19 +494,19 @@ class EtcPopup(QDialog):
             slitwidth_match = re.search(r"SLITWIDTH=([0-9.]+)", output)
 
             if exptime_match:
-                exptime = round(float(exptime_match.group(1)))
+                exptime = float(exptime_match.group(1))
                 self.exptime_input.setText(str(exptime))
 
             if res_match:
-                resolution = round(float(res_match.group(1)))
+                resolution = float(res_match.group(1))
                 self.resolution_input.setText(str(resolution))
 
             if snr_match:
-                snr = round(float(snr_match.group(1)))
+                snr = float(snr_match.group(1))
                 self.snr_input.setText(str(snr))
 
             if slitwidth_match:
-                slitwidth = round(float(slitwidth_match.group(1)))
+                slitwidth = float(slitwidth_match.group(1))
                 self.slit_width_input.setText(str(slitwidth))
 
         except subprocess.CalledProcessError as e:
