@@ -890,7 +890,10 @@ class SeqProgressGui {
           }
         }
         if (jmessage.contains("ontarget") && jmessage["ontarget"].is_boolean()) {
-          state_.ontarget = jmessage["ontarget"].get<bool>();
+          // Latch ontarget=true; only clear on new target (reset_progress_only above)
+          if (jmessage["ontarget"].get<bool>()) {
+            state_.ontarget = true;
+          }
         }
         if (jmessage.contains("fine_tune_active") && jmessage["fine_tune_active"].is_boolean()) {
           bool active = jmessage["fine_tune_active"].get<bool>();
