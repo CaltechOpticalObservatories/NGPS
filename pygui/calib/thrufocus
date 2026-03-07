@@ -31,6 +31,10 @@ camera exptime 10000
 # 3. Camera BOI
 camera boi R 410 200
 camera boi I 580 200
+camera boi G 360 200
+### Add G channel BOI
+### Add U channel BOI once BOI with binning works.
+
 
 # 3.5 Get some information from the camera and set some information
 imnum0=(`camera imnum`[1])
@@ -41,16 +45,21 @@ focusbase="focus_internal_`date +%g%m%d_%H%M%S`"
 camera basename $focusbase
 
 # 4. Turn on lamp and wait
-fociI=( 4.4 4.5 4.6 4.7 4.8 4.9 5.0 5.1 5.2 5.3 5.4 5.5 )
+fociI=( 4.2 4.3 4.4 4.5 4.6 4.7 4.8 4.9 5.0 5.1 5.2 5.3 )
 fociR=( 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.1 )
+fociG=( 2.8 2.9 3.0 3.1 3.2 3.3 3.4 3.5 3.6 3.7 3.8 3.9 )
+### Add fociU 
 focpos="1 2 3 4 5 6 7 8 9 10 11 12"
 echo $foci
 for fp in $focpos; do
     # set the focus
     #    focus set I $focus
-    echo " FOC I ${fociI[$fp]} R ${fociR[$fp]} No `camera imnum`"
+    echo " FOC I ${fociI[$fp]} R ${fociR[$fp]} G ${fociG[$fp]} No `camera imnum`"
     focus set I  ${fociI[$fp]}
     focus set R  ${fociR[$fp]}
+    focus set G  ${fociG[$fp]}
+    ### focus set G ${fociG[$fp]}
+    ### focus set U .....
     echo
     sleep 4
     imnum1=(`camera imnum`[1])
@@ -75,17 +84,30 @@ calib set door=close
 # revert BOI
 camera boi R full
 camera boi I full
+camera boi G full
+
+#Add  camera boi U full
+
+# now set the foci to nominal values, just because we can
+
+focus set G 3.35
+focus set R 2.45
+focus set I 4.75
+
 
 # now run the analysis script.
+
+
+
 
 # now display the results
 
 
 allfiles="$focusbase*.fits"
 cd /home/observer/focus/
-/home/developer/Software/run/focus_spec.py /data/latest/$allfiles -fa x -fk FOCUS --range $imnum0 $imnum1
+/home/developer/Software/run/focus_spec.py /data/latest/$allfiles -fa x -fk FOCUS -G /home/observer/focus/gfocus.reg
 
 
-eog focus_spec_*.png
+eog focus_spec_?.png
 
 echo "Done."
