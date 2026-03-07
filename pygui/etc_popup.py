@@ -45,10 +45,10 @@ class EtcPopup(QDialog):
             c.addItems(items)
 
             c.setMinimumHeight(self.FIELD_HEIGHT)
-            c.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            c.setFixedWidth(self.FIELD_WIDTH)
 
-            c.setSizeAdjustPolicy(QComboBox.AdjustToContents)
-            c.setMaxVisibleItems(6)
+            c.setMaxVisibleItems(4)  # exactly the number of items
+            c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
 
             return c
 
@@ -85,6 +85,7 @@ class EtcPopup(QDialog):
         self.no_slicer_checkbox.setMinimumHeight(self.FIELD_HEIGHT)
 
         self.seeing_input = line()
+        self.seeing_wavelength = line()
         self.sky_mag_input = line()
         self.airmass_input = line()
 
@@ -110,6 +111,15 @@ class EtcPopup(QDialog):
         self.snr_mode.currentIndexChanged.connect(self.update_exptime_mode)
         self.res_mode.currentIndexChanged.connect(self.update_resolution_mode)
 
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("""
+            QLabel {
+                color: #cc0000;
+                font-weight: bold;
+            }
+        """)
+        self.error_label.setWordWrap(True)
+
         # initialize state
         self.update_exptime_mode()
         self.update_resolution_mode()
@@ -119,6 +129,8 @@ class EtcPopup(QDialog):
         self.filter_dropdown.setCurrentText("R")
 
         self.seeing_input.setText("1.5")
+        self.seeing_wavelength.setText("6400")
+        self.seeing_wavelength.setEnabled(False)
         self.airmass_input.setText("1")
         self.sky_mag_input.setText("21.4")
         self.magnitude_input.setText("18")
@@ -234,11 +246,14 @@ class EtcPopup(QDialog):
         cond.addWidget(QLabel("Seeing (arcsec)"), 0, 0)
         cond.addWidget(self.seeing_input, 0, 1)
 
-        cond.addWidget(QLabel("Sky (mag/arcsec²)"), 0, 2)
-        cond.addWidget(self.sky_mag_input, 0, 3)
+        cond.addWidget(QLabel("Seeing Pivot (Å)"), 0, 2)
+        cond.addWidget(self.seeing_wavelength, 0, 3)
 
-        cond.addWidget(QLabel("Airmass"), 1, 0)
-        cond.addWidget(self.airmass_input, 1, 1)
+        cond.addWidget(QLabel("Sky (mag/arcsec²)"), 1, 0)
+        cond.addWidget(self.sky_mag_input, 1, 1)
+
+        cond.addWidget(QLabel("Airmass"), 1, 2)
+        cond.addWidget(self.airmass_input, 1, 3)
 
         L.addLayout(cond)
         L.addWidget(self.hline())
@@ -264,6 +279,8 @@ class EtcPopup(QDialog):
 
         L.addLayout(target)
         L.addWidget(self.hline())
+
+        L.addWidget(self.error_label)
 
         # BUTTONS
         btn = QHBoxLayout()
@@ -405,6 +422,7 @@ class EtcPopup(QDialog):
 
         if not self.validate_inputs():
             return
+        self.error_label.setText("")
 
         channel = self.channel_dropdown.currentText()
 
@@ -452,7 +470,7 @@ class EtcPopup(QDialog):
             solve_param,
             solve_value,
             *slit_mode,
-            "-seeing", seeing, "500",
+            "-seeing", seeing, "640",
             "-airmass", airmass,
             "-skymag", sky_mag,
             "-mag", mag,
@@ -510,6 +528,20 @@ class EtcPopup(QDialog):
                 self.slit_width_input.setText(str(slitwidth))
 
         except subprocess.CalledProcessError as e:
+
+            stderr = e.stderr or ""
+
+            error_line = ""
+
+            for line in stderr.splitlines():
+                if "ETC_main.py: error:" in line:
+                    error_line = line
+                    break
+
+            if error_line:
+                self.error_label.setText(error_line)
+            else:
+                self.error_label.setText("ETC failed. See terminal for details.")
 
             print("ETC failed")
             print(e.stdout)
