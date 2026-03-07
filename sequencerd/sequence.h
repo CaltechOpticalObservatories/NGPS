@@ -295,6 +295,7 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
+      std::atomic<bool> can_expose;
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
@@ -325,6 +326,7 @@ namespace Sequencer {
       Sequence() :
           context(),
           ready_to_start(false),
+          can_expose(false),
           is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
@@ -358,6 +360,8 @@ namespace Sequencer {
             topic_handlers = {
               { "_snapshot", std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { "camerad", std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) },
               { "slicecam_autoacq", std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_slicecam_autoacq(msg); } ) }
             };
@@ -407,6 +411,8 @@ namespace Sequencer {
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
 
+      std::mutex camerad_mtx;
+      std::condition_variable camerad_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -482,6 +488,7 @@ namespace Sequencer {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_camerad( const nlohmann::json &jmessage );
       void handletopic_slicecam_autoacq( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);

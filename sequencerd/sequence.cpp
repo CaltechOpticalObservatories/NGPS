@@ -12,6 +12,7 @@
  */
 
 #include "sequence.h"
+#include "message_keys.h"
 
 #include <fstream>
 
@@ -40,6 +41,23 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
+
+
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /**
+   * @brief      handles camerad telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    if (jmessage.contains(Key::Camerad::READY)) {
+      int isready = jmessage[Key::Camerad::READY].get<bool>();
+      this->can_expose.store(isready, std::memory_order_relaxed);
+      std::lock_guard<std::mutex> lock(camerad_mtx);
+      this->camerad_cv.notify_all();
+    }
+  }
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
 
 
   /***** Sequencer::Sequence::handletopic_slicecam_autoacq ********************/
@@ -1178,12 +1196,59 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
+    // wait until camera is ready to expose
+    //
+    std::unique_lock<std::mutex> lock(this->camerad_mtx);
+    if (!this->can_expose.load()) {
+
+      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
+
+      this->camerad_cv.wait( lock, [this]() {
+        return( this->can_expose.load() || this->cancel_flag.load() );
+      } );
+
+      if (this->cancel_flag.load()) {
+        logwrite(function, "sequence cancelled");
+        return NO_ERROR;
+      }
+    }
+    lock.unlock();
+
     logwrite( function, "setting camera parameters");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
+
+    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
+    // indexed by name. Calibration targets use target.name for the index, or
+    // use "SCIENCE" index for all science targets.
+    //
+    std::ostringstream activechans, deactivechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    // build up lists of (de)activate chans
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      (active ? activechans : deactivechans) << " " << chan;
+    }
+
+    // send two commands, one for each
+    if (!activechans.str().empty()) {
+      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
+    if (!deactivechans.str().empty()) {
+      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
 
     // send the EXPTIME command to camerad
     //
@@ -4451,6 +4516,10 @@ namespace Sequencer {
       retstring.append( message.str() ); retstring.append( "\n" );
 
       message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
+      this->async.enqueue_and_log( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
+      message.str(""); message << "NOTICE: camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
       this->async.enqueue_and_log( function, message.str() );
       retstring.append( message.str() );
 
