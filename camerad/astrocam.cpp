@@ -5821,8 +5821,11 @@ logwrite(function, message.str());
 
   /***** AstroCam::Interface::get_logical *************************************/
   /**
-   * @brief      return the class physical coords in logical coords
-   * @details    This is for internal use.
+   * @brief      return the original detector geometry in logical coords
+   * @details    Uses the default (config-specified) detector dimensions and
+   *             overscans so that repeated calls to set_image_size via the
+   *             bin command are idempotent. The current binning is returned
+   *             from the info class.
    * @param[in]  pcontroller pointer to Controller object
    * @param[out] spat        reference to spat
    * @param[out] spec        reference to spec
@@ -5835,8 +5838,8 @@ logwrite(function, message.str());
   void Interface::get_logical(Controller* pcontroller,
                               int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
     if (!pcontroller) return;
-    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->defrows, pcontroller->defcols, spat, spec );
+    pcontroller->physical_to_logical( pcontroller->defosrows, pcontroller->defoscols, osspat, osspec );
     pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
   }
