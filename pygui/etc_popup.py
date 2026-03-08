@@ -3,6 +3,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QComboBox, QCheckBox,
     QPushButton, QSizePolicy, QFrame
 )
+from PyQt5.QtCore import Qt
 import re
 import subprocess
 
@@ -73,8 +74,8 @@ class EtcPopup(QDialog):
 
         self.channel_dropdown = combo(["R", "I", "U", "G"])
         self.channel_dropdown.currentTextChanged.connect(self.update_channel_range)
-        self.spatial_dropdown = combo(["1", "2", "4", "6"])
-        self.spectral_dropdown = combo(["1", "2", "4", "6"])
+        self.spatial_dropdown = combo(["1", "2", "3", "4", "5", "6"])
+        self.spectral_dropdown = combo(["1", "2", "3", "4", "5", "6"])
         self.extract_dropdown = combo(["PSF", "2px", "4px", "6px", "8px", "10px"])
 
         self.range_start = line()
@@ -121,6 +122,15 @@ class EtcPopup(QDialog):
         """)
         self.error_label.setWordWrap(True)
 
+        self.target_label = QLabel("No target selected")
+        self.target_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 14px;
+                color: #dddddd;
+            }
+        """)
+        self.target_label.setAlignment(Qt.AlignCenter)
         # initialize state
         self.update_exptime_mode()
         self.update_resolution_mode()
@@ -181,6 +191,8 @@ class EtcPopup(QDialog):
     def init_layout(self):
 
         L = self.main_layout
+        L.addWidget(self.target_label)
+        L.addWidget(self.hline())
 
         # EXPOSURE
         exp = QGridLayout()
@@ -347,8 +359,8 @@ class EtcPopup(QDialog):
             self.range_end.setText(end) 
 
     def update_extract_mode(self, mode):
-        if mode != "PSF":
-            self.no_slicer_checkbox.setChecked(False)
+        if mode == "PSF":
+            self.no_slicer_checkbox.setChecked(True)
             
     def validate_inputs(self):
         """Validate numeric inputs and highlight invalid fields."""
@@ -564,21 +576,59 @@ class EtcPopup(QDialog):
 
     def save_etc(self):
 
+        # Prevent execution if no target selected
+        if not getattr(self.parent, "current_observation_id", None):
+            print("No target selected, ETC results cannot be applied.")
+            return
+
         exptime = self.exptime_input.text()
         resolution = self.resolution_input.text()
+        slit_width = self.slit_width_input.text()
 
-        if self.parent.current_observation_id:
+        # Exposure time
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "OTMexpt", exptime
+        )
 
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "exptime", "SET " + exptime
+        )
+
+        # Resolution
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "OTMres", resolution
+        )
+
+        # Slit width
+        if slit_width:
             self.logic_service.send_update_to_db(
-                self.parent.current_observation_id, "OTMexpt", exptime
+                self.parent.current_observation_id, "OTMslitwidth", slit_width
             )
 
             self.logic_service.send_update_to_db(
-                self.parent.current_observation_id, "exptime", exptime
+                self.parent.current_observation_id, "slitwidth", "SET " + slit_width
             )
 
-            self.logic_service.send_update_to_db(
-                self.parent.current_observation_id, "OTMres", resolution
-            )
+        print("ETC values applied to target.")
 
-        self.save_button.setEnabled(True)
+    def load_target(self, target_data):
+        """
+        Populate ETC fields from selected target.
+        target_data is a dict from the target table.
+        """
+
+        mag = target_data.get("MAG")
+        filt = target_data.get("FILTER")
+
+        if mag:
+            self.magnitude_input.setText(str(mag))
+
+        if filt:
+            idx = self.filter_dropdown.findText(filt)
+            if idx >= 0:
+                self.filter_dropdown.setCurrentIndex(idx)
+
+    def set_target_info(self, name, ra, dec):
+
+        text = f"Target: {name}    RA: {ra}    Dec: {dec}"
+        self.target_label.setText(text)

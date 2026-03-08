@@ -414,7 +414,8 @@ if __name__ == "__main__":
 
         # Save
         plt.tight_layout()
-        plt.savefig('plotSNR.png')
+        plt.show()
+        #plt.savefig('plotSNR.png')
         print('Wrote', 'plotSNR.png')
 
     if args.plotslit:

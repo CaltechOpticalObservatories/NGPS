@@ -22,9 +22,7 @@ class ControlTab(QDialog):
         # services
         self.logic_service = LogicService(self.parent)
 
-    # -----------------------------
-    # Style helpers (centralized)
-    # -----------------------------
+    # Style helpers
     def _style_enabled_green(self, btn: QPushButton):
         btn.setEnabled(True)
         btn.setStyleSheet("""
@@ -74,9 +72,8 @@ class ControlTab(QDialog):
         self.startup_shutdown_button.setText("Shutdown")
         self._style_black(self.startup_shutdown_button)
 
-    # -----------------------------
+
     # UI construction
-    # -----------------------------
     def create_control_tab(self):
         control_layout = QVBoxLayout()
 
@@ -286,9 +283,7 @@ class ControlTab(QDialog):
         row5_widget.setLayout(row5_layout)
         return row5_widget
 
-    # -----------------------------
-    # Utility wiring
-    # -----------------------------
+    # Utils
     def add_separator_line(self, layout):
         """Thin divider line between rows."""
         separator = QFrame()
@@ -307,9 +302,8 @@ class ControlTab(QDialog):
         self.bin_spect_box.textChanged.connect(self.on_input_changed)
         self.bin_spat_box.textChanged.connect(self.on_input_changed)
 
-    # -----------------------------
+
     # Button slots / actions
-    # -----------------------------
     def on_repeat_button_click(self):
         print("Repeating now...")
         self.parent.send_command("repeat\n")
@@ -449,9 +443,8 @@ class ControlTab(QDialog):
         bin_spect = self.bin_spect_box.text()
         bin_spat = self.bin_spat_box.text()
 
-        # -----------------------------
+
         # DB Updates
-        # -----------------------------
         if exposure_time and slit_width and slit_angle and num_of_exposures and bin_spect and bin_spat:
             print(
                 f"Confirmed Exposure Time: {exposure_time}, Slit Width: {slit_width}, "
@@ -495,9 +488,7 @@ class ControlTab(QDialog):
         else:
             print("Please enter valid values for all fields.")
 
-        # -----------------------------
-        # Update the selected row in the table (no refresh)
-        # -----------------------------
+        # Update the selected row in the table
         table = self.parent.layout_service.target_list_display
         selected = table.selectionModel().selectedRows()
 
@@ -529,9 +520,7 @@ class ControlTab(QDialog):
                 col = headers.index("BINSPAT")
                 table.item(row, col).setText(bin_spat)
 
-        # -----------------------------
         # Enable Go button
-        # -----------------------------
         self._style_enabled_green(self.go_button)
 
     def on_exposure_time_changed(self):

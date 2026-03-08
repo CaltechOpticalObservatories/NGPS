@@ -299,9 +299,25 @@ class NgpsGUI(QMainWindow):
             self.calibration_gui.activateWindow()
 
     def open_etc_popup(self):
-        """Opens the EtcPopup when the button is clicked."""
-        self.etc_popup = EtcPopup(self)  # Pass the parent as the current MainWindow
-        self.etc_popup.exec_()
+
+        if not hasattr(self, "etc_popup") or self.etc_popup is None:
+            self.etc_popup = EtcPopup(self)
+
+        table = self.layout_service.target_list_display
+        selected = table.selectionModel().selectedRows()
+
+        if selected:
+            row = selected[0].row()
+
+            name = table.item(row, 0).text()
+            ra = table.item(row, 1).text()
+            dec = table.item(row, 2).text()
+
+            self.etc_popup.set_target_info(name, ra, dec)
+
+        self.etc_popup.show()
+        self.etc_popup.raise_()
+        self.etc_popup.activateWindow()
 
     def show_popup(self, message):
         """Show a popup message on the screen."""
@@ -459,6 +475,16 @@ class NgpsGUI(QMainWindow):
         # Do one immediate check so the row isn't stale on startup
         self.refresh_daemon_states_from_ps()
         self._daemon_timer.start()
+
+    def update_etc_target(self, target_data):
+
+        if hasattr(self, "etc_popup") and self.etc_popup is not None:
+
+            name = target_data.get("NAME", "")
+            ra = target_data.get("RA", "")
+            dec = target_data.get("DECL", "")
+
+            self.etc_popup.set_target_info(name, ra, dec)
 
 
 if __name__ == '__main__':

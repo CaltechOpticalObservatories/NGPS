@@ -57,7 +57,8 @@ chanConfig['readnoise']=(4.0, 4.0, 4.0, 4.0)*u.count/u.pix
 #LSFFile={}  # Wait for data
 
 #FWHM ~ sigma*2.35
-chanConfig['LSFsigma_px']=[2.585, 2.585, 2.585, 2.585]  # R, I widths measured by Matt Matuszewski, 2025
+#chanConfig['LSFsigma_px']=[2.585, 2.585, 2.585, 2.585]  # R, I widths measured by Matt Matuszewski, 2025
+chanConfig['LSFsigma_px']=[1.23, 1.14, 1.25, 1.25]  # Measured by C. Fremling, 2026
 chanConfig['LSFsigma'] = chanConfig['LSFsigma_px'] * chanConfig['dLambda']
 
 # Colors for plotting
