@@ -19,6 +19,19 @@ namespace Andor {
   std::vector<float> sim_vsspeeds = { 0.6, 1.13, 2.2, 4.33 };
 
 
+  /***** Andor::Emulator::_IsInternalMechanicalShutter ************************/
+  /**
+   * @brief      wrapper for IsInternalMechanicalShutter.
+   * @return     NO_ERROR
+   *
+   */
+  long Emulator::_IsInternalMechanicalShutter( int &internalshutter ) {
+    internalshutter=0;
+    return NO_ERROR;
+  }
+  /***** Andor::Emulator::_IsInternalMechanicalShutter ************************/
+
+
   /***** Andor::Emulator::_GetCapabilities ************************************/
   /**
    * @brief      wrapper for GetCapabilities.
