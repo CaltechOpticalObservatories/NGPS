@@ -2480,6 +2480,48 @@ namespace Slicecam {
   /***** Slicecam::Interface::shutdown ****************************************/
 
 
+  /***** Slicecam::Interface::shutter *****************************************/
+  /**
+   * @brief      get/set shutter
+   * @param[in]  args       [open|close|auto]
+   * @param[out] retstring  return string
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::shutter(const std::string args, std::string &retstring) {
+    const std::string function("Slicecam::Interface::shutter");
+
+    // Help
+    if ( args == "?" || args == "help" ) {
+      retstring = SLICECAMD_SHUTTER;
+      retstring.append( " [ open | close | auto]\n" );
+      retstring.append( "   open or close the internal shutter\n" );
+      retstring.append( "   applies to all connected cameras\n" );
+      return HELP;
+    }
+
+    // if it's not empty then it must be open|close|auto
+    if (!args.empty() && (args != "open" && args != "close" && args != "auto")) {
+      logwrite(function, "ERROR expected [ open | close | auto ]");
+      retstring="invalid_argument";
+      return ERROR;
+    }
+
+    long error = NO_ERROR;
+
+    std::ostringstream oss;
+    for (const auto &pair : this->camera.andor) {
+      std::string state = args;
+      error |= pair.second->set_shutter(state);
+      oss << pair.second->camera_info.camera_name << ":" << state << " ";
+    }
+    retstring=oss.str();
+
+    return error;
+  }
+  /***** Slicecam::Interface::shutter *****************************************/
+
+
   /***** Slicecam::Interface::test ********************************************/
   /**
    * @brief      test routines
