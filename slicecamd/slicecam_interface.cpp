@@ -2525,6 +2525,7 @@ namespace Slicecam {
       retstring.append( "   sleep\n" );
       retstring.append( "   sliceparams [ ? ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
+      retstring.append( "   internalshutter [ ? ]\n" );
       return HELP;
     }
 
@@ -2610,6 +2611,25 @@ namespace Slicecam {
         logwrite( function, message.str() );
         retstring="argument_exception";
         return ERROR;
+      }
+    }
+    else
+    if ( testname == "internalshutter" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SLICECAMD_TEST;
+        retstring.append( " internalshutter\n" );
+        retstring.append( "  is internal shutter installed?\n" );
+        return HELP;
+      }
+      else {
+	std::ostringstream oss;
+        for ( const auto &pair : this->camera.andor ) {
+	  oss << " " << pair.second->camera_info.camera_name << ":";
+	  int shut;
+          error = pair.second->sdk._IsInternalMechanicalShutter( shut );
+	  if (error==NO_ERROR) oss << (shut==1?"yes":"no"); else oss << "ERROR";
+	}
+	retstring=oss.str();
       }
     }
     else
