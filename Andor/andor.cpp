@@ -11,6 +11,32 @@
 
 namespace Andor {
 
+  /***** Andor::SDK::_IsInternalMechanicalShutter *****************************/
+  /**
+   * @brief      wrapper for Andor SDK GetCapabilities
+   * @return     NO_ERROR on DRV_SUCCESS, otherwise ERROR
+   *
+   */
+  long SDK::_IsInternalMechanicalShutter(int &internal_shutter) {
+    const std::string function("Andor::SDK::_IsInternalMechanicalShutter");
+    std::ostringstream message;
+
+    unsigned int ret = IsInternalMechanicalShutter(&internal_shutter);
+
+    switch ( ret ) {
+      case DRV_SUCCESS:         /* silent on success */                break;
+      case DRV_NOT_AVAILABLE:   message << "ERROR Not an iXon camera"; break;
+      case DRV_P1INVALID:       message << "ERROR invalid pointer";    break;
+      default:                  message << "ERROR unrecognized return code " << ret;
+    }
+
+    if ( message.str().substr(0,5)=="ERROR" ) logwrite( function, message.str() );
+
+    return ( ret==DRV_SUCCESS ? NO_ERROR : ERROR );
+  }
+  /***** Andor::SDK::_IsInternalMechanicalShutter *****************************/
+
+
   /***** Andor::SDK::_GetCapabilities *****************************************/
   /**
    * @brief      wrapper for Andor SDK GetCapabilities

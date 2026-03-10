@@ -4172,6 +4172,7 @@ logwrite( function, message.str() );
       retstring.append( "   sleep\n" );
       retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
+      retstring.append( "   internalshutter [ ? ]\n" );
       return HELP;
     }
 
@@ -4335,6 +4336,23 @@ logwrite( function, message.str() );
         std::thread( this->dothread_fpoffset, std::ref(*this) ).detach();
         message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
         logwrite( function, message.str() );
+      }
+    }
+    else
+    // --------------------------------
+    // internalshutter
+    //
+    if ( testname == "internalshutter" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = ACAMD_TEST;
+        retstring.append( " internalshutter\n" );
+        retstring.append( "  is internal shutter installed?\n" );
+        return HELP;
+      }
+      else {
+       int shut;
+       error = this->camera.andor.sdk._IsInternalMechanicalShutter( shut );
+       retstring=(shut==1?"yes":"no");
       }
     }
     else
