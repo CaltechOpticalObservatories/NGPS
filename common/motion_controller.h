@@ -117,6 +117,9 @@ namespace MotionController {
     public:
       std::string host;                              ///< each motor controller defines its own host and port
       int port;
+      std::optional<char> term_write;
+      std::optional<char> term_read;
+      std::optional<char> term_error;
 
       ControllerInfo() : host(""), port(-1) { }      ///< constructor
 

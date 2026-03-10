@@ -107,7 +107,7 @@ namespace Network {
       int Close();                       ///< close a socket connection
       ssize_t Read( void* buf, const size_t count ); ///< read data from connected socket
       ssize_t Read(std::string &retstring);  ///< read data from connected socket until newline
-      ssize_t Read( std::string &retstring, const char &term); ///< read data from connected socket until terminating char found
+      ssize_t Read( std::string &retstring, const char &term, std::optional<char> errchar=std::nullopt); ///< read data from connected socket until terminating char found
       ssize_t Read( std::string &retstring, const std::string &endstr);  ///< read data from connected socket until endstr
       int Bytes_ready();                 ///< get the number of bytes available on the socket descriptor this->fd
       void Flush();                      ///< flush a socket by reading until it's empty
@@ -191,6 +191,7 @@ namespace Network {
       std::mutex mtx;
       char term_write;            ///< send_command() adds this char on writes
       char term_read;             ///< send_command() looks for this char on reads (if reply requested)
+      std::optional<char> term_error;
 
     public:
       /// has the class been initialized?
@@ -209,7 +210,7 @@ namespace Network {
 
       inline bool isopen() { std::lock_guard<std::mutex> lock( this->mtx ); return this->sock.isconnected(); }
 
-      Interface( std::string name, std::string host, uint16_t port, char term_write, char term_read );
+      Interface( std::string name, std::string host, uint16_t port, char term_write, char term_read, std::optional<char> term_error=std::nullopt );
       Interface( std::string name, std::string host, uint16_t port );
       Interface();
       ~Interface();

@@ -649,7 +649,7 @@ namespace Network {
       message.str(""); message << ( revents & POLLHUP  ? "POLLHUP "  : "" )
                                << ( revents & POLLERR  ? "POLLERR "  : "" )
                                << ( revents & POLLNVAL ? "POLLNVAL " : "" )
-                               << "recevied: closing socket " << this->host << "/" << this->port << " on fd " << this->fd;
+                               << "recevied: closing socket " << this->host << ":" << this->port << " on fd " << this->fd;
       logwrite( function, message.str() );
       this->Close();
       ret = -1;
@@ -688,7 +688,7 @@ namespace Network {
     int status = getaddrinfo(this->host.c_str(), std::to_string(this->port).c_str(), &hints, &this->addrs);
 
     if ( status != 0 ) {
-      errstm << "error " << errno << " connecting to " << this->host << "/" << this->port
+      errstm << "error " << errno << " connecting to " << this->host << ":" << this->port
                          << " : " << gai_strerror(status);
       logwrite(function, errstm.str());
       return(-1);
@@ -707,7 +707,7 @@ namespace Network {
       // connect to the socket file descriptor
       //
       if ( connect( this->fd, sa->ai_addr, sa->ai_addrlen ) == -1 ) {
-        errstm << "error " << errno << " connecting to " << this->host << "/" << this->port 
+        errstm << "error " << errno << " connecting to " << this->host << ":" << this->port
                            << " on fd " << this->fd << ": " << std::strerror(errno);
         logwrite(function, errstm.str());
         return (-1);
@@ -748,7 +748,7 @@ namespace Network {
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
 #ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
+//      message.str(""); message << "[DEBUG] connection to " << this->host << ":" << this->port << " on fd " << this->fd << " closed";
 //      logwrite( function, message.str() );
 #endif
         error = 0;
@@ -909,7 +909,7 @@ namespace Network {
    * in the string.
    *
    */
-  ssize_t TcpSocket::Read( std::string &retstring, const char &term ) {
+  ssize_t TcpSocket::Read(std::string &retstring, const char &term, std::optional<char> errchar) {
     std::string function = "Network::TcpSocket::Read[term]";
     std::stringstream message;
     size_t bytesread=0;
@@ -941,6 +941,11 @@ namespace Network {
         if ( bytesread > 1 ) {           // break only when terminated with that char
           break;
         }
+      }
+      if (errchar && charin==errchar) {
+	message << "ERROR received '" << *errchar << "' from " << this->host << ":" << this->port;
+	logwrite(function, message.str());
+	return -1;
       }
       retstring.push_back( charin );     // append the read-in character to the return string
 
@@ -990,12 +995,12 @@ namespace Network {
     while ( 1 ) {
       nread = read( this->fd, buf, bufsz );
       if ( nread<0 ) {
-        message << "ERROR reading socket " << this->host << "/" << this->port << " on fd " << this->fd << ": " << strerror(errno);
+        message << "ERROR reading socket " << this->host << ":" << this->port << " on fd " << this->fd << ": " << strerror(errno);
         logwrite( function, message.str() );
         break;
       }
       if ( nread == 0 ) {
-        message << "ERROR no data from socket " << this->host << "/" << this->port << " on fd " << this->fd << ": closing connection";
+        message << "ERROR no data from socket " << this->host << ":" << this->port << " on fd " << this->fd << ": closing connection";
         logwrite( function, message.str() );
         this->Close();
         break;
@@ -1112,13 +1117,14 @@ namespace Network {
    * @param[in]  term_read   send_command() looks for this char on reads (if reply requested)
    *
    */
-  Interface::Interface( std::string _name, std::string _host, uint16_t _port, char _term_write, char _term_read ) {
+  Interface::Interface( std::string _name, std::string _host, uint16_t _port, char _term_write, char _term_read, std::optional<char> _term_error ) {
     this->name = _name;
     this->port = _port;
     this->host = _host;
     this->term_write = _term_write;
     this->term_read  = _term_read;
     this->initialized = true;
+    this->term_error = _term_error;
   }
   /***** Network::Interface::Interface ****************************************/
 
@@ -1292,9 +1298,9 @@ namespace Network {
         if ( error != NO_ERROR ) logwrite( function, message.str() );
       }
       else
-      if ( ( retval = this->sock.Read( reply, this->term_read ) ) < 0 ) {
+      if ( ( retval = this->sock.Read( reply, this->term_read, this->term_error ) ) < 0 ) {
         message.str(""); message << "ERROR: " << strerror( errno )
-                                 << ": reading from " << this->sock.gethost() << "/" << this->sock.getport();
+                                 << ": reading from " << this->sock.gethost() << ":" << this->sock.getport();
         logwrite( function, message.str() );
       }
 
