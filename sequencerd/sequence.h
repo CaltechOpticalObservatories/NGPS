@@ -15,6 +15,8 @@
 #include <vector>
 #include <chrono>
 #include <atomic>
+#include <cstdint>
+#include <sys/types.h>
 #include <map>
 #include <cmath>
 #include <mysqlx/xdevapi.h>
@@ -154,6 +156,7 @@ namespace Sequencer {
     SEQ_WAIT_TCS,            ///< set when waiting for tcs
     // states
     SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_GUIDE,          ///< set when waiting for guiding state
     SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
     SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
     SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
@@ -174,10 +177,22 @@ namespace Sequencer {
     {SEQ_WAIT_TCS,      "TCS"},
     // states
     {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
+    {SEQ_WAIT_GUIDE,    "GUIDE"},
     {SEQ_WAIT_EXPOSE,   "EXPOSE"},
     {SEQ_WAIT_READOUT,  "READOUT"},
     {SEQ_WAIT_TCSOP,    "TCSOP"},
     {SEQ_WAIT_USER,     "USER"}
+  };
+
+  /**
+   * @enum  UserGateAction
+   * @brief explicit action represented by a USER wait gate
+   */
+  enum UserGateAction : int {
+    USER_GATE_NONE = 0,
+    USER_GATE_ACQUIRE,
+    USER_GATE_EXPOSE,
+    USER_GATE_OFFSET_EXPOSE
   };
 
   /**
@@ -288,6 +303,9 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<bool> fine_tune_active{false}; ///< fine tune running state reported by slicecamd autoacq
+      std::atomic<bool> offset_active{false};    ///< tracks offset operation in progress
+      std::atomic<int> user_gate_action{USER_GATE_NONE};  ///< explicit USER gate action for GUI labeling
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -315,6 +333,10 @@ namespace Sequencer {
           arm_readout_flag(false),
           acquisition_timeout(0),
           acquisition_max_retrys(-1),
+          acq_automatic_mode(1),
+          acq_fine_tune_cmd("ngps_acq"),
+          acq_fine_tune_log(false),
+          acq_offset_settle(0),
           tcs_offsetrate_ra(45),
           tcs_offsetrate_dec(45),
           tcs_settle_timeout(10),
@@ -340,7 +362,9 @@ namespace Sequencer {
               { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
+                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) },
+              { "slicecam_autoacq", std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slicecam_autoacq(msg); } ) }
             };
           }
 
@@ -374,6 +398,10 @@ namespace Sequencer {
 
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
+      int acq_automatic_mode;     ///< acquisition automation mode (1=legacy, 2=semi-auto, 3=auto)
+      std::string acq_fine_tune_cmd; ///< optional fine-tune args override passed to slicecamd autoacq
+      bool acq_fine_tune_log;     ///< log fine-tune output to /data/<datedir>/logs/ngps_acq_<datedir>.log
+      double acq_offset_settle;   ///< seconds to wait after automatic offset
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
       double tcs_offsetrate_dec;  ///< TCS offset rate DEC ("MRATE") in arcsec per second
       double tcs_settle_timeout;  ///< timeout for telescope to settle (in sec) set by configuration parameter TCS_SETTLE_TIMEOUT
@@ -389,6 +417,12 @@ namespace Sequencer {
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
+      std::mutex fine_tune_mtx;
+      std::condition_variable fine_tune_cv;
+      bool fine_tune_done{false};
+      bool fine_tune_success{false};
+      uint64_t fine_tune_run_id{0};
+      std::string fine_tune_message;
       std::mutex monitor_mtx;
 
       std::map<int, std::string> sequence_states;
@@ -456,12 +490,14 @@ namespace Sequencer {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_camerad( const nlohmann::json &jmessage );
+      void handletopic_slicecam_autoacq( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();
       void publish_threadstate();
+      void publish_progress();
 
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint

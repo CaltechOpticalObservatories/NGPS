@@ -89,6 +89,18 @@ namespace Common {
         return ( poller.poll(100) > 0 );
       }
 
+      int get_fd() const {
+        int fd = -1;
+        _socket.get(zmqpp::socket_option::file_descriptor, fd);
+        return fd;
+      }
+
+      bool has_message_nonblock() {
+        zmqpp::poller poller;
+        poller.add(_socket, zmqpp::poller::poll_in);
+        return (poller.poll(0) > 0);  // 0ms = non-blocking
+      }
+
       /**
        * @brief       publishers bind to a socket endpoint (not for brokers)
        * @param[in]   addr   broker endpoint

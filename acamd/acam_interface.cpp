@@ -1453,6 +1453,11 @@ namespace Acam {
                                     this->motion.get_current_coverpos() :
                                     "not_connected" );
 
+    std::string mode = this->target.acquire_mode_string();
+    jmessage_out["ACAM_ACQUIRE_MODE"] = mode;
+    jmessage_out["ACAM_GUIDING"] = ( mode == "guiding" );
+    jmessage_out["ACAM_ACQUIRING"] = ( mode == "acquiring" );
+
     try {
       this->publisher->publish( jmessage_out );
     }
@@ -2807,6 +2812,7 @@ namespace Acam {
         long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
         if ( did_acquire != NO_ERROR ) {
           iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
+          iface.publish_snapshot();                                    // notify ZMQ subscribers immediately
         }
         // set guide status
         iface.guide_manager.status = iface.target.acquire_mode_string();
@@ -5540,12 +5546,8 @@ logwrite( function, message.str() );
     retstring = message.str();
 
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      this->target.acquire_mode = Acam::TARGET_ACQUIRE;
-      this->target.nacquired = 0;
-      this->target.attempts = 0;
-      this->target.sequential_failures = 0;
-      this->target.timeout_time = std::chrono::steady_clock::now()
-                                + std::chrono::duration<double>(this->target.timeout);
+      // Keep GUIDE mode; just reset filtering so the new goal takes effect quickly.
+      this->target.reset_offset_params();
     }
 
     return NO_ERROR;
