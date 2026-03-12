@@ -272,8 +272,7 @@ class SeqProgressGui {
  public:
   SeqProgressGui(const Options &opt)
       : options_(opt),
-        cmd_iface_("sequencer", options_.host, static_cast<uint16_t>(options_.nbport)),
-        acam_iface_("acam", options_.acam_host, static_cast<uint16_t>(options_.acam_nbport)) {}
+        cmd_iface_("sequencer", options_.host, static_cast<uint16_t>(options_.nbport)) {}
 
   bool init() {
     display_ = XOpenDisplay(nullptr);
@@ -302,16 +301,6 @@ class SeqProgressGui {
 
     init_zmq();
 
-    if (options_.nbport > 0) {
-      if (cmd_iface_.open() == 0) {
-        cmd_iface_.send_command("state");
-        cmd_iface_.send_command("wstate");
-      }
-    }
-    if (options_.acam_nbport > 0) {
-      acam_iface_.open();
-    }
-
     return true;
   }
 
@@ -327,6 +316,15 @@ class SeqProgressGui {
       FD_ZERO(&fds);
       FD_SET(xfd, &fds);
       int maxfd = xfd;
+
+      int zmq_fd = -1;
+      if (zmq_sub_) {
+        zmq_fd = zmq_sub_->get_fd();
+        if (zmq_fd >= 0) {
+          FD_SET(zmq_fd, &fds);
+          if (zmq_fd > maxfd) maxfd = zmq_fd;
+        }
+      }
 
       struct timeval tv;
       tv.tv_sec = 0;
@@ -384,7 +382,6 @@ class SeqProgressGui {
 
   Options options_;
   Network::Interface cmd_iface_;
-  Network::Interface acam_iface_;
   zmqpp::context zmq_context_;
   std::unique_ptr<Common::PubSub> zmq_sub_;
   std::unique_ptr<Common::PubSub> zmq_pub_;
@@ -393,8 +390,6 @@ class SeqProgressGui {
   std::chrono::steady_clock::time_point last_zmq_waitstate_;
   std::chrono::steady_clock::time_point last_zmq_any_;
   std::chrono::steady_clock::time_point last_snapshot_request_;
-  std::chrono::steady_clock::time_point last_acam_poll_;
-  std::chrono::steady_clock::time_point last_seq_poll_;
   std::chrono::steady_clock::time_point last_seqstate_update_;
   std::chrono::steady_clock::time_point last_waitstate_update_;
 
@@ -768,7 +763,7 @@ class SeqProgressGui {
     const bool has_starting = has_token(seq_tokens, "STARTING");
     const bool has_stopping = has_token(seq_tokens, "STOPPING");
     const bool have_zmq = (zmq_sub_ != nullptr);
-    const int stale_ms = have_zmq ? 5000 : (options_.poll_ms > 0 ? options_.poll_ms * 2 : 5000);
+    const int stale_ms = have_zmq ? 15000 : (options_.poll_ms > 0 ? options_.poll_ms * 2 : 5000);
     const bool seq_stale = is_stale(last_seqstate_update_, stale_ms);
     const bool wait_stale = is_stale(last_waitstate_update_, stale_ms);
 
@@ -839,10 +834,14 @@ class SeqProgressGui {
 
   bool process_zmq() {
     if (!zmq_sub_) return false;
-    if (!zmq_sub_->has_message()) return false;
-    auto [topic, payload] = zmq_sub_->receive();
-    handle_zmq_message(topic, payload);
-    return true;
+    constexpr int kMaxDrainPerCycle = 50;
+    int count = 0;
+    while (count < kMaxDrainPerCycle && zmq_sub_->has_message_nonblock()) {
+      auto [topic, payload] = zmq_sub_->receive();
+      handle_zmq_message(topic, payload);
+      ++count;
+    }
+    return count > 0;
   }
 
   void handle_zmq_message(const std::string &topic, const std::string &payload) {
@@ -972,11 +971,14 @@ class SeqProgressGui {
 
   void request_snapshot() {
     if (!zmq_pub_) return;
+    auto now = std::chrono::steady_clock::now();
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - last_snapshot_request_).count() < 5000) return;
     nlohmann::json jmessage;
     jmessage["sequencerd"] = true;
     jmessage["acamd"] = true;
     zmq_pub_->publish(jmessage, "_snapshot");
-    last_snapshot_request_ = std::chrono::steady_clock::now();
+    last_snapshot_request_ = now;
   }
 
   bool is_stale(const std::chrono::steady_clock::time_point &tp, int stale_ms) const {
@@ -985,118 +987,26 @@ class SeqProgressGui {
     return std::chrono::duration_cast<std::chrono::milliseconds>(now - tp).count() > stale_ms;
   }
 
-  bool should_poll_acam() const {
-    if (state_.seqstate.find("RUNNING") != std::string::npos) return true;
-    if (state_.waitstate.find("ACQUIRE") != std::string::npos) return true;
-    if (state_.waitstate.find("GUIDE") != std::string::npos) return true;
-    if (state_.waitstate.find("EXPOSE") != std::string::npos) return true;
-    if (state_.waitstate.find("READOUT") != std::string::npos) return true;
+  bool maybe_poll(const std::chrono::steady_clock::time_point &now) {
+    if (!zmq_sub_ || !zmq_pub_) return false;
+
+    constexpr int kSnapshotIntervalMs = 15000;
+    constexpr int kStaleThresholdMs   = 10000;
+
+    const bool seq_stale = is_stale(last_zmq_seqstate_, kStaleThresholdMs) ||
+                           is_stale(last_zmq_waitstate_, kStaleThresholdMs);
+
+    auto ms_since_snapshot = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - last_snapshot_request_).count();
+
+    if (seq_stale && ms_since_snapshot >= kSnapshotIntervalMs) {
+      request_snapshot();
+      return true;
+    }
     return false;
   }
 
-  bool maybe_poll(const std::chrono::steady_clock::time_point &now) {
-    bool updated = false;
-    const int stale_ms = 5000;
-    const bool have_zmq = (zmq_sub_ != nullptr);
-    const bool stale_seq = have_zmq &&
-                           (is_stale(last_zmq_seqstate_, stale_ms) ||
-                            is_stale(last_zmq_waitstate_, stale_ms));
-    const bool zmq_quiet = have_zmq && is_stale(last_zmq_any_, options_.poll_ms > 0 ? options_.poll_ms * 3 : stale_ms * 3);
-    const bool allow_tcp_poll = !have_zmq || (zmq_quiet && stale_seq);
 
-    if (options_.poll_ms > 0) {
-      if (have_zmq && zmq_pub_ && state_.waiting_for_user &&
-          std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= 1000) {
-        request_snapshot();
-        updated = true;
-      }
-      if (have_zmq && zmq_pub_) {
-        if (stale_seq &&
-            std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= stale_ms) {
-          request_snapshot();
-          updated = true;
-        }
-      }
-      if (allow_tcp_poll) {
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_seq_poll_).count() >= options_.poll_ms) {
-          poll_sequencer();
-          last_seq_poll_ = now;
-          updated = true;
-        }
-        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_acam_poll_).count() >= options_.poll_ms) {
-          if (should_poll_acam()) {
-            poll_acam();
-            updated = true;
-          }
-          last_acam_poll_ = now;
-        }
-      }
-    } else if (have_zmq && zmq_pub_) {
-      if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_snapshot_request_).count() >= stale_ms) {
-        request_snapshot();
-        updated = true;
-      }
-    }
-
-    return updated;
-  }
-
-  void poll_status() {
-    poll_sequencer();
-    poll_acam();
-  }
-
-  void poll_sequencer() {
-    if (options_.nbport <= 0) return;
-    if (!cmd_iface_.isopen()) {
-      if (cmd_iface_.open() != 0) return;
-    }
-
-    std::string reply;
-    if (cmd_iface_.send_command("state", reply, 200) == 0 && !reply.empty()) {
-      handle_message("SEQSTATE: " + reply);
-    } else if (!cmd_iface_.isopen()) {
-      cmd_iface_.reconnect();
-      return;
-    }
-
-    reply.clear();
-    if (cmd_iface_.send_command("wstate", reply, 200) == 0 && !reply.empty()) {
-      handle_waitstate(reply);
-    } else if (!cmd_iface_.isopen()) {
-      cmd_iface_.reconnect();
-      return;
-    }
-
-    // Poll acqmode — the no-arg response includes "current mode = N"
-    reply.clear();
-    if (cmd_iface_.send_command("acqmode", reply, 200) == 0 && !reply.empty()) {
-      auto pos = reply.find("current mode = ");
-      if (pos != std::string::npos) {
-        try { state_.acqmode = std::stoi(reply.substr(pos + 15)); } catch (...) {}
-      }
-    }
-  }
-
-  void poll_acam() {
-    if (options_.acam_nbport <= 0) return;
-    if (!acam_iface_.isopen()) {
-      if (acam_iface_.open() != 0) return;
-    }
-
-    std::string reply;
-    if (acam_iface_.send_command("acquire", reply, 200) == 0 && !reply.empty()) {
-      std::string lower = to_lower_copy(reply);
-      if (lower.find("guiding") != std::string::npos) {
-        state_.guiding_on = true;
-      } else if (lower.find("stopped") != std::string::npos || lower.find("acquir") != std::string::npos) {
-        state_.guiding_on = false;
-      }
-    } else if (!acam_iface_.isopen()) {
-      acam_iface_.reconnect();
-      return;
-    }
-  }
 
   void set_phase(int idx) {
     if (idx < 0 || idx >= kPhaseCount) return;
@@ -1131,9 +1041,6 @@ class SeqProgressGui {
 
     state_.waiting_for_tcsop = has_tcsop;
     state_.waiting_for_user = has_user;
-    if (has_user) {
-      request_snapshot();
-    }
 
     if (!has_tcsop && (has_acquire || has_guide || has_expose || has_readout || has_user)) {
       state_.ontarget = true;
@@ -1234,8 +1141,7 @@ int main(int argc, char **argv) {
   load_acam_config(opt.acam_config_path, opt);
 
   if (opt.nbport <= 0) {
-    std::cerr << "ERROR: NBPORT not set (check sequencerd.cfg)\n";
-    return 1;
+    std::cerr << "WARNING: NBPORT not set; ontarget/usercontinue buttons will be disabled\n";
   }
   if (opt.sub_endpoint.empty()) {
     std::cerr << "WARNING: SUB_ENDPOINT not set; seq-progress will run in polling-only mode\n";

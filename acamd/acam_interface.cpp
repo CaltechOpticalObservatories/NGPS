@@ -2812,6 +2812,7 @@ namespace Acam {
         long did_acquire = iface.target.do_acquire();                 // acquire target here (if needed)
         if ( did_acquire != NO_ERROR ) {
           iface.target.acquire( Acam::TARGET_NOP );                   // disable acquire on failure
+          iface.publish_snapshot();                                    // notify ZMQ subscribers immediately
         }
         // set guide status
         iface.guide_manager.status = iface.target.acquire_mode_string();
