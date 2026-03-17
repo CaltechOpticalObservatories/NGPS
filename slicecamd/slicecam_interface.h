@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <optional>
 #include <future>
 #include <cmath>
 #include <cpython.h>
@@ -25,6 +26,7 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 #include "slicecam_camera.h"
+#include "slicecam_math.h"
 
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
@@ -56,6 +58,42 @@ namespace Slicecam {
 
   class Interface;  // forward declaration
 
+  /***** Slicecam::FineAcqState ***********************************************/
+  /**
+   * @brief  Persistent state for the fine-acquisition per-frame state machine
+   *
+   * @details
+   *   which       - which camera to use ("L" or "R")
+   *   aimpoint    - desired star location on the chip, FITS 1-based pixels.
+   *                 This is the pixel analogue of CF's --goal-x / --goal-y.
+   *                 The star is driven toward this pixel, not toward an ra/dec.
+   *   bg_region   - background estimation ROI, 1-based inclusive.
+   *                 Matches the --bg-x1/x2/y1/y2 defaults in slicecamd.cfg.
+   *   dra_samp    - accumulated dRA*cos(dec) samples in degrees
+   *   ddec_samp   - accumulated dDEC samples in degrees
+   *   max_samples - samples to gather before evaluating a move
+   *   goal_arcsec - convergence threshold; loop stops when median offset
+   *                 magnitude falls below this value
+   *   gain        - fraction of the median offset commanded each cycle (0..1)
+   *   skip_frames - counts down frames to discard while telescope settles
+   *                 after a commanded move
+   */
+  struct FineAcqState {
+    std::string which      = "L";
+    Point       aimpoint   = { 150.0, 115.5 };      ///< 1-based pixel aim point
+    Rect        bg_region  = { 80, 165, 30, 210 };  ///< background ROI (1-based)
+    std::vector<double> dra_samp;                   ///< dRA*cos(dec) samples, degrees
+    std::vector<double> ddec_samp;                  ///< dDEC samples, degrees
+    int    max_samples  = 10;    ///< samples before evaluating a move
+    double goal_arcsec  = 0.3;   ///< convergence threshold, arcsec
+    double gain         = 0.7;   ///< gain applied to commanded offset
+    int    skip_frames  = 0;     ///< frames to skip after a telescope move
+
+    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0; }
+  };
+  /***** Slicecam::FineAcqState ***********************************************/
+
+
   /***** Slicecam::Interface **************************************************/
   /**
    * @class   Interface
@@ -77,6 +115,8 @@ namespace Slicecam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      FineAcqState fineacquire_state;
+
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint
@@ -92,7 +132,8 @@ namespace Slicecam {
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
-      std::atomic<bool> is_targetacquire_running;  ///< set if target acquisition is running
+      std::atomic<bool> is_fineacquire_running;  ///< set if fine target acquisition is running
+      std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
 
       /** these are set by Interface::saveframes()
        */
@@ -130,7 +171,8 @@ namespace Slicecam {
           should_subscriber_thread_run(false),
           should_framegrab_run(false),
           is_framegrab_running(false),
-          is_targetacquire_running(false),
+          is_fineacquire_running(false),
+          is_fineacquire_locked(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
           snapshot_status { { "slitd", false }, {"tcsd", false} }
@@ -184,11 +226,8 @@ namespace Slicecam {
       void request_snapshot();
       bool wait_for_snapshots();
 
-      long acquire_target(std::string args, std::string &retstring);
-      void calculate_centroid(const std::string &which,
-                                     std::pair<double, double> &centroid);
-      void calculate_acquisition_offsets(const std::pair<double, double> &centroid,
-                                                std::pair<double, double> &offsets);
+      long fineacquire(std::string args, std::string &retstring);
+      void do_fineacquire();
 
       long avg_frames( std::string args, std::string &retstring );
       long bin( std::string args, std::string &retstring );
@@ -218,7 +257,7 @@ namespace Slicecam {
 
       long get_acam_guide_state( bool &is_guiding );
 
-      long offset_acam_goal(const std::pair<double, double> &offsets);
+      long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt);
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 

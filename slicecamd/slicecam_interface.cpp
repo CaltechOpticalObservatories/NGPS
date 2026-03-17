@@ -9,6 +9,7 @@
  */
 
 #include "slicecam_interface.h"
+#include "slicecam_math.h"
 
 namespace Slicecam {
 
@@ -16,106 +17,247 @@ namespace Slicecam {
 
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
-  /***** Slicecam::Interface::acquire_target **********************************/
+  /***** Slicecam::Interface::fineacquire *************************************/
   /**
-   * @brief      
-   * @param[in]  
-   * @param[out] 
-   * @return     
+   * @brief      user-interface to start/stop fine target acquisition
+   * @param[in]  args contains stop | <L|R> <ra> <dec>
+   * @param[out] return string
+   * @return     ERROR|NO_ERROR|HELP
    *
    */
-  long Interface::acquire_target(std::string args, std::string &retstring) {
-    const std::string function("Slicecam::Interface::acquire_target");
+  long Interface::fineacquire(std::string args, std::string &retstring) {
+    const std::string function("Slicecam::Interface::fineacquire");
     std::stringstream message;
 
     // Help
     if ( args == "?" || args == "help" ) {
-      retstring = SLICECAMD_ACQUIRETARGET;
-      retstring.append( " <ra> <dec> <size>\n" );
-      retstring.append( "   where <ra> <dec> are the coordinates of the destination\n" );
-      retstring.append( "   and <size> is the size of a box centered on <ra> <dec>\n" );
+      retstring = SLICECAMD_FINEACQUIRE;
+      retstring.append( " stop | start { L | R } \n" );
+      retstring.append( "   start or stop fine target acquisition.\n" );
+      retstring.append( "   L | R specifies which camera\n" );
       return HELP;
     }
 
-    if (args.empty()) {
-      logwrite(function, "ERROR missing args.... TBD");
+    std::vector<std::string> tokens;
+    Tokenize(args, tokens, " ");
+    const std::string action = tokens.empty() ? "status" : tokens.at(0);
+
+    // empty args returns status
+    if (action=="status") {
+      retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+      return NO_ERROR;
+    }
+    else
+
+    // stop fine acquisition
+    if (action=="stop") {
+      if (!this->is_fineacquire_running.load(std::memory_order_acquire)) {
+        logwrite(function, "stopped");
+      }
+      else {
+        this->is_fineacquire_running.store(false);
+        logwrite(function, "stop requested");
+      }
+      retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+      return NO_ERROR;
+    }
+    else
+
+    // not empty, stop or start is an error
+    if (action != "start" || tokens.size() < 2) {
+      logwrite(function, "ERROR expected stop | start { L | R }");
+      retstring="invalid_argument";
       return ERROR;
     }
+
+    // at this point, action=="start"
 
     // don't allow someone to run this if already running
-    if (this->is_targetacquire_running.load(std::memory_order_acquire)) {
+    if (this->is_fineacquire_running.load(std::memory_order_acquire)) {
       logwrite(function, "ERROR target acquisition already running");
+      retstring="running";
       return ERROR;
     }
-
-    // sets the is_targetacquire_running state true, clears automatically
-    BoolState targetacquire_running(this->is_targetacquire_running);
 
     // framegrabbing must be running
     if (!this->is_framegrab_running.load(std::memory_order_acquire)) {
       logwrite(function, "ERROR framegrabbing is not running");
+      retstring="stopped";
       return ERROR;
     }
 
-    std::pair<double,double> centroid;  // { RA, DEC } of centroid
-    std::pair<double,double> offsets;   // { dRA, dDEC } puts centroid on target
+    const std::string which = tokens.at(1);
+    if (which != "L" && which != "R") {
+      logwrite(function, "ERROR expected stop | start { L | R }");
+      retstring="invalid_argument";
+      return ERROR;
+    }
 
-    std::string camera("L");            // somehow need to determine camera name!
+    this->fineacquire_state.which = which;
 
-    this->calculate_centroid(camera, centroid);
+    // start the state machine
+    this->fineacquire_state.reset();
+    this->is_fineacquire_locked.store(false, std::memory_order_release);
+    this->is_fineacquire_running.store(true, std::memory_order_release);
 
-    this->calculate_acquisition_offsets(centroid, offsets);
+    logwrite(function, "fine target acquisition enabled");
 
-    this->offset_acam_goal(offsets);
+    retstring=is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
 
     return NO_ERROR;
   }
-  /***** Slicecam::Interface::acquire_target **********************************/
+  /***** Slicecam::Interface::fineacquire *************************************/
 
 
-  /***** Slicecam::Interface::calculate_centroid ******************************/
+  /***** Slicecam::Interface::do_fineacquire **********************************/
   /**
-   * @brief      calculate offsets required to move centroid on target
-   * @param[in]  which     "L" or "R" indicates which camera
-   * @param[out] centroid  pair { RA, DEC } coordinates of centroid
-   *
-   * CHAZ
+   * @brief      Evaluates fine acquisition natively per-frame
+   * @details    Called synchronously inside dothread_framegrab. Acts as a
+   *             state machine to accumulate samples, calculate medians, and
+   *             publish acam goal corrections, to which acam responds by
+   *             sending offsets to the telescope.
+   * @param[in]  which  "L" or "R" indicates which camera
    *
    */
-  void Interface::calculate_centroid(const std::string &which,
-                                     std::pair<double, double> &centroid) {
+  void Interface::do_fineacquire() {
+    const std::string function = "Slicecam::Interface::do_fineacquire";
 
-    // pointer to the selected camera
+    // skip frames if we are waiting for the telescope to settle after a move
     //
-    auto* cam = this->camera.andor[which].get();
+    if (this->fineacquire_state.skip_frames > 0) {
+      this->fineacquire_state.skip_frames--;
+      return;
+    }
 
-    // pointer to a buffer containing the image
-    //
-    float* data = cam->get_avg_data();
+    const std::string which = this->fineacquire_state.which;
 
-    // In case you want it, the size of the image can be gotten from:
+    // get a reference to the requested slicecam and
+    // a pointer to that image buffer
     //
-    long cols = cam->camera_info.axes[0];
-    long rows = cam->camera_info.axes[1];
-    unsigned long imsize = cam->camera_info.section_size;  // rows*cols
+    auto it = this->camera.andor.find(which);
+    if (it==this->camera.andor.end() || it->second==nullptr) {
+      logwrite(function, "slicecam '"+which+"' not found!");
+      this->is_fineacquire_running.store( false, std::memory_order_release );
+      logwrite(function, "fine target acquisition disabled");
+      return;
+    }
+    auto* cam = it->second.get();
+    float* img_data = cam->get_avg_data();
+
+    if (img_data==nullptr) {
+      logwrite(function, "bad image data buffer for slicecam '"+which+"'");
+      return;
+    }
+
+    const long ncols = cam->camera_info.cols;
+    const long nrows = cam->camera_info.rows;
+
+    // find the star centroid near the aim point
+    //
+    Point centroid;
+
+    if ( Math::calculate_centroid( img_data, ncols, nrows,
+                                   this->fineacquire_state.bg_region,
+                                   this->fineacquire_state.aimpoint,
+                                   centroid) != NO_ERROR ) {
+      logwrite(function, "WARNING: failed to find centroid, skipping frame");
+      return;
+    }
+
+    // convert centroid pixel -> sky using WCS from FITS header
+    //
+    World star_sky;
+    try {
+      Math::pix2world( cam->fitskeys, centroid, star_sky );
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "WARNING pix2world (centroid) failed: "+std::string(e.what())+", skipping frame");
+      return;
+    }
+    if ( !std::isfinite( star_sky.ra ) || !std::isfinite( star_sky.dec ) ) {
+      logwrite( function, "WARNING pix2world returned non-finite coords, skipping frame" );
+      return;
+    }
+
+    // convert aim point pixel -> sky
+    //
+    World aimpoint_sky;
+    try {
+      Math::pix2world( cam->fitskeys, this->fineacquire_state.aimpoint, aimpoint_sky );
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "WARNING pix2world (aimpoint) failed: "+std::string(e.what())+", skipping frame");
+      return;
+    }
+
+    // compute dRA,dDEC in degrees and accumulate
+    //
+    std::pair<double, double> offsets;
+
+    Math::calculate_acquisition_offsets( star_sky, aimpoint_sky, offsets );
+
+    this->fineacquire_state.dra_samp.push_back( offsets.first );
+    this->fineacquire_state.ddec_samp.push_back( offsets.second );
+
+    // wait until there are enough samples to evaluate a move
+    //
+    const int max_samples = this->fineacquire_state.max_samples;
+    if ( static_cast<int>(this->fineacquire_state.dra_samp.size()) < max_samples ) {
+      return;
+    }
+
+    // calculate median from accumulated samples
+    //
+    std::vector<double> dra_sorted = this->fineacquire_state.dra_samp;
+    std::vector<double> ddec_sorted = this->fineacquire_state.ddec_samp;
+
+    std::sort( dra_sorted.begin(),  dra_sorted.end() );
+    std::sort( ddec_sorted.begin(), ddec_sorted.end() );
+
+    const double med_dra  = dra_sorted[ max_samples / 2 ];
+    const double med_ddec = ddec_sorted[ max_samples / 2 ];
+
+    // convert to arcsec only for the threshold comparison and logging
+    //
+    const double offset_arcsec = std::hypot( med_dra, med_ddec ) * 3600.0;
+
+
+    // convergence check
+    //
+    if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
+      if ( !this->is_fineacquire_locked.load(std::memory_order_acquire) ) {
+        logwrite( function, "NOTICE fine acquisition converged" );
+        this->is_fineacquire_locked.store( true,  std::memory_order_release );
+      }
+      this->fineacquire_state.reset();
+      return;
+    }
+    // drifted outside threshold so clear the locked flag
+    this->is_fineacquire_locked.store(false, std::memory_order_release);
+
+    // send gain-weighted offsets to acam
+    //
+    std::ostringstream oss;
+    oss << "offset dRA=" << med_dra * 3600.0
+        << " dDEC=" << med_ddec * 3600.0
+        << " arcsec (r=" << offset_arcsec
+        << " arcsec) -- applying correction";
+    logwrite( function, oss.str() );
+
+    const double cmd_dra  = this->fineacquire_state.gain * med_dra;
+    const double cmd_ddec = this->fineacquire_state.gain * med_ddec;
+
+    if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
+      logwrite( function, "ERROR failed to send offset to ACAM" );
+      this->is_fineacquire_running.store( false, std::memory_order_release );
+      return;
+    }
+
+    // reset samples and skip a couple of frames for telescope settling
+    this->fineacquire_state.reset();
+    this->fineacquire_state.skip_frames = 2;
   }
-  /***** Slicecam::Interface::calculate_centroid ******************************/
-
-
-  /***** Slicecam::Interface::calculate_acquisition_offsets *******************/
-  /**
-   * @brief      calculate offsets required to move centroid on target
-   * @param[in]  centroid  pair { RA, DEC } coordinates of centroid
-   * @param[out] offsets   pair { dRA, dDEC } offsets to put centroid on target
-   *
-   * CHAZ
-   *
-   */
-  void Interface::calculate_acquisition_offsets(const std::pair<double, double> &centroid,
-                                                std::pair<double, double> &offsets) {
-
-  }
-  /***** Slicecam::Interface::calculate_acquisition_offsets *******************/
+  /***** Slicecam::Interface::do_fineacquire **********************************/
 
 
   /***** Slicecam::Interface::bin *********************************************/
@@ -1062,13 +1204,18 @@ namespace Slicecam {
         collect_header_info( cam );
       }
 
+      // run the fine target acquisition if enabled
+      if ( is_fineacquire_running.load() ) { do_fineacquire(); }
+
+      // write to FITS file
       if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                              this->imagename,
-                                                             this->tcs_online.load(std::memory_order_acquire) );    // write to FITS file
+                                                             this->tcs_online.load(std::memory_order_acquire) );
 
       this->framegrab_time = std::chrono::steady_clock::time_point::min();
 
-      this->gui_manager.push_gui_image( this->imagename );                                 // send frame to GUI
+      // send frame to GUI
+      this->gui_manager.push_gui_image( this->imagename );
 
       // Normally, framegrabs are overwritten to the same file.
       // This optionally saves them at the requested cadence by
@@ -1458,10 +1605,13 @@ namespace Slicecam {
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::offset_acam_goal(const std::pair<double, double> &offsets) {
+  long Interface::offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire) {
     const std::string function("Slicecam::Interface::offset_acam_goal");
 
     auto [ra_off, dec_off] = offsets;  // local copy
+
+    bool is_fineacquire=false;
+    if (fineacquire) is_fineacquire = *fineacquire;
 
     // If ACAM is guiding then slicecam must not move the telescope,
     // but must allow ACAM to perform the offset.
@@ -1481,6 +1631,10 @@ namespace Slicecam {
       //
       std::stringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
+
+      // add fineguiding arg when used for fine acquisition mode
+      if (is_fineacquire) cmd << " fineguiding";
+
       error = this->acamd.command( cmd.str() );
       if ( error != NO_ERROR ) {
         logwrite( function, "ERROR adding offset to acam goal" );

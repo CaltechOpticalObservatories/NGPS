@@ -39,6 +39,7 @@ add_executable(slicecamd
         ${SLICECAMD_DIR}/slicecam_interface.cpp
         ${SLICECAMD_DIR}/slicecam_camera.cpp
         ${SLICECAMD_DIR}/slicecam_fits.cpp
+        ${SLICECAMD_DIR}/slicecam_math.cpp
         ${PYTHON_DEV}
         )
 

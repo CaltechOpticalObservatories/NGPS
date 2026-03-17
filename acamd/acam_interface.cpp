@@ -5479,8 +5479,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::offset_goal( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::offset_goal";
-    std::stringstream message;
+    const std::string function("Acam::Interface::offset_goal");
+    std::ostringstream message;
 
     if ( args.empty() ) {
       message << this->target.dRA << " " << this->target.dDEC;
@@ -5492,39 +5492,29 @@ logwrite( function, message.str() );
     //
     if ( args == "?" ) {
       retstring = ACAMD_OFFSETGOAL;
-      retstring.append( " [ <dRA> <dDEC> ]\n" );
+      retstring.append( " [ <dRA> <dDEC> [ fineguiding ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
       retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
+      retstring.append( "  The optional 'fineguiding' is used for slicecam fine acquisition.\n" );
       return HELP;
     }
 
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
+    std::istringstream iss(args);
 
-    if ( tokens.size() != 2 ) {
-      logwrite( function, "ERROR expected <dRA> <dDEC>" );
+    double dRA=NAN, dDEC=NAN;
+    if (!(iss >> dRA >> dDEC) ||
+        (std::isnan(dRA) || std::isnan(dDEC)) ) {
+      logwrite( function, "ERROR expected <dRA> <dDEC> [ fineguiding ]" );
       retstring="invalid_argument";
       return ERROR;
     }
+    this->target.dRA  = dRA;
+    this->target.dDEC = dDEC;
 
-    // Convert the input string to double and save in the class
-    //
-    try {
-      double dRA  = std::stod( tokens.at(0) );
-      double dDEC = std::stod( tokens.at(1) );
-
-      if (std::isnan(dRA) || std::isnan(dDEC)) throw std::invalid_argument("NaN value encountered");
-
-      this->target.dRA  = dRA;
-      this->target.dDEC = dDEC;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
-      logwrite( function, message.str() );
-      retstring="argument_exception";
-      return ERROR;
-    }
+    // optional fineguiding flag used for slicecam fineacquisition mode
+    std::string flag;
+    bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
     // Apply any dRA, dDEC goal offsets from the "put on slit" action to
     // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -5540,12 +5530,19 @@ logwrite( function, message.str() );
     retstring = message.str();
 
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      this->target.acquire_mode = Acam::TARGET_ACQUIRE;
-      this->target.nacquired = 0;
-      this->target.attempts = 0;
-      this->target.sequential_failures = 0;
-      this->target.timeout_time = std::chrono::steady_clock::now()
-                                + std::chrono::duration<double>(this->target.timeout);
+      // for slicecam fine aquisition/guiding, stay in TARGET_GUIDE but
+      // reset the filtering so the goal takes effect quickly
+      if ( is_fineguiding ) {
+        this->target.reset_offset_params();
+      }
+      else {
+        this->target.acquire_mode = Acam::TARGET_ACQUIRE;
+        this->target.nacquired = 0;
+        this->target.attempts = 0;
+        this->target.sequential_failures = 0;
+        this->target.timeout_time = std::chrono::steady_clock::now()
+                                  + std::chrono::duration<double>(this->target.timeout);
+      }
     }
 
     return NO_ERROR;
