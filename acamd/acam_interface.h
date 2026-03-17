@@ -510,6 +510,13 @@ namespace Acam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      struct {
+        std::string acquire_mode = "";
+        bool        is_acquired  = false;
+        int         nacquired    = 0;
+        int         attempts     = 0;
+      } last_status;
+
     public:
 
       std::string motion_host;
@@ -645,6 +652,7 @@ namespace Acam {
 
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
+      void publish_status();
       void request_snapshot();
       bool wait_for_snapshots();
       long handle_json_message( std::string message_in );

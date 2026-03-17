@@ -1465,6 +1465,55 @@ namespace Acam {
   /***** Acam::Interface::publish_snapshot ************************************/
 
 
+  /***** Acam::Interface::publish_status **************************************/
+  /**
+   * @brief      publishes my acam-related (important) status on change
+   * @details    This publishes a JSON message containing important telemetry.
+   *
+   */
+  void Interface::publish_status() {
+    const std::string acquire_mode = this->target.acquire_mode_string();
+    const bool        is_acquired  = this->target.is_acquired.load();
+    const int         nacquired    = this->target.nacquired;
+    const int         attempts     = this->target.attempts;
+    const double      seeing       = this->astrometry.get_seeing();
+    const double      background   = this->astrometry.get_background();
+
+    // only will publish if there was a change in any one of these
+    //
+    if ( acquire_mode == this->last_status.acquire_mode &&
+         is_acquired  == this->last_status.is_acquired  &&
+         nacquired    == this->last_status.nacquired    &&
+         attempts     == this->last_status.attempts ) return;
+
+    this->last_status.acquire_mode = acquire_mode;
+    this->last_status.is_acquired  = is_acquired;
+    this->last_status.nacquired    = nacquired;
+    this->last_status.attempts     = attempts;
+
+    // assemble the telemetry into a json message
+    //
+    nlohmann::json jmessage_out;
+    jmessage_out["source"]       = "acamd";
+    jmessage_out["ACQUIRE_MODE"] = this->target.acquire_mode_string();
+    jmessage_out["IS_ACQUIRED"]  = this->target.is_acquired.load();
+    jmessage_out["NACQUIRED"]    = this->target.nacquired;
+    jmessage_out["ATTEMPTS"]     = this->target.attempts;
+    jmessage_out["SEEING"]       = this->astrometry.get_seeing();
+    jmessage_out["BACKGROUND"]   = this->astrometry.get_background();
+
+    try {
+      this->publisher->publish( jmessage_out, "acamd" );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_status",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Acam::Interface::publish_status **************************************/
+
+
   /***** Acam::Interface::request_snapshot ************************************/
   /**
    * @brief      sends request for snapshot
@@ -3412,6 +3461,8 @@ logwrite( function, message.str() );
 
     this->acquire_mode = requested_mode;
 
+    iface->publish_status();
+
     return NO_ERROR;
   }
   /***** Acam::Target::acquire ************************************************/
@@ -3796,6 +3847,8 @@ logwrite( function, message.str() );
     catch ( const std::exception &e ) {
       logwrite( function, "ERROR writing to database: "+std::string(e.what()) );
     }
+
+    iface->publish_status();
 
     return error;
   }
@@ -5544,6 +5597,8 @@ logwrite( function, message.str() );
                                   + std::chrono::duration<double>(this->target.timeout);
       }
     }
+
+    this->publish_status();
 
     return NO_ERROR;
   }
