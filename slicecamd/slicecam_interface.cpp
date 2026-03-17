@@ -221,19 +221,15 @@ namespace Slicecam {
     //
     const double offset_arcsec = std::hypot( med_dra, med_ddec ) * 3600.0;
 
-
     // convergence check
     //
     if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
-      if ( !this->is_fineacquire_locked.load(std::memory_order_acquire) ) {
-        logwrite( function, "NOTICE fine acquisition converged" );
-        this->is_fineacquire_locked.store( true,  std::memory_order_release );
-      }
+      logwrite( function, "fine acquisition converged" );
+      this->is_fineacquire_locked.store( true,  std::memory_order_release );
+      this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
       return;
     }
-    // drifted outside threshold so clear the locked flag
-    this->is_fineacquire_locked.store(false, std::memory_order_release);
 
     // send gain-weighted offsets to acam
     //
