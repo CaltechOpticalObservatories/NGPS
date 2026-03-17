@@ -32,7 +32,7 @@ namespace Slicecam {
     // Help
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_FINEACQUIRE;
-      retstring.append( " stop | start { L | R } \n" );
+      retstring.append( " stop | start { L | R } | [ status ]\n" );
       retstring.append( "   start or stop fine target acquisition.\n" );
       retstring.append( "   L | R specifies which camera\n" );
       return HELP;

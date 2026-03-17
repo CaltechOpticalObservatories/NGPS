@@ -531,6 +531,10 @@ namespace Slicecam {
                       ret = this->interface.fan_mode( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_FINEACQUIRE ) {
+                      ret = this->interface.fineacquire( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_GAIN ) {
                       ret  = this->interface.gain( args, retstring );            // set gain
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret

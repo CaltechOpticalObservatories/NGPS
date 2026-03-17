@@ -54,7 +54,7 @@ const std::vector<std::string> SLICECAMD_SYNTAX = {
                                                 SLICECAMD_TCSISCONNECTED+" [ ? ]",
                                                 SLICECAMD_TCSISOPEN+" [ ? ]",
                                                 "  CAMERA COMMANDS:",
-                                                SLICECAMD_FINEACQUIRE+" [ ? ]",
+                                                SLICECAMD_FINEACQUIRE+" [ ? | status | stop | start { L | R } ]",
                                                 SLICECAMD_AVGFRAMES+" [ ? | <num> ]",
                                                 SLICECAMD_FRAMEGRAB+" [ ? | start | stop | one [ <filename> ] | status ]",
                                                 SLICECAMD_FRAMEGRABFIX+" [ ? ]",
