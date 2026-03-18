@@ -148,7 +148,7 @@ namespace Sequencer {
    */
   void Sequence::publish_waitstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -158,7 +158,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_waitstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_WAITSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_waitstate",
@@ -178,7 +178,7 @@ namespace Sequencer {
    */
   void Sequence::publish_daemonstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -188,7 +188,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_daemonstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_DAEMONSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_daemonstate",
@@ -208,7 +208,7 @@ namespace Sequencer {
    */
   void Sequence::publish_threadstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of thread state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -218,7 +218,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_threadstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_THREADSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_threadstate",

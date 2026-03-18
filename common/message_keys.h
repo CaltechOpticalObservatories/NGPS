@@ -15,6 +15,9 @@ namespace Topic {
   inline const std::string SLITD      = "slitd";
   inline const std::string CAMERAD    = "camerad";
   inline const std::string ACAMD      = "acamd";
+  inline const std::string SEQ_DAEMONSTATE = "seq_daemonstate";
+  inline const std::string SEQ_THREADSTATE = "seq_threadstate";
+  inline const std::string SEQ_WAITSTATE = "seq_waitstate";
   inline const std::string SLICECAMD  = "slicecamd";
 }
 
