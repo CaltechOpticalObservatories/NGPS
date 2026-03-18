@@ -373,6 +373,42 @@ namespace Sequencer {
   }
 
 
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+  /**
+   * @brief      waits for the user to click a button, or cancel
+   * @details    Use this when you just want to slow things down or get a
+   *             cup of coffee instead of observing.
+   *
+   */
+  void Sequence::wait_for_user() {
+    const std::string function("Sequencer::Sequence::wait_for_user");
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+
+    this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
+
+    while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+      std::unique_lock<std::mutex> lock(cv_mutex);
+      this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+    }
+
+    this->async.enqueue_and_log( function, "NOTICE: received "
+                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                           +" signal!" );
+    }  // end scope for wait_state = WAIT_USER
+
+    if ( this->cancel_flag.load() ) {
+      this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+      return;
+    }
+
+    this->is_usercontinue.store(false);
+
+    this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+  }
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+
+
   /***** Sequencer::Sequence::sequence_start **********************************/
   /**
    * @brief      main sequence start thread
@@ -569,52 +605,35 @@ namespace Sequencer {
         break;
       }
 
-/*** 12/17/24 move acquisition elsewhere?
- *
- *    logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
-
- *    this->seq_state.set( Sequencer::SEQ_WAIT_ACQUIRE );
- *    this->broadcast_seqstate();
- *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
- ***/
-
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target and dotype is ALL then auto acquire,
+      // first acam then slicecam
       //
-      if ( !this->target.iscal ) {
+      if ( !this->target.iscal && !this->do_once.load() ) {
 
-        // waiting for user signal (or cancel)
-        //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
-        {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
-
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
-        }
-
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
-
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+        // start ACAM acquisition
+        if ( this->do_acam_acquire() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "ERROR acam acquisition failed" );
+          this->thread_error_manager.set( THR_ACQUISITION );
           return;
         }
 
-        this->is_usercontinue.store(false);
+        // start SLICECAM fine acquisition
+        if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "WARNING slicecam fine acquisition failed" );
+        }
+      }
+      else
 
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+      // Not a calibration target but do-one, i.e. "manual" then
+      // wait for a user continue
+      //
+      if ( !this->target.iscal && this->do_once.load() ) {
+        this->wait_for_user();
+      }
 
-        // Ensure slit offset is in "expose" position
-        //
+      // Ensure slit offset is in "expose" position when needed
+      //
+      if ( !this->target.iscal ) {
         auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
         try {
           error |= slitset.get();
