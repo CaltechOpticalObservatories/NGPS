@@ -22,7 +22,7 @@ namespace Sequencer {
   /**
    * @brief      publishes snapshot of my telemetry
    * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry info when the subscriber receives the "_snapshot"
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
    *             topic and the payload contains my daemon name.
    * @param[in]  jmessage_in  subscribed-received JSON message
    *
@@ -43,7 +43,7 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
   /**
-   * @brief      handles camerad telemetry
+   * @brief      handles Topic::CAMERAD telemetry
    * @param[in]  jmessage  subscribed-received JSON message
    *
    */
@@ -56,6 +56,40 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+  /**
+   * @brief      handles Topic::SLICECAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
+    // set is_fineacquire_locked flag
+    bool fineacquirelocked;
+    Common::extract_telemetry_value( jmessage, Key::Slicecamd::FINEACQUIRE_LOCKED, fineacquirelocked );
+    this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+    this->fineacquire_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+
+
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
+  /**
+   * @brief      handles Topic::ACAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
+    // set is_acam_guiding flag
+    bool acquired;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
+    this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->acam_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -549,10 +583,11 @@ namespace Sequencer {
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) } };
 
       }
+      else {
+
       // For any other pointmode (SLIT, or empty, which assumes SLIT), all
       // subsystems are readied.
       //
-      else {
         // set pointmode explicitly, in case it's empty
         this->target.pointmode = Acam::POINTMODE_SLIT;
 
@@ -624,7 +659,7 @@ namespace Sequencer {
       }
       else
 
-      // Not a calibration target but do-one, i.e. "manual" then
+      // Not a calibration target but dotype is ONE, i.e. "manual" then
       // wait for a user continue
       //
       if ( !this->target.iscal && this->do_once.load() ) {

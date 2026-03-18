@@ -27,6 +27,7 @@
 #include "skyinfo.h"
 #include "slicecam_camera.h"
 #include "slicecam_math.h"
+#include "message_keys.h"
 
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
@@ -160,6 +161,11 @@ namespace Slicecam {
       std::mutex snapshot_mtx;
       std::unordered_map<std::string, bool> snapshot_status;
 
+      struct {
+        bool is_fineacquire_running=false;
+        bool is_fineacquire_locked=false;
+      } last_status;
+
       GUIManager gui_manager;
 
       Interface()
@@ -222,6 +228,7 @@ namespace Slicecam {
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
+      void publish_status();
       void publish_snapshot();
       void request_snapshot();
       bool wait_for_snapshots();

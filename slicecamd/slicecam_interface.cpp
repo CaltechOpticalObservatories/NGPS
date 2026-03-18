@@ -56,6 +56,7 @@ namespace Slicecam {
       }
       else {
         this->is_fineacquire_running.store(false);
+        this->publish_status();
         logwrite(function, "stop requested");
       }
       retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
@@ -100,6 +101,9 @@ namespace Slicecam {
     this->is_fineacquire_locked.store(false, std::memory_order_release);
     this->is_fineacquire_running.store(true, std::memory_order_release);
 
+    // publishes status on change only
+    this->publish_status();
+
     logwrite(function, "fine target acquisition enabled");
 
     retstring=is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
@@ -138,6 +142,7 @@ namespace Slicecam {
     if (it==this->camera.andor.end() || it->second==nullptr) {
       logwrite(function, "slicecam '"+which+"' not found!");
       this->is_fineacquire_running.store( false, std::memory_order_release );
+      this->publish_status();
       logwrite(function, "fine target acquisition disabled");
       return;
     }
@@ -228,6 +233,7 @@ namespace Slicecam {
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
       this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
+      this->publish_status();
       return;
     }
 
@@ -246,6 +252,7 @@ namespace Slicecam {
     if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
       logwrite( function, "ERROR failed to send offset to ACAM" );
       this->is_fineacquire_running.store( false, std::memory_order_release );
+      this->publish_status();
       return;
     }
 
@@ -400,6 +407,40 @@ namespace Slicecam {
   }
 
 
+  /***** Slicecam::Interface::publish_status **********************************/
+  /**
+   * @brief      publishes my important status on change
+   * @details    This publishes a JSON message containing important telemetry.
+   *
+   */
+  void Interface::publish_status() {
+    const bool is_fineacquire_running_now = this->is_fineacquire_running.load();
+    const bool is_fineacquire_locked_now  = this->is_fineacquire_locked.load();
+
+    // only publish if there was a change
+    //
+    if ( is_fineacquire_running_now == this->last_status.is_fineacquire_running &&
+         is_fineacquire_locked_now  == this->last_status.is_fineacquire_locked) return;
+
+    this->last_status.is_fineacquire_running = is_fineacquire_running_now;
+    this->last_status.is_fineacquire_locked  = is_fineacquire_locked_now;
+
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
+    jmessage_out[Key::Slicecamd::FINEACQUIRE_RUNNING] = this->is_fineacquire_running.load();
+    jmessage_out[Key::Slicecamd::FINEACQUIRE_LOCKED]  = this->is_fineacquire_locked.load();
+
+    try {
+      this->publisher->publish(jmessage_out, Topic::SLICECAMD);
+    }
+    catch (const std::exception &e) {
+      logwrite("Slicecam::Interface::publish_status",
+               "ERROR publishing status: "+std::string(e.what()));
+    }
+  }
+  /***** Slicecam::Interface::publish_status **********************************/
+
+
   /***** Slicecam::Interface::publish_snapshot ********************************/
   /**
    * @brief      publishes snapshot of my telemetry
@@ -409,7 +450,7 @@ namespace Slicecam {
    */
   void Interface::publish_snapshot() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]   = "slicecamd";
+    jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
 
     for ( const auto &[name, cam] : this->camera.andor ) {
       std::string key="TANDOR_SCAM_"+name;
@@ -442,7 +483,7 @@ namespace Slicecam {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "_snapshot" );
+      this->publisher->publish( jmessage_out, Topic::SNAPSHOT );
     }
     catch ( const std::exception &e ) {
       logwrite( "Slicecam::Interface::request_snapshot",

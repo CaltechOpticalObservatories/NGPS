@@ -341,6 +341,10 @@ namespace Sequencer {
             topic_handlers = {
               { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+              { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -462,6 +466,8 @@ namespace Sequencer {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_camerad( const nlohmann::json &jmessage );
+      void handletopic_acamd( const nlohmann::json &jmessage );
+      void handletopic_slicecamd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();

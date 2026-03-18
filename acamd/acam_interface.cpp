@@ -1433,28 +1433,23 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-
-    // assemble the telemetry into a json message
-    //
     nlohmann::json jmessage_out;
-
-    jmessage_out["source"]   = "acamd";                            // source of this telemetry
+    jmessage_out[Key::SOURCE] = Topic::ACAMD;
 
     int ccdtemp=99;
-    this->camera.andor.get_temperature( ccdtemp );                 // temp is int
-    jmessage_out["TANDOR_ACAM"] = ( this->isopen("camera") ?
-                                    static_cast<float>(ccdtemp) :  // but the database wants floats
-                                    NAN );
-
-    jmessage_out["ACAM_FILTER"] = ( this->isopen("motion" ) ?
-                                    this->motion.get_current_filtername() :
-                                    "not_connected" );
-    jmessage_out["ACAM_COVER"] = ( this->isopen("motion" ) ?
-                                    this->motion.get_current_coverpos() :
-                                    "not_connected" );
+    this->camera.andor.get_temperature( ccdtemp );                           // temp is int
+    jmessage_out[Key::Acamd::TANDOR] = ( this->isopen("camera") ?
+                                         static_cast<float>(ccdtemp) :  // but the database wants floats
+                                         NAN );
+    jmessage_out[Key::Acamd::FILTER] = ( this->isopen("motion" ) ?
+                                         this->motion.get_current_filtername() :
+                                         "not_connected" );
+    jmessage_out[Key::Acamd::COVER]  = ( this->isopen("motion" ) ?
+                                         this->motion.get_current_coverpos() :
+                                         "not_connected" );
 
     try {
-      this->publisher->publish( jmessage_out );
+      this->publisher->publish( jmessage_out, Topic::SNAPSHOT );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::publish_snapshot",
@@ -1494,16 +1489,16 @@ namespace Acam {
     // assemble the telemetry into a json message
     //
     nlohmann::json jmessage_out;
-    jmessage_out["source"]       = "acamd";
-    jmessage_out["ACQUIRE_MODE"] = this->target.acquire_mode_string();
-    jmessage_out["IS_ACQUIRED"]  = this->target.is_acquired.load();
-    jmessage_out["NACQUIRED"]    = this->target.nacquired;
-    jmessage_out["ATTEMPTS"]     = this->target.attempts;
-    jmessage_out["SEEING"]       = this->astrometry.get_seeing();
-    jmessage_out["BACKGROUND"]   = this->astrometry.get_background();
+    jmessage_out[Key::SOURCE]       = Topic::ACAMD;
+    jmessage_out[Key::Acamd::ACQUIRE_MODE] = this->target.acquire_mode_string();
+    jmessage_out[Key::Acamd::IS_ACQUIRED]  = this->target.is_acquired.load();
+    jmessage_out[Key::Acamd::NACQUIRED]    = this->target.nacquired;
+    jmessage_out[Key::Acamd::ATTEMPTS]     = this->target.attempts;
+    jmessage_out[Key::Acamd::SEEING]       = this->astrometry.get_seeing();
+    jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
 
     try {
-      this->publisher->publish( jmessage_out, "acamd" );
+      this->publisher->publish( jmessage_out, Topic::ACAMD );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::publish_status",
@@ -1528,7 +1523,7 @@ namespace Acam {
     }
     }
     try {
-      this->publisher->publish( jmessage, "_snapshot" );
+      this->publisher->publish( jmessage, Topic::SNAPSHOT );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::request_snapshot",

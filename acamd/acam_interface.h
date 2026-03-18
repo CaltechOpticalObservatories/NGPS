@@ -24,6 +24,7 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 #include "database.h"
+#include "message_keys.h"
 
 #ifdef ANDORSIM
 #include "andorsim.h"

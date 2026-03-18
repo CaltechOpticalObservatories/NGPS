@@ -127,9 +127,11 @@ int main(int argc, char **argv) {
     sequencerd.exit_cleanly();
   }
 
-  // initialize the pub/sub handler
+  // initialize the pub-sub handler with my subscriber topics
   //
-  if ( sequencerd.sequence.init_pubsub( {"camerad"} ) == ERROR ) {
+  if ( sequencerd.sequence.init_pubsub( { Topic::CAMERAD,
+                                          Topic::ACAMD,
+                                          Topic::SLICECAMD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }

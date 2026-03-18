@@ -154,7 +154,7 @@ namespace Thermal {
       // no errors, so disseminate the message contents based on the message type
       //
       if ( messagetype == "acaminfo" ) {
-        this->process_key<float>( jmessage, "TANDOR_ACAM" );
+        this->process_key<float>( jmessage, Key::Acamd::TANDOR );
       }
       else
       if ( messagetype == "slicecaminfo" ) {
