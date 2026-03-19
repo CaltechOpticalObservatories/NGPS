@@ -119,15 +119,15 @@ namespace Sequencer {
    */
   void Sequence::publish_seqstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // sequencer state
     std::string seqstate( this->seq_state_manager.get_set_states() );
     rtrim( seqstate );
-    jmessage_out["seqstate"]  = seqstate;
+    jmessage_out[Key::Sequencer::SEQSTATE] = seqstate;
 
     try {
-      this->publisher->publish( jmessage_out, "seq_seqstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_seqstate",
@@ -412,9 +412,10 @@ namespace Sequencer {
    * @brief      waits for the user to click a button, or cancel
    * @details    Use this when you just want to slow things down or get a
    *             cup of coffee instead of observing.
+   * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  void Sequence::wait_for_user() {
+  long Sequence::wait_for_user() {
     const std::string function("Sequencer::Sequence::wait_for_user");
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
@@ -433,12 +434,14 @@ namespace Sequencer {
 
     if ( this->cancel_flag.load() ) {
       this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-      return;
+      return ABORT;
     }
 
     this->is_usercontinue.store(false);
 
     this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::wait_for_user ***********************************/
 
@@ -640,38 +643,36 @@ namespace Sequencer {
         break;
       }
 
-      // If not a calibration target and dotype is ALL then auto acquire,
-      // first acam then slicecam
+      // If not a calibration target then acquire, first acam then slicecam
       //
-      if ( !this->target.iscal && !this->do_once.load() ) {
+      if ( !this->target.iscal ) {
 
-        // start ACAM acquisition
+        // start ACAM acquisition. If it fails then wait for user to continue or cancel.
         if ( this->do_acam_acquire() != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR acam acquisition failed" );
-          this->thread_error_manager.set( THR_ACQUISITION );
-          return;
+          this->async.enqueue_and_log( function, "WARNING acam acquisition failed" );
+          if (this->wait_for_user()==ABORT) {
+            this->async.enqueue_and_log( function, "NOTICE: cancelled" );
+            return;
+          }
         }
-
+        else
         // start SLICECAM fine acquisition
         if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
           this->async.enqueue_and_log( function, "WARNING slicecam fine acquisition failed" );
         }
       }
-      else
 
-      // Not a calibration target but dotype is ONE, i.e. "manual" then
-      // wait for a user continue
-      //
-      if ( !this->target.iscal && this->do_once.load() ) {
-        this->wait_for_user();
-      }
-
-      // Ensure slit offset is in "expose" position when needed
-      //
       if ( !this->target.iscal ) {
-        auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
+        // send offsets. wait for user if that fails to continue or cancel.
+        if ( this->target_offset() == ERROR ) {
+          if (this->wait_for_user()==ABORT) {
+            this->async.enqueue_and_log( function, "NOTICE: cancelled" );
+            return;
+          }
+        }
+        // ensure slit offset is in "expose" position when needed
         try {
-          error |= slitset.get();
+          error |= this->slit_set(Sequencer::VSM_EXPOSE);
         }
         catch (const std::exception& e) {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
@@ -3358,27 +3359,34 @@ namespace Sequencer {
    */
   long Sequence::target_offset() {
     const std::string function("Sequencer::Sequence::target_offset");
-    long error=NO_ERROR;
 
-    if ( this->is_acam_guiding.load() ) {
+    // nothing to do if both ra and dec offsets are zero
+    if (this->target.offset_ra  == 0.0 &&
+        this->target.offset_dec == 0.0) return NO_ERROR;
+
+    // zero TCS offsets before applying target offset
+    long error = this->tcsd.command( TCSD_ZERO_OFFSETS );
+
+    // when ACAM is guiding, offsets are handled by changing his goal
+    if (error==NO_ERROR && this->is_acam_guiding.load()) {
       // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
       const double dra_deg = this->target.offset_ra / 3600.0;
       const double ddec_deg = this->target.offset_dec / 3600.0;
       std::stringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << dra_deg << " " << ddec_deg;
       error = this->acamd.command( cmd.str() );
-      logwrite( function, "sent "+cmd.str()+" (guiding)" );
-      return error;
+    }
+    else
+    // if ACAM is not guiding then I send the offsets directly to the TCS
+    if (error==NO_ERROR) {
+      std::ostringstream cmd;
+      cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+      error = this->tcsd.command( cmd.str() );
     }
 
-    error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
-
-    std::stringstream cmd;
-    cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
-
-    error |= this->tcsd.command( cmd.str() );
-
-    logwrite( function, "sent "+cmd.str() );
+    std::ostringstream oss;
+    oss << (error==NO_ERROR?"":"ERROR ") << "target offsets" << (error==NO_ERROR ? " " : " not ") << "applied";
+    logwrite(function, oss.str());
 
     return error;
   }

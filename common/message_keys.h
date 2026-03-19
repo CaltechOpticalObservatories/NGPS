@@ -16,6 +16,7 @@ namespace Topic {
   inline const std::string CAMERAD    = "camerad";
   inline const std::string ACAMD      = "acamd";
   inline const std::string SEQ_DAEMONSTATE = "seq_daemonstate";
+  inline const std::string SEQ_SEQSTATE = "seq_seqstate";
   inline const std::string SEQ_THREADSTATE = "seq_threadstate";
   inline const std::string SEQ_WAITSTATE = "seq_waitstate";
   inline const std::string SLICECAMD  = "slicecamd";
@@ -24,6 +25,10 @@ namespace Topic {
 namespace Key {
 
   inline const std::string SOURCE = "source";
+
+  namespace Sequencer {
+    inline const std::string SEQSTATE = "seqstate";
+  }
 
   namespace Camerad {
     inline const std::string READY = "ready";

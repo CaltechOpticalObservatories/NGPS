@@ -560,7 +560,7 @@ namespace Sequencer {
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
 
       void dothread_test();
-      void wait_for_user();          ///< wait for the user to do something
+      long wait_for_user();          ///< wait for the user or cancel
       void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
