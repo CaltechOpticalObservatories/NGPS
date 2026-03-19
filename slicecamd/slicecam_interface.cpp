@@ -372,6 +372,21 @@ namespace Slicecam {
   }
 
 
+  /***** Slicecam::Interface::handletopic_acamd *******************************/
+  /**
+   * @brief      handles Topic::ACAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_acamd(const nlohmann::json &jmessage) {
+    // set is_acam_guiding flag
+    bool acquired;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
+    this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+  }
+  /***** Slicecam::Interface::handletopic_acamd *******************************/
+
+
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
@@ -1570,68 +1585,6 @@ namespace Slicecam {
   /***** Slicecam::Interface::dothread_fpoffset *******************************/
 
 
-  /***** Slicecam::Interface::get_acam_guide_state ****************************/
-  /**
-   * @brief      asks if ACAM is guiding
-   * @details    The only way this can fail is if acam is connected but returns
-   *             an error reading the state.
-   * @param[out] is_guiding  bool guiding state
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::get_acam_guide_state( bool &is_guiding ) {
-    std::string function = "Slicecam::Interface::get_acam_guide_state";
-    std::stringstream message;
-    long error = NO_ERROR;
-    std::string retstring;
-
-    // If not connected to acamd then try to connect to the daemon.
-    // If there's an error in doing this then assume acamd is not even
-    // running, in which case the guiding cannot be running.
-    //
-    error = this->acamd.is_connected(retstring);
-    if ( error == ERROR ) {
-      logwrite( function, "ERROR no response from acamd -- will assume guiding is inactive" );
-      is_guiding = false;
-      return NO_ERROR;
-    }
-
-    // Not connected, try to connect
-    //
-    if ( retstring.find("false") != std::string::npos ) {
-      logwrite( function, "connecting to acamd" );
-      error = this->acamd.connect();
-      if ( error != NO_ERROR ) {
-        logwrite( function, "ERROR unable to connect to acamd -- will assume guiding is inactive" );
-        is_guiding=false;
-        return NO_ERROR;
-      }
-      logwrite( function, "connected to acamd" );
-    }
-
-    // Is acamd guiding? At this point slicecam is connected to acamd, so
-    // consider an error here as a fault and don't continute.
-    //
-    error = this->acamd.send( ACAMD_ACQUIRE, retstring );
-    if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR getting guiding state from ACAM" );
-      return ERROR;
-    }
-
-    // If guiding is in the return string then it is enabled.
-    //
-    if ( retstring.find( "guiding" ) != std::string::npos ) {
-      is_guiding = true;
-    }
-    else is_guiding = false;
-
-    message.str(""); message << "acam is" << ( is_guiding ? " " : " not " ) << "guiding";
-
-    return NO_ERROR;
-  }
-  /***** Slicecam::Interface::get_acam_guide_state ****************************/
-
-
   /***** Slicecam::Interface::offset_acam_goal ********************************/
   /**
    * @brief      applies offset to ACAM goal, or move telescope directly
@@ -1653,13 +1606,7 @@ namespace Slicecam {
     // If ACAM is guiding then slicecam must not move the telescope,
     // but must allow ACAM to perform the offset.
     //
-    bool is_guiding;
-    long error = this->get_acam_guide_state( is_guiding );
-
-    if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR getting guide state" );
-      return ERROR;
-    }
+    bool is_guiding = this->is_acam_guiding.load();
 
     // send the offsets now
     //
@@ -1672,8 +1619,7 @@ namespace Slicecam {
       // add fineguiding arg when used for fine acquisition mode
       if (is_fineacquire) cmd << " fineguiding";
 
-      error = this->acamd.command( cmd.str() );
-      if ( error != NO_ERROR ) {
+      if (this->acamd.command( cmd.str() ) != NO_ERROR) {
         logwrite( function, "ERROR adding offset to acam goal" );
         return ERROR;
       }
@@ -1766,17 +1712,6 @@ namespace Slicecam {
       message.str(""); message << "ERROR parsing input \"" << args << "\": " << e.what();
       logwrite( function, message.str() );
       retstring="argument_exception";
-      return ERROR;
-    }
-
-    // If ACAM is guiding then slicecam must not move the telescope,
-    // but must allow ACAM to perform the offset.
-    //
-    bool is_guiding;
-    long error = this->get_acam_guide_state( is_guiding );
-
-    if ( error != NO_ERROR ) {
-      logwrite( function, "ERROR getting guide state" );
       return ERROR;
     }
 
@@ -2104,9 +2039,7 @@ namespace Slicecam {
         retstring.append( "  Return the acam guiding state\n" );
         return HELP;
       }
-      bool is_guiding;
-      error = this->get_acam_guide_state( is_guiding );
-      message.str(""); message << "request returned " << ( error==ERROR ? "ERROR" : "NO_ERROR" ) << ": guiding is " << ( is_guiding ? "on" : "off" );
+      message.str(""); message << ": ACAM guiding is " << ( this->is_acam_guiding.load() ? "on" : "off" );
       retstring = message.str();
     }
     else
@@ -2122,16 +2055,8 @@ namespace Slicecam {
         retstring="invalid_argument";
         return ERROR;
       }
-      bool is_guiding;
-      long error = this->get_acam_guide_state( is_guiding );
 
-      if ( error != NO_ERROR ) {
-        logwrite( function, "ERROR getting guide state" );
-        retstring="acamd_error";
-        return ERROR;
-      }
-
-      if ( !is_guiding ) {
+      if ( !this->is_acam_guiding.load() ) {
         logwrite( function, "ERROR acam is not guiding" );
         retstring="not_guiding";
         return ERROR;

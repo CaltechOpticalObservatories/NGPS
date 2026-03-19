@@ -135,6 +135,7 @@ namespace Slicecam {
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
       std::atomic<bool> is_fineacquire_running;  ///< set if fine target acquisition is running
       std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
+      std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
       /** these are set by Interface::saveframes()
        */
@@ -179,16 +180,19 @@ namespace Slicecam {
           is_framegrab_running(false),
           is_fineacquire_running(false),
           is_fineacquire_locked(false),
+          is_acam_guiding(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
           snapshot_status { { "slitd", false }, {"tcsd", false} }
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-          { "tcsd", std::function<void(const nlohmann::json&)>(
+          { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+          { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-          { "slitd", std::function<void(const nlohmann::json&)>(
+          { Topic::SLITD, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
         };
       }
@@ -226,6 +230,7 @@ namespace Slicecam {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_status();
@@ -261,8 +266,6 @@ namespace Slicecam {
       long exptime( std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
-
-      long get_acam_guide_state( bool &is_guiding );
 
       long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt);
 
