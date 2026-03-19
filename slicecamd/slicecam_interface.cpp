@@ -87,6 +87,13 @@ namespace Slicecam {
       return ERROR;
     }
 
+    // ACAM must be guiding
+    if (!this->is_acam_guiding.load(std::memory_order_acquire)) {
+      logwrite(function, "ERROR ACAM is not guiding");
+      retstring="stopped";
+      return ERROR;
+    }
+
     const std::string which = tokens.at(1);
     if (which != "L" && which != "R") {
       logwrite(function, "ERROR expected stop | start { L | R }");
