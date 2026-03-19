@@ -2083,10 +2083,6 @@ namespace Sequencer {
     //
     if ( this->cancel_flag.load() ) return NO_ERROR;
 
-    // if ontarget (not cancelled) then acquire target
-    //
-    if ( !this->cancel_flag.load() ) this->acamd.command( ACAMD_ACQUIRE );
-
     this->is_ontarget.store(false);
 
     // remember the last target that was tracked on
@@ -2578,141 +2574,6 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::modify_exptime **********************************/
-
-
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
-  /**
-   * @brief      performs the acqusition sequence
-   * @details    this gets called by the move_to_target thread
-   *
-   * This function is spawned in a thread.
-   *
-   */
-  void Sequence::dothread_acquisition() {
-    const std::string function("Sequencer::Sequence::dothread_acquisition");
-    std::stringstream message;
-    std::stringstream cmd;
-    std::string reply;
-    long error = NO_ERROR;
-
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
-
-    // Before sending target coordinates to ACAM,
-    // convert them to decimal and to ACAM coordinates.
-    // (fpoffsets.coords_* are always in degrees)
-    //
-    double ra_in    = radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-    double dec_in   = radec_to_decimal( this->target.dec_dms );
-    double angle_in = this->target.slitangle;
-
-    // can't be NaN
-    //
-    bool ra_isnan  = std::isnan( ra_in  );
-    bool dec_isnan = std::isnan( dec_in );
-
-    if ( ra_isnan || dec_isnan ) {
-      message.str(""); message << "ERROR: converting";
-      if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
-      if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
-      message << " to decimal";
-      this->async.enqueue_and_log( function, message.str() );
-      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-      return;
-    }
-
-//  // Before sending the target coords to the ACAM,
-//  // convert them from <pointmode> to ACAM coordinates.
-//  //
-//  double ra_out, dec_out, angle_out;
-//  error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
-//                                               ra_in, dec_in, angle_in,
-//                                               ra_out, dec_out, angle_out );
-//
-//  // Send the ACQUIRE command to acamd, which requires
-//  // the target coordinates (from the database).
-//  //
-//  message.str(""); message << "starting target acquisition " << ra_out    << " "
-//                                                             << dec_out   << " "
-//                                                             << angle_out << " "
-//                                                             << this->target.name;
-    message.str(""); message << "starting target acquisition " << ra_in    << " "
-                                                               << dec_in   << " "
-                                                               << angle_in << " "
-                                                               << this->target.name;
-    logwrite( function, message.str() );
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_in << " "
-                                             << dec_in << " "
-                                             << angle_in << " ";
-
-    error = this->acamd.command( cmd.str(), reply );
-
-/***** DONT CARE ABOUT ERRORS NOW -- NO CONDITION ON ACQ SUCCESS 
-    if ( error != NO_ERROR ) {
-      this->thread_error_manager.set( THR_ACQUISITION );               // report error
-      message.str(""); message << "ERROR acquiring target";
-      this->async.enqueue_and_log( function, message.str() );
-      this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );            // clear ACQUIRE bit
-      this->broadcast_seqstate();
-      return;
-    }
-
-    // The reply contains the timeout.
-    // Acam's acquisition sequence uses that timeout but the Sequencer
-    // will also use it here, so that it knows when to stop asking acamd
-    // for its acquisition status.
-    //
-    double timeout;
-    try {
-      timeout = std::stod( reply );
-    } catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing timeout \"" << reply << "\" from acam: " << e.what();
-      logwrite( function, message.str() );
-      this->thread_error_manager.set( THR_ACQUISITION );               // report any error
-      return;
-    }
-
-    auto timeout_time = std::chrono::steady_clock::now()
-                        + std::chrono::duration<double>(timeout);
-
-    reply.clear();
-
-    // Poll acamd while it is acquiring. Once finished, get the state.
-    //
-    bool acquiring = true;
-    do {
-      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-      if (error==NO_ERROR) error = this->acamd.command( ACAMD_ACQUIRE, reply );
-      acquiring = ( reply.find("acquiring") != std::string::npos );
-    } while ( error==NO_ERROR &&
-              acquiring       &&
-              std::chrono::steady_clock::now() < timeout_time );
-
-    // Acquisition loop complete so get the state
-    //
-    error = this->acamd.command( ACAMD_ISACQUIRED, reply );
-    this->target.acquired = ( reply.find("true") != std::string::npos );
-
-    // set message
-    //
-    if ( std::chrono::steady_clock::now() >= timeout_time ) {        // Timeout
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR failed to acquire within timeout";
-    }
-    else
-    if ( error!=NO_ERROR ) {                                         // Error polling
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR acquiring target";
-    }
-    else {                                                           // Success
-      message.str(""); message << "NOTICE: target " << ( this->target.acquired ? "acquired" : "not acquired" );
-    }
-
-    this->async.enqueue_and_log( function, message.str() );            // log message
-*****/
-
-  }
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
 
 
   /***** Sequencer::Sequence::startup *****************************************/
@@ -3499,16 +3360,7 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::target_offset");
     long error=NO_ERROR;
 
-    bool is_guiding = false;
-    std::string reply;
-    if ( this->acamd.command( ACAMD_ACQUIRE, reply ) == NO_ERROR ) {
-      if ( reply.find( "guiding" ) != std::string::npos ) is_guiding = true;
-    }
-    else {
-      logwrite( function, "ERROR reading ACAM guide state, falling back to TCS offset" );
-    }
-
-    if ( is_guiding ) {
+    if ( this->is_acam_guiding.load() ) {
       // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
       const double dra_deg = this->target.offset_ra / 3600.0;
       const double ddec_deg = this->target.offset_dec / 3600.0;
@@ -4676,8 +4528,8 @@ namespace Sequencer {
 
       // Finally, spawn the acquisition thread
       //
-      logwrite( function, "spawning dothread_acquisition..." );
-      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+      logwrite( function, "spawning do_acam_acquire..." );
+      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::do_acam_acquire, this ).detach();
     }
     else
 

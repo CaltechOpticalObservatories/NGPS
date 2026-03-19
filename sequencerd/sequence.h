@@ -558,7 +558,6 @@ namespace Sequencer {
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
-      void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       void dothread_test();
       void wait_for_user();          ///< wait for the user to do something
