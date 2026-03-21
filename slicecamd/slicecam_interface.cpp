@@ -154,21 +154,44 @@ namespace Slicecam {
       return;
     }
     auto* cam = it->second.get();
-    float* img_data = cam->get_avg_data();
+    const long ncols = cam->camera_info.axes[0];
+    const long nrows = cam->camera_info.axes[1];
 
-    if (img_data==nullptr) {
-      logwrite(function, "bad image data buffer for slicecam '"+which+"'");
+    const std::vector<float> img_data = this->camera.get_image(which);
+
+    if (img_data.empty()) {
+      logwrite(function, "no image data for slicecam '"+which+"'");
       return;
     }
-
-    const long ncols = cam->camera_info.cols;
-    const long nrows = cam->camera_info.rows;
 
     // find the star centroid near the aim point
     //
     Point centroid;
+    {
+    std::ostringstream oss;
+    oss << "[DEBUG] ncols=" << ncols << " nrows=" << nrows << " img_data=" << std::hex << std::uppercase << img_data.data();
+    logwrite(function, oss.str());
+    oss.str(""); oss << "[DEBUG] pix=";
+    for (int i=0; i<5; i++) oss << " " << img_data[i];
+    logwrite(function, oss.str());
+    }
 
-    if ( Math::calculate_centroid( img_data, ncols, nrows,
+{
+const int ax = static_cast<int>( this->fineacquire_state.aimpoint.x ) - 1;  // 0-based
+const int ay = static_cast<int>( this->fineacquire_state.aimpoint.y ) - 1;
+std::ostringstream oss;
+oss << "[DEBUG] aimpoint=(" << ax+1 << "," << ay+1 << ") pixels around aimpoint:";
+for ( int dy = -2; dy <= 2; dy++ ) {
+  for ( int dx = -2; dx <= 2; dx++ ) {
+    const int x = ax + dx;
+    const int y = ay + dy;
+    if ( x >= 0 && x < ncols && y >= 0 && y < nrows )
+      oss << " (" << x+1 << "," << y+1 << ")=" << img_data.data()[y*ncols+x];
+  }
+}
+logwrite( function, oss.str() );
+}
+    if ( Math::calculate_centroid( img_data.data(), ncols, nrows,
                                    this->fineacquire_state.bg_region,
                                    this->fineacquire_state.aimpoint,
                                    centroid) != NO_ERROR ) {
@@ -386,6 +409,10 @@ namespace Slicecam {
    *
    */
   void Interface::handletopic_acamd(const nlohmann::json &jmessage) {
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status[Topic::ACAMD]=true;
+    }
     // set is_acam_guiding flag
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
@@ -397,7 +424,7 @@ namespace Slicecam {
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["slitd"]=true;
+    snapshot_status[Topic::SLITD]=true;
     }
     Common::extract_telemetry_value( jmessage, "SLITO",  telem.slitoffset );
     Common::extract_telemetry_value( jmessage, "SLITW",  telem.slitwidth );
@@ -410,7 +437,7 @@ namespace Slicecam {
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["tcsd"]=true;
+    snapshot_status[Topic::TCSD]=true;
     }
     // extract and store values in the class
     //
@@ -1263,13 +1290,13 @@ namespace Slicecam {
         collect_header_info( cam );
       }
 
-      // run the fine target acquisition if enabled
-      if ( is_fineacquire_running.load() ) { do_fineacquire(); }
-
       // write to FITS file
       if (error==NO_ERROR) error = this->camera.write_frame( sourcefile,
                                                              this->imagename,
                                                              this->tcs_online.load(std::memory_order_acquire) );
+
+      // run the fine target acquisition if enabled
+      if ( is_fineacquire_running.load() ) { do_fineacquire(); }
 
       this->framegrab_time = std::chrono::steady_clock::time_point::min();
 

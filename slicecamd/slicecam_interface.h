@@ -183,7 +183,9 @@ namespace Slicecam {
           is_acam_guiding(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
-          snapshot_status { { "slitd", false }, {"tcsd", false} }
+          snapshot_status { { Topic::SLITD, false },
+	                    { Topic::TCSD, false },
+	                    { Topic::ACAMD, false } }
       {
         topic_handlers = {
           { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(

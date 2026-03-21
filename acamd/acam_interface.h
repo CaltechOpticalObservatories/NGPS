@@ -575,8 +575,10 @@ namespace Acam {
           nskip_preserve_frames(0),
           newframe_ready(false),
           snapshot_status {
-            {"tcsd",       false},
-            {"slitd",      false}
+            {Topic::TCSD,       false},
+            {Topic::SLITD,      false},
+            {Topic::TARGETINFO, false},
+            {Topic::ACAMD,      false}
           },
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
@@ -584,13 +586,13 @@ namespace Acam {
       {
             target.set_interface_instance( this ); ///< Set the Interface instance in Target
             topic_handlers = {
-              { "_snapshot", std::function<void(const nlohmann::json&)>(
+              { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-              { "tcsd", std::function<void(const nlohmann::json&)>(
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-              { "targetinfo", std::function<void(const nlohmann::json&)>(
+              { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) },
-              { "slitd", std::function<void(const nlohmann::json&)>(
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
             };
       }

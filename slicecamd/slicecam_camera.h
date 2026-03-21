@@ -37,12 +37,12 @@ namespace Slicecam {
    */
   class Camera {
     private:
-      uint16_t* image_data;
+      std::unique_ptr<float> simdata;
       int simsize;      /// for the sky simulator
       std::map<at_32, at_32> handlemap;
 
     public:
-      Camera() : image_data( nullptr ), simsize(1024) { };
+      Camera() : simsize(1024) { };
 
       FITS_file fits_file;        /// instantiate a FITS container object
       FitsInfo  fitsinfo;
@@ -66,6 +66,8 @@ namespace Slicecam {
       long close();
       long get_frame();
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
+      std::vector<float> get_image(const std::string &which);
+      std::vector<float> read_from_file(const std::string &which);
       long bin( const int hbin, const int vbin );
       long set_fan( std::string which, int mode );
       long imflip( std::string args, std::string &retstring );

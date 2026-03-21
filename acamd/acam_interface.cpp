@@ -1433,6 +1433,7 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
+    this->publish_status();
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::ACAMD;
 
@@ -1602,7 +1603,7 @@ namespace Acam {
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["tcsd"]=true;
+    snapshot_status[Topic::TCSD]=true;
     }
     // extract and store values in the class
     //
@@ -1631,6 +1632,10 @@ namespace Acam {
 
 
   void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    {
+    std::lock_guard<std::mutex> lock(snapshot_mtx);
+    snapshot_status[Topic::TARGETINFO]=true;
+    }
     this->database.add_from_json<int>( jmessage, "OBS_ID" );
     this->database.add_from_json<std::string>( jmessage, "NAME" );
     this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
@@ -1648,7 +1653,7 @@ namespace Acam {
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["slitd"]=true;
+    snapshot_status[Topic::SLITD]=true;
     }
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);

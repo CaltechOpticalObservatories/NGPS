@@ -992,4 +992,35 @@ namespace Slicecam {
   }
   /***** Slicecam::Camera::write_frame ****************************************/
 
+
+  std::vector<float> Camera::get_image(const std::string &which) {
+    auto it = this->andor.find(which);
+    if (it==this->andor.end() || it->second==nullptr) return {};
+    const auto &cam = it->second;
+    if (cam->is_emulated()) return this->read_from_file(which);
+    const float* buf = cam->get_avg_data();
+    if (buf==nullptr) return {};
+    const long npix = cam->camera_info.axes[0]*cam->camera_info.axes[1];
+    return std::vector<float>(buf, buf+npix);
+  }
+
+
+  std::vector<float> Camera::read_from_file(const std::string &extname) {
+    const char* function = "Slicecam::Camera::read_image";
+    try {
+      std::unique_ptr<CCfits::FITS> pInfile(new CCfits::FITS(fitsinfo.fits_name, CCfits::Read, true));
+      CCfits::ExtHDU& ext = pInfile->extension(extname);
+      std::valarray<float> tmp;
+      ext.read(tmp);
+      return std::vector<float>(std::begin(tmp), std::end(tmp));
+    }
+    catch (const CCfits::FitsException &e) {
+      logwrite(function, "ERROR CCfits: "+std::string(e.message()));
+      return {};
+    }
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR: "+std::string(e.what()));
+      return {};
+    }
+  }
 }
