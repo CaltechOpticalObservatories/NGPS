@@ -31,7 +31,7 @@ namespace Slicecam {
       /**
        * @brief      compute the centroid of the brightest source near an aim point
        */
-      static long calculate_centroid( const float* image,
+      static long calculate_centroid( const std::vector<float> &image,
                                       long cols, long rows,
                                       Rect background,
                                       Point aimpoint,
@@ -46,6 +46,7 @@ namespace Slicecam {
        */
       static void calculate_acquisition_offsets( World star, World goal,
                                                  std::pair<double, double> &offsets );
+
   };
   /***** Slicecam::Math *******************************************************/
 

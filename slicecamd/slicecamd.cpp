@@ -154,9 +154,6 @@ int main(int argc, char **argv) {
   }
 
   std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-  slicecamd.interface.publish_snapshot();
-
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
   slicecamd.interface.request_snapshot();
 
   // This will pre-thread N_THREADS threads.

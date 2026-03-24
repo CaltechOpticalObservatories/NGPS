@@ -68,6 +68,7 @@ namespace Slicecam {
       long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
       std::vector<float> get_image(const std::string &which);
       std::vector<float> read_from_file(const std::string &which);
+      std::vector<float> read_from_file(const std::string &which, long &ncols, long &nrows);
       long bin( const int hbin, const int vbin );
       long set_fan( std::string which, int mode );
       long imflip( std::string args, std::string &retstring );

@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <queue>
 
 namespace Slicecam {
 
@@ -191,12 +192,12 @@ namespace Slicecam {
    *             Internally everything is 0-based.
    *
    */
-  long Math::calculate_centroid( const float* image,
+  long Math::calculate_centroid( const std::vector<float> &image,
                                   long ncols, long nrows,
                                   Rect background,
                                   Point aimpoint,
                                   Point &centroid ) {
-    if ( !image || ncols <= 0 || nrows <= 0 ) return ERROR;
+    if ( image.empty() || ncols <= 0 || nrows <= 0 ) return ERROR;
 
     // Convert 1-based inclusive ROI to 0-based, clamped
     const long bx1 = std::max( 0L, background.x1 - 1 );

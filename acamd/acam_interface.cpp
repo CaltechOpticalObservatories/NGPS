@@ -1433,7 +1433,7 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-    this->publish_status();
+    this->publish_status(true);
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::ACAMD;
 
@@ -1467,7 +1467,7 @@ namespace Acam {
    * @details    This publishes a JSON message containing important telemetry.
    *
    */
-  void Interface::publish_status() {
+  void Interface::publish_status(bool force) {
     const std::string acquire_mode = this->target.acquire_mode_string();
     const bool        is_acquired  = this->target.is_acquired.load();
     const int         nacquired    = this->target.nacquired;
@@ -1477,7 +1477,8 @@ namespace Acam {
 
     // only will publish if there was a change in any one of these
     //
-    if ( acquire_mode == this->last_status.acquire_mode &&
+    if ( !force &&
+	 acquire_mode == this->last_status.acquire_mode &&
          is_acquired  == this->last_status.is_acquired  &&
          nacquired    == this->last_status.nacquired    &&
          attempts     == this->last_status.attempts ) return;

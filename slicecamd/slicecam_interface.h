@@ -252,6 +252,7 @@ namespace Slicecam {
       void close();
       long close( std::string args, std::string &retstring );
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
+      long acamd_init();
       long saveframes( std::string args, std::string &retstring );
       void alert_framegrabbing_stopped(const int &waitms);
       long framegrab( std::string args );                            /// wrapper to control Andor frame grabbing

@@ -655,7 +655,7 @@ namespace Acam {
 
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
-      void publish_status();
+      void publish_status(bool force=false);
       void request_snapshot();
       bool wait_for_snapshots();
       long handle_json_message( std::string message_in );

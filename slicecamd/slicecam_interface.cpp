@@ -154,10 +154,12 @@ namespace Slicecam {
       return;
     }
     auto* cam = it->second.get();
-    const long ncols = cam->camera_info.axes[0];
-    const long nrows = cam->camera_info.axes[1];
+    long ncols = cam->camera_info.axes[0];
+    long nrows = cam->camera_info.axes[1];
 
-    const std::vector<float> img_data = this->camera.get_image(which);
+    const std::vector<float> img_data = cam->is_emulated()
+                                        ? this->camera.read_from_file(which, ncols, nrows)
+                                        : this->camera.get_image(which);
 
     if (img_data.empty()) {
       logwrite(function, "no image data for slicecam '"+which+"'");
@@ -167,31 +169,8 @@ namespace Slicecam {
     // find the star centroid near the aim point
     //
     Point centroid;
-    {
-    std::ostringstream oss;
-    oss << "[DEBUG] ncols=" << ncols << " nrows=" << nrows << " img_data=" << std::hex << std::uppercase << img_data.data();
-    logwrite(function, oss.str());
-    oss.str(""); oss << "[DEBUG] pix=";
-    for (int i=0; i<5; i++) oss << " " << img_data[i];
-    logwrite(function, oss.str());
-    }
 
-{
-const int ax = static_cast<int>( this->fineacquire_state.aimpoint.x ) - 1;  // 0-based
-const int ay = static_cast<int>( this->fineacquire_state.aimpoint.y ) - 1;
-std::ostringstream oss;
-oss << "[DEBUG] aimpoint=(" << ax+1 << "," << ay+1 << ") pixels around aimpoint:";
-for ( int dy = -2; dy <= 2; dy++ ) {
-  for ( int dx = -2; dx <= 2; dx++ ) {
-    const int x = ax + dx;
-    const int y = ay + dy;
-    if ( x >= 0 && x < ncols && y >= 0 && y < nrows )
-      oss << " (" << x+1 << "," << y+1 << ")=" << img_data.data()[y*ncols+x];
-  }
-}
-logwrite( function, oss.str() );
-}
-    if ( Math::calculate_centroid( img_data.data(), ncols, nrows,
+    if ( Math::calculate_centroid( img_data, ncols, nrows,
                                    this->fineacquire_state.bg_region,
                                    this->fineacquire_state.aimpoint,
                                    centroid) != NO_ERROR ) {
@@ -778,6 +757,9 @@ logwrite( function, oss.str() );
     long error = this->tcs_init( "", retstring );
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
+    // open connection to acamd
+    error |= this->acamd_init();
+
     if ( this->camera.open( which, args ) == NO_ERROR ) {  // open the camera
       error |= this->framegrab( "start", retstring );      // start frame grabbing if open succeeds
       std::thread( &Slicecam::GUIManager::push_gui_settings, &gui_manager ).detach();  // force display refresh
@@ -956,6 +938,36 @@ logwrite( function, oss.str() );
     return error;
   }
   /***** Slicecam::Interface::tcs_init ****************************************/
+
+
+  /***** Slicecam::Interface::acamd_init **************************************/
+  /**
+   * @brief      initialize connection to acamd
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::acamd_init() {
+    const char* function = "Slicecam::Interface::acam_init";
+
+    // If not connected to acamd then try to connect to the daemon.
+    std::string retstring;
+    if (this->acamd.is_connected(retstring) != NO_ERROR) {
+      logwrite(function, "ERROR no response from acamd");
+      return NO_ERROR;
+    }
+
+    // Not connected, try to connect
+    if ( retstring.find("false") != std::string::npos ) {
+      logwrite( function, "connecting to acamd" );
+      if (this->acamd.connect() != NO_ERROR) {
+        logwrite( function, "ERROR unable to connect to acamd" );
+        return NO_ERROR;
+      }
+      logwrite( function, "connected to acamd" );
+    }
+    return NO_ERROR;
+  }
+  /***** Slicecam::Interface::acamd_init **************************************/
 
 
   /***** Slicecam::Interface::saveframes **************************************/

@@ -997,7 +997,8 @@ namespace Slicecam {
     auto it = this->andor.find(which);
     if (it==this->andor.end() || it->second==nullptr) return {};
     const auto &cam = it->second;
-    if (cam->is_emulated()) return this->read_from_file(which);
+//  if (cam->is_emulated()) { return this->read_from_file(which);
+//  logwrite("Slicecam::Camera::get_image", "[DEBUG] PROBLEM: is_emulated=false");
     const float* buf = cam->get_avg_data();
     if (buf==nullptr) return {};
     const long npix = cam->camera_info.axes[0]*cam->camera_info.axes[1];
@@ -1006,10 +1007,15 @@ namespace Slicecam {
 
 
   std::vector<float> Camera::read_from_file(const std::string &extname) {
+    return{};
+  }
+  std::vector<float> Camera::read_from_file(const std::string &extname, long &ncols, long &nrows) {
     const char* function = "Slicecam::Camera::read_image";
     try {
-      std::unique_ptr<CCfits::FITS> pInfile(new CCfits::FITS(fitsinfo.fits_name, CCfits::Read, true));
+      std::unique_ptr<CCfits::FITS> pInfile(new CCfits::FITS(fitsinfo.fits_name, CCfits::Read, false));
       CCfits::ExtHDU& ext = pInfile->extension(extname);
+      ncols = ext.axis(0);
+      nrows = ext.axis(1);
       std::valarray<float> tmp;
       ext.read(tmp);
       return std::vector<float>(std::begin(tmp), std::end(tmp));
