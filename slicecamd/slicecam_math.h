@@ -17,9 +17,28 @@
 
 namespace Slicecam {
 
-  struct Point { double x = 0.0; double y = 0.0; };                      ///< pixel coordinate
-  struct Rect  { long x1 = 1; long x2 = 1; long y1 = 1; long y2 = 1; };  ///< rectangular region
-  struct World { double ra  = 0.0; double dec = 0.0; };                  ///< sky coordinates
+  struct Point {      ///< pixel coordinate
+    double x = 0.0; double y = 0.0;
+    bool is_valid() const noexcept {
+      return !std::isnan(x) && !std::isnan(y) &&
+             x >= 0.0 && y >= 0.0;
+    }
+  };
+
+  struct Rect  {      ///< rectangular region
+    long x1 = 1; long x2 = 1; long y1 = 1; long y2 = 1;
+    bool is_valid() const noexcept {
+      return x1>0 && x2>0 && y1>0 && y2>0 && x1 != x2 && y1 != y2;
+    }
+  };
+
+  struct World {      ///< sky coordinates
+    double ra  = 0.0; double dec = 0.0;
+    bool is_valid() const noexcept {
+      return !std::isnan(ra) && !std::isnan(dec) &&
+             ra >= 0.0 && dec >= 0.0;
+    }
+  };
 
   /***** Slicecam::Math *******************************************************/
   /**

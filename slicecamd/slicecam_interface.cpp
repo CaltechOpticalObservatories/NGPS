@@ -26,15 +26,18 @@ namespace Slicecam {
    *
    */
   long Interface::fineacquire(std::string args, std::string &retstring) {
-    const std::string function("Slicecam::Interface::fineacquire");
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::fineacquire";
+    std::ostringstream message;
 
     // Help
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_FINEACQUIRE;
-      retstring.append( " stop | start { L | R } | [ status ]\n" );
+      retstring.append( " stop | start [ { L | R } <x> <y> ] | [ status ]\n" );
       retstring.append( "   start or stop fine target acquisition.\n" );
-      retstring.append( "   L | R specifies which camera\n" );
+      retstring.append( "   aimpoint is optional and uses configuration by default, but\n" );
+      retstring.append( "   if specified must contain both L or R to specify which camera,\n" );
+      retstring.append( "   and aimpoint <x>, <y> coordinates, which may be fractional pixels.\n" );
+      retstring.append( "   No argument (or optional 'status') returns status.\n" );
       return HELP;
     }
 
@@ -66,7 +69,7 @@ namespace Slicecam {
 
     // not empty, stop or start is an error
     if (action != "start" || tokens.size() < 2) {
-      logwrite(function, "ERROR expected stop | start { L | R }");
+      logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
       retstring="invalid_argument";
       return ERROR;
     }
@@ -94,14 +97,34 @@ namespace Slicecam {
       return ERROR;
     }
 
-    const std::string which = tokens.at(1);
-    if (which != "L" && which != "R") {
-      logwrite(function, "ERROR expected stop | start { L | R }");
-      retstring="invalid_argument";
+    // <which> <x> <y> are optional but if specified then require all three
+    if (tokens.size() > 1 && tokens.size() != 4) {
+      logwrite(function, "ERROR ACAM is not guiding");
+      retstring="stopped";
       return ERROR;
     }
-
-    this->fineacquire_state.which = which;
+    else
+    // override the default camera and aimpoint if provided
+    if (tokens.size() > 1 && tokens.size() == 4) {
+      try {
+        const std::string which = tokens.at(1);
+        double x = std::stod(tokens.at(2));
+        double y = std::stod(tokens.at(3));
+        if ( (which != "L" && which != "R") ||
+             std::isnan(x) || std::isnan(y) || x<0 || y<0) {
+          logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
+          retstring="invalid_argument";
+          return ERROR;
+        }
+        this->fineacquire_state.which    = which;
+        this->fineacquire_state.aimpoint = { x, y };
+      }
+      catch (const std::exception &e) {
+        logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ] : "+std::string(e.what()));
+        retstring="invalid_argument";
+        return ERROR;
+      }
+    }
 
     // start the state machine
     this->fineacquire_state.reset();
@@ -131,7 +154,7 @@ namespace Slicecam {
    *
    */
   void Interface::do_fineacquire() {
-    const std::string function = "Slicecam::Interface::do_fineacquire";
+    const char* function = "Slicecam::Interface::do_fineacquire";
 
     // skip frames if we are waiting for the telescope to settle after a move
     //
@@ -281,8 +304,8 @@ namespace Slicecam {
    *
    */
   long Interface::bin( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::bin";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::bin";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -368,22 +391,24 @@ namespace Slicecam {
   /***** Slicecam::Interface::bin *********************************************/
 
 
+  /***** Slicecam::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      what to do when the topic is Topic::SLICECAMD
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    // If my name is in the jmessage then publish my snapshot
-    //
-    if ( jmessage.contains( Slicecam::DAEMON_NAME ) ) {
-      this->publish_snapshot();
-    }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Slicecam::Interface::handletopic_snapshot", jmessage.dump() );
-    }
+    if ( jmessage.contains(Topic::SLICECAMD) ) this->publish_snapshot();
   }
+  /***** Slicecam::Interface::handletopic_snapshot ****************************/
 
 
   /***** Slicecam::Interface::handletopic_acamd *******************************/
   /**
-   * @brief      handles Topic::ACAMD telemetry
+   * @brief      what to do when the topic is Topic::ACAMD
    * @param[in]  jmessage  subscribed-received JSON message
    *
    */
@@ -400,6 +425,13 @@ namespace Slicecam {
   /***** Slicecam::Interface::handletopic_acamd *******************************/
 
 
+  /***** Slicecam::Interface::handletopic_slitd *******************************/
+  /**
+   * @brief      what to do when the topic is Topic::SLITD
+   * @details    This receives tcs telemetry
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
@@ -411,8 +443,16 @@ namespace Slicecam {
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
   }
+  /***** Slicecam::Interface::handletopic_slitd *******************************/
 
 
+  /***** Slicecam::Interface::handletopic_tcsd ********************************/
+  /**
+   * @brief      what to do when the topic is Topic::TCSD
+   * @details    This receives tcs telemetry
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
     {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
@@ -433,21 +473,24 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
     Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
   }
+  /***** Slicecam::Interface::handletopic_tcsd ********************************/
 
 
   /***** Slicecam::Interface::publish_status **********************************/
   /**
    * @brief      publishes my important status on change
    * @details    This publishes a JSON message containing important telemetry.
+   * @param[in]  force  optional (default=false) forces publish irrespective of change
    *
    */
-  void Interface::publish_status() {
+  void Interface::publish_status(bool force) {
     const bool is_fineacquire_running_now = this->is_fineacquire_running.load();
     const bool is_fineacquire_locked_now  = this->is_fineacquire_locked.load();
 
-    // only publish if there was a change
+    // unless forced, only publish if there was a change
     //
-    if ( is_fineacquire_running_now == this->last_status.is_fineacquire_running &&
+    if ( !force &&
+         is_fineacquire_running_now == this->last_status.is_fineacquire_running &&
          is_fineacquire_locked_now  == this->last_status.is_fineacquire_locked) return;
 
     this->last_status.is_fineacquire_running = is_fineacquire_running_now;
@@ -477,6 +520,9 @@ namespace Slicecam {
    *
    */
   void Interface::publish_snapshot() {
+    // force-publish status
+    this->publish_status(true);
+
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
 
@@ -525,6 +571,8 @@ namespace Slicecam {
   /***** Slicecam::Interface::wait_for_snapshots ******************************/
   /**
    * @brief      wait for everyone to publish their snaphots
+   * @details    When forcing subscribers to publish their telemetry,
+   *             this waits until they have done so.
    *
    */
   bool Interface::wait_for_snapshots() {
@@ -549,7 +597,7 @@ namespace Slicecam {
       if (all_received) return true;
 
       if (std::chrono::steady_clock::now() - start_time > timeout) {
-        std::stringstream message;
+        std::ostringstream message;
         message << "ERROR timeout waiting for telemetry from:";
         for ( const auto &[topic,status] : snapshot_status ) {
           if (!status) message << " " << topic;
@@ -573,8 +621,8 @@ namespace Slicecam {
    *
    */
   long Interface::configure_interface( Config &config ) {
-    std::string function = "Slicecam::Interface::configure_interface";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::configure_interface";
+    std::ostringstream message;
     int applied=0;
     long error = NO_ERROR;
 
@@ -661,21 +709,21 @@ namespace Slicecam {
         logwrite( function, message.str() );
         applied++;
       }
-
+      else
       if ( starts_with( config.param[entry], "PUSH_GUI_SETTINGS" ) ) {
         this->gui_manager.set_push_settings( config.arg[entry] );
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;
       }
-
+      else
       if ( starts_with( config.param[entry], "PUSH_GUI_IMAGE" ) ) {
         this->gui_manager.set_push_image( config.arg[entry] );
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;
       }
-
+      else
       if ( starts_with( config.param[entry], "TCSD_PORT" ) ) {
         int port;
         try {
@@ -691,7 +739,7 @@ namespace Slicecam {
         logwrite( function, message.str() );
         applied++;
       }
-
+      else
       if ( config.param[entry] == "SKYSIM_IMAGE_SIZE" ) {
         try {
           this->camera.set_simsize( std::stoi( config.arg[entry] ) );
@@ -705,8 +753,38 @@ namespace Slicecam {
         logwrite( function, message.str() );
         applied++;
       }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_AIMPOINT=" ) {
+        std::string which;
+        double x,y;
+        std::istringstream iss(config.arg[entry]);
+        if (!(iss >> which >> x >> y)) {
+          logwrite(function, "ERROR invalid FINE_ACQUIRE_AIMPOINT='"+config.arg[entry]+"' expected <which> <x> <y>");
+          return ERROR;
+        }
+        this->fineacquire_state.which    = which;
+        this->fineacquire_state.aimpoint = { x, y };
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_BACKGROUND=" ) {
+        long x1, x2, y1, y2;
+        std::istringstream iss(config.arg[entry]);
+        if (!(iss >> x1 >> x2 >> y1 >> y2)) {
+          logwrite(function, "ERROR invalid FINE_ACQUIRE_BACKGROUND='"+config.arg[entry]+"' expected <x1> <x2> <y1> <y2>");
+          return ERROR;
+        }
+        this->fineacquire_state.bg_region = { x1, x2, y1, y2 };
+      }
 
     }
+
+    // FINE_ACQUIRE parameters must have been configured properly
+    //
+    if (!this->fineacquire_state.is_valid()) {
+      logwrite(function, "ERROR bad or missing FINE_ACQUIRE configuration");
+      return ERROR;
+    }
+
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());
 
@@ -724,8 +802,6 @@ namespace Slicecam {
    *
    */
   long Interface::open( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::open";
-    std::stringstream message;
 
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_OPEN;
@@ -785,8 +861,8 @@ namespace Slicecam {
    *
    */
   long Interface::isopen( std::string which, bool &state, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::isopen";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::isopen";
+    std::ostringstream message;
 
     // Help
     //
@@ -850,19 +926,22 @@ namespace Slicecam {
 
   /***** Slicecam::Interface::close *******************************************/
   /**
-   * @brief      closes slicecams
-   * @param[in]  args       optionally request help
-   * @param[out] retstring  contains return string for help
-   * @return     ERROR | NO_ERROR | HELP
+   * @brief      closes slicecams, internal use
    *
    */
   void Interface::close() {
     std::string dontcare;
     this->close("",dontcare);
   }
+  /***** Slicecam::Interface::close *******************************************/
+  /**
+   * @brief      closes slicecams
+   * @param[in]  args       optionally request help
+   * @param[out] retstring  contains return string for help
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
   long Interface::close( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::close";
-    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -895,8 +974,8 @@ namespace Slicecam {
    *
    */
   long Interface::tcs_init( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::tcs_init";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::tcs_init";
+    std::ostringstream message;
 
     // Send command to tcs daemon client. If help was requested then that
     // request is passed on here to tcsd.init() so this could return HELP.
@@ -979,7 +1058,7 @@ namespace Slicecam {
    *
    */
   long Interface::saveframes( std::string args, std::string &retstring ) {
-    const std::string function = "Slicecam::Interface::saveframes";
+    const char* function = "Slicecam::Interface::saveframes";
 
     // Help
     //
@@ -1032,8 +1111,8 @@ namespace Slicecam {
    *
    */
   long Interface::framegrab_fix( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::framegrab_fix";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::framegrab_fix";
+    std::ostringstream message;
 
     // Help
     //
@@ -1115,8 +1194,8 @@ namespace Slicecam {
    *
    */
   long Interface::framegrab( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::framegrab";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::framegrab";
+    std::ostringstream message;
     std::string _imagename = this->imagename;
 
     // Help
@@ -1222,8 +1301,8 @@ namespace Slicecam {
    *
    */
   void Interface::dothread_framegrab( const std::string whattodo, const std::string sourcefile ) {
-    std::string function = "Slicecam::Interface::dothread_framegrab";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::dothread_framegrab";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // For any whattodo that will take an image, when running the Andor emulator,
@@ -1377,7 +1456,7 @@ namespace Slicecam {
         return;
       }
 
-      std::stringstream fn;
+      std::ostringstream fn;
       fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << npreserve << ".fits";
 
       // increment until a unique file is found so that it never overwrites
@@ -1417,8 +1496,8 @@ namespace Slicecam {
    *
    */
   long Interface::gui_settings_control( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::gui_settings_control";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::gui_settings_control";
+    std::ostringstream message;
     auto info = this->camera.andor.begin()->second->camera_info;
 
     // Help
@@ -1613,8 +1692,8 @@ namespace Slicecam {
    *
    */
   void Interface::dothread_fpoffset( Slicecam::Interface &iface ) {
-    std::string function = "Slicecam::Interface::dothread_fpoffset";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::dothread_fpoffset";
+    std::ostringstream message;
 
     message.str(""); message << "calling fpoffsets.compute_offset() from thread: PyGILState=" << PyGILState_Check();
     logwrite( function, message.str() );
@@ -1642,7 +1721,7 @@ namespace Slicecam {
    *
    */
   long Interface::offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire) {
-    const std::string function("Slicecam::Interface::offset_acam_goal");
+    const char* function = "Slicecam::Interface::offset_acam_goal";
 
     auto [ra_off, dec_off] = offsets;  // local copy
 
@@ -1659,7 +1738,7 @@ namespace Slicecam {
     if ( is_guiding ) {
       // Send to acamd if guiding
       //
-      std::stringstream cmd;
+      std::ostringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
 
       // add fineguiding arg when used for fine acquisition mode
@@ -1709,8 +1788,8 @@ namespace Slicecam {
    *
    */
   long Interface::put_on_slit( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::put_on_slit";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::put_on_slit";
+    std::ostringstream message;
 
     // Help
     //
@@ -1777,8 +1856,8 @@ namespace Slicecam {
    *
    */
   long Interface::shutdown( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::shutdown";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::shutdown";
+    std::ostringstream message;
 
     // Help
     //
@@ -1814,7 +1893,7 @@ namespace Slicecam {
    *
    */
   long Interface::shutter(const std::string args, std::string &retstring) {
-    const std::string function("Slicecam::Interface::shutter");
+    const char* function("Slicecam::Interface::shutter");
 
     // Help
     if ( args == "?" || args == "help" ) {
@@ -1870,8 +1949,8 @@ namespace Slicecam {
    *
    */
   long Interface::test( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::test";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::test";
+    std::ostringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
@@ -2179,8 +2258,8 @@ namespace Slicecam {
    *
    */
   long Interface::exptime( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::exptime";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::exptime";
+    std::ostringstream message;
 
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_EXPTIME;
@@ -2256,8 +2335,8 @@ namespace Slicecam {
    *
    */
   long Interface::fan_mode( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::fan_mode";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::fan_mode";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -2351,8 +2430,8 @@ namespace Slicecam {
    *
    */
   long Interface::gain( std::string args, std::string &retstring ) {
-    std::string function = "Slicecam::Interface::gain";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::gain";
+    std::ostringstream message;
     long error = NO_ERROR;
     int gain = -999;
 
@@ -2459,8 +2538,8 @@ namespace Slicecam {
    *
    */
   long Interface::collect_header_info( std::unique_ptr<Andor::Interface> &slicecam ) {
-    std::string function = "Slicecam::Interface::collect_header_info";
-    std::stringstream message;
+    const char* function = "Slicecam::Interface::collect_header_info";
+    std::ostringstream message;
 
     std::string cam = slicecam->camera_info.camera_name;
 

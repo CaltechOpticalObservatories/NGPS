@@ -58,6 +58,25 @@ PUSH_GUI_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_slicev.sh
 #
 PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 
+# FINE_ACQUIRE_AIMPOINT=( <which> <x> <y> )
+# camera and location of aimpoint for fine acquisition
+#   <which>  which camera must be { L R }
+#   <x>      x-coordinate (col)
+#   <y>      y-coordinate (row)
+# aimpoint x,y may be fractional
+#
+FINE_ACQUIRE_AIMPOINT=(L 150.0 115.5)
+
+# FINE_ACQUIRE_BACKGROUND=(<x1> <x2> <y1> <y2>)
+# defines the bounds of the region for background coorection
+# for fine acquisition centroiding
+#   <x1>  x-coordinate lower left
+#   <x2>  x-coordinate lower right
+#   <y1>  y-coordinate upper left
+#   <y2>  y-coordinate upper right
+#
+FINE_ACQUIRE_BACKGROUND=(80 165 30 210)
+
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
 # Sets the keyword argument "IMAGE_SIZE=<is>"

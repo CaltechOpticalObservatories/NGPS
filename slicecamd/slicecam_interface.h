@@ -80,17 +80,20 @@ namespace Slicecam {
    *                 after a commanded move
    */
   struct FineAcqState {
-    std::string which      = "L";
-    Point       aimpoint   = { 150.0, 115.5 };      ///< 1-based pixel aim point
-    Rect        bg_region  = { 80, 165, 30, 210 };  ///< background ROI (1-based)
-    std::vector<double> dra_samp;                   ///< dRA*cos(dec) samples, degrees
-    std::vector<double> ddec_samp;                  ///< dDEC samples, degrees
-    int    max_samples  = 10;    ///< samples before evaluating a move
-    double goal_arcsec  = 0.3;   ///< convergence threshold, arcsec
-    double gain         = 0.7;   ///< gain applied to commanded offset
-    int    skip_frames  = 0;     ///< frames to skip after a telescope move
+    std::string which;
+    Point       aimpoint;           ///< 1-based pixel aim point
+    Rect        bg_region;          ///< background ROI (1-based)
+    std::vector<double> dra_samp;   ///< dRA*cos(dec) samples, degrees
+    std::vector<double> ddec_samp;  ///< dDEC samples, degrees
+    int    max_samples  = 10;       ///< samples before evaluating a move
+    double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
+    double gain         = 0.7;      ///< gain applied to commanded offset
+    int    skip_frames  = 0;        ///< frames to skip after a telescope move
 
     void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0; }
+    bool is_valid() const noexcept {
+      return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
+    }
   };
   /***** Slicecam::FineAcqState ***********************************************/
 
@@ -235,7 +238,7 @@ namespace Slicecam {
       void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
-      void publish_status();
+      void publish_status(bool force=false);
       void publish_snapshot();
       void request_snapshot();
       bool wait_for_snapshots();
