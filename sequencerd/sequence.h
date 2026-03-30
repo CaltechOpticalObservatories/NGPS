@@ -291,6 +291,12 @@ namespace Sequencer {
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
+      struct Operation {
+        std::string name;
+        ThreadStatusBits thr;
+        std::function<long()> func;
+      };
+
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
       void safe_thread(long (Sequence::*method)(), const std::string &function) {
@@ -456,6 +462,11 @@ namespace Sequencer {
       float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
       float slitwidthacquire;   ///< "virtual slit mode" width for acquire
 
+      // new stuff
+      long run(const Operation &op, const std::string &function);
+      long run_parallel(const std::vector<Operation> &ops, const std::string &function);
+      long run_default_sequence(const std::string &caller);
+
       // publish/subscribe functions
       //
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {
@@ -560,7 +571,9 @@ namespace Sequencer {
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
 
       void dothread_test();
-      long wait_for_user();          ///< wait for the user or cancel
+      long wait_for_user(const std::string &function);      ///< wait for the user or cancel
+      long wait_for_exposure(const std::string &function);  ///< wait for exposure completion or cancel
+      long wait_for_readout(const std::string &function);   ///< wait for readout completion or cancel
       void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
