@@ -20,49 +20,88 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::run ********************************************/
   /**
-   * @brief      
-   * @param[in]  op        Operation
-   * @param[in]  function  function name of operation for logging
+   * @brief      executes a single operation
+   * @param[in]  op      Operation
+   * @param[in]  caller  name of calling function for logging
+   * @return     ERROR|NO_ERROR|ABORT
    *
    */
   long Sequence::run( const Operation &op,
-                      const std::string &function ) {
+                      const std::string &caller ) {
     long error=NO_ERROR;
     try {
       error = op.func();
 
       if (error != NO_ERROR) {
-        this->async.enqueue_and_log(function, "ERROR in "+op.name);
+        this->async.enqueue_and_log(caller, "ERROR in "+op.name);
       }
     }
     catch (const std::exception &e) {
-      logwrite(function, "ERROR in "+op.name+": "+e.what());
+      logwrite(caller, "ERROR in "+op.name+": "+e.what());
     }
     return error;
   }
   /***** Sequencer::Sequence::run ********************************************/
 
 
+  /***** Sequencer::Sequence::run_sequence ***********************************/
+  /**
+   * @brief      executes operations in sequence, one at a time
+   * @param[in]  op      vector of Operations to execute
+   * @param[in]  caller  name of calling function for logging
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::run_sequence( const std::vector<Operation> &ops,
+                               const std::string &caller ) {
+
+    for (const auto &op : ops) {
+
+      if (this->cancel_flag.load()) return ABORT;
+
+      logwrite(caller, "starting "+op.name);
+
+      try {
+      long error;
+        if ( (error = op.func()) != NO_ERROR ) {
+          std::ostringstream oss;
+          oss << (error==ABORT ? "cancelled" : "ERROR") << " in " << op.name;
+          logwrite(caller, oss.str());
+          return error;
+        }
+      }
+      catch (const std::exception &e) {
+        logwrite(caller, "ERROR in "+op.name+": "+std::string(e.what()));
+        return ERROR;
+      }
+    }
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::run_sequence ***********************************/
+
+
   /***** Sequencer::Sequence::run_parallel ***********************************/
   /**
-   * @brief      
-   * @param[in]  op        Operation
-   * @param[in]  function  function name of operation for logging
+   * @brief      executes operations in parallel threads
+   * @details    This will return only when all have completed.
+   * @param[in]  op      vector of Operations to execute
+   * @param[in]  caller  name of calling function for logging
+   * @return     ERROR|NO_ERROR|ABORT
    *
    */
   long Sequence::run_parallel( const std::vector<Operation> &ops,
-                               const std::string &function ) {
+                               const std::string &caller ) {
 
     // start a thread for each operation
     //
     std::vector<std::future<long>> futures;
     for (const auto &op : ops) {
-      futures.emplace_back(std::async(std::launch::async, [this, &op, function]() {
+      futures.emplace_back(std::async(std::launch::async, [this, &op, caller]() {
         try {
           return op.func();
         }
         catch (const std::exception &e) {
-          logwrite(function, "ERROR in "+op.name+": "+e.what());
+          logwrite(caller, "ERROR in "+op.name+": "+e.what());
           return ERROR;
         }
       }));
@@ -75,10 +114,10 @@ namespace Sequencer {
     for (size_t i=0; i<ops.size(); ++i) {
       try {
         error |= futures[i].get(); // wait for this worker to finish
-        logwrite(function, "NOTICE: worker "+ops[i].name+" completed");
+        logwrite(caller, "NOTICE: worker "+ops[i].name+" completed");
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR waiting for worker "+ops[i].name+": "+e.what() );
+        logwrite( caller, "ERROR waiting for worker "+ops[i].name+": "+e.what() );
         return ERROR;
       }
     }
@@ -88,32 +127,44 @@ namespace Sequencer {
 
 
   /***** Sequencer::Sequence::run_default_sequence ***************************/
+  /**
+   * @brief      executes a default observation sequence
+   * @param[in]  caller  name of calling function for logging
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
   long Sequence::run_default_sequence(const std::string &caller) {
 
     long error = NO_ERROR;
 
-    std::vector<Operation> ops;
+    std::vector<Operation> par_ops;
 
+    // If pointmode is ACAM then the user has chosen to put the star on ACAM, in
+    // which case the assumption is made that nothing else matters. This special
+    // mode of operation only points the telescope.
+    //
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
-      ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } };
+      par_ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } };
     }
     else {
       this->target.pointmode = Acam::POINTMODE_SLIT;
 
+      // ---------- RUN THESE IN PARALLEL ------------------
+
       // these are the default operations prior to exposure,
       // they can be done in parallel
-      ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
-              { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
-              { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
-              { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
-              { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
-              { "slit_set",       THR_SLIT_SET,
-                                  [this]{ return slit_set(this->target.iscal ? VSM_DATABASE : VSM_ACQUIRE); } } };
+      par_ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
+                  { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
+                  { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
+                  { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
+                  { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
+                  { "slit_set",       THR_SLIT_SET,
+                                      [this]{ return slit_set(this->target.iscal ? VSM_DATABASE : VSM_ACQUIRE); } } };
     }
 
-    // wait for threads
-    error = run_parallel(ops, caller);
+    // execute in parallel threads and wait for completion
+    error = run_parallel(par_ops, caller);
 
     // early exit on error
     if (error != NO_ERROR) return error;
@@ -131,80 +182,89 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
+    // ---------- RUN THESE IN SERIES ----------------------
+
+    std::vector<Operation> seq_ops;
+
     // if not a calibration target then acquire, first acam then slicecam
     if (!this->target.iscal) {
 
       // ---------- TARGET ACQUISITION ---------------------
 
-      // start ACAM acquisition. If it fails then wait for user to continue or cancel.
-      if ( this->do_acam_acquire() != NO_ERROR ) {
+      seq_ops.push_back( { "acam_acquire", THR_ACQUISITION,
+          [this,caller]() {
 
-        this->async.enqueue_and_log( caller, "WARNING acam acquisition failed" );
+          // start ACAM acquisition.
+          if ( this->do_acam_acquire() != NO_ERROR ) {
 
-        if (this->wait_for_user(caller)==ABORT) {
-          this->async.enqueue_and_log( caller, "NOTICE: cancelled" );
-          return ABORT;
-        }
-      }
-      else
-      // start SLICECAM fine acquisition
-      if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+            this->async.enqueue_and_log( caller, "WARNING acam acquisition failed" );
 
-        this->async.enqueue_and_log( caller, "WARNING slicecam fine acquisition failed" );
-      }
+            // If acquisition fails, wait for user to continue or cancel.
+            if (this->wait_for_user(caller)==ABORT) {
+              this->async.enqueue_and_log( caller, "NOTICE: cancelled" );
+              return ABORT;
+            }
+          }
+          else
+          // ACAM acquire success, start SLICECAM fine acquisition
+          if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+
+            // slicecam fine acquire failure is not fatal
+            this->async.enqueue_and_log( caller, "WARNING slicecam fine acquisition failed" );
+          }
+      } } );
 
       // ---------- TARGET OFFSETS -------------------------
 
-      // send offsets. wait for user if that fails or cancelled
-      if (this->target_offset() == ERROR) {
+      seq_ops.push_back( { "target_offset", THR_MOVE_TO_TARGET,
+          [this,caller]() {
 
-        if (this->wait_for_user(caller)==ABORT) {
-          this->async.enqueue_and_log(caller, "NOTICE: cancelled");
-          return ABORT;
-        }
-      }
+          // send offsets. wait for user if that fails or cancelled
+          if (this->target_offset() == ERROR) {
+
+            if (this->wait_for_user(caller)==ABORT) {
+              this->async.enqueue_and_log(caller, "NOTICE: cancelled");
+              return ABORT;
+            }
+          }
+      } } );
 
       // ---------- SLIT POSITON FOR EXPOSE ----------------
 
-      // ensure slit offset is in "expose" position when needed
-      try {
-        error |= this->slit_set(Sequencer::VSM_EXPOSE);
-      }
-      catch (const std::exception &e) {
-        logwrite(caller, "ERROR slit offset exception: "+std::string(e.what()));
-        return ERROR;
-      }
+      seq_ops.push_back( { "slit_expose", THR_SLIT_SET,
+          [this]() {
+          // This was moved to VSM_ACQUIRE initially, then VSM_EXPOSE after acquisition.
+          return this->slit_set(Sequencer::VSM_EXPOSE);
+      } } );
     }
+    // end if iscal
 
     // ---------- EXPOSURE ---------------------------------
 
-    logwrite(caller, "starting exposure");
+    seq_ops.push_back( { "trigger_exposure", THR_TRIGGER_EXPOSURE,
+        [this, caller]() {
 
-    // Start the exposure in a thread...
-    // set the EXPOSE bit here, outside of the trigger_exposure function, because that
-    // function only triggers the exposure -- it doesn't block waiting for the exposure.
-    //
-    this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
-    auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
-    try {
-      error = start_exposure.get();
-    }
-    catch (const std::exception& e) {
-      logwrite( caller, "ERROR start_exposure exception: "+std::string(e.what()) );
-      return ERROR;
-    }
+        logwrite(caller, "starting exposure");
 
-    // wait for the exposure to end (naturally or cancelled)
-    //
-    logwrite( caller, "waiting for exposure" );
-    if (error==NO_ERROR) error = this->wait_for_exposure(caller);
+        // Start the exposure in a thread...
+        // set the EXPOSE bit here, outside of the trigger_exposure function, because that
+        // function only triggers the exposure -- it doesn't block waiting for the exposure.
+        //
+        this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
+        auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
+        long ret = start_exposure.get();
 
-    // If not using frame transfer then wait for readout, too
-    //
-    if (error==NO_ERROR && !this->is_science_frame_transfer) {
-      logwrite( caller, "waiting for readout" );
-      error = this->wait_for_readout(caller);
-    }
+        if (ret==NO_ERROR) ret = this->wait_for_exposure(caller);
+
+        if (ret==NO_ERROR && !this->is_science_frame_transfer) {
+          ret = this->wait_for_readout(caller);
+        }
+        return ret;
+    } } );
+
+    // ---------- RUN THE SEQUENCE NOW ---------------------
+
+    error = run_sequence(seq_ops, caller);
 
     return error;
   }
@@ -645,6 +705,7 @@ namespace Sequencer {
    *
    */
   long Sequence::wait_for_exposure(const std::string &caller) {
+    logwrite(caller, "waiting for exposure");
     while (!this->cancel_flag.load() &&
            wait_state_manager.is_set(Sequencer::SEQ_WAIT_EXPOSE)) {
       std::unique_lock<std::mutex> lock(cv_mutex);
@@ -670,6 +731,7 @@ namespace Sequencer {
    *
    */
   long Sequence::wait_for_readout(const std::string &caller) {
+    logwrite(caller, "waiting for readout");
     while (!this->cancel_flag.load() &&
            wait_state_manager.is_set(Sequencer::SEQ_WAIT_READOUT)) {
       std::unique_lock<std::mutex> lock(cv_mutex);
@@ -703,7 +765,7 @@ namespace Sequencer {
    */
   void Sequence::sequence_start(std::string obsid_in="") {
     const std::string function("Sequencer::Sequence::sequence_start");
-    std::stringstream message;
+    std::ostringstream message;
     std::string reply;
     std::string targetstatus;
     TargetInfo::TargetState targetstate;
@@ -793,7 +855,9 @@ namespace Sequencer {
 
         // let the world know of the state change
         //
-        message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
+        message.str(""); message << "TARGETSTATE:" << this->target.state
+                                 << " TARGET:" << this->target.name
+                                 << " OBSID:" << this->target.obsid;
         this->async.enqueue( message.str() );
 #ifdef LOGLEVEL_DEBUG
         logwrite( function, "[DEBUG] target found, starting threads" );
