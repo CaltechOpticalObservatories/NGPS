@@ -464,6 +464,7 @@ namespace Sequencer {
 
       // new stuff
       long run(const Operation &op, const std::string &function);
+      long run_sequence(const std::vector<Operation> &ops, const std::string &function);
       long run_parallel(const std::vector<Operation> &ops, const std::string &function);
       long run_default_sequence(const std::string &caller);
 
