@@ -29,6 +29,8 @@ namespace Sequencer {
   long Sequence::run( const Operation &op,
                       const std::string &caller ) {
     long error=NO_ERROR;
+    logwrite(caller, "starting "+op.name);
+
     try {
       error = op.func();
 
@@ -38,6 +40,7 @@ namespace Sequencer {
     }
     catch (const std::exception &e) {
       logwrite(caller, "ERROR in "+op.name+": "+e.what());
+      error = ERROR;
     }
     return error;
   }
@@ -92,38 +95,81 @@ namespace Sequencer {
   long Sequence::run_parallel( const std::vector<Operation> &ops,
                                const std::string &caller ) {
 
+    std::vector<std::future<long>> futures;
+
     // start a thread for each operation
     //
-    std::vector<std::future<long>> futures;
     for (const auto &op : ops) {
-      futures.emplace_back(std::async(std::launch::async, [this, &op, caller]() {
-        try {
-          return op.func();
-        }
-        catch (const std::exception &e) {
-          logwrite(caller, "ERROR in "+op.name+": "+e.what());
-          return ERROR;
-        }
-      }));
+      futures.emplace_back(std::async(std::launch::async, op.func));
     }
 
-    long error=NO_ERROR;
+    long error = NO_ERROR;
 
-    // wait for each thread to complete
+    // wait for all threads, collect errors
     //
-    for (size_t i=0; i<ops.size(); ++i) {
+    for (size_t i=0; i < futures.size(); ++i) {
       try {
-        error |= futures[i].get(); // wait for this worker to finish
-        logwrite(caller, "NOTICE: worker "+ops[i].name+" completed");
+        error |= futures[i].get();
+        logwrite(caller, "completed "+ops[i].name);
       }
-      catch (const std::exception& e) {
-        logwrite( caller, "ERROR waiting for worker "+ops[i].name+": "+e.what() );
-        return ERROR;
+      catch (const std::exception &e) {
+        logwrite(caller, "ERROR in "+ops[i].name+": "+e.what());
+        error |= ERROR;
       }
     }
+
     return error;
   }
   /***** Sequencer::Sequence::run_parallel ***********************************/
+
+
+  /***** Sequencer::Sequence::run_operation_blocks ***************************/
+  /**
+   * @brief      executes operation blocks
+   * @details    An operation block contains a vector of operations paired
+   *             with a type, SERIAL|PARALLEL which specifies how that block
+   *             is to be executed. This executes a vector of Operation Blocks.
+   *             The optional continue_on_error allows a block to continue, or
+   *             stop immediately when any operation within the block fails.
+   * @param[in]  blocks             vector of OperationBlocks
+   * @param[in]  caller             name of calling function for logging
+   * @param[in]  continue_on_error  continue or stop block execution on error
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::run_operation_blocks( const std::vector<OperationBlock> &blocks,
+                                       const std::string &caller,
+                                       bool continue_on_error ) {
+    long error = NO_ERROR;
+
+    for (const auto &block : blocks) {
+      if (this->cancel_flag.load()) return ABORT;
+
+      // PARALLEL Blocks are executed in parallel threads
+      //
+      if (block.type == OperationType::PARALLEL) {
+        long ret = run_parallel(block.operations, caller);
+        error |= ret;
+
+        if (ret != NO_ERROR && !continue_on_error) return error;
+      }
+      // SERIAL Blocks are executed one at a time
+      //
+      else {
+        for (const auto &op : block.operations) {
+          if (this->cancel_flag.load()) return ABORT;
+
+          long ret = run(op, caller);
+          error |= ret;
+
+          if (ret != NO_ERROR && !continue_on_error) return error;
+        }
+      }
+    }
+
+    return error;
+  }
+  /***** Sequencer::Sequence::run_operation_blocks ***************************/
 
 
   /***** Sequencer::Sequence::run_default_sequence ***************************/
@@ -135,9 +181,9 @@ namespace Sequencer {
    */
   long Sequence::run_default_sequence(const std::string &caller) {
 
-    long error = NO_ERROR;
+    std::vector<OperationBlock> blocks;
 
-    std::vector<Operation> par_ops;
+    // ---------- RUN THESE IN PARALLEL --------------------
 
     // If pointmode is ACAM then the user has chosen to put the star on ACAM, in
     // which case the assumption is made that nothing else matters. This special
@@ -145,128 +191,113 @@ namespace Sequencer {
     //
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
-      par_ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } };
+      blocks.push_back( { OperationType::PARALLEL,
+                        { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
       this->target.pointmode = Acam::POINTMODE_SLIT;
 
-      // ---------- RUN THESE IN PARALLEL ------------------
-
       // these are the default operations prior to exposure,
       // they can be done in parallel
-      par_ops = { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
-                  { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
-                  { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
-                  { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
-                  { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
-                  { "slit_set",       THR_SLIT_SET,
-                                      [this]{ return slit_set(this->target.iscal ? VSM_DATABASE : VSM_ACQUIRE); } } };
+      blocks.push_back( { OperationType::PARALLEL,
+                        { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
+                          { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
+                          { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
+                          { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
+                          { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
+                          { "slit_set",       THR_SLIT_SET,
+                                              [this]{ return slit_set(this->target.iscal ? VSM_DATABASE : VSM_ACQUIRE); } } } } );
     }
 
-    // execute in parallel threads and wait for completion
-    error = run_parallel(par_ops, caller);
-
-    // early exit on error
-    if (error != NO_ERROR) return error;
-
-    if (this->cancel_flag.load()) return ABORT;
-
-    // ---------- POINTMODE-ACAM EXIT ----------------------
-
-    // If pointmode is ACAM then the user has chosen to put the star on ACAM, in
-    // which case the assumption is made that nothing else matters. This special
-    // mode of operation only points the telescope.
+    // Early Exit for pointmode=ACAM
     //
-    if ( this->target.pointmode == Acam::POINTMODE_ACAM ) {
-      this->async.enqueue_and_log(caller, "NOTICE: target list processing has stopped");
-      return NO_ERROR;
+    if (this->target.pointmode == Acam::POINTMODE_ACAM) {
+      return run_operation_blocks(blocks, caller);
     }
 
     // ---------- RUN THESE IN SERIES ----------------------
-
-    std::vector<Operation> seq_ops;
 
     // if not a calibration target then acquire, first acam then slicecam
     if (!this->target.iscal) {
 
       // ---------- TARGET ACQUISITION ---------------------
 
-      seq_ops.push_back( { "acam_acquire", THR_ACQUISITION,
-          [this,caller]() {
+      blocks.push_back( { OperationType::SERIAL,
+          { { "acam_acquire", THR_ACQUISITION, [this,caller]() {
 
-          // start ACAM acquisition.
-          if ( this->do_acam_acquire() != NO_ERROR ) {
-
-            this->async.enqueue_and_log( caller, "WARNING acam acquisition failed" );
-
-            // If acquisition fails, wait for user to continue or cancel.
-            if (this->wait_for_user(caller)==ABORT) {
-              this->async.enqueue_and_log( caller, "NOTICE: cancelled" );
-              return ABORT;
+            // if ACAM acquisition fails, wait for user to continue or cancel
+            if ( this->do_acam_acquire() != NO_ERROR ) {
+              return this->wait_for_user(caller);
             }
-          }
-          else
-          // ACAM acquire success, start SLICECAM fine acquisition
-          if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+            else return NO_ERROR;
+            } },
 
-            // slicecam fine acquire failure is not fatal
-            this->async.enqueue_and_log( caller, "WARNING slicecam fine acquisition failed" );
+            { "slicecam_fineacquire", THR_ACQUISITION, [this,caller]() {
+            if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+              this->async.enqueue_and_log(caller, "WARNING slicecam fine acquisition failed");
+            }
+            return NO_ERROR; // slicecam fine acquire is never fatal
+            } }
           }
-      } } );
+          } );
+    }
+
+    if (!this->target.iscal) {
 
       // ---------- TARGET OFFSETS -------------------------
 
-      seq_ops.push_back( { "target_offset", THR_MOVE_TO_TARGET,
-          [this,caller]() {
+      blocks.push_back( { OperationType::SERIAL,
+          { { "target_offset", THR_MOVE_TO_TARGET, [this,caller]() {
 
-          // send offsets. wait for user if that fails or cancelled
-          if (this->target_offset() == ERROR) {
-
-            if (this->wait_for_user(caller)==ABORT) {
-              this->async.enqueue_and_log(caller, "NOTICE: cancelled");
-              return ABORT;
+            // if offsets fail, wait for user to continue or cancel
+            if (this->target_offset() != NO_ERROR) {
+              return this->wait_for_user(caller);
             }
+            else return NO_ERROR;
+            } }
           }
-      } } );
+          } );
+    }
+
+    if (!this->target.iscal) {
 
       // ---------- SLIT POSITON FOR EXPOSE ----------------
 
-      seq_ops.push_back( { "slit_expose", THR_SLIT_SET,
-          [this]() {
-          // This was moved to VSM_ACQUIRE initially, then VSM_EXPOSE after acquisition.
-          return this->slit_set(Sequencer::VSM_EXPOSE);
-      } } );
+      blocks.push_back( { OperationType::SERIAL,
+          { { "slit_expose", THR_SLIT_SET, [this]() {
+            return this->slit_set(Sequencer::VSM_EXPOSE); } }
+          }
+          } );
     }
-    // end if iscal
 
     // ---------- EXPOSURE ---------------------------------
 
-    seq_ops.push_back( { "trigger_exposure", THR_TRIGGER_EXPOSURE,
-        [this, caller]() {
+    blocks.push_back( { OperationType::SERIAL,
+        { { "trigger_exposure", THR_EXPOSURE, [this]() {
 
-        logwrite(caller, "starting exposure");
+          // set the EXPOSE bit here, outside of the trigger_exposure function, because that
+          // function only triggers the exposure -- it doesn't block waiting for the exposure.
+          //
+          this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
+          return trigger_exposure();
+          } },
 
-        // Start the exposure in a thread...
-        // set the EXPOSE bit here, outside of the trigger_exposure function, because that
-        // function only triggers the exposure -- it doesn't block waiting for the exposure.
-        //
-        this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
-        auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
-        long ret = start_exposure.get();
+          { "wait_exposure", THR_EXPOSURE, [this,caller]() {
+          return this->wait_for_exposure(caller);
+          } },
 
-        if (ret==NO_ERROR) ret = this->wait_for_exposure(caller);
-
-        if (ret==NO_ERROR && !this->is_science_frame_transfer) {
-          ret = this->wait_for_readout(caller);
+          { "wait_readout", THR_EXPOSURE, [this,caller]() {
+          if (!this->is_science_frame_transfer) {
+            return this->wait_for_readout(caller);
+          }
+          else return NO_ERROR;
+          } }
         }
-        return ret;
-    } } );
+    } );
 
     // ---------- RUN THE SEQUENCE NOW ---------------------
 
-    error = run_sequence(seq_ops, caller);
-
-    return error;
+    return run_operation_blocks(blocks, caller);
   }
   /***** Sequencer::Sequence::run_default_sequence ***************************/
 
@@ -4843,7 +4874,6 @@ namespace Sequencer {
         return( ERROR );
       }
 
-      bool ispower = false;
       std::string reply;
 
       // power module must be initialized before any others. If this is not

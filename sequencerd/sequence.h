@@ -188,6 +188,7 @@ namespace Sequencer {
   enum ThreadStatusBits : size_t {
     THR_SEQUENCER_ASYNC_LISTENER=0,
     THR_TRIGGER_EXPOSURE,
+    THR_EXPOSURE,
     THR_REPEAT_EXPOSURE,
     THR_STOP_EXPOSURE,
     THR_ABORT_PROCESS,
@@ -232,6 +233,7 @@ namespace Sequencer {
   const std::map<size_t, std::string> thread_names = {
     {THR_SEQUENCER_ASYNC_LISTENER, "async_listener"},
     {THR_TRIGGER_EXPOSURE,         "trigger_exposure"},
+    {THR_EXPOSURE,                 "exposure"},
     {THR_REPEAT_EXPOSURE,          "repeat_exposure"},
     {THR_STOP_EXPOSURE,            "stop_exposure"},
     {THR_ABORT_PROCESS,            "abort_process"},
@@ -291,10 +293,21 @@ namespace Sequencer {
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
+      enum class OperationType {
+        PARALLEL,
+        SERIAL
+      };
+
       struct Operation {
-        std::string name;
-        ThreadStatusBits thr;
-        std::function<long()> func;
+        std::string name;                           ///< name of this operation
+        ThreadStatusBits thr;                       ///< status bit of what is running
+        std::function<long()> func;                 ///< function that this operation calls
+        std::map<std::string, std::string> params;  ///< function parameters
+      };
+
+      struct OperationBlock {
+        OperationType type;
+        std::vector<Operation> operations;
       };
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
@@ -467,6 +480,9 @@ namespace Sequencer {
       long run_sequence(const std::vector<Operation> &ops, const std::string &function);
       long run_parallel(const std::vector<Operation> &ops, const std::string &function);
       long run_default_sequence(const std::string &caller);
+      long run_operation_blocks( const std::vector<OperationBlock> &blocks,
+                                       const std::string &caller,
+                                       bool continue_on_error=false );
 
       // publish/subscribe functions
       //
