@@ -1043,7 +1043,7 @@ namespace Sequencer {
     }
 
     while (1) {
-      std::string message = seq.sequence.async.dequeue();     // get the latest message from the queue (blocks)
+      auto message = seq.sequence.async.dequeue();            // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
         std::stringstream errstm;

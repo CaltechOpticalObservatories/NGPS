@@ -312,7 +312,7 @@ namespace Sequencer {
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
-      void safe_thread(long (Sequence::*method)(), const std::string &function) {
+      void safe_thread(long (Sequence::*method)(), std::string_view function) {
         std::thread([this, method, function]() {
           try {
             (this->*method)();
@@ -476,12 +476,12 @@ namespace Sequencer {
       float slitwidthacquire;   ///< "virtual slit mode" width for acquire
 
       // new stuff
-      long run(const Operation &op, const std::string &function);
-      long run_sequence(const std::vector<Operation> &ops, const std::string &function);
-      long run_parallel(const std::vector<Operation> &ops, const std::string &function);
-      long run_default_sequence(const std::string &caller);
+      long run(const Operation &op, std::string_view function);
+      long run_sequence(const std::vector<Operation> &ops, std::string_view function);
+      long run_parallel(const std::vector<Operation> &ops, std::string_view function);
+      long run_default_sequence(std::string_view caller);
       long run_operation_blocks( const std::vector<OperationBlock> &blocks,
-                                       const std::string &caller,
+                                       std::string_view caller,
                                        bool continue_on_error=false );
 
       // publish/subscribe functions
@@ -543,7 +543,7 @@ namespace Sequencer {
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
       long parse_calibration_target();
-      long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
+      long parse_state( std::string_view whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
@@ -588,9 +588,12 @@ namespace Sequencer {
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
 
       void dothread_test();
-      long wait_for_user(const std::string &function);      ///< wait for the user or cancel
-      long wait_for_exposure(const std::string &function);  ///< wait for exposure completion or cancel
-      long wait_for_readout(const std::string &function);   ///< wait for readout completion or cancel
+      long wait_for_ontarget(std::string_view caller);  ///< wait for TCS Operator
+      long wait_for_user(std::string_view caller);      ///< wait for the user or cancel
+      long wait_for_exposure(std::string_view caller);  ///< wait for exposure completion or cancel
+      long wait_for_readout(std::string_view caller);   ///< wait for readout completion or cancel
+      long wait_for_canexpose(std::string_view caller); ///< wait for camera can_expose
+
       void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
@@ -605,6 +608,8 @@ namespace Sequencer {
        */
       long do_acam_acquire();
       long do_slicecam_fineacquire();
+      long do_target_acquisition(std::string_view caller);
+      long do_target_virtualslit(VirtualSlitMode mode);
 
 
       long acam_init();                                        ///< initializes connection to acamd
