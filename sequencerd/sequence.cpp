@@ -27,7 +27,7 @@ namespace Sequencer {
    *
    */
   long Sequence::run( const Operation &op,
-                      const std::string &caller ) {
+                      std::string_view caller ) {
     long error=NO_ERROR;
     logwrite(caller, "starting "+op.name);
 
@@ -56,7 +56,7 @@ namespace Sequencer {
    *
    */
   long Sequence::run_sequence( const std::vector<Operation> &ops,
-                               const std::string &caller ) {
+                               std::string_view caller ) {
 
     for (const auto &op : ops) {
 
@@ -93,7 +93,7 @@ namespace Sequencer {
    *
    */
   long Sequence::run_parallel( const std::vector<Operation> &ops,
-                               const std::string &caller ) {
+                               std::string_view caller ) {
 
     std::vector<std::future<long>> futures;
 
@@ -138,7 +138,7 @@ namespace Sequencer {
    *
    */
   long Sequence::run_operation_blocks( const std::vector<OperationBlock> &blocks,
-                                       const std::string &caller,
+                                       std::string_view caller,
                                        bool continue_on_error ) {
     long error = NO_ERROR;
 
@@ -179,7 +179,7 @@ namespace Sequencer {
    * @return     ERROR|NO_ERROR|ABORT
    *
    */
-  long Sequence::run_default_sequence(const std::string &caller) {
+  long Sequence::run_default_sequence(std::string_view caller) {
 
     std::vector<OperationBlock> blocks;
 
@@ -200,13 +200,14 @@ namespace Sequencer {
       // these are the default operations prior to exposure,
       // they can be done in parallel
       blocks.push_back( { OperationType::PARALLEL,
-                        { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
-                          { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
-                          { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
-                          { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
-                          { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
-                          { "slit_set",       THR_SLIT_SET,
-                                              [this]{ return slit_set(this->target.iscal ? VSM_DATABASE : VSM_ACQUIRE); } } } } );
+          { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
+            { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
+            { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
+            { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
+            { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
+            { "slit_set",       THR_SLIT_SET,       [this]{ return slit_set(this->target.iscal ? VSM_DATABASE
+                                                                                               : VSM_ACQUIRE); } }
+          } } );
     }
 
     // Early Exit for pointmode=ACAM
@@ -217,58 +218,17 @@ namespace Sequencer {
 
     // ---------- RUN THESE IN SERIES ----------------------
 
-    // if not a calibration target then acquire, first acam then slicecam
-    if (!this->target.iscal) {
+    blocks.push_back( { OperationType::SERIAL,
+        { { "target_acquisition", THR_ACQUISITION,
+            [this,caller]() { return this->do_target_acquisition(caller); } },
 
-      // ---------- TARGET ACQUISITION ---------------------
+          { "target_offset", THR_MOVE_TO_TARGET,
+            [this]() { return this->target_offset(); } },
 
-      blocks.push_back( { OperationType::SERIAL,
-          { { "acam_acquire", THR_ACQUISITION, [this,caller]() {
-
-            // if ACAM acquisition fails, wait for user to continue or cancel
-            if ( this->do_acam_acquire() != NO_ERROR ) {
-              return this->wait_for_user(caller);
-            }
-            else return NO_ERROR;
-            } },
-
-            { "slicecam_fineacquire", THR_ACQUISITION, [this,caller]() {
-            if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
-              this->async.enqueue_and_log(caller, "WARNING slicecam fine acquisition failed");
-            }
-            return NO_ERROR; // slicecam fine acquire is never fatal
-            } }
-          }
-          } );
-    }
-
-    if (!this->target.iscal) {
-
-      // ---------- TARGET OFFSETS -------------------------
-
-      blocks.push_back( { OperationType::SERIAL,
-          { { "target_offset", THR_MOVE_TO_TARGET, [this,caller]() {
-
-            // if offsets fail, wait for user to continue or cancel
-            if (this->target_offset() != NO_ERROR) {
-              return this->wait_for_user(caller);
-            }
-            else return NO_ERROR;
-            } }
-          }
-          } );
-    }
-
-    if (!this->target.iscal) {
-
-      // ---------- SLIT POSITON FOR EXPOSE ----------------
-
-      blocks.push_back( { OperationType::SERIAL,
-          { { "slit_expose", THR_SLIT_SET, [this]() {
-            return this->slit_set(Sequencer::VSM_EXPOSE); } }
-          }
-          } );
-    }
+          { "slit_expose", THR_SLIT_SET,
+            [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } }
+        }
+        } );
 
     // ---------- EXPOSURE ---------------------------------
 
@@ -589,7 +549,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_sequencer_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
-    const std::string function("Sequencer::Sequence::dothread_sequencer_async_listener");
+    std::string_view function("Sequencer::Sequence::dothread_sequencer_async_listener");
 
     ScopedState thr_state( seq.thread_state_manager, Sequencer::THR_SEQUENCER_ASYNC_LISTENER );
 
@@ -691,6 +651,40 @@ namespace Sequencer {
   }
 
 
+  /***** Sequencer::Sequence::wait_for_ontarget *******************************/
+  /**
+   * @brief      waits for the TCS Operator to click 'ontarget'
+   * @param[in]  caller  reference to caller's name for logging
+   * @return     NO_ERROR on continue | ABORT on cancel
+   *
+   */
+  long Sequence::wait_for_ontarget(std::string_view caller) {
+    // waiting for TCS Operator input (or cancel)
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
+
+    this->async.enqueue_and_log(caller, "NOTICE: waiting for TCS operator to send 'ontarget' signal");
+
+    while ( !this->cancel_flag.load() &&
+            !this->is_ontarget.load() ) {
+
+      std::unique_lock<std::mutex> lock(cv_mutex);
+      this->cv.wait( lock, [this]() { return( this->is_ontarget.load() ||
+                                              this->cancel_flag.load() ); } );
+    }
+
+    this->async.enqueue_and_log(caller, "NOTICE: received "
+                                        +(this->cancel_flag.load() ? std::string("cancel")
+                                                                   : std::string("ontarget"))
+                                        +" signal!" );
+    }
+    this->is_ontarget.store(false);
+
+    return (this->cancel_flag.load() ? ABORT : NO_ERROR);
+  }
+  /***** Sequencer::Sequence::wait_for_ontarget *******************************/
+
+
   /***** Sequencer::Sequence::wait_for_user ***********************************/
   /**
    * @brief      waits for the user to click a button, or cancel
@@ -700,7 +694,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_user(const std::string &caller) {
+  long Sequence::wait_for_user(std::string_view caller) {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
 
@@ -735,7 +729,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_exposure(const std::string &caller) {
+  long Sequence::wait_for_exposure(std::string_view caller) {
     logwrite(caller, "waiting for exposure");
     while (!this->cancel_flag.load() &&
            wait_state_manager.is_set(Sequencer::SEQ_WAIT_EXPOSE)) {
@@ -761,7 +755,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_readout(const std::string &caller) {
+  long Sequence::wait_for_readout(std::string_view caller) {
     logwrite(caller, "waiting for readout");
     while (!this->cancel_flag.load() &&
            wait_state_manager.is_set(Sequencer::SEQ_WAIT_READOUT)) {
@@ -780,6 +774,36 @@ namespace Sequencer {
   /***** Sequencer::Sequence::wait_for_readout ********************************/
 
 
+  /***** Sequencer::Sequence::wait_for_canexpose ******************************/
+  /**
+   * @brief      waits for camera to be ready to expose, or cancel
+   * @param[in]  caller  reference to caller's name for logging
+   * @return     NO_ERROR on continue | ABORT on cancel
+   *
+   */
+  long Sequence::wait_for_canexpose(std::string_view caller) {
+    logwrite(caller, "waiting for can_expose");
+
+    while ( !this->cancel_flag.load() &&
+            !this->can_expose.load() ) {
+
+      this->async.enqueue_and_log(caller, "NOTICE: waiting for camera to be ready to expose");
+
+      std::unique_lock<std::mutex> lock(this->camerad_mtx);
+      this->camerad_cv.wait( lock, [this]() { return( this->can_expose.load() ||
+                                                      this->cancel_flag.load() ); } );
+    }
+
+    if (this->cancel_flag.load()) {
+      this->async.enqueue_and_log(caller, "NOTICE: wait for can_expose cancelled");
+      return ABORT;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::wait_for_canexpose ******************************/
+
+
   /***** Sequencer::Sequence::sequence_start **********************************/
   /**
    * @brief      main sequence start thread
@@ -795,7 +819,7 @@ namespace Sequencer {
    *
    */
   void Sequence::sequence_start(std::string obsid_in="") {
-    const std::string function("Sequencer::Sequence::sequence_start");
+    std::string_view function("Sequencer::Sequence::sequence_start");
     std::ostringstream message;
     std::string reply;
     std::string targetstatus;
@@ -905,7 +929,7 @@ namespace Sequencer {
         break;
       }
 
-      // default observation sequence
+      // ---------- default observation sequence -----------
       //
       error = run_default_sequence(function);
 
@@ -982,27 +1006,14 @@ namespace Sequencer {
    *
    */
   long Sequence::camera_set() {
-    const std::string function("Sequencer::Sequence::camera_set");
+    std::string_view function("Sequencer::Sequence::camera_set");
     std::string reply;
     std::stringstream camcmd;
     long error=NO_ERROR;
 
     // wait until camera is ready to expose
     //
-    std::unique_lock<std::mutex> lock(this->camerad_mtx);
-    if (!this->can_expose.load()) {
-
-      this->async.enqueue_and_log(function, "NOTICE: waiting for camera to be ready to expose");
-
-      this->camerad_cv.wait( lock, [this]() {
-        return( this->can_expose.load() || this->cancel_flag.load() );
-      } );
-
-      if (this->cancel_flag.load()) {
-        logwrite(function, "sequence cancelled");
-        return NO_ERROR;
-      }
-    }
+    this->wait_for_canexpose(function);
 
     logwrite( function, "setting camera parameters");
 
@@ -1083,7 +1094,7 @@ namespace Sequencer {
    *
    */
   long Sequence::slit_set(VirtualSlitMode mode) {
-    const std::string function("Sequencer::Sequence::slit_set");
+    std::string_view function("Sequencer::Sequence::slit_set");
     std::string reply, modestr;
     std::stringstream slitcmd, message;
 
@@ -1140,7 +1151,7 @@ namespace Sequencer {
    *
    */
   long Sequence::power_init() {
-    const std::string function("Sequencer::Sequence::power_init");
+    std::string_view function("Sequencer::Sequence::power_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_POWER_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_POWER );
@@ -1167,7 +1178,7 @@ namespace Sequencer {
    *
    */
   long Sequence::power_shutdown() {
-    const std::string function("Sequencer::Sequence::power_shutdown");
+    std::string_view function("Sequencer::Sequence::power_shutdown");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_POWER_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_POWER );
@@ -1190,7 +1201,7 @@ namespace Sequencer {
    *
    */
   long Sequence::slit_init() {
-    const std::string function("Sequencer::Sequence::slit_init");
+    std::string_view function("Sequencer::Sequence::slit_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_SLIT_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
@@ -1256,7 +1267,7 @@ namespace Sequencer {
    *
    */
   long Sequence::slit_shutdown() {
-    const std::string function("Sequencer::Sequence::slit_shutdown");
+    std::string_view function("Sequencer::Sequence::slit_shutdown");
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
@@ -1324,7 +1335,7 @@ namespace Sequencer {
    *
    */
   long Sequence::slicecam_init() {
-    const std::string function("Sequencer::Sequence::slicecam_init");
+    std::string_view function("Sequencer::Sequence::slicecam_init");
 
     this->daemon_manager.clear( Sequencer::DAEMON_SLICECAM );  // slicecamd not ready
 
@@ -1364,7 +1375,7 @@ namespace Sequencer {
    *
    */
   long Sequence::acam_init() {
-    const std::string function("Sequencer::Sequence::acam_init");
+    std::string_view function("Sequencer::Sequence::acam_init");
 
     this->daemon_manager.clear( Sequencer::DAEMON_ACAM );  // acamd not ready
 
@@ -1424,7 +1435,7 @@ namespace Sequencer {
    *
    */
   long Sequence::slicecam_shutdown() {
-    const std::string function("Sequencer::Sequence::slicecam_shutdown");
+    std::string_view function("Sequencer::Sequence::slicecam_shutdown");
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
@@ -1487,7 +1498,7 @@ namespace Sequencer {
    *
    */
   long Sequence::acam_shutdown() {
-    const std::string function("Sequencer::Sequence::acam_shutdown");
+    std::string_view function("Sequencer::Sequence::acam_shutdown");
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
@@ -1559,7 +1570,7 @@ namespace Sequencer {
    *
    */
   long Sequence::calib_init() {
-    const std::string function("Sequencer::Sequence::calib_init");
+    std::string_view function("Sequencer::Sequence::calib_init");
 
     this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
@@ -1633,7 +1644,7 @@ namespace Sequencer {
    *
    */
   long Sequence::calib_shutdown() {
-    const std::string function("Sequencer::Sequence::calib_shutdown");
+    std::string_view function("Sequencer::Sequence::calib_shutdown");
     long error=NO_ERROR;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CALIB_SHUTDOWN );
@@ -1755,7 +1766,7 @@ namespace Sequencer {
    *
    */
   long Sequence::tcs_shutdown() {
-    const std::string function("Sequencer::Sequence::tcs_shutdown");
+    std::string_view function("Sequencer::Sequence::tcs_shutdown");
     std::stringstream message;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_TCS_SHUTDOWN );
@@ -1797,7 +1808,7 @@ namespace Sequencer {
    *
    */
   long Sequence::flexure_init() {
-    const std::string function("Sequencer::Sequence::flexure_init");
+    std::string_view function("Sequencer::Sequence::flexure_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
@@ -1836,7 +1847,7 @@ namespace Sequencer {
    *
    */
   long Sequence::flexure_shutdown() {
-    const std::string function("Sequencer::Sequence::flexure_shutdown");
+    std::string_view function("Sequencer::Sequence::flexure_shutdown");
     std::string reply;
     long error=NO_ERROR;
 
@@ -1897,7 +1908,7 @@ namespace Sequencer {
    *
    */
   long Sequence::focus_init() {
-    const std::string function("Sequencer::Sequence::focus_init");
+    std::string_view function("Sequencer::Sequence::focus_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FOCUS_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FOCUS );
@@ -1965,7 +1976,7 @@ namespace Sequencer {
    *
    */
   long Sequence::focus_shutdown() {
-    const std::string function("Sequencer::Sequence::focus_shutdown");
+    std::string_view function("Sequencer::Sequence::focus_shutdown");
     std::string reply;
     long error=NO_ERROR;
 
@@ -2026,7 +2037,7 @@ namespace Sequencer {
    *
    */
   long Sequence::camera_init() {
-    const std::string function("Sequencer::Sequence::camera_init");
+    std::string_view function("Sequencer::Sequence::camera_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
@@ -2080,7 +2091,7 @@ namespace Sequencer {
    *
    */
   long Sequence::camera_shutdown() {
-    const std::string function("Sequencer::Sequence::camera_shutdown");
+    std::string_view function("Sequencer::Sequence::camera_shutdown");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CAMERA_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
@@ -2145,7 +2156,7 @@ namespace Sequencer {
    *
    */
   long Sequence::move_to_target() {
-    const std::string function("Sequencer::Sequence::move_to_target");
+    std::string_view function("Sequencer::Sequence::move_to_target");
     std::stringstream message;
     long error=NO_ERROR;
 
@@ -2299,7 +2310,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_notify_tcs( Sequencer::Sequence &seq ) {
-    const std::string function("Sequencer::Sequence::dothread_notify_tcs");
+    std::string_view function("Sequencer::Sequence::dothread_notify_tcs");
     std::stringstream message;
 
     ScopedState thr_state( seq.thread_state_manager, Sequencer::THR_NOTIFY_TCS );
@@ -2371,7 +2382,7 @@ namespace Sequencer {
    *
    */
   long Sequence::focus_set() {
-    const std::string function("Sequencer::Sequence::focus_set");
+    std::string_view function("Sequencer::Sequence::focus_set");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FOCUS_SET );
 
@@ -2390,7 +2401,7 @@ namespace Sequencer {
    *
    */
   long Sequence::flexure_set() {
-    const std::string function("Sequencer::Sequence::flexure_set");
+    std::string_view function("Sequencer::Sequence::flexure_set");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
 
@@ -2409,7 +2420,7 @@ namespace Sequencer {
    *
    */
   long Sequence::calib_set() {
-    const std::string function("Sequencer::Sequence::calib_set");
+    std::string_view function("Sequencer::Sequence::calib_set");
     std::stringstream message;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIBRATOR_SET );
@@ -2494,7 +2505,7 @@ namespace Sequencer {
    *
    */
   void Sequence::abort_process() {
-    const std::string function("Sequencer::Sequence::abort_process");
+    std::string_view function("Sequencer::Sequence::abort_process");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
 
@@ -2529,7 +2540,7 @@ namespace Sequencer {
    *
    */
   void Sequence::stop_exposure() {
-    const std::string function("Sequencer::Sequence::stop_exposure");
+    std::string_view function("Sequencer::Sequence::stop_exposure");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
 
@@ -2577,7 +2588,7 @@ namespace Sequencer {
    *
    */
   long Sequence::repeat_exposure() {
-    const std::string function("Sequencer::Sequence::repeat_exposure");
+    std::string_view function("Sequencer::Sequence::repeat_exposure");
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -2667,7 +2678,7 @@ namespace Sequencer {
    *
    */
   long Sequence::trigger_exposure() {
-    const std::string function("Sequencer::Sequence::trigger_exposure");
+    std::string_view function("Sequencer::Sequence::trigger_exposure");
     std::stringstream message;
     std::string reply;
     long error=NO_ERROR;
@@ -2721,7 +2732,7 @@ namespace Sequencer {
    *
    */
   void Sequence::modify_exptime( double exptime_in ) {
-    const std::string function("Sequencer::Sequence::modify_exptime");
+    std::string_view function("Sequencer::Sequence::modify_exptime");
     std::stringstream message;
     std::string reply="";
     long error = NO_ERROR;
@@ -2775,7 +2786,7 @@ namespace Sequencer {
    *
    */
   long Sequence::startup() {
-    const std::string function("Sequencer::Sequence::startup");
+    std::string_view function("Sequencer::Sequence::startup");
     std::stringstream message;
     long error=NO_ERROR;
 
@@ -2984,7 +2995,7 @@ namespace Sequencer {
    *
    */
   long Sequence::shutdown() {
-    const std::string function("Sequencer::Sequence::shutdown");
+    std::string_view function("Sequencer::Sequence::shutdown");
     long error=ERROR;
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
@@ -3075,8 +3086,8 @@ namespace Sequencer {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Sequence::parse_state( std::string whoami, std::string reply, bool &state ) {
-    const std::string function("Sequencer::Sequence::parse_state");
+  long Sequence::parse_state( std::string_view whoami, std::string reply, bool &state ) {
+    std::string_view function("Sequencer::Sequence::parse_state");
     std::stringstream message;
 
     // Tokenize the reply --
@@ -3133,7 +3144,7 @@ namespace Sequencer {
    *
    */
   long Sequence::extract_tcs_value( std::string reply, int &value ) {
-    const std::string function("Sequencer::Sequence::extract_tcs_value");
+    std::string_view function("Sequencer::Sequence::extract_tcs_value");
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = ERROR;
@@ -3221,7 +3232,7 @@ namespace Sequencer {
    *
    */
   long Sequence::parse_tcs_generic( int value ) {
-    const std::string function("Sequencer::Sequence::parse_tcs_generic");
+    std::string_view function("Sequencer::Sequence::parse_tcs_generic");
     std::stringstream message;
     std::string tcsreply;
     std::vector<std::string> tokens;
@@ -3270,7 +3281,7 @@ namespace Sequencer {
    *
    */
   long Sequence::dotype( std::string args ) {
-    const std::string function("Sequencer::Sequence::dotype");
+    std::string_view function("Sequencer::Sequence::dotype");
     std::stringstream message;
     std::string dontcare;
     return this->dotype( args, dontcare );
@@ -3294,7 +3305,7 @@ namespace Sequencer {
    *
    */
   long Sequence::dotype( std::string args, std::string &retstring ) {
-    const std::string function("Sequencer::Sequence::dotype");
+    std::string_view function("Sequencer::Sequence::dotype");
     std::stringstream message;
     long error = NO_ERROR;
 
@@ -3341,7 +3352,7 @@ namespace Sequencer {
     return this->get_dome_position( false, domeazi, telazi );
   }
   long Sequence::get_dome_position( bool poll, double &domeazi, double &telazi ) {
-    const std::string function("Sequencer::Sequence::get_dome_position");
+    std::string_view function("Sequencer::Sequence::get_dome_position");
     std::stringstream message;
 
     std::string tcsreply;
@@ -3403,7 +3414,7 @@ namespace Sequencer {
     return this->get_tcs_motion( false, state_out );
   }
   long Sequence::get_tcs_motion( bool poll, std::string &state_out ) {
-    const std::string function("Sequencer::Sequence::get_tcs_motion");
+    std::string_view function("Sequencer::Sequence::get_tcs_motion");
     std::stringstream message;
 
     std::string tcsreply;
@@ -3445,7 +3456,7 @@ namespace Sequencer {
     return this->get_tcs_coords_type( TCSD_WEATHER_COORDS, ra_h, dec_d );
   }
   long Sequence::get_tcs_coords_type( std::string cmd, double &ra_h, double &dec_d ) {
-    const std::string function("Sequencer::Sequence::get_tcs_coords");
+    std::string_view function("Sequencer::Sequence::get_tcs_coords");
     std::stringstream message;
 
     std::string coordstring;
@@ -3498,7 +3509,7 @@ namespace Sequencer {
    *
    */
   long Sequence::get_tcs_cass( double &cass ) {
-    const std::string function("Sequencer::Sequencer::get_tcs_cass");
+    std::string_view function("Sequencer::Sequencer::get_tcs_cass");
     std::stringstream message;
     std::string tcsreply;
 
@@ -3549,11 +3560,14 @@ namespace Sequencer {
    *
    */
   long Sequence::target_offset() {
-    const std::string function("Sequencer::Sequence::target_offset");
+    std::string_view function("Sequencer::Sequence::target_offset");
 
-    // nothing to do if both ra and dec offsets are zero
-    if (this->target.offset_ra  == 0.0 &&
-        this->target.offset_dec == 0.0) return NO_ERROR;
+    bool  is_ra_zero = std::abs(this->target.offset_ra)  < std::numeric_limits<double>::epsilon();
+    bool is_dec_zero = std::abs(this->target.offset_dec) < std::numeric_limits<double>::epsilon();
+
+    // nothing to do for calibrator or if both ra and dec offsets are zero
+    if ( this->target.iscal ||
+        (is_ra_zero && is_dec_zero) ) return NO_ERROR;
 
     // zero TCS offsets before applying target offset
     long error = this->tcsd.command( TCSD_ZERO_OFFSETS );
@@ -3661,7 +3675,7 @@ namespace Sequencer {
    *
    */
   long Sequence::handle_json_message( const std::string message_in ) {
-    const std::string function("Sequencer::Sequence::handle_json_message");
+    std::string_view function("Sequencer::Sequence::handle_json_message");
     std::stringstream message;
 
     if ( message_in.empty() ) {
@@ -3744,7 +3758,7 @@ namespace Sequencer {
    *
    */
   void Sequence::dothread_test_fpoffset() {
-    const std::string function("Sequencer::Sequence::dothread_fpoffset");
+    std::string_view function("Sequencer::Sequence::dothread_fpoffset");
     std::stringstream message;
 
     message.str(""); message << "calling fpoffsets.compute_offset() from thread: PyGILState=" << PyGILState_Check();
@@ -3779,7 +3793,7 @@ namespace Sequencer {
   }
 
   long Sequence::set_power_switch( PowerState reqstate, const std::string which, std::chrono::seconds delay ) { 
-    const std::string function("Sequencer::Sequence::set_power_switch");
+    std::string_view function("Sequencer::Sequence::set_power_switch");
     long error=NO_ERROR;
     bool need_delay=false;
 
@@ -3885,7 +3899,7 @@ namespace Sequencer {
   long Sequence::open_hardware( Common::DaemonClient &daemon,
                                 const std::string opencmd, const int opentimeout,
                                 bool &was_opened, bool forceopen ) {
-    const std::string function("Sequencer::Sequence::open_hardware");
+    std::string_view function("Sequencer::Sequence::open_hardware");
     const int maxattempts=3;  ///< allow retries connecting to daemon
     bool isopen=false;
     std::string reply;
@@ -3945,7 +3959,7 @@ namespace Sequencer {
    *
    */
   long Sequence::connect_to_daemon( Common::DaemonClient &daemon ) {
-    const std::string function("Sequencer::Sequence::connect_to_daemon");
+    std::string_view function("Sequencer::Sequence::connect_to_daemon");
 
     // if not connected to the daemon then connect
     //
@@ -3973,7 +3987,7 @@ namespace Sequencer {
    *
    */
   long Sequence::daemon_restart(Common::DaemonClient &daemon) {
-    const std::string function("Sequencer::Sequence::daemon_restart");
+    std::string_view function("Sequencer::Sequence::daemon_restart");
     std::string command;
 
     // the daemon control script must have been specified in the config file
@@ -4028,7 +4042,7 @@ namespace Sequencer {
    *
    */
   long Sequence::test( std::string args, std::string &retstring ) {
-    const std::string function("Sequencer::Sequence::test");
+    std::string_view function("Sequencer::Sequence::test");
     std::stringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;

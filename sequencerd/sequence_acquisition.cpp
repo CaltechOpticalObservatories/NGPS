@@ -16,7 +16,7 @@ namespace Sequencer {
    *
    */
   long Sequence::do_acam_acquire() {
-    const std::string function("Sequencer::Sequence::do_acam_acquire");
+    std::string_view function("Sequencer::Sequence::do_acam_acquire");
     std::string reply;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
@@ -75,7 +75,7 @@ namespace Sequencer {
    *
    */
   long Sequence::do_slicecam_fineacquire() {
-    const std::string function("Sequencer::Sequence::do_slicecam_fineacquire");
+    std::string_view function("Sequencer::Sequence::do_slicecam_fineacquire");
 
     ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE);
 
@@ -117,4 +117,50 @@ namespace Sequencer {
   }
   /***** Sequencer::Sequence::do_slicecam_fineacquire **************************/
 
+
+  /***** Sequencer::Sequence::do_target_acquisition ****************************/
+  /**
+   * @brief      performs target acquisition
+   * @details    First acquire on ACAM, then run slicecam fineacquire
+   * @return     NO_ERROR | ABORT
+   *
+   */
+  long Sequence::do_target_acquisition(std::string_view caller) {
+
+    if (this->target.iscal) return NO_ERROR;
+
+    // ---------- ACAM acquire -----------------------------
+    //
+    if ( this->do_acam_acquire() != NO_ERROR ) {
+      this->async.enqueue_and_log(caller, "WARNING acam acquisition failed");
+
+      // on ACAM acquisition failure wait for user to continue or cancel
+      if ( this->wait_for_user(caller) == ABORT ) return ABORT;
+
+      return NO_ERROR;  // user chose to continue
+    }
+
+    // ---------- SLICECAM fineacquire ---------------------
+    //
+    if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+      this->async.enqueue_and_log(caller, "WARNING slicecam fine acquisition failed");
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::do_target_acquisition ****************************/
+
+
+  /***** Sequencer::Sequence::do_target_virtualslit ****************************/
+  /**
+   * @brief      move to virtual slit position
+   * @param[in]  mode  VirtualSlitMode
+   * @return     NO_ERROR | NO_ERROR
+   *
+   */
+  long Sequence::do_target_virtualslit(VirtualSlitMode mode) {
+    if (this->target.iscal) return NO_ERROR;
+    return this->slit_set(mode);
+  }
+  /***** Sequencer::Sequence::do_target_virtualslit ****************************/
 }
