@@ -101,12 +101,14 @@ namespace Sequencer {
    * @return     ERROR|NO_ERROR|ABORT
    *
    */
-  long Sequence::run_sequence( const std::vector<OperationGroup> &groups,
+  long Sequence::run_sequence( const std::vector<OperationGroup> &sequence,
                                std::string_view caller,
                                bool continue_on_error ) {
     long error = NO_ERROR;
 
-    for (const auto &group : groups) {
+    logwrite(caller, "starting sequence");
+
+    for (const auto &group : sequence) {
       if (this->cancel_flag.load()) return ABORT;
 
       // PARALLEL Groups are executed in parallel threads
@@ -131,6 +133,8 @@ namespace Sequencer {
       }
     }
 
+    logwrite(caller, "sequence complete");
+
     return error;
   }
   /***** Sequencer::Sequence::run_sequence ***********************************/
@@ -145,7 +149,7 @@ namespace Sequencer {
    */
   long Sequence::run_default_sequence(std::string_view caller) {
 
-    std::vector<OperationGroup> groups;
+    std::vector<OperationGroup> sequence;
 
     // ---------- RUN THESE IN PARALLEL --------------------
 
@@ -156,15 +160,15 @@ namespace Sequencer {
     //
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
-      groups.push_back( { OperationType::PARALLEL,
-                        { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
+      sequence.push_back( { OperationType::PARALLEL,
+                          { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
       this->target.pointmode = Acam::POINTMODE_SLIT;
 
       // these are the default operations prior to exposure,
       // they can be done in parallel
-      groups.push_back( { OperationType::PARALLEL,
+      sequence.push_back( { OperationType::PARALLEL,
           { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
             { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
             { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
@@ -178,17 +182,17 @@ namespace Sequencer {
     // ---------- RUN THESE IN SERIES ----------------------
 
     if (this->target.pointmode != Acam::POINTMODE_ACAM) {
-      groups.push_back( { OperationType::SERIAL,
-          { { "target_acquisition", THR_ACQUISITION,
+      sequence.push_back( { OperationType::SERIAL,
+          { { "target_acquire", THR_ACQUISITION,
               [this,caller]() { return this->do_target_acquisition(caller); } },
 
             { "target_offset", THR_MOVE_TO_TARGET,
               [this]() { return this->target_offset(); } },
 
-            { "slit_expose", THR_SLIT_SET,
+            { "slit_set", THR_SLIT_SET,
               [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
 
-            { "science_exposure", THR_EXPOSURE,
+            { "expose", THR_EXPOSURE,
               [this,caller]() { return this->do_exposure(caller); } }
           }
           } );
@@ -196,7 +200,7 @@ namespace Sequencer {
 
     // ---------- RUN THE SEQUENCE NOW ---------------------
 
-    return run_sequence(groups, caller);
+    return run_sequence(sequence, caller);
   }
   /***** Sequencer::Sequence::run_default_sequence ***************************/
 
@@ -209,7 +213,26 @@ namespace Sequencer {
    *
    */
   long Sequence::run_script(const std::string &filename) {
-    return NO_ERROR;
+    std::string_view function("Sequencer::Sequence::run_script");
+
+    std::vector<ParsedCommand> commands;
+    if ( parse_script(filename, commands) != NO_ERROR ) {
+      logwrite(function, "ERROR parsing '"+filename+"'");
+      return ERROR;
+    }
+
+    std::vector<OperationGroup> sequence;
+    if ( build_sequence(commands, sequence) != NO_ERROR ) {
+      logwrite(function, "ERROR building sequence from '"+filename+"'");
+      return ERROR;
+    }
+
+    if ( validate_sequence(sequence) != NO_ERROR ) {
+      logwrite(function, "ERROR validating sequence from '"+filename+"'");
+      return ERROR;
+    }
+
+    return run_sequence(sequence, function);
   }
   /***** Sequencer::Sequence::run_script *************************************/
 
@@ -217,25 +240,97 @@ namespace Sequencer {
   /***** Sequencer::Sequence::parse_script ***********************************/
   /**
    * @brief      parses a user script
-   * @param[in]  filename  filename of script
-   * @return     ERROR|NO_ERROR|ABORT
+   * @details    This parses a script, makes a ParsedCommand struct from each
+   *             line, returning a vector of ParsedCommands. No validation is
+   *             done here, only parsing.
+   * @param[in]  filename      filename of script
+   * @param[out] commands_out  reference to vector of ParsedCommands
+   * @return     ERROR|NO_ERROR
    *
    */
   long Sequence::parse_script(const std::string &filename,
-                              std::vector<ParsedCommand> &out) {
+                              std::vector<ParsedCommand> &commands_out) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+      logwrite("Sequencer::Sequence::parse_script", "ERROR opening '"+filename+"'");
+      return ERROR;
+    }
+
+    std::string line;
+
+    while (std::getline(file, line)) {
+
+      auto command = parse_command(line);
+
+      if (command) commands_out.push_back(*command);
+    }
+
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::parse_script ***********************************/
 
 
-  /***** Sequencer::Sequence::validate_sequence ******************************/
+  /***** Sequencer::Sequence::parse_command **********************************/
   /**
-   * @brief      
-   * @param[in]  
-   * @return     ERROR|NO_ERROR|ABORT
+   * @brief      parses a single command line
+   * @details    This parses a command and any parameters as key=val pairs
+   *             from the supplied string and returns a ParsedCommand struct.
+   * @param[in]  args  string containing command and any optional arguments
+   * @return     nullptr | ParsedCommand
    *
    */
-  long Sequence::validate_sequence(const std::vector<OperationGroup> &groups) {
+  std::optional<Sequence::ParsedCommand> Sequence::parse_command(std::string &args) {
+
+    // strip comments, everything after '#'
+    auto pos = args.find('#');
+    if (pos != std::string::npos) args = args.substr(0, pos);
+
+    std::istringstream iss(args);
+    std::string word;
+
+    // first word is the command
+    if (!(iss >> word)) return std::nullopt;
+
+    ParsedCommand command;
+    command.name = word;
+
+    // any additional words are parameters, expected to be key=val pairs
+    while (iss >> word) {
+      auto eq = word.find('=');
+      if (eq != std::string::npos) {
+        std::string key = word.substr(0, eq);
+        std::string val = word.substr(eq+1);
+        command.params.map[key] = val;
+      }
+    }
+
+    return command;
+  }
+  /***** Sequencer::Sequence::parse_command **********************************/
+
+
+  /***** Sequencer::Sequence::validate_sequence ******************************/
+  /**
+   * @brief      applies validation rules to sequence
+   * @param[in]  sequence  vector of OperationGroups
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Sequence::validate_sequence(const std::vector<OperationGroup> &sequence) {
+
+    // sequence is a vector of OperationGroups
+    for (const auto &group : sequence) {
+
+      // group is a vector of Operations
+      for (const auto &op : group.operations) {
+
+        if (op.name == "expose") {
+        }
+        else
+        if (op.name == "slit_set") {
+        }
+      }
+    }
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::validate_sequence ******************************/
@@ -244,12 +339,38 @@ namespace Sequencer {
   /***** Sequencer::Sequence::handle_cli_operation ***************************/
   /**
    * @brief      handle incoming operation request
-   * @param[in]  op  the name of an operation
+   * @details    This performs all the same steps for a single command as a
+   *             sequence of one operation. This is inefficient for performing
+   *             multiple steps.
+   * @param[in]  args  string containing command and any arguments
    * @return     ERROR|NO_ERROR|ABORT
    *
    */
-  long Sequence::handle_cli_operation(const std::string &op) {
-    return NO_ERROR;
+  long Sequence::handle_cli_operation(std::string args) {
+    std::string_view function("Sequencer::Sequence::handle_cli_operation");
+
+    if (args.empty()) return ERROR;
+
+    // build a mini-sequence of one command in order to validate it
+    //
+    auto commands = { *parse_command(args) };
+
+    std::vector<OperationGroup> sequence;
+
+    if ( build_sequence(commands, sequence) != NO_ERROR ) return ERROR;
+
+    if ( validate_sequence(sequence) != NO_ERROR ) return ERROR;
+
+    if ( sequence.empty() || sequence[0].operations.empty() ) {
+      logwrite(function, "ERROR invalid command '"+args+"'");
+      return ERROR;
+    }
+
+    Operation op = sequence[0].operations[0];
+
+    // ---------- RUN THE COMMAND --------------------------
+    //
+    return run(op, function);
   }
   /***** Sequencer::Sequence::handle_cli_operation ***************************/
 
