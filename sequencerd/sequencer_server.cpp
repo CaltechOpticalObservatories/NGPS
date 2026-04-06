@@ -1376,6 +1376,22 @@ namespace Sequencer {
       }
       else
 
+      // handle incoming CLI operation request
+      //
+      if ( cmd == SEQUENCERD_OP ) {
+                  std::thread( &Sequencer::Sequence::handle_cli_operation, std::ref(this->sequence), args ).detach();
+                  ret = NO_ERROR;
+      }
+      else
+
+      // run sequencer script
+      //
+      if ( cmd == SEQUENCERD_SCRIPT ) {
+                  std::thread( &Sequencer::Sequence::run_script, std::ref(this->sequence), args ).detach();
+                  ret = NO_ERROR;
+      }
+      else
+
       // Sequence "start"
       //
       if ( cmd == SEQUENCERD_START ) {
