@@ -31,12 +31,14 @@ namespace Sequencer {
         continue;
       }
       else
+
       if (command.name == "end_parallel") {
         sequence_out.push_back(group);
-        group = { OperationType::SERIAL, {} };  // back to default
+        group = { OperationType::SERIAL, {} };
         continue;
       }
       else
+
       if (command.name == "move_to_target") {
         group.operations.emplace_back( Operation {
           "move_to_target", THR_MOVE_TO_TARGET,
@@ -48,6 +50,30 @@ namespace Sequencer {
             return move_to_target();
           },
           command.params
+        });
+      }
+      else
+
+      if (command.name == "slit_set") {
+        group.operations.emplace_back( Operation {
+          "slit_set", THR_SLIT_SET,
+          [this,params=command.params]() {
+            size_t mode = params.get<size_t>("mode", VSM_DATABASE);
+            return slit_set(static_cast<VirtualSlitMode>(mode));
+          },
+          command.params
+        });
+      }
+
+      else
+
+      if (command.name == "expose") {
+        group.operations.emplace_back( Operation {
+          "expose", THR_SLIT_SET,
+          [this]() {
+            return do_exposure("placeholder");
+          },
+          {}
         });
       }
 

@@ -527,11 +527,12 @@ namespace Sequencer {
 
       long run_script(const std::string &filename);                        ///< run user script
       long parse_script(const std::string &filename,
-                        std::vector<ParsedCommand> &out);                  ///< parse script into commands/args
+                        std::vector<ParsedCommand> &commands_out);         ///< parse script into commands/args
+      std::optional<ParsedCommand> parse_command(std::string &args);
       long build_sequence(const std::vector<ParsedCommand> &commands,
                           std::vector<OperationGroup> &sequence_out);      ///< build sequence from parsed commands
-      long validate_sequence(const std::vector<OperationGroup> &groups);   ///< validate sequence
-      long handle_cli_operation(const std::string &op);                    ///< handle incoming operation request
+      long validate_sequence(const std::vector<OperationGroup> &sequence); ///< validate sequence
+      long handle_cli_operation(std::string command);                      ///< handle incoming operation request
 
       // publish/subscribe functions
       //
