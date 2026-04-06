@@ -47,42 +47,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::run ********************************************/
 
 
-  /***** Sequencer::Sequence::run_sequence ***********************************/
-  /**
-   * @brief      executes operations in sequence, one at a time
-   * @param[in]  op      vector of Operations to execute
-   * @param[in]  caller  name of calling function for logging
-   * @return     ERROR|NO_ERROR|ABORT
-   *
-   */
-  long Sequence::run_sequence( const std::vector<Operation> &ops,
-                               std::string_view caller ) {
-
-    for (const auto &op : ops) {
-
-      if (this->cancel_flag.load()) return ABORT;
-
-      logwrite(caller, "starting "+op.name);
-
-      try {
-      long error;
-        if ( (error = op.func()) != NO_ERROR ) {
-          std::ostringstream oss;
-          oss << (error==ABORT ? "cancelled" : "ERROR") << " in " << op.name;
-          logwrite(caller, oss.str());
-          return error;
-        }
-      }
-      catch (const std::exception &e) {
-        logwrite(caller, "ERROR in "+op.name+": "+std::string(e.what()));
-        return ERROR;
-      }
-    }
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::run_sequence ***********************************/
-
-
   /***** Sequencer::Sequence::run_parallel ***********************************/
   /**
    * @brief      executes operations in parallel threads
@@ -123,40 +87,40 @@ namespace Sequencer {
   /***** Sequencer::Sequence::run_parallel ***********************************/
 
 
-  /***** Sequencer::Sequence::run_operation_blocks ***************************/
+  /***** Sequencer::Sequence::run_sequence ***********************************/
   /**
-   * @brief      executes operation blocks
-   * @details    An operation block contains a vector of operations paired
-   *             with a type, SERIAL|PARALLEL which specifies how that block
-   *             is to be executed. This executes a vector of Operation Blocks.
-   *             The optional continue_on_error allows a block to continue, or
-   *             stop immediately when any operation within the block fails.
-   * @param[in]  blocks             vector of OperationBlocks
+   * @brief      executes a sequence, a collection of operation groups
+   * @details    An operation group contains a vector of operations paired
+   *             with a type, SERIAL|PARALLEL which specifies how that group
+   *             is to be executed. This executes a vector of Operation Groups.
+   *             The optional continue_on_error allows a group to continue, or
+   *             stop immediately when any operation within the group fails.
+   * @param[in]  groups             vector of OperationGroups
    * @param[in]  caller             name of calling function for logging
-   * @param[in]  continue_on_error  continue or stop block execution on error
+   * @param[in]  continue_on_error  continue or stop group execution on error
    * @return     ERROR|NO_ERROR|ABORT
    *
    */
-  long Sequence::run_operation_blocks( const std::vector<OperationBlock> &blocks,
-                                       std::string_view caller,
-                                       bool continue_on_error ) {
+  long Sequence::run_sequence( const std::vector<OperationGroup> &groups,
+                               std::string_view caller,
+                               bool continue_on_error ) {
     long error = NO_ERROR;
 
-    for (const auto &block : blocks) {
+    for (const auto &group : groups) {
       if (this->cancel_flag.load()) return ABORT;
 
-      // PARALLEL Blocks are executed in parallel threads
+      // PARALLEL Groups are executed in parallel threads
       //
-      if (block.type == OperationType::PARALLEL) {
-        long ret = run_parallel(block.operations, caller);
+      if (group.type == OperationType::PARALLEL) {
+        long ret = run_parallel(group.operations, caller);
         error |= ret;
 
         if (ret != NO_ERROR && !continue_on_error) return error;
       }
-      // SERIAL Blocks are executed one at a time
+      // SERIAL Groups are executed one at a time
       //
       else {
-        for (const auto &op : block.operations) {
+        for (const auto &op : group.operations) {
           if (this->cancel_flag.load()) return ABORT;
 
           long ret = run(op, caller);
@@ -169,7 +133,7 @@ namespace Sequencer {
 
     return error;
   }
-  /***** Sequencer::Sequence::run_operation_blocks ***************************/
+  /***** Sequencer::Sequence::run_sequence ***********************************/
 
 
   /***** Sequencer::Sequence::run_default_sequence ***************************/
@@ -181,17 +145,18 @@ namespace Sequencer {
    */
   long Sequence::run_default_sequence(std::string_view caller) {
 
-    std::vector<OperationBlock> blocks;
+    std::vector<OperationGroup> groups;
 
     // ---------- RUN THESE IN PARALLEL --------------------
 
     // If pointmode is ACAM then the user has chosen to put the star on ACAM, in
     // which case the assumption is made that nothing else matters. This special
-    // mode of operation only points the telescope.
+    // mode of operation only points the telescope so this is the only operation
+    // added to the sequence.
     //
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
-      blocks.push_back( { OperationType::PARALLEL,
+      groups.push_back( { OperationType::PARALLEL,
                         { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
@@ -199,7 +164,7 @@ namespace Sequencer {
 
       // these are the default operations prior to exposure,
       // they can be done in parallel
-      blocks.push_back( { OperationType::PARALLEL,
+      groups.push_back( { OperationType::PARALLEL,
           { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
             { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
             { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
@@ -210,56 +175,83 @@ namespace Sequencer {
           } } );
     }
 
-    // Early Exit for pointmode=ACAM
-    //
-    if (this->target.pointmode == Acam::POINTMODE_ACAM) {
-      return run_operation_blocks(blocks, caller);
-    }
-
     // ---------- RUN THESE IN SERIES ----------------------
 
-    blocks.push_back( { OperationType::SERIAL,
-        { { "target_acquisition", THR_ACQUISITION,
-            [this,caller]() { return this->do_target_acquisition(caller); } },
+    if (this->target.pointmode != Acam::POINTMODE_ACAM) {
+      groups.push_back( { OperationType::SERIAL,
+          { { "target_acquisition", THR_ACQUISITION,
+              [this,caller]() { return this->do_target_acquisition(caller); } },
 
-          { "target_offset", THR_MOVE_TO_TARGET,
-            [this]() { return this->target_offset(); } },
+            { "target_offset", THR_MOVE_TO_TARGET,
+              [this]() { return this->target_offset(); } },
 
-          { "slit_expose", THR_SLIT_SET,
-            [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } }
-        }
-        } );
+            { "slit_expose", THR_SLIT_SET,
+              [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
 
-    // ---------- EXPOSURE ---------------------------------
-
-    blocks.push_back( { OperationType::SERIAL,
-        { { "trigger_exposure", THR_EXPOSURE, [this]() {
-
-          // set the EXPOSE bit here, outside of the trigger_exposure function, because that
-          // function only triggers the exposure -- it doesn't block waiting for the exposure.
-          //
-          this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );  // set EXPOSE bit
-          return trigger_exposure();
-          } },
-
-          { "wait_exposure", THR_EXPOSURE, [this,caller]() {
-          return this->wait_for_exposure(caller);
-          } },
-
-          { "wait_readout", THR_EXPOSURE, [this,caller]() {
-          if (!this->is_science_frame_transfer) {
-            return this->wait_for_readout(caller);
+            { "science_exposure", THR_EXPOSURE,
+              [this,caller]() { return this->do_exposure(caller); } }
           }
-          else return NO_ERROR;
-          } }
-        }
-    } );
+          } );
+    }
 
     // ---------- RUN THE SEQUENCE NOW ---------------------
 
-    return run_operation_blocks(blocks, caller);
+    return run_sequence(groups, caller);
   }
   /***** Sequencer::Sequence::run_default_sequence ***************************/
+
+
+  /***** Sequencer::Sequence::run_script *************************************/
+  /**
+   * @brief      executes a user script
+   * @param[in]  filename  filename of script
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::run_script(const std::string &filename) {
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::run_script *************************************/
+
+
+  /***** Sequencer::Sequence::parse_script ***********************************/
+  /**
+   * @brief      parses a user script
+   * @param[in]  filename  filename of script
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::parse_script(const std::string &filename,
+                              std::vector<ParsedCommand> &out) {
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::parse_script ***********************************/
+
+
+  /***** Sequencer::Sequence::validate_sequence ******************************/
+  /**
+   * @brief      
+   * @param[in]  
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::validate_sequence(const std::vector<OperationGroup> &groups) {
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::validate_sequence ******************************/
+
+
+  /***** Sequencer::Sequence::handle_cli_operation ***************************/
+  /**
+   * @brief      handle incoming operation request
+   * @param[in]  op  the name of an operation
+   * @return     ERROR|NO_ERROR|ABORT
+   *
+   */
+  long Sequence::handle_cli_operation(const std::string &op) {
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::handle_cli_operation ***************************/
 
 
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
@@ -642,168 +634,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::dothread_sequencer_async_listener ***************/
 
 
-  void Sequence::dothread_test() {
-    logwrite( "Sequencer::Sequence::dothread_test", "here I am" );
-    std::string targetstatus;
-    this->target.get_specified_target( "4430", targetstatus );
-    logwrite( "Sequencer::Sequence::dothread_test", targetstatus );
-    return;
-  }
-
-
-  /***** Sequencer::Sequence::wait_for_ontarget *******************************/
-  /**
-   * @brief      waits for the TCS Operator to click 'ontarget'
-   * @param[in]  caller  reference to caller's name for logging
-   * @return     NO_ERROR on continue | ABORT on cancel
-   *
-   */
-  long Sequence::wait_for_ontarget(std::string_view caller) {
-    // waiting for TCS Operator input (or cancel)
-    {
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
-
-    this->async.enqueue_and_log(caller, "NOTICE: waiting for TCS operator to send 'ontarget' signal");
-
-    while ( !this->cancel_flag.load() &&
-            !this->is_ontarget.load() ) {
-
-      std::unique_lock<std::mutex> lock(cv_mutex);
-      this->cv.wait( lock, [this]() { return( this->is_ontarget.load() ||
-                                              this->cancel_flag.load() ); } );
-    }
-
-    this->async.enqueue_and_log(caller, "NOTICE: received "
-                                        +(this->cancel_flag.load() ? std::string("cancel")
-                                                                   : std::string("ontarget"))
-                                        +" signal!" );
-    }
-    this->is_ontarget.store(false);
-
-    return (this->cancel_flag.load() ? ABORT : NO_ERROR);
-  }
-  /***** Sequencer::Sequence::wait_for_ontarget *******************************/
-
-
-  /***** Sequencer::Sequence::wait_for_user ***********************************/
-  /**
-   * @brief      waits for the user to click a button, or cancel
-   * @details    Use this when you just want to slow things down or get a
-   *             cup of coffee instead of observing.
-   * @param[in]  caller  reference to caller's name for logging
-   * @return     NO_ERROR on continue | ABORT on cancel
-   *
-   */
-  long Sequence::wait_for_user(std::string_view caller) {
-    {
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-    this->async.enqueue_and_log( caller, "NOTICE: waiting for USER to send 'continue' signal" );
-
-    while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-      std::unique_lock<std::mutex> lock(cv_mutex);
-      this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
-    }
-
-    this->async.enqueue_and_log( caller, "NOTICE: received "
-                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                           +" signal!" );
-    }  // end scope for wait_state = WAIT_USER
-
-    if ( this->cancel_flag.load() ) {
-      this->async.enqueue_and_log( caller, "NOTICE: sequence cancelled" );
-      return ABORT;
-    }
-
-    this->is_usercontinue.store(false);
-
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::wait_for_user ***********************************/
-
-
-  /***** Sequencer::Sequence::wait_for_exposure *******************************/
-  /**
-   * @brief      waits for exposure completion, or cancel
-   * @param[in]  caller  reference to caller's name for logging
-   * @return     NO_ERROR on continue | ABORT on cancel
-   *
-   */
-  long Sequence::wait_for_exposure(std::string_view caller) {
-    logwrite(caller, "waiting for exposure");
-    while (!this->cancel_flag.load() &&
-           wait_state_manager.is_set(Sequencer::SEQ_WAIT_EXPOSE)) {
-      std::unique_lock<std::mutex> lock(cv_mutex);
-      this->cv.wait( lock, [this]() { return(!wait_state_manager.is_set(SEQ_WAIT_EXPOSE) ||
-                                             this->cancel_flag.load()); } );
-    }
-
-    if (this->cancel_flag.load()) {
-      this->async.enqueue_and_log(caller, "NOTICE: exposure cancelled");
-      return ABORT;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::wait_for_exposure *******************************/
-
-
-  /***** Sequencer::Sequence::wait_for_readout ********************************/
-  /**
-   * @brief      waits for readout completion, or cancel
-   * @param[in]  caller  reference to caller's name for logging
-   * @return     NO_ERROR on continue | ABORT on cancel
-   *
-   */
-  long Sequence::wait_for_readout(std::string_view caller) {
-    logwrite(caller, "waiting for readout");
-    while (!this->cancel_flag.load() &&
-           wait_state_manager.is_set(Sequencer::SEQ_WAIT_READOUT)) {
-      std::unique_lock<std::mutex> lock(cv_mutex);
-      this->cv.wait( lock, [this]() { return(!wait_state_manager.is_set(SEQ_WAIT_READOUT) ||
-                                             this->cancel_flag.load()); } );
-    }
-
-    if (this->cancel_flag.load()) {
-      this->async.enqueue_and_log(caller, "NOTICE: wait for readout cancelled");
-      return ABORT;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::wait_for_readout ********************************/
-
-
-  /***** Sequencer::Sequence::wait_for_canexpose ******************************/
-  /**
-   * @brief      waits for camera to be ready to expose, or cancel
-   * @param[in]  caller  reference to caller's name for logging
-   * @return     NO_ERROR on continue | ABORT on cancel
-   *
-   */
-  long Sequence::wait_for_canexpose(std::string_view caller) {
-    logwrite(caller, "waiting for can_expose");
-
-    while ( !this->cancel_flag.load() &&
-            !this->can_expose.load() ) {
-
-      this->async.enqueue_and_log(caller, "NOTICE: waiting for camera to be ready to expose");
-
-      std::unique_lock<std::mutex> lock(this->camerad_mtx);
-      this->camerad_cv.wait( lock, [this]() { return( this->can_expose.load() ||
-                                                      this->cancel_flag.load() ); } );
-    }
-
-    if (this->cancel_flag.load()) {
-      this->async.enqueue_and_log(caller, "NOTICE: wait for can_expose cancelled");
-      return ABORT;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::wait_for_canexpose ******************************/
-
-
   /***** Sequencer::Sequence::sequence_start **********************************/
   /**
    * @brief      main sequence start thread
@@ -840,6 +670,8 @@ namespace Sequencer {
       return;
     }
 
+    // ---------- SEQUENCER IS RUNNING ---------------------
+    //
     ScopedState thr_state( thread_state_manager, Sequencer::THR_SEQUENCE_START );  // this thread is running
     ScopedState seq_state( seq_state_manager, Sequencer::SEQ_RUNNING, true );      // state = RUNNING (only)
     seq_state.destruct_set( Sequencer::SEQ_READY );                                // set state=READY on exit
@@ -1011,8 +843,6 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
-    // wait until camera is ready to expose
-    //
     this->wait_for_canexpose(function);
 
     logwrite( function, "setting camera parameters");
@@ -2683,6 +2513,8 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
+    this->wait_for_canexpose(function);
+
     ScopedState thr_state( thread_state_manager, Sequencer::THR_TRIGGER_EXPOSURE );
 
     // Check tcs_preauth_time and set notify_tcs_next_target --
@@ -2719,6 +2551,30 @@ namespace Sequencer {
     return error;
   }
   /***** Sequencer::Sequence::trigger_exposure ********************************/
+
+
+  /***** Sequencer::Sequence::do_exposure *************************************/
+  /**
+   * @brief      wrapper for performing science exposure
+   * @details    Triggers an exposure and waits for the exposure and readout.
+   *             This blocks until 
+   * @param[in]  caller  name of calling function
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Sequence::do_exposure(std::string_view caller) {
+
+    this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );
+
+    if ( this->trigger_exposure() != NO_ERROR ) return ERROR;
+
+    if ( this->wait_for_exposure(caller) != NO_ERROR ) return ERROR;
+
+    if ( this->wait_for_readout(caller) != NO_ERROR ) return ERROR;
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::do_exposure *************************************/
 
 
   /***** Sequencer::Sequence::modify_exptime **********************************/

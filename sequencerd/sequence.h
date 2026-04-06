@@ -193,6 +193,7 @@ namespace Sequencer {
     THR_STOP_EXPOSURE,
     THR_ABORT_PROCESS,
     THR_SEQUENCE_START,
+    THR_RUN_SCRIPT,
     THR_MONITOR_READY_STATE,
     THR_CALIB_SET,
     THR_CAMERA_SET,
@@ -238,6 +239,7 @@ namespace Sequencer {
     {THR_STOP_EXPOSURE,            "stop_exposure"},
     {THR_ABORT_PROCESS,            "abort_process"},
     {THR_SEQUENCE_START,           "sequence_start"},
+    {THR_RUN_SCRIPT,               "run_script"},
     {THR_MONITOR_READY_STATE,      "monitor_ready_state"},
     {THR_CALIB_SET,                "calib_set"},
     {THR_CAMERA_SET,               "camera_set"},
@@ -293,21 +295,60 @@ namespace Sequencer {
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
+      /** @brief operation type can be SERIAL or PARALLEL
+       */
       enum class OperationType {
         PARALLEL,
         SERIAL
       };
 
-      struct Operation {
-        std::string name;                           ///< name of this operation
-        ThreadStatusBits thr;                       ///< status bit of what is running
-        std::function<long()> func;                 ///< function that this operation calls
-        std::map<std::string, std::string> params;  ///< function parameters
+      /** @brief  map of parameter key=value pairs associated with operation
+       */
+      struct OperationParams {
+        std::unordered_map<std::string, std::string> map;
+
+        bool has(const std::string &key) const {
+          return map.find(key) != map.end();
+        }
+
+        template <typename T>
+        T get(const std::string &key, const T &default_val) const {
+          auto it = map.find(key);
+          if (it == map.end()) return default_val;
+
+          if constexpr (std::is_same_v<T, std::string>) {
+            return it->second;
+          }
+          else {
+            std::istringstream iss(it->second);
+            T val;
+            iss >> val;
+            return iss.fail() ? default_val : val;
+          }
+        }
       };
 
-      struct OperationBlock {
+      /** @brief  sequencer operation contains name, status bit, function and params
+       */
+      struct Operation {
+        std::string name;
+        ThreadStatusBits thr;
+        std::function<long()> func;
+        OperationParams params;
+      };
+
+      /** @brief  a group of operations stored in a vector with the operation type
+       */
+      struct OperationGroup {
         OperationType type;
         std::vector<Operation> operations;
+      };
+
+      /** @brief  associates a sequencer command with its parameters
+       */
+      struct ParsedCommand {
+        std::string name;
+        OperationParams params;
       };
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
@@ -475,14 +516,22 @@ namespace Sequencer {
       float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
       float slitwidthacquire;   ///< "virtual slit mode" width for acquire
 
-      // new stuff
+      // ---------- sequencer scripting and execution tools --------------------
+      //
       long run(const Operation &op, std::string_view function);
-      long run_sequence(const std::vector<Operation> &ops, std::string_view function);
       long run_parallel(const std::vector<Operation> &ops, std::string_view function);
       long run_default_sequence(std::string_view caller);
-      long run_operation_blocks( const std::vector<OperationBlock> &blocks,
-                                       std::string_view caller,
-                                       bool continue_on_error=false );
+      long run_sequence( const std::vector<OperationGroup> &groups,
+                         std::string_view caller,
+                         bool continue_on_error=false );
+
+      long run_script(const std::string &filename);                        ///< run user script
+      long parse_script(const std::string &filename,
+                        std::vector<ParsedCommand> &out);                  ///< parse script into commands/args
+      long build_sequence(const std::vector<ParsedCommand> &commands,
+                          std::vector<OperationGroup> &sequence_out);      ///< build sequence from parsed commands
+      long validate_sequence(const std::vector<OperationGroup> &groups);   ///< validate sequence
+      long handle_cli_operation(const std::string &op);                    ///< handle incoming operation request
 
       // publish/subscribe functions
       //
@@ -582,6 +631,7 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      long do_exposure(std::string_view caller); ///< wrapper performs and waits for science exposure
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
