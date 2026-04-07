@@ -1043,7 +1043,7 @@ namespace Sequencer {
     }
 
     while (1) {
-      std::string message = seq.sequence.async.dequeue();     // get the latest message from the queue (blocks)
+      auto message = seq.sequence.async.dequeue();            // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
         std::stringstream errstm;
@@ -1373,6 +1373,22 @@ namespace Sequencer {
                   else {
                     ret = this->sequence.shutdown();
                   }
+      }
+      else
+
+      // handle incoming CLI operation request
+      //
+      if ( cmd == SEQUENCERD_OP ) {
+                  std::thread( &Sequencer::Sequence::handle_cli_operation, std::ref(this->sequence), args ).detach();
+                  ret = NO_ERROR;
+      }
+      else
+
+      // run sequencer script
+      //
+      if ( cmd == SEQUENCERD_SCRIPT ) {
+                  std::thread( &Sequencer::Sequence::run_script, std::ref(this->sequence), args ).detach();
+                  ret = NO_ERROR;
       }
       else
 

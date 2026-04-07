@@ -175,13 +175,12 @@ void close_log() {
  * log filestream isn't open.
  *
  */
-void logwrite( const std::string &function, std::string message ) {
-  std::stringstream logmsg;
-  std::string timestamp = get_timestamp();       // get the current time (defined in utilities.h)
+void logwrite( std::string_view function, std::string_view message ) {
+  std::ostringstream logmsg;
 
   std::lock_guard<std::mutex> lock(loglock);     // lock mutex to protect from multiple access
 
-  logmsg << timestamp << "  (" << function << ") " << message << "\n";
+  logmsg << get_timestamp() << "  (" << function << ") " << message << "\n";
 
   if (filestream.is_open()) {
     filestream << logmsg.str();                  // send to the file stream (if open)

@@ -31,7 +31,8 @@ namespace Key {
   }
 
   namespace Camerad {
-    inline const std::string READY = "ready";
+    inline const std::string READY       = "ready";
+    inline const std::string SHUTTERTIME = "shuttime_sec";
   }
 
   namespace Acamd {
@@ -50,4 +51,23 @@ namespace Key {
     inline const std::string FINEACQUIRE_LOCKED  = "fineacquire_locked";
     inline const std::string FINEACQUIRE_RUNNING = "fineacquire_running";
   }
+
+  namespace Slitd {
+    inline const std::string SLITPOSA = "slitposa";
+    inline const std::string SLITPOSB = "slitposb";
+    inline const std::string SLITW    = "slitw";
+    inline const std::string SLITO    = "slito";
+    inline const std::string ISOPEN   = "isopen";
+    inline const std::string ISHOME   = "ishome";
+  }
+
+  namespace Tcsd {
+    inline const std::string TELRA    = "telra";
+    inline const std::string TELDEC   = "teldec";
+    inline const std::string ALT      = "alt";
+    inline const std::string AZ       = "az";
+    inline const std::string AIRMASS  = "airmass";
+    inline const std::string CASANGLE = "casangle";
+  }
+
 }

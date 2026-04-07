@@ -82,7 +82,7 @@ namespace Sequencer {
         // are initialized here. The names are useful just for logging.
         //
         this->sequence.calibd.name   = "calibd";
-        this->sequence.camerad.name  = "camerad";
+//      this->sequence.camerad.name  = "camerad";
         this->sequence.filterd.name  = "filterd";
         this->sequence.flexured.name = "flexured";
         this->sequence.focusd.name   = "focusd";

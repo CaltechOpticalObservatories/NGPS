@@ -168,7 +168,7 @@ namespace Network {
       std::string getgroup() { return this->group; };                    ///< use to get group
 
       int Create();                                         ///< create a UDP multi-cast socket
-      int Send(std::string message);                        ///< transmit the message to the UDP socket
+      int Send(std::string_view message);                   ///< transmit the message to the UDP socket
       int Close();                                          ///< close the UDP socket connection
       int Listener();                                       ///< creates a UDP listener, returns a file descriptor
       ssize_t Receive( std::string &message );              ///< receive a UDP message from the Listener fd

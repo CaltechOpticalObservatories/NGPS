@@ -34,6 +34,10 @@
 #include "tcsd_commands.h"
 #include "sequencerd_commands.h"
 #include "message_keys.h"
+/*** Work-In-Progress
+ * #include "command.h"
+ * #include "command_rules.h"
+ */
 
 #include "tcs_constants.h"
 #include "acam_interface_shared.h"
@@ -188,10 +192,12 @@ namespace Sequencer {
   enum ThreadStatusBits : size_t {
     THR_SEQUENCER_ASYNC_LISTENER=0,
     THR_TRIGGER_EXPOSURE,
+    THR_EXPOSURE,
     THR_REPEAT_EXPOSURE,
     THR_STOP_EXPOSURE,
     THR_ABORT_PROCESS,
     THR_SEQUENCE_START,
+    THR_RUN_SCRIPT,
     THR_MONITOR_READY_STATE,
     THR_CALIB_SET,
     THR_CAMERA_SET,
@@ -232,10 +238,12 @@ namespace Sequencer {
   const std::map<size_t, std::string> thread_names = {
     {THR_SEQUENCER_ASYNC_LISTENER, "async_listener"},
     {THR_TRIGGER_EXPOSURE,         "trigger_exposure"},
+    {THR_EXPOSURE,                 "exposure"},
     {THR_REPEAT_EXPOSURE,          "repeat_exposure"},
     {THR_STOP_EXPOSURE,            "stop_exposure"},
     {THR_ABORT_PROCESS,            "abort_process"},
     {THR_SEQUENCE_START,           "sequence_start"},
+    {THR_RUN_SCRIPT,               "run_script"},
     {THR_MONITOR_READY_STATE,      "monitor_ready_state"},
     {THR_CALIB_SET,                "calib_set"},
     {THR_CAMERA_SET,               "camera_set"},
@@ -291,9 +299,65 @@ namespace Sequencer {
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
+      /** @brief operation type can be SERIAL or PARALLEL
+       */
+      enum class OperationType {
+        PARALLEL,
+        SERIAL
+      };
+
+      /** @brief  map of parameter key=value pairs associated with operation
+       */
+      struct OperationParams {
+        std::unordered_map<std::string, std::string> map;
+
+        bool has(const std::string &key) const {
+          return map.find(key) != map.end();
+        }
+
+        template <typename T>
+        T get(const std::string &key, const T &default_val) const {
+          auto it = map.find(key);
+          if (it == map.end()) return default_val;
+
+          if constexpr (std::is_same_v<T, std::string>) {
+            return it->second;
+          }
+          else {
+            std::istringstream iss(it->second);
+            T val;
+            iss >> val;
+            return iss.fail() ? default_val : val;
+          }
+        }
+      };
+
+      /** @brief  sequencer operation contains name, status bit, function and params
+       */
+      struct Operation {
+        std::string name;
+        ThreadStatusBits thr;
+        std::function<long()> func;
+        OperationParams params;
+      };
+
+      /** @brief  a group of operations stored in a vector with the operation type
+       */
+      struct OperationGroup {
+        OperationType type;
+        std::vector<Operation> operations;
+      };
+
+      /** @brief  associates a sequencer command with its parameters
+       */
+      struct ParsedCommand {
+        std::string name;
+        OperationParams params;
+      };
+
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
-      void safe_thread(long (Sequence::*method)(), const std::string &function) {
+      void safe_thread(long (Sequence::*method)(), std::string_view function) {
         std::thread([this, method, function]() {
           try {
             (this->*method)();
@@ -345,6 +409,10 @@ namespace Sequencer {
                   [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
               { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -396,6 +464,10 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      std::mutex slitd_mtx;
+      std::condition_variable slitd_cv;
+      std::mutex tcsd_mtx;
+      std::condition_variable tcsd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -450,11 +522,36 @@ namespace Sequencer {
       Common::DaemonClient slitd { "slitd" };
       Common::DaemonClient tcsd { "tcsd" };
 
+/**** Work-In-Progress
+      CommandClient<CameraState> camerad_cmd { camerad,
+                                               camerad_specs,
+                                               CameraState::IDLE,
+                                               camerad_transitions};
+*****/
+
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
       float slitoffsetexpose;   ///< "virtual slit mode" offset for expose
       float slitoffsetacquire;  ///< "virtual slit mode" offset for acquire
       float slitwidthacquire;   ///< "virtual slit mode" width for acquire
+
+      // ---------- sequencer scripting and execution tools --------------------
+      //
+      long run(const Operation &op, std::string_view function);
+      long run_parallel(const std::vector<Operation> &ops, std::string_view function);
+      long run_default_sequence(std::string_view caller);
+      long run_sequence( const std::vector<OperationGroup> &groups,
+                         std::string_view caller,
+                         bool continue_on_error=false );
+
+      long run_script(const std::string &filename);                        ///< run user script
+      long parse_script(const std::string &filename,
+                        std::vector<ParsedCommand> &commands_out);         ///< parse script into commands/args
+      std::optional<ParsedCommand> parse_command(std::string &args);
+      long build_sequence(const std::vector<ParsedCommand> &commands,
+                          std::vector<OperationGroup> &sequence_out);      ///< build sequence from parsed commands
+      long validate_sequence(const std::vector<OperationGroup> &sequence); ///< validate sequence
+      long handle_cli_operation(std::string command);                      ///< handle incoming operation request
 
       // publish/subscribe functions
       //
@@ -468,6 +565,8 @@ namespace Sequencer {
       void handletopic_camerad( const nlohmann::json &jmessage );
       void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slicecamd( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();
@@ -515,7 +614,7 @@ namespace Sequencer {
       bool is_ready() { return this->ready_to_start; }  ///< returns the ready_to_start state, set true only after nightly startup
 
       long parse_calibration_target();
-      long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
+      long parse_state( std::string_view whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
@@ -538,8 +637,6 @@ namespace Sequencer {
       long target_offset();
 
       void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
-      void get_external_telemetry();                                ///< collect telemetry from another daemon
-      long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
@@ -554,14 +651,20 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      long do_exposure(std::string_view caller); ///< wrapper performs and waits for science exposure
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
 
       void dothread_test();
-      long wait_for_user();          ///< wait for the user or cancel
-      void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
+      long wait_for_ontarget(std::string_view caller);  ///< wait for TCS Operator
+      long wait_for_user(std::string_view caller);      ///< wait for the user or cancel
+      long wait_for_exposure(std::string_view caller);  ///< wait for exposure completion or cancel
+      long wait_for_readout(std::string_view caller);   ///< wait for readout completion or cancel
+      long wait_for_canexpose(std::string_view caller); ///< wait for camera can_expose
+
+      void sequence_start(std::string obsid_in="");      ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
@@ -575,6 +678,8 @@ namespace Sequencer {
        */
       long do_acam_acquire();
       long do_slicecam_fineacquire();
+      long do_target_acquisition(std::string_view caller);
+      long do_target_virtualslit(VirtualSlitMode mode);
 
 
       long acam_init();                                        ///< initializes connection to acamd

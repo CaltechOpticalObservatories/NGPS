@@ -59,7 +59,7 @@ namespace Common {
    * @param[in]  message   string to write
    *
    */
-  void Queue::enqueue_and_log(std::string function, std::string message) {
+  void Queue::enqueue_and_log(std::string_view function, std::string_view message) {
     std::lock_guard<std::mutex> lock(queue_mutex);
     message_queue.push(message);
     notifier.notify_one();
@@ -77,9 +77,9 @@ namespace Common {
    * @param[in]  message   string to write
    *
    */
-  void Queue::enqueue_and_log( std::string tag, std::string function, std::string message ) {
+  void Queue::enqueue_and_log( std::string_view tag, std::string_view function, std::string_view message ) {
     std::lock_guard<std::mutex> lock(queue_mutex);
-    std::stringstream qmessage;
+    std::ostringstream qmessage;
     qmessage << tag << ":" << message;
     message_queue.push(qmessage.str());
     notifier.notify_one();
@@ -98,12 +98,12 @@ namespace Common {
    * If the queue is empty, wait untill an element is avaiable.
    *
    */
-  std::string Queue::dequeue(void) {
+  std::string_view Queue::dequeue(void) {
     std::unique_lock<std::mutex> lock(queue_mutex);
     while(message_queue.empty()) {
       notifier.wait(lock);   // release lock as long as the wait and reaquire it afterwards.
     }
-    std::string message = message_queue.front();
+    std::string_view message = message_queue.front();
     message_queue.pop();
     return message;
   }
