@@ -1004,6 +1004,12 @@ class LayoutService:
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
             # self.parent.logic_service.update_target_list_table(target_data)
+            if hasattr(self.parent, "etc_popup") and self.parent.etc_popup is not None:
+                self.parent.etc_popup.set_target_info(
+                    target_data.get("NAME", ""),
+                    target_data.get("RA", ""),
+                    target_data.get("DECL", "")
+                )
 
             # Call to set the column widths (adjust them as needed)
             self.set_column_widths()

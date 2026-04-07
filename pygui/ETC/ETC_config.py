@@ -41,10 +41,12 @@ channels=('U','G','R','I')  # use tuple not list to allow function caching
 chanConfig=QTable([channels], names=['channel'])
 chanConfig.add_index('channel')  # Allows us to specify rows by channel
 
-chanConfig['channelRange']=[[310.,436.], [417.,590.], [561.,794.], [756.,1040.]] * u.nm
+# chanConfig['channelRange']=[[305.1,443.5], [415.7,593.1], [561.9,793.4], [751.2,1040.5]] * u.nm
+chanConfig['channelRange']=[[3051.,4435.], [4157.,5931.], [5619.,7934.], [7512.,10405.]] * u.AA
 
 # Width of detector (px) in the dispersion direction
-chanConfig['Npix_dispers']=(4096, 4096, 4096, 4096)
+chanConfig['Npix_dispers']=(4114, 4114, 4114, 4114)
+chanConfig['dLambda'] = [ (cr[1]-cr[0])/npd for (cr,npd) in zip(chanConfig['channelRange'], chanConfig['Npix_dispers']) ]
 
 chanConfig['platescale']=(0.191, 0.191, 0.191, 0.191)*u.arcsec/u.pix
 
@@ -54,24 +56,20 @@ chanConfig['readnoise']=(4.0, 4.0, 4.0, 4.0)*u.count/u.pix
 
 #LSFFile={}  # Wait for data
 
-#1/2 of FWHM requirement --> sigma
-chanConfig['LSFsigma']=(1.0, 1.4, 1.85, 2.25)*u.AA /2/2.35
+#FWHM ~ sigma*2.35
+#chanConfig['LSFsigma_px']=[2.585, 2.585, 2.585, 2.585]  # R, I widths measured by Matt Matuszewski, 2025
+chanConfig['LSFsigma_px']=[1.23, 1.14, 1.25, 1.25]  # Measured by C. Fremling, 2026
+chanConfig['LSFsigma'] = chanConfig['LSFsigma_px'] * chanConfig['dLambda']
 
 # Colors for plotting
 chanConfig['channelColor']=('blue','green','red','magenta')
 
+# Spectrograph Throughput here includes CCD QE
 chanConfig['throughputFile_spectrograph']=(
-    'throughput-NGPS-spectrograph-U.csv',
-    'throughput-NGPS-spectrograph-G.csv',
-    'throughput-NGPS-spectrograph-R.csv',
-    'throughput-NGPS-spectrograph-I.csv'
-)
-
-chanConfig['QEFile']=(
-    'QE-LBNL-CCD-blue.csv',
-    'QE-LBNL-CCD-red.csv',
-    'QE-LBNL-CCD-red.csv',
-    'QE-LBNL-CCD-red.csv'
+    'throughput-spectrograph-20260206-U.csv',
+    'throughput-spectrograph-20260206-G.csv',
+    'throughput-spectrograph-20260206-R.csv',
+    'throughput-spectrograph-20260206-I.csv'
 )
 
 # Make standalone dicts from the columns in the data table

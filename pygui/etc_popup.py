@@ -1,340 +1,634 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox, QCheckBox, QPushButton, QSpacerItem, QSizePolicy, QFrame
+from PyQt5.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QLineEdit, QComboBox, QCheckBox,
+    QPushButton, QSizePolicy, QFrame
+)
 from PyQt5.QtCore import Qt
-import subprocess
 import re
+import subprocess
 
 class EtcPopup(QDialog):
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
+        self.FIELD_HEIGHT = 34
+        self.FIELD_WIDTH = 220
+        self.LABEL_WIDTH = 150
+        self.INPUT_COLUMN_OFFSET = 190
+
         self.setWindowTitle("ETC")
-        self.setFixedSize(600, 600)  # Increased width for better alignment
+        self.resize(900, 700)
 
-        # Main layout for the dialog
-        self.main_layout = QVBoxLayout()
-        self.main_layout.setSpacing(12)
-        self.main_layout.setContentsMargins(10, 10, 10, 10)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_layout.setSpacing(14)
+        
+        self.channel_ranges = {
+            "U": ("3250", "4330"),
+            "G": ("4330", "5850"),
+            "R": ("5850", "7600"),
+            "I": ("7700", "9340"),
+        }
 
-        # Initialize the form components
         self.init_widgets()
         self.init_layout()
-        self.setLayout(self.main_layout)
 
     def init_widgets(self):
-        """Initialize all the widgets needed for the form."""
-        # Create input fields and widgets
-        self.magnitude_input = QLineEdit()
-        self.filter_dropdown = QComboBox()
-        self.filter_dropdown.addItems(["U", "G", "R", "I"])
-        self.system_field = QLineEdit("AB")
-        self.system_field.setReadOnly(True)
 
-        self.sky_mag_input = QLineEdit()
-        self.snr_input = QLineEdit()
+        def line():
+            w = QLineEdit()
+            w.setMinimumHeight(self.FIELD_HEIGHT)
+            w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            return w
+        def combo(items):
+            c = QComboBox()
+            c.addItems(items)
 
-        self.slit_width_input = QLineEdit()
-        self.slit_dropdown = QComboBox()
-        self.slit_dropdown.addItems(["SET", "LOSS", "SNR", "RES", "AUTO"])
+            c.setMinimumHeight(self.FIELD_HEIGHT)
+            c.setFixedWidth(self.FIELD_WIDTH)
 
-        self.range_input_start = QLineEdit()
-        self.range_input_end = QLineEdit()
+            c.setMaxVisibleItems(4)  # exactly the number of items
+            c.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLength)
+
+            return c
+
+        self.exptime_input = line()
+        self.snr_input = line()
+
+        self.snr_mode = QComboBox()
+        self.snr_mode.addItems([
+            "Fixed EXPTIME",
+            "Solve for EXPTIME"
+        ])
+        self.snr_mode.setMinimumHeight(self.FIELD_HEIGHT)
+        self.slit_width_input = line()
+        self.resolution_input = line()
+        self.res_mode = QComboBox()
+        self.res_mode.addItems([
+            "Fixed slit width",
+            "RES",
+            "AUTO"
+        ])
+        self.res_mode.setMinimumHeight(self.FIELD_HEIGHT)
+
+        self.channel_dropdown = combo(["R", "I", "U", "G"])
+        self.channel_dropdown.currentTextChanged.connect(self.update_channel_range)
+        self.spatial_dropdown = combo(["1", "2", "3", "4", "5", "6"])
+        self.spectral_dropdown = combo(["1", "2", "3", "4", "5", "6"])
+        self.extract_dropdown = combo(["PSF", "2px", "4px", "6px", "8px", "10px"])
+
+        self.range_start = line()
+        self.range_end = line()
+
         self.no_slicer_checkbox = QCheckBox("No Slicer")
+        self.no_slicer_checkbox.setChecked(True)
+        self.no_slicer_checkbox.setMinimumHeight(self.FIELD_HEIGHT)
 
-        self.seeing_input = QLineEdit()
-        self.airmass_input = QLineEdit()
+        self.seeing_input = line()
+        self.seeing_wavelength = line()
+        self.sky_mag_input = line()
+        self.airmass_input = line()
 
-        self.exptime_input = QLineEdit()
-        self.resolution_input = QLineEdit()
+        self.magnitude_input = line()
+        self.abvega_dropdown = combo(["AB", "VEGA"])
+        self.filter_dropdown = combo(["match", "U", "V", "R", "I"])
 
-        # Buttons
+        self.extended_checkbox = QCheckBox("Extended Source")
+        self.extended_checkbox.setMinimumHeight(self.FIELD_HEIGHT)
+
+        self.expert_field = line()
+        self.expert_field.setMaximumWidth(400)
+        self.expert_field.setPlaceholderText("Advanced parameters (for power users)")
+
         self.run_button = QPushButton("Run ETC")
-        self.save_button = QPushButton("Save")
-        self.save_button.setEnabled(False)  # Initially disable the Save button
+        self.save_button = QPushButton("Apply to Target")
+
+        self.run_button.setFixedSize(160, 50)
+        self.save_button.setFixedSize(160, 50)
+        self.run_button.clicked.connect(self.run_etc)
+        self.save_button.clicked.connect(self.save_etc)
+        
+        self.snr_mode.currentIndexChanged.connect(self.update_exptime_mode)
+        self.res_mode.currentIndexChanged.connect(self.update_resolution_mode)
+        self.extract_dropdown.currentTextChanged.connect(self.update_extract_mode)
+
+        self.error_label = QLabel("")
+        self.error_label.setStyleSheet("""
+            QLabel {
+                color: #cc0000;
+                font-weight: bold;
+            }
+        """)
+        self.error_label.setWordWrap(True)
+
+        self.target_label = QLabel("No target selected")
+        self.target_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                font-size: 14px;
+                color: #dddddd;
+            }
+        """)
+        self.target_label.setAlignment(Qt.AlignCenter)
+        # initialize state
+        self.update_exptime_mode()
+        self.update_resolution_mode()
+        
+        # Default ETC values
+        self.channel_dropdown.setCurrentText("R")
+        self.filter_dropdown.setCurrentText("match")
+        self.extract_dropdown.setCurrentText("8px")
+        self.spatial_dropdown.setCurrentText("2")
+
+        self.seeing_input.setText("1.5")
+        self.seeing_wavelength.setText("6400")
+        self.seeing_wavelength.setEnabled(False)
+        self.airmass_input.setText("1")
+        self.sky_mag_input.setText("21.4")
+        self.magnitude_input.setText("18")
+
+        self.update_channel_range(self.channel_dropdown.currentText())
+
+    def label(self, text):
+        l = QLabel(text)
+        l.setFixedWidth(self.LABEL_WIDTH)
+        return l
+
+    def hline(self):
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("color:#555;margin-top:10px;margin-bottom:10px;")
+        return line
+
+    def etc_row(self, l_label=None, l_widget=None, r_label=None, r_widget=None):
+
+        row = QHBoxLayout()
+        row.setSpacing(10)
+
+        def label(text):
+            lab = QLabel(text)
+            lab.setFixedWidth(self.INPUT_COLUMN_OFFSET)
+            return lab
+
+        if l_label:
+            row.addWidget(label(l_label))
+
+        if l_widget:
+            row.addWidget(l_widget)
+
+        if r_label:
+            row.addSpacing(60)
+            row.addWidget(label(r_label))
+
+        if r_widget:
+            row.addWidget(r_widget)
+
+        row.addStretch()
+
+        return row
 
     def init_layout(self):
-        """Add widgets to the layout."""
-        # Add input rows for each section
-        self.main_layout.addLayout(self.create_input_row("Magnitude:", self.magnitude_input, self.filter_dropdown, self.system_field))
-        
-        # Call create_sky_mag_snr_layout for Sky Mag and SNR fields
-        self.main_layout.addLayout(self.create_sky_mag_snr_layout())
-        
-        self.main_layout.addLayout(self.create_input_row("Slit Width:", self.slit_width_input, self.slit_dropdown))
-        self.main_layout.addLayout(self.create_range_layout())
 
-        # Modified the "Seeing" and "Airmass" row
-        self.main_layout.addLayout(self.create_seeing_airmass_layout())
+        L = self.main_layout
+        L.addWidget(self.target_label)
+        L.addWidget(self.hline())
 
-        # Modified the "Exp Time" and "Resolution" row
-        self.main_layout.addLayout(self.create_exptime_resolution_layout())
+        # EXPOSURE
+        exp = QGridLayout()
+        exp.setHorizontalSpacing(24)
+        exp.setVerticalSpacing(14)
 
-        # Add a divider line
-        divider_line = QFrame()
-        divider_line.setFrameShape(QFrame.HLine)
-        divider_line.setFrameShadow(QFrame.Sunken)
-        self.main_layout.addWidget(divider_line)
+        exp.setColumnMinimumWidth(0, 180)
+        exp.setColumnMinimumWidth(2, 140)
 
-        # Add buttons
-        self.add_buttons()
+        exp.setColumnStretch(1, 1)
+        exp.setColumnStretch(3, 1)
 
-        # Add a spacer to ensure widgets aren't squished
-        spacer = QSpacerItem(20, 30, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.main_layout.addItem(spacer)
+        # Row 1
+        exp.addWidget(self.label("Exp. Time (s)"), 0, 0)
+        exp.addWidget(self.exptime_input,          0, 1)
 
-    def create_input_row(self, label_text, *widgets):
-        """Create a horizontal layout with a label and widgets."""
-        row_layout = QHBoxLayout()
-        label = self.create_aligned_label(label_text)
-        row_layout.addWidget(label)
-        for widget in widgets:
-            row_layout.addWidget(widget)
-            widget.setFixedHeight(35)
-            widget.setFixedWidth(110)
-            widget.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        return row_layout
+        exp.addWidget(self.label("SNR"),           0, 2)
+        exp.addWidget(self.snr_input,              0, 3)
+        exp.addWidget(self.snr_mode,               0, 4)
 
-    def create_sky_mag_snr_layout(self):
-        """Create a layout for Sky Mag and SNR with labels next to the input fields."""
-        layout = QHBoxLayout()
+        # Row 2
+        exp.addWidget(self.label("Slit width (arcsec)"), 1, 0)
+        exp.addWidget(self.slit_width_input,             1, 1)
 
-        # Add Sky Mag label and input
-        sky_mag_label = self.create_aligned_label("Sky Mag:")
-        layout.addWidget(sky_mag_label)
-        layout.addWidget(self.sky_mag_input)
+        exp.addWidget(self.label("Resolution"),          1, 2)
+        exp.addWidget(self.resolution_input,             1, 3)
+        exp.addWidget(self.res_mode,                     1, 4)
 
-        # Add SNR label and input next to it
-        snr_label = self.create_aligned_label("SNR:")
-        layout.addWidget(snr_label)
-        layout.addWidget(self.snr_input)
+        L.addLayout(exp)
+        L.addWidget(self.hline())
 
-        self.sky_mag_input.setFixedHeight(35)
-        self.sky_mag_input.setFixedWidth(110)
-        self.snr_input.setFixedHeight(35)
-        self.snr_input.setFixedWidth(110)
+        # CHANNEL / CCD
+        chan = QGridLayout()
+        chan.setHorizontalSpacing(40)
+        chan.setVerticalSpacing(16)
 
-        return layout
+        chan.addWidget(QLabel("Channel"), 0, 0)
+        chan.addWidget(self.channel_dropdown, 0, 1)
 
-    def create_seeing_airmass_layout(self):
-        """Create a layout for 'Seeing' and 'Airmass' next to each other."""
-        layout = QHBoxLayout()
-        
-        # Add Seeing label and input
-        seeing_label = self.create_aligned_label("Seeing:")
-        layout.addWidget(seeing_label)
-        layout.addWidget(self.seeing_input)
-        
-        # Add Airmass label and input next to it
-        airmass_label = self.create_aligned_label("Airmass:")
-        layout.addWidget(airmass_label)
-        layout.addWidget(self.airmass_input)
-        
-        self.seeing_input.setFixedHeight(35)
-        self.seeing_input.setFixedWidth(110)
-        self.airmass_input.setFixedHeight(35)
-        self.airmass_input.setFixedWidth(110)
+        snr = QHBoxLayout()
+        snr.addWidget(self.range_start)
+        snr.addWidget(self.range_end)
 
-        return layout
+        chan.addWidget(QLabel("SNR Range (Å)"), 1, 0)
+        chan.addLayout(snr, 1, 1)
 
-    def create_exptime_resolution_layout(self):
-        """Create a layout for 'Exp Time' and 'Resolution' next to each other."""
-        layout = QHBoxLayout()
-        
-        # Add Exp Time label and input
-        exptime_label = self.create_aligned_label("Exp Time:")
-        layout.addWidget(exptime_label)
-        layout.addWidget(self.exptime_input)
-        
-        # Add Resolution label and input next to it
-        resolution_label = self.create_aligned_label("Resolution:")
-        layout.addWidget(resolution_label)
-        layout.addWidget(self.resolution_input)
-        
-        self.exptime_input.setFixedHeight(35)
-        self.exptime_input.setFixedWidth(110)
-        self.resolution_input.setFixedHeight(35)
-        self.resolution_input.setFixedWidth(110)
+        chan.addWidget(self.no_slicer_checkbox, 2, 0)
 
-        return layout
+        chan.addWidget(QLabel("Bin Spatial"), 0, 2)
+        chan.addWidget(self.spatial_dropdown, 0, 3)
 
-    def create_range_layout(self):
-        """Create the range row layout."""
-        range_layout = QHBoxLayout()
-        range_layout.setSpacing(10)
-        range_layout.addWidget(self.create_aligned_label("Range:"))
-        range_layout.addWidget(self.range_input_start)
-        range_layout.addWidget(QLabel("-"))
-        range_layout.addWidget(self.range_input_end)
-        range_layout.addWidget(self.no_slicer_checkbox)
-        return range_layout
+        chan.addWidget(QLabel("Bin Spectral"), 1, 2)
+        chan.addWidget(self.spectral_dropdown, 1, 3)
 
-    def create_aligned_label(self, text):
-        """Create a label with right alignment."""
-        label = QLabel(text)
-        label.setFixedWidth(110)
-        label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        label.setStyleSheet("font-size: 14pt;")
-        return label
+        chan.addWidget(QLabel("Extract Spatial"), 2, 2)
+        chan.addWidget(self.extract_dropdown, 2, 3)
 
-    def add_buttons(self):
-        """Add buttons to the layout."""
-        button_row_layout = QHBoxLayout()
-        button_row_layout.setSpacing(10)
+        L.addLayout(chan)
+        L.addWidget(self.hline())
 
-        self.run_button.setFixedSize(110, 45)
-        self.run_button.clicked.connect(self.run_etc)
+        # CONDITIONS
+        cond = QGridLayout()
+        cond.setHorizontalSpacing(40)
+        cond.setVerticalSpacing(16)
 
-        self.save_button.setFixedSize(100, 45)
-        self.save_button.clicked.connect(self.save_etc)
+        cond.addWidget(QLabel("Seeing (arcsec)"), 0, 0)
+        cond.addWidget(self.seeing_input, 0, 1)
 
-        button_row_layout.addWidget(self.run_button)
-        button_row_layout.addWidget(self.save_button)
+        cond.addWidget(QLabel("Seeing Pivot (Å)"), 0, 2)
+        cond.addWidget(self.seeing_wavelength, 0, 3)
 
-        # Add a spacer after the buttons to create margin below
-        spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        button_row_layout.addItem(spacer)
+        cond.addWidget(QLabel("Sky (mag/arcsec²)"), 1, 0)
+        cond.addWidget(self.sky_mag_input, 1, 1)
 
-        self.main_layout.addLayout(button_row_layout)
+        cond.addWidget(QLabel("Airmass"), 1, 2)
+        cond.addWidget(self.airmass_input, 1, 3)
 
+        L.addLayout(cond)
+        L.addWidget(self.hline())
+
+        # TARGET MODEL
+        target = QGridLayout()
+        target.setHorizontalSpacing(40)
+        target.setVerticalSpacing(16)
+
+        target.addWidget(QLabel("Magnitude"), 0, 0)
+        target.addWidget(self.magnitude_input, 0, 1)
+
+        target.addWidget(QLabel("AB/Vega"), 0, 2)
+        target.addWidget(self.abvega_dropdown, 0, 3)
+
+        target.addWidget(QLabel("Filter"), 0, 4)
+        target.addWidget(self.filter_dropdown, 0, 5)
+
+        target.addWidget(self.extended_checkbox, 1, 0)
+
+        target.addWidget(QLabel("Expert"), 1, 2)
+        target.addWidget(self.expert_field, 1, 3, 1, 3)
+
+        L.addLayout(target)
+        L.addWidget(self.hline())
+
+        L.addWidget(self.error_label)
+
+        # BUTTONS
+        btn = QHBoxLayout()
+        btn.addStretch()
+        btn.addWidget(self.run_button)
+        btn.addSpacing(60)
+        btn.addWidget(self.save_button)
+        btn.addStretch()
+
+        L.addLayout(btn)
+
+    def update_exptime_mode(self):
+
+        mode = self.snr_mode.currentText()
+
+        if mode == "Fixed EXPTIME":
+            self.set_field_state(self.exptime_input, True)
+            self.set_field_state(self.snr_input, False)
+
+        else:
+            self.set_field_state(self.exptime_input, False)
+            self.set_field_state(self.snr_input, True)
+            
+    def update_resolution_mode(self):
+
+        mode = self.res_mode.currentText()
+
+        if mode == "Fixed slit width":
+            self.set_field_state(self.slit_width_input, True)
+            self.set_field_state(self.resolution_input, False)
+
+        elif mode == "RES":
+            self.set_field_state(self.slit_width_input, False)
+            self.set_field_state(self.resolution_input, True)
+
+        else:  # AUTO
+            self.set_field_state(self.slit_width_input, False)
+            self.set_field_state(self.resolution_input, False)
+
+    def set_field_state(self, field, enabled):
+
+        field.setEnabled(enabled)
+
+        if enabled:
+            field.setStyleSheet("")
+        else:
+            field.clear()
+            field.setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #cccccc;
+                }
+            """)
+
+    def update_channel_range(self, channel):
+
+        if channel in self.channel_ranges:
+
+            start, end = self.channel_ranges[channel]
+
+            self.range_start.setText(start)
+            self.range_end.setText(end) 
+
+    def update_extract_mode(self, mode):
+        if mode == "PSF":
+            self.no_slicer_checkbox.setChecked(True)
+            
     def validate_inputs(self):
-        """Validates user inputs in the ETC tab and highlights invalid fields."""
-        
-        # Helper function to check if the input is a valid float and not empty
+        """Validate numeric inputs and highlight invalid fields."""
+
         def is_valid_float(text):
-            if text.strip() == '':  # Check if the text is empty
+            if text.strip() == "":
                 return False
             try:
-                float(text)  # Try to convert to float
+                float(text)
                 return True
             except ValueError:
-                return False  # Return False if the conversion fails
+                return False
 
-        # Reset all fields to default state (clear previous error highlighting)
-        self.magnitude_input.setStyleSheet("")
-        self.sky_mag_input.setStyleSheet("")
-        self.snr_input.setStyleSheet("")
-        self.slit_width_input.setStyleSheet("")
-        self.range_input_start.setStyleSheet("")
-        self.range_input_end.setStyleSheet("")
-        
+        fields = [
+            self.magnitude_input,
+            self.sky_mag_input,
+            self.snr_input,
+            self.slit_width_input,
+            self.range_start,
+            self.range_end,
+            self.seeing_input,
+            self.airmass_input,
+        ]
+
+        # clear previous errors
+        for f in fields:
+            f.setStyleSheet("")
+
         try:
-            # Check if all numeric inputs are valid
+
             if not is_valid_float(self.magnitude_input.text()):
-                self.magnitude_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Magnitude must be a valid number.")
-            magnitude = float(self.magnitude_input.text())
+                self.magnitude_input.setStyleSheet("border:1px solid red;")
+                raise ValueError("Magnitude must be a number")
 
             if not is_valid_float(self.sky_mag_input.text()):
-                self.sky_mag_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Sky Mag must be a valid number.")
-            sky_mag = float(self.sky_mag_input.text())
+                self.sky_mag_input.setStyleSheet("border:1px solid red;")
+                raise ValueError("Sky Mag must be a number")
 
-            if not is_valid_float(self.snr_input.text()):
-                self.snr_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("SNR must be a valid number.")
-            snr = float(self.snr_input.text())
+            if self.snr_input.isEnabled():
+                if not is_valid_float(self.snr_input.text()):
+                    self.snr_input.setStyleSheet("border:1px solid red;")
+                    raise ValueError("SNR must be a number")
 
-            if not is_valid_float(self.slit_width_input.text()):
-                self.slit_width_input.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Slit Width must be a valid number.")
-            slit_width = float(self.slit_width_input.text())
+            if self.slit_width_input.isEnabled():
+                if not is_valid_float(self.slit_width_input.text()):
+                    self.slit_width_input.setStyleSheet("border:1px solid red;")
+                    raise ValueError("Slit width must be a number")
 
-            if not is_valid_float(self.range_input_start.text()):
-                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range Start must be a valid number.")
-            range_start = float(self.range_input_start.text())
+            if not is_valid_float(self.range_start.text()):
+                self.range_start.setStyleSheet("border:1px solid red;")
+                raise ValueError("Range start must be a number")
 
-            if not is_valid_float(self.range_input_end.text()):
-                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range End must be a valid number.")
-            range_end = float(self.range_input_end.text())
-            
-            # Ensure range_start is less than range_end
-            if range_start >= range_end:
-                self.range_input_start.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                self.range_input_end.setStyleSheet("border: 1px solid red;")  # Highlight invalid field
-                raise ValueError("Range start must be less than range end.")
+            if not is_valid_float(self.range_end.text()):
+                self.range_end.setStyleSheet("border:1px solid red;")
+                raise ValueError("Range end must be a number")
 
-            # Check for valid values (you can adjust this for your specific needs)
-            if magnitude <= 0 or sky_mag <= 0 or snr <= 0 or slit_width <= 0:
-                raise ValueError("Magnitude, Sky Mag, SNR, and Slit Width must be positive values.")
-            
+            if self.resolution_input.isEnabled():
+                if not is_valid_float(self.resolution_input.text()):
+                    self.resolution_input.setStyleSheet("border:1px solid red;")
+                    raise ValueError("Resolution must be a number")
+        
+            start = float(self.range_start.text())
+            end = float(self.range_end.text())
+
+            if start >= end:
+                self.range_start.setStyleSheet("border:1px solid red;")
+                self.range_end.setStyleSheet("border:1px solid red;")
+                raise ValueError("Range start must be less than range end")
+
             self.save_button.setEnabled(True)
-            return True  # All inputs are valid
+            return True
 
         except ValueError as e:
-            # Show error message
-            error_msg = f"Invalid input: {str(e)}"
-            print(error_msg)
-            return False  # Input is invalid
-
+            print(f"Invalid input: {e}")
+            return False
 
     def run_etc(self):
-        """Handles the logic for the 'Run ETC' button."""
-        
-        # Validate inputs before running the command
+
         if not self.validate_inputs():
-            return  # If inputs are invalid, do not proceed
-        
-        # Collecting all necessary data from input fields
-        filter_value = self.filter_dropdown.currentText()  # e.g., "G"
-        magnitude_value = self.magnitude_input.text()  # e.g., "18.0"
-        sky_mag_value = self.sky_mag_input.text()  # e.g., "21.4"
-        snr_value = self.snr_input.text()  # e.g., "10"
-        slit_width_value = self.slit_width_input.text()  # e.g., "0.5"
-        slit_option = self.slit_dropdown.currentText()  # e.g., "SET X"
-        seeing_value = self.seeing_input.text()
-        airmass_value = self.airmass_input.text()
-        mag_system_value = self.system_field.text()  # e.g., "AB"
-        mag_filter_value = "match"  # e.g., "match"
-        
-        # Handling the range inputs
-        range_start_value = self.range_input_start.text()
-        range_end_value = self.range_input_end.text()
+            return
+        self.error_label.setText("")
 
-        # Construct the command string
-        command = f"python3 ETC/ETC_main.py {filter_value} {range_start_value} {range_end_value} SNR {snr_value} " \
-                f"-slit {slit_option} {slit_width_value} -seeing {seeing_value} 500 -airmass {airmass_value} " \
-                f"-skymag {sky_mag_value} -mag {magnitude_value} -magsystem {mag_system_value} -magfilter {mag_filter_value}"
+        channel = self.channel_dropdown.currentText()
 
-        # Print the command for debugging
-        print(f"Running command: {command}")
-        
-        # Run the command and capture the output
+        wrange_start = str(float(self.range_start.text()) / 10)
+        wrange_end = str(float(self.range_end.text()) / 10)
+
+        mag = self.magnitude_input.text()
+        magsystem = self.abvega_dropdown.currentText()
+        magfilter = self.filter_dropdown.currentText()
+
+        sky_mag = self.sky_mag_input.text()
+        seeing = self.seeing_input.text()
+        airmass = self.airmass_input.text()
+
+        # EXPTIME / SNR solve mode
+        snr_mode = self.snr_mode.currentText()
+
+        if snr_mode == "Fixed EXPTIME":
+            solve_param = "EXPTIME"
+            solve_value = self.exptime_input.text()
+        else:
+            solve_param = "SNR"
+            solve_value = self.snr_input.text()
+
+        # SLIT / RESOLUTION mode
+        res_mode = self.res_mode.currentText()
+
+        if res_mode == "Fixed slit width":
+            slit_mode = ["-slit", "SET", self.slit_width_input.text()]
+
+        elif res_mode == "RES":
+            slit_mode = ["-slit", "RES", self.resolution_input.text()]
+
+        else:
+            slit_mode = ["-slit", "AUTO"]
+
+
+        # Build command
+        cmd = [
+            "python3",
+            "ETC/ETC_main.py",
+            channel,
+            wrange_start,
+            wrange_end,
+            solve_param,
+            solve_value,
+            *slit_mode,
+            "-seeing", seeing, "640",
+            "-airmass", airmass,
+            "-skymag", sky_mag,
+            "-mag", mag,
+            "-magsystem", magsystem,
+            "-magfilter", magfilter
+        ]
+
+        # slicer option
+        if self.no_slicer_checkbox.isChecked():
+            cmd.append("-noslicer")
+
+        # binning options
+        cmd.extend(["-binspect", self.spectral_dropdown.currentText()])
+        cmd.extend(["-binspat", self.spatial_dropdown.currentText()])
+        # extract aperture -> fastSNR option
+        extract_mode = self.extract_dropdown.currentText()
+
+        if extract_mode != "PSF":
+            fastsnr_value = int(extract_mode.replace("px", "")) // 2
+            cmd.extend(["-fastSNR", str(fastsnr_value)])
+
+        # expert option
+        expert = self.expert_field.text().strip()
+        if expert:
+            cmd.extend(expert.split())
+
+        print("Running ETC command:")
+        print(" ".join(cmd))
+
         try:
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-            output = result.stdout.strip()  # Get the output from the command
-            print(f"Command output: {output}")
 
-            # Extract EXPTIME and RESOLUTION from the output using regex
-            exptime_match = re.search(r"EXPTIME=([0-9.]+) s", output)
-            resolution_match = re.search(r"RESOLUTION=([0-9.]+)", output)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            output = result.stdout
+            print(output)
+
+            exptime_match = re.search(r"EXPTIME=([0-9.]+)", output)
+            res_match = re.search(r"RESOLUTION=([0-9.]+)", output)
+            snr_match = re.search(r"SNR=([0-9.]+)", output)
+            slitwidth_match = re.search(r"SLITWIDTH=([0-9.]+)", output)
 
             if exptime_match:
                 exptime = float(exptime_match.group(1))
-                exptime_rounded = round(exptime)  # Round EXPTIME to the nearest integer
-                self.exptime_input.setText(str(exptime_rounded))  # Update GUI field with rounded EXPTIME
+                self.exptime_input.setText(str(exptime))
 
-            if resolution_match:
-                resolution = float(resolution_match.group(1))
-                resolution_rounded = round(resolution)  # Round RESOLUTION to the nearest integer
-                self.resolution_input.setText(str(resolution_rounded))  # Update GUI field with rounded RESOLUTION
+            if res_match:
+                resolution = float(res_match.group(1))
+                self.resolution_input.setText(str(resolution))
+
+            if snr_match:
+                snr = float(snr_match.group(1))
+                self.snr_input.setText(str(snr))
+
+            if slitwidth_match:
+                slitwidth = float(slitwidth_match.group(1))
+                self.slit_width_input.setText(str(slitwidth))
 
         except subprocess.CalledProcessError as e:
-            # Handle errors if the command fails
-            print(f"Error running ETC: {e}")
-        
-        # Display the result in the results display (GUI)
-        result_text = f"Running ETC with the following parameters:\n{command}\n\n" \
-                    f"EXPTIME: {self.exptime_input.text()}\n" \
-                    f"RESOLUTION: {self.resolution_input.text()}"
-        print(result_text)
+
+            stderr = e.stderr or ""
+
+            error_line = ""
+
+            for line in stderr.splitlines():
+                if "ETC_main.py: error:" in line:
+                    error_line = line
+                    break
+
+            if error_line:
+                self.error_label.setText(error_line)
+            else:
+                self.error_label.setText("ETC failed. See terminal for details.")
+
+            print("ETC failed")
+            print(e.stdout)
+            print(e.stderr)
+
         self.save_button.setEnabled(True)
 
     def save_etc(self):
+
+        # Prevent execution if no target selected
+        if not getattr(self.parent, "current_observation_id", None):
+            print("No target selected, ETC results cannot be applied.")
+            return
+
         exptime = self.exptime_input.text()
         resolution = self.resolution_input.text()
-        if (self.parent.current_observation_id):
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exptime)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMres", resolution)
-            self.save_button.setEnabled(False)
+        slit_width = self.slit_width_input.text()
+
+        # Exposure time
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "OTMexpt", exptime
+        )
+
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "exptime", "SET " + exptime
+        )
+
+        # Resolution
+        self.logic_service.send_update_to_db(
+            self.parent.current_observation_id, "OTMres", resolution
+        )
+
+        # Slit width
+        if slit_width:
+            self.logic_service.send_update_to_db(
+                self.parent.current_observation_id, "OTMslitwidth", slit_width
+            )
+
+            self.logic_service.send_update_to_db(
+                self.parent.current_observation_id, "slitwidth", "SET " + slit_width
+            )
+
+        print("ETC values applied to target.")
+
+    def load_target(self, target_data):
+        """
+        Populate ETC fields from selected target.
+        target_data is a dict from the target table.
+        """
+
+        mag = target_data.get("MAG")
+        filt = target_data.get("FILTER")
+
+        if mag:
+            self.magnitude_input.setText(str(mag))
+
+        if filt:
+            idx = self.filter_dropdown.findText(filt)
+            if idx >= 0:
+                self.filter_dropdown.setCurrentIndex(idx)
+
+    def set_target_info(self, name, ra, dec):
+
+        text = f"Target: {name}    RA: {ra}    Dec: {dec}"
+        self.target_label.setText(text)
