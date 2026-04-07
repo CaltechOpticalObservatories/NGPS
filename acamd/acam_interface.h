@@ -24,6 +24,7 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 #include "database.h"
+#include "message_keys.h"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -510,6 +511,13 @@ namespace Acam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      struct {
+        std::string acquire_mode = "";
+        bool        is_acquired  = false;
+        int         nacquired    = 0;
+        int         attempts     = 0;
+      } last_status;
+
     public:
 
       std::string motion_host;
@@ -567,8 +575,10 @@ namespace Acam {
           nskip_preserve_frames(0),
           newframe_ready(false),
           snapshot_status {
-            {"tcsd",       false},
-            {"slitd",      false}
+            {Topic::TCSD,       false},
+            {Topic::SLITD,      false},
+            {Topic::TARGETINFO, false},
+            {Topic::ACAMD,      false}
           },
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
@@ -576,13 +586,13 @@ namespace Acam {
       {
             target.set_interface_instance( this ); ///< Set the Interface instance in Target
             topic_handlers = {
-              { "_snapshot", std::function<void(const nlohmann::json&)>(
+              { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-              { "tcsd", std::function<void(const nlohmann::json&)>(
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-              { "targetinfo", std::function<void(const nlohmann::json&)>(
+              { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) },
-              { "slitd", std::function<void(const nlohmann::json&)>(
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
             };
       }
@@ -645,6 +655,7 @@ namespace Acam {
 
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
+      void publish_status(bool force=false);
       void request_snapshot();
       bool wait_for_snapshots();
       long handle_json_message( std::string message_in );

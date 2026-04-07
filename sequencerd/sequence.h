@@ -288,6 +288,8 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
+      std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -339,6 +341,10 @@ namespace Sequencer {
             topic_handlers = {
               { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+              { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -384,6 +390,10 @@ namespace Sequencer {
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
 
+      std::mutex fineacquire_mtx;
+      std::condition_variable fineacquire_cv;
+      std::mutex acam_mtx;
+      std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
       std::mutex wait_mtx;
@@ -456,6 +466,8 @@ namespace Sequencer {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
       void handletopic_camerad( const nlohmann::json &jmessage );
+      void handletopic_acamd( const nlohmann::json &jmessage );
+      void handletopic_slicecamd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();
@@ -546,9 +558,9 @@ namespace Sequencer {
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
-      void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       void dothread_test();
+      long wait_for_user();          ///< wait for the user or cancel
       void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
@@ -557,6 +569,13 @@ namespace Sequencer {
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
+
+      /**
+       * these are in sequence_acquisition.cpp
+       */
+      long do_acam_acquire();
+      long do_slicecam_fineacquire();
+
 
       long acam_init();                                        ///< initializes connection to acamd
       long calib_init();                                       ///< initializes connection to calibd

@@ -22,7 +22,7 @@ namespace Sequencer {
   /**
    * @brief      publishes snapshot of my telemetry
    * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry info when the subscriber receives the "_snapshot"
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
    *             topic and the payload contains my daemon name.
    * @param[in]  jmessage_in  subscribed-received JSON message
    *
@@ -43,7 +43,7 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
   /**
-   * @brief      handles camerad telemetry
+   * @brief      handles Topic::CAMERAD telemetry
    * @param[in]  jmessage  subscribed-received JSON message
    *
    */
@@ -56,6 +56,40 @@ namespace Sequencer {
     }
   }
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+  /**
+   * @brief      handles Topic::SLICECAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
+    // set is_fineacquire_locked flag
+    bool fineacquirelocked;
+    Common::extract_telemetry_value( jmessage, Key::Slicecamd::FINEACQUIRE_LOCKED, fineacquirelocked );
+    this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+    this->fineacquire_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+
+
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
+  /**
+   * @brief      handles Topic::ACAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
+    // set is_acam_guiding flag
+    bool acquired;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
+    this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->acam_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -85,15 +119,15 @@ namespace Sequencer {
    */
   void Sequence::publish_seqstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // sequencer state
     std::string seqstate( this->seq_state_manager.get_set_states() );
     rtrim( seqstate );
-    jmessage_out["seqstate"]  = seqstate;
+    jmessage_out[Key::Sequencer::SEQSTATE] = seqstate;
 
     try {
-      this->publisher->publish( jmessage_out, "seq_seqstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_seqstate",
@@ -114,7 +148,7 @@ namespace Sequencer {
    */
   void Sequence::publish_waitstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -124,7 +158,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_waitstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_WAITSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_waitstate",
@@ -144,7 +178,7 @@ namespace Sequencer {
    */
   void Sequence::publish_daemonstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -154,7 +188,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_daemonstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_DAEMONSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_daemonstate",
@@ -174,7 +208,7 @@ namespace Sequencer {
    */
   void Sequence::publish_threadstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of thread state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -184,7 +218,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_threadstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_THREADSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_threadstate",
@@ -373,6 +407,45 @@ namespace Sequencer {
   }
 
 
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+  /**
+   * @brief      waits for the user to click a button, or cancel
+   * @details    Use this when you just want to slow things down or get a
+   *             cup of coffee instead of observing.
+   * @return     NO_ERROR on continue | ABORT on cancel
+   *
+   */
+  long Sequence::wait_for_user() {
+    const std::string function("Sequencer::Sequence::wait_for_user");
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+
+    this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
+
+    while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+      std::unique_lock<std::mutex> lock(cv_mutex);
+      this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+    }
+
+    this->async.enqueue_and_log( function, "NOTICE: received "
+                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                           +" signal!" );
+    }  // end scope for wait_state = WAIT_USER
+
+    if ( this->cancel_flag.load() ) {
+      this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+      return ABORT;
+    }
+
+    this->is_usercontinue.store(false);
+
+    this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+
+
   /***** Sequencer::Sequence::sequence_start **********************************/
   /**
    * @brief      main sequence start thread
@@ -513,10 +586,11 @@ namespace Sequencer {
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) } };
 
       }
+      else {
+
       // For any other pointmode (SLIT, or empty, which assumes SLIT), all
       // subsystems are readied.
       //
-      else {
         // set pointmode explicitly, in case it's empty
         this->target.pointmode = Acam::POINTMODE_SLIT;
 
@@ -569,55 +643,36 @@ namespace Sequencer {
         break;
       }
 
-/*** 12/17/24 move acquisition elsewhere?
- *
- *    logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
-
- *    this->seq_state.set( Sequencer::SEQ_WAIT_ACQUIRE );
- *    this->broadcast_seqstate();
- *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
- ***/
-
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target then acquire, first acam then slicecam
       //
       if ( !this->target.iscal ) {
 
-        // waiting for user signal (or cancel)
-        //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
-        {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
-
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
-
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        // start ACAM acquisition. If it fails then wait for user to continue or cancel.
+        if ( this->do_acam_acquire() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "WARNING acam acquisition failed" );
+          if (this->wait_for_user()==ABORT) {
+            this->async.enqueue_and_log( function, "NOTICE: cancelled" );
+            return;
+          }
         }
-
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
-
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-          return;
+        else
+        // start SLICECAM fine acquisition
+        if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+          this->async.enqueue_and_log( function, "WARNING slicecam fine acquisition failed" );
         }
+      }
 
-        this->is_usercontinue.store(false);
-
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
-
-        // Ensure slit offset is in "expose" position
-        //
-        auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
+      if ( !this->target.iscal ) {
+        // send offsets. wait for user if that fails to continue or cancel.
+        if ( this->target_offset() == ERROR ) {
+          if (this->wait_for_user()==ABORT) {
+            this->async.enqueue_and_log( function, "NOTICE: cancelled" );
+            return;
+          }
+        }
+        // ensure slit offset is in "expose" position when needed
         try {
-          error |= slitset.get();
+          error |= this->slit_set(Sequencer::VSM_EXPOSE);
         }
         catch (const std::exception& e) {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
@@ -2029,10 +2084,6 @@ namespace Sequencer {
     //
     if ( this->cancel_flag.load() ) return NO_ERROR;
 
-    // if ontarget (not cancelled) then acquire target
-    //
-    if ( !this->cancel_flag.load() ) this->acamd.command( ACAMD_ACQUIRE );
-
     this->is_ontarget.store(false);
 
     // remember the last target that was tracked on
@@ -2524,141 +2575,6 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::modify_exptime **********************************/
-
-
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
-  /**
-   * @brief      performs the acqusition sequence
-   * @details    this gets called by the move_to_target thread
-   *
-   * This function is spawned in a thread.
-   *
-   */
-  void Sequence::dothread_acquisition() {
-    const std::string function("Sequencer::Sequence::dothread_acquisition");
-    std::stringstream message;
-    std::stringstream cmd;
-    std::string reply;
-    long error = NO_ERROR;
-
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
-
-    // Before sending target coordinates to ACAM,
-    // convert them to decimal and to ACAM coordinates.
-    // (fpoffsets.coords_* are always in degrees)
-    //
-    double ra_in    = radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-    double dec_in   = radec_to_decimal( this->target.dec_dms );
-    double angle_in = this->target.slitangle;
-
-    // can't be NaN
-    //
-    bool ra_isnan  = std::isnan( ra_in  );
-    bool dec_isnan = std::isnan( dec_in );
-
-    if ( ra_isnan || dec_isnan ) {
-      message.str(""); message << "ERROR: converting";
-      if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
-      if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
-      message << " to decimal";
-      this->async.enqueue_and_log( function, message.str() );
-      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-      return;
-    }
-
-//  // Before sending the target coords to the ACAM,
-//  // convert them from <pointmode> to ACAM coordinates.
-//  //
-//  double ra_out, dec_out, angle_out;
-//  error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
-//                                               ra_in, dec_in, angle_in,
-//                                               ra_out, dec_out, angle_out );
-//
-//  // Send the ACQUIRE command to acamd, which requires
-//  // the target coordinates (from the database).
-//  //
-//  message.str(""); message << "starting target acquisition " << ra_out    << " "
-//                                                             << dec_out   << " "
-//                                                             << angle_out << " "
-//                                                             << this->target.name;
-    message.str(""); message << "starting target acquisition " << ra_in    << " "
-                                                               << dec_in   << " "
-                                                               << angle_in << " "
-                                                               << this->target.name;
-    logwrite( function, message.str() );
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_in << " "
-                                             << dec_in << " "
-                                             << angle_in << " ";
-
-    error = this->acamd.command( cmd.str(), reply );
-
-/***** DONT CARE ABOUT ERRORS NOW -- NO CONDITION ON ACQ SUCCESS 
-    if ( error != NO_ERROR ) {
-      this->thread_error_manager.set( THR_ACQUISITION );               // report error
-      message.str(""); message << "ERROR acquiring target";
-      this->async.enqueue_and_log( function, message.str() );
-      this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );            // clear ACQUIRE bit
-      this->broadcast_seqstate();
-      return;
-    }
-
-    // The reply contains the timeout.
-    // Acam's acquisition sequence uses that timeout but the Sequencer
-    // will also use it here, so that it knows when to stop asking acamd
-    // for its acquisition status.
-    //
-    double timeout;
-    try {
-      timeout = std::stod( reply );
-    } catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing timeout \"" << reply << "\" from acam: " << e.what();
-      logwrite( function, message.str() );
-      this->thread_error_manager.set( THR_ACQUISITION );               // report any error
-      return;
-    }
-
-    auto timeout_time = std::chrono::steady_clock::now()
-                        + std::chrono::duration<double>(timeout);
-
-    reply.clear();
-
-    // Poll acamd while it is acquiring. Once finished, get the state.
-    //
-    bool acquiring = true;
-    do {
-      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-      if (error==NO_ERROR) error = this->acamd.command( ACAMD_ACQUIRE, reply );
-      acquiring = ( reply.find("acquiring") != std::string::npos );
-    } while ( error==NO_ERROR &&
-              acquiring       &&
-              std::chrono::steady_clock::now() < timeout_time );
-
-    // Acquisition loop complete so get the state
-    //
-    error = this->acamd.command( ACAMD_ISACQUIRED, reply );
-    this->target.acquired = ( reply.find("true") != std::string::npos );
-
-    // set message
-    //
-    if ( std::chrono::steady_clock::now() >= timeout_time ) {        // Timeout
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR failed to acquire within timeout";
-    }
-    else
-    if ( error!=NO_ERROR ) {                                         // Error polling
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR acquiring target";
-    }
-    else {                                                           // Success
-      message.str(""); message << "NOTICE: target " << ( this->target.acquired ? "acquired" : "not acquired" );
-    }
-
-    this->async.enqueue_and_log( function, message.str() );            // log message
-*****/
-
-  }
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
 
 
   /***** Sequencer::Sequence::startup *****************************************/
@@ -3443,36 +3359,34 @@ namespace Sequencer {
    */
   long Sequence::target_offset() {
     const std::string function("Sequencer::Sequence::target_offset");
-    long error=NO_ERROR;
 
-    bool is_guiding = false;
-    std::string reply;
-    if ( this->acamd.command( ACAMD_ACQUIRE, reply ) == NO_ERROR ) {
-      if ( reply.find( "guiding" ) != std::string::npos ) is_guiding = true;
-    }
-    else {
-      logwrite( function, "ERROR reading ACAM guide state, falling back to TCS offset" );
-    }
+    // nothing to do if both ra and dec offsets are zero
+    if (this->target.offset_ra  == 0.0 &&
+        this->target.offset_dec == 0.0) return NO_ERROR;
 
-    if ( is_guiding ) {
+    // zero TCS offsets before applying target offset
+    long error = this->tcsd.command( TCSD_ZERO_OFFSETS );
+
+    // when ACAM is guiding, offsets are handled by changing his goal
+    if (error==NO_ERROR && this->is_acam_guiding.load()) {
       // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
       const double dra_deg = this->target.offset_ra / 3600.0;
       const double ddec_deg = this->target.offset_dec / 3600.0;
       std::stringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << dra_deg << " " << ddec_deg;
       error = this->acamd.command( cmd.str() );
-      logwrite( function, "sent "+cmd.str()+" (guiding)" );
-      return error;
+    }
+    else
+    // if ACAM is not guiding then I send the offsets directly to the TCS
+    if (error==NO_ERROR) {
+      std::ostringstream cmd;
+      cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+      error = this->tcsd.command( cmd.str() );
     }
 
-    error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
-
-    std::stringstream cmd;
-    cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
-
-    error |= this->tcsd.command( cmd.str() );
-
-    logwrite( function, "sent "+cmd.str() );
+    std::ostringstream oss;
+    oss << (error==NO_ERROR?"":"ERROR ") << "target offsets" << (error==NO_ERROR ? " " : " not ") << "applied";
+    logwrite(function, oss.str());
 
     return error;
   }
@@ -4622,8 +4536,8 @@ namespace Sequencer {
 
       // Finally, spawn the acquisition thread
       //
-      logwrite( function, "spawning dothread_acquisition..." );
-      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+      logwrite( function, "spawning do_acam_acquire..." );
+      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::do_acam_acquire, this ).detach();
     }
     else
 

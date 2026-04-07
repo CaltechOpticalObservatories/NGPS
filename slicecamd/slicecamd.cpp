@@ -146,13 +146,12 @@ int main(int argc, char **argv) {
   // initialize the pub/sub handler, which
   // takes a list of subscription topics
   //
-  if ( slicecamd.interface.init_pubsub({"slitd", "tcsd"}) == ERROR ) {
+  if ( slicecamd.interface.init_pubsub( { Topic::SLITD,
+                                          Topic::ACAMD,
+                                          Topic::TCSD }) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     slicecamd.exit_cleanly();
   }
-
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-  slicecamd.interface.publish_snapshot();
 
   std::this_thread::sleep_for( std::chrono::milliseconds(100) );
   slicecamd.interface.request_snapshot();

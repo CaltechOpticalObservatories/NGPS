@@ -37,6 +37,7 @@ add_executable(sequencerd
         ${SEQUENCER_DIR}/sequencerd.cpp 
         ${SEQUENCER_DIR}/sequencer_server.cpp 
         ${SEQUENCER_DIR}/sequencer_interface.cpp 
+        ${SEQUENCER_DIR}/sequence_acquisition.cpp
         ${SEQUENCER_DIR}/sequence.cpp 
         ${MYSQL_INCLUDES}
         ${PYTHON_DEV}

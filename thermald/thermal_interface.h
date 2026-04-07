@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "message_keys.h"
 #include "network.h"
 #include "logentry.h"
 #include "common.h"

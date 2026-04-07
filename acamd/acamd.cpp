@@ -174,7 +174,9 @@ int main(int argc, char **argv) {
 
   // initialize the pub/sub handler and give it time to start
   //
-  if ( acamd.interface.init_pubsub( {"tcsd", "targetinfo", "slitd"} ) == ERROR ) {
+  if ( acamd.interface.init_pubsub( { Topic::TCSD,
+                                      Topic::TARGETINFO,
+                                      Topic::SLITD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     acamd.exit_cleanly();
   }

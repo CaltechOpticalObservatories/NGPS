@@ -733,6 +733,34 @@ namespace Common {
         }
         return;
       }
+
+      template <typename T>
+      T get_key(const std::string &keyname) const {
+        auto it = this->keydb.find(keyname);
+        if (it == this->keydb.end()) {
+          throw std::out_of_range("FitsKeys::get_key '"+keyname+"' not found");
+        }
+        const std::string &val = it->second.keyvalue;
+
+        try {
+          if constexpr(std::is_same_v<T,double>)      return std::stod(val);
+          else
+          if constexpr(std::is_same_v<T,float>)       return std::stof(val);
+          else
+          if constexpr(std::is_same_v<T,int>)         return std::stoi(val);
+          else
+          if constexpr(std::is_same_v<T,long>)        return std::stol(val);
+          else
+          if constexpr(std::is_same_v<T,bool>)        return (val=="T"||val=="true"||val=="1");
+          else
+          if constexpr(std::is_same_v<T,std::string>) return val;
+          else
+          static_assert(std::is_same_v<T,void>, "FitsKeys::get_key unsupported type");
+        }
+        catch (const std::exception &e) {
+          throw std::runtime_error("FitsKeys::get_key '"+keyname+"' could not convert '"+val+"'");
+        }
+      }
   };
   /**************** Common::FitsKeys ******************************************/
 
