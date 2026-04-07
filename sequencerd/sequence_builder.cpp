@@ -69,7 +69,7 @@ namespace Sequencer {
 
       if (command.name == "expose") {
         group.operations.emplace_back( Operation {
-          "expose", THR_SLIT_SET,
+          "expose", THR_EXPOSURE,
           [this]() {
             return do_exposure("placeholder");
           },

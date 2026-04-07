@@ -405,14 +405,32 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    this->target.column_from_json<double>( DBCol::EXPTIME, Key::Camerad::SHUTTERTIME, jmessage );
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
       this->can_expose.store(isready, std::memory_order_relaxed);
-      std::lock_guard<std::mutex> lock(camerad_mtx);
-      this->camerad_cv.notify_all();
     }
+
+    std::lock_guard<std::mutex> lock(camerad_mtx);
+    this->camerad_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slitd ******************************/
+  /**
+   * @brief      handles Topic::SLITD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slitd(const nlohmann::json &jmessage) {
+    this->target.column_from_json<double>( DBCol::SLITWIDTH,  Key::Slitd::SLITW, jmessage );
+    this->target.column_from_json<double>( DBCol::SLITOFFSET, Key::Slitd::SLITO, jmessage );
+
+    std::lock_guard<std::mutex> lock(slitd_mtx);
+    this->slitd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slitd ******************************/
 
 
   /***** Sequencer::Sequence::handletopic_slicecamd **************************/
@@ -426,10 +444,31 @@ namespace Sequencer {
     bool fineacquirelocked;
     Common::extract_telemetry_value( jmessage, Key::Slicecamd::FINEACQUIRE_LOCKED, fineacquirelocked );
     this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
+
     std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
     this->fineacquire_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+
+
+  /***** Sequencer::Sequence::handletopic_tcsd *******************************/
+  /**
+   * @brief      handles Topic::TCSD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_tcsd(const nlohmann::json &jmessage) {
+    this->target.column_from_json<std::string>( DBCol::TELRA,   Key::Tcsd::TELRA,    jmessage );
+    this->target.column_from_json<std::string>( DBCol::TELDECL, Key::Tcsd::TELDEC,   jmessage );
+    this->target.column_from_json<double>( DBCol::ALT,          Key::Tcsd::ALT,      jmessage );
+    this->target.column_from_json<double>( DBCol::AZ,           Key::Tcsd::AZ,       jmessage );
+    this->target.column_from_json<double>( DBCol::AIRMASS,      Key::Tcsd::AIRMASS,  jmessage );
+    this->target.column_from_json<double>( DBCol::CASANGLE,     Key::Tcsd::CASANGLE, jmessage );
+
+    std::lock_guard<std::mutex> lock(tcsd_mtx);
+    this->tcsd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_tcsd *******************************/
 
 
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
@@ -443,6 +482,7 @@ namespace Sequencer {
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+
     std::lock_guard<std::mutex> lock(this->acam_mtx);
     this->acam_cv.notify_all();
   }
@@ -769,7 +809,7 @@ namespace Sequencer {
    * @param[in]  obsid_in  optional obsid, specify for single-target observation
    *
    */
-  void Sequence::sequence_start(std::string obsid_in="") {
+  void Sequence::sequence_start(std::string obsid_in) {
     std::string_view function("Sequencer::Sequence::sequence_start");
     std::ostringstream message;
     std::string reply;
@@ -896,10 +936,7 @@ namespace Sequencer {
         break;
       }
 
-      // before writing to the completed database table, get current
-      // telemetry from other daemons.
-      //
-      this->get_external_telemetry();
+//    this->request_status(tcsd);  // force tcsd to publish his status  TODO WORK-IN-PROGRESS
 
       // Update this target's state in the database
       //
@@ -989,6 +1026,7 @@ namespace Sequencer {
     // send two commands, one for each
     if (!activechans.str().empty()) {
       std::string cmd = CAMERAD_ACTIVATE + activechans.str();
+/***  if ( camerad_cmd.send( { CAMERAD_ACTIVATE, { activechans.str() } } ) != NO_ERROR ) {  WIP ***/
       if (this->camerad.send(cmd, reply)!=NO_ERROR) {
         this->async.enqueue_and_log(function, "ERROR sending \""+cmd+"\": "+reply);
         throw std::runtime_error("camera returned "+reply);
@@ -3013,8 +3051,8 @@ namespace Sequencer {
       { THR_CAMERA_SHUTDOWN,   std::bind(&Sequence::camera_shutdown, this)   },
       { THR_FLEXURE_SHUTDOWN,  std::bind(&Sequence::flexure_shutdown, this)  },
       { THR_FOCUS_SHUTDOWN,    std::bind(&Sequence::focus_shutdown, this)    },
-      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slit_shutdown, this)     },
-      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slicecam_shutdown, this) },
+      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slit_shutdown, this)     },
+      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slicecam_shutdown, this) },
       { THR_TCS_SHUTDOWN,      std::bind(&Sequence::tcs_shutdown, this)      }
     };
 
@@ -3615,120 +3653,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::make_telemetry_message **************************/
 
 
-  /***** Sequencer::Sequence::get_external_telemetry **************************/
-  /**
-   * @brief      collect telemetry from other daemon(s)
-   * @details    This is used for any telemetry that I need to collect from
-   *             another daemon. Common::collect_telemetry() sends a command
-   *             to the daemon, which will respond with a JSON message. The
-   *             daemon(s) to contact are configured with the TELEM_PROVIDER
-   *             key in the config file.
-   *
-   */
-  void Sequence::get_external_telemetry() {
-    // Loop through each configured telemetry provider. This requests
-    // their telemetry which is returned as a serialized json string
-    // held in retstring.
-    //
-    // handle_json_message() will parse the serialized json string.
-    //
-    std::string retstring;
-    for ( const auto &provider : this->telemetry_providers ) {
-      Common::collect_telemetry( provider, retstring );
-      handle_json_message(retstring);
-    }
-    return;
-  }
-  /***** Sequencer::Sequence::get_external_telemetry **************************/
-
-
-  /***** Sequencer::Sequence::handle_json_message *****************************/
-  /**
-   * @brief      parses incoming telemetry messages
-   * @details    Requesting telemetry from another daemon returns a serialized
-   *             JSON message which needs to be passed in here to parse it.
-   * @param[in]  message_in  incoming serialized JSON message (as a string)
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Sequence::handle_json_message( const std::string message_in ) {
-    std::string_view function("Sequencer::Sequence::handle_json_message");
-    std::stringstream message;
-
-    if ( message_in.empty() ) {
-      logwrite( function, "ERROR empty JSON message" );
-      return ERROR;
-    }
-
-    try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-      std::string messagetype;
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
-          messagetype = jmessage["messagetype"];
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
-          return ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        return ERROR;
-      }
-
-      // No errors, so disseminate the message contents based on the message type.
-      //
-      // column_from_json<T>( colname, jkey, jmessage ) will extract the value of
-      // expected type <T> with key jkey from json string jmessage, and assign it
-      // to this->target.external_telemetry[colname] map. It is expected that
-      // "colname" is the column name in the database.
-      //
-      if ( messagetype == "camerainfo" ) {
-        this->target.column_from_json<double>( "EXPTIME", "SHUTTIME_SEC", jmessage );
-      }
-      else
-      if ( messagetype == "slitinfo" ) {
-        this->target.column_from_json<double>( "SLITWIDTH", "SLITW", jmessage );
-        this->target.column_from_json<double>( "SLITOFFSET", "SLITO", jmessage );
-      }
-      else
-      if ( messagetype == "tcsinfo" ) {
-        this->target.column_from_json<std::string>( "TELRA", "TELRA", jmessage );
-        this->target.column_from_json<std::string>( "TELDECL", "TELDEC", jmessage );
-        this->target.column_from_json<double>( "ALT", "ALT", jmessage );
-        this->target.column_from_json<double>( "AZ", "AZ", jmessage );
-        this->target.column_from_json<double>( "AIRMASS", "AIRMASS", jmessage );
-        this->target.column_from_json<double>( "CASANGLE", "CASANGLE", jmessage );
-      }
-      else
-      if ( messagetype == "test" ) {
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Sequencer::Sequence::handle_json_message *****************************/
-
-
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
   /**
    * @brief      for testing, calls a Python function from a thread
@@ -4054,7 +3978,6 @@ namespace Sequencer {
       retstring.append( "   fpoffset ? | <from> <to>\n" );
       retstring.append( "   getnext [ ? ]\n" );
       retstring.append( "   getobsid [ ? ]\n" );
-      retstring.append( "   gettelem [ ? ]\n" );
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
       retstring.append( "   notify [ ? ]\n" );
@@ -4435,24 +4358,6 @@ namespace Sequencer {
 
       rts << "TCS coords: ra=" << ra_out*TO_HOURS << "  dec=" << dec_out << "  angle=" << angle_out << "\n";
       retstring = rts.str();
-    }
-    else
-    // ----------------------------------------------------
-    // gettelem -- get external telemetry
-    // ----------------------------------------------------
-    //
-    if ( testname == "gettelem" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test gettelem\n";
-        retstring.append( "  Get external telemetry from other daemons.\n" );
-        return HELP;
-      }
-      this->get_external_telemetry();
-      message.str("");
-      for ( const auto &[name,data] : this->target.external_telemetry ) {
-        message << "name=" << name << " valid=" << (data.valid?"T":"F") << " value=" << data.value << "\n";
-      }
-      retstring = message.str();
     }
     else
 

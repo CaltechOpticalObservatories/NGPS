@@ -376,7 +376,7 @@ namespace Slit {
     }
 
     while (1) {
-      std::string message = slit.interface.async.dequeue();   // get the latest message from the queue (blocks)
+      std::string_view message = slit.interface.async.dequeue();   // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
         std::stringstream errstm;
@@ -597,22 +597,6 @@ namespace Slit {
       if ( cmd == SLITD_NATIVE ) {
                       ret = this->interface.send_command( args, retstring );
       }
-      else
-
-      // send telemetry on request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      this->interface.publish_snapshot(retstring);
-                      ret = JSON;
-                    }
-     }
 
       // unknown commands generate an error
       //

@@ -131,6 +131,8 @@ int main(int argc, char **argv) {
   //
   if ( sequencerd.sequence.init_pubsub( { Topic::CAMERAD,
                                           Topic::ACAMD,
+                                          Topic::TCSD,
+                                          Topic::SLITD,
                                           Topic::SLICECAMD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
