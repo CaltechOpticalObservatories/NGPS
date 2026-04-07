@@ -34,6 +34,10 @@
 #include "tcsd_commands.h"
 #include "sequencerd_commands.h"
 #include "message_keys.h"
+/*** Work-In-Progress
+ * #include "command.h"
+ * #include "command_rules.h"
+ */
 
 #include "tcs_constants.h"
 #include "acam_interface_shared.h"
@@ -405,6 +409,10 @@ namespace Sequencer {
                   [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
               { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -456,6 +464,10 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      std::mutex slitd_mtx;
+      std::condition_variable slitd_cv;
+      std::mutex tcsd_mtx;
+      std::condition_variable tcsd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -510,6 +522,13 @@ namespace Sequencer {
       Common::DaemonClient slitd { "slitd" };
       Common::DaemonClient tcsd { "tcsd" };
 
+/**** Work-In-Progress
+      CommandClient<CameraState> camerad_cmd { camerad,
+                                               camerad_specs,
+                                               CameraState::IDLE,
+                                               camerad_transitions};
+*****/
+
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
       float slitoffsetexpose;   ///< "virtual slit mode" offset for expose
@@ -546,6 +565,8 @@ namespace Sequencer {
       void handletopic_camerad( const nlohmann::json &jmessage );
       void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slicecamd( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
       void publish_seqstate();
@@ -616,8 +637,6 @@ namespace Sequencer {
       long target_offset();
 
       void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
-      void get_external_telemetry();                                ///< collect telemetry from another daemon
-      long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
@@ -645,7 +664,7 @@ namespace Sequencer {
       long wait_for_readout(std::string_view caller);   ///< wait for readout completion or cancel
       long wait_for_canexpose(std::string_view caller); ///< wait for camera can_expose
 
-      void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
+      void sequence_start(std::string obsid_in="");      ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode

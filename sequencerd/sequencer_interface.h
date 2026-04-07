@@ -26,6 +26,19 @@
 
 #define ERROR_TARGETLIST_BAD_HEADER 1001  ///< TODO change this
 
+namespace DBCol {
+  inline const std::string EXPTIME    = "EXPTIME";
+  inline const std::string SLITWIDTH  = "SLITWIDTH";
+  inline const std::string SLITOFFSET = "SLITOFFSET";
+
+  inline const std::string TELRA    = "TELRA";
+  inline const std::string TELDECL  = "TELDECL";
+  inline const std::string ALT      = "ALT";
+  inline const std::string AZ       = "AZ";
+  inline const std::string AIRMASS  = "AIRMASS";
+  inline const std::string CASANGLE = "CASANGLE";
+}
+
 /***** Sequencer **************************************************************/
 /**
  * @namespace Sequencer
