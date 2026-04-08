@@ -517,7 +517,7 @@ namespace Andor {
        * @return     "emulator" or "sdk" or "null"
        *
        */
-      inline std::string_view get_andor_object() {
+      inline std::string_view get_andor_object() const {
         if ( this->andor == &emulator ) return ANDOR_OBJ_EMULATOR;
         else
         if ( this->andor == &sdk ) return ANDOR_OBJ_SDK;

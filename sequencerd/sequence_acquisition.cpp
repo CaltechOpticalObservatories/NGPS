@@ -16,7 +16,7 @@ namespace Sequencer {
    *
    */
   long Sequence::do_acam_acquire() {
-    std::string_view function("Sequencer::Sequence::do_acam_acquire");
+    const std::string function("Sequencer::Sequence::do_acam_acquire");
     std::string reply;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
@@ -75,7 +75,7 @@ namespace Sequencer {
    *
    */
   long Sequence::do_slicecam_fineacquire() {
-    std::string_view function("Sequencer::Sequence::do_slicecam_fineacquire");
+    const std::string function("Sequencer::Sequence::do_slicecam_fineacquire");
 
     ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE);
 
@@ -125,7 +125,7 @@ namespace Sequencer {
    * @return     NO_ERROR | ABORT
    *
    */
-  long Sequence::do_target_acquisition(std::string_view caller) {
+  long Sequence::do_target_acquisition(std::string caller) {
 
     if (this->target.iscal) return NO_ERROR;
 

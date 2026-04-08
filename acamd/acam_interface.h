@@ -286,7 +286,7 @@ namespace Acam {
        * @details    the script pushes the indicated file to the Guider GUI display
        * @param[in]  filename  fits file to send
        */
-      void push_guider_image( std::string_view filename ) {
+      void push_guider_image( std::string filename ) {
         std::string function = "Acam::GuideManager::push_guider_image";
         std::stringstream cmd;
         cmd << push_image << " "
@@ -304,7 +304,7 @@ namespace Acam {
        * @brief      calls the push_message script with the supplied message string
        * @param[in]  message  message to send
        */
-      void push_guider_message( std::string_view message ) {
+      void push_guider_message( std::string message ) {
         std::string function = "Acam::GuideManager::push_guider_message";
         std::stringstream cmd;
         cmd << push_message << " "
@@ -613,8 +613,14 @@ namespace Acam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
-      inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
+      inline void set_imagename( std::string name_in ) {
+        this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : std::move(name_in) );
+        return;
+      }
+      inline void set_wcsname( std::string name_in ) {
+        this->wcsname = std::move(name_in);
+          return;
+      }
 
       GuideManager guide_manager;
 

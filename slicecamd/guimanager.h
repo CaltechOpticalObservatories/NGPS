@@ -105,7 +105,7 @@ namespace Slicecam {
        * @details    the script pushes the indicated file to the Guider GUI display
        * @param[in]  filename  fits file to send
        */
-      void push_gui_image( std::string_view filename ) {
+      void push_gui_image( std::string filename ) {
         const std::string function("Slicecam::GUIManager::push_gui_image");
         std::ostringstream cmd;
         cmd << push_image << " "

@@ -339,7 +339,7 @@ void async_main(Network::UdpSocket sock) {
   }
 
   while (1) {
-    std::string_view message = server.camera.async.dequeue();    // get the latest message from the queue (blocks)
+    std::string message = server.camera.async.dequeue();    // get the latest message from the queue (blocks)
     retval = sock.Send(message);                            // transmit the message
     if (retval < 0) {
       std::stringstream errstm;

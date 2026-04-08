@@ -23,7 +23,7 @@
     public:
       Common::DaemonClient client { "tcsd", '\n', '\n' };
 
-      long init( std::string_view which, std::string &retstring );
+      long init( std::string which, std::string &retstring );
       long get_name( std::string &name, bool poll );
       long get_name( std::string &name );
       long poll_name( std::string &name );

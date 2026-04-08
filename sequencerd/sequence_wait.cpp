@@ -16,7 +16,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_ontarget(std::string_view caller) {
+  long Sequence::wait_for_ontarget(std::string caller) {
     // waiting for TCS Operator input (or cancel)
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
@@ -52,7 +52,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_user(std::string_view caller) {
+  long Sequence::wait_for_user(std::string caller) {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
 
@@ -87,7 +87,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_exposure(std::string_view caller) {
+  long Sequence::wait_for_exposure(std::string caller) {
     logwrite(caller, "waiting for exposure");
     while (!this->cancel_flag.load() &&
            wait_state_manager.is_set(Sequencer::SEQ_WAIT_EXPOSE)) {
@@ -113,7 +113,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_readout(std::string_view caller) {
+  long Sequence::wait_for_readout(std::string caller) {
 
     // don't have to wait for readout when using frame transfer
     if ( this->is_science_frame_transfer ) return NO_ERROR;
@@ -144,7 +144,7 @@ namespace Sequencer {
    * @return     NO_ERROR on continue | ABORT on cancel
    *
    */
-  long Sequence::wait_for_canexpose(std::string_view caller) {
+  long Sequence::wait_for_canexpose(std::string caller) {
 
     this->async.enqueue_and_log(caller, "NOTICE: waiting for camera to be ready to expose");
 

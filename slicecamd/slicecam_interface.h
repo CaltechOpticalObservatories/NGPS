@@ -207,8 +207,14 @@ namespace Slicecam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
-      inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
+      inline void set_imagename( std::string name_in ) {
+        this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : std::move(name_in) );
+        return;
+      }
+      inline void set_wcsname( std::string name_in ) {
+        this->wcsname = std::move(name_in);
+        return;
+      }
 
       Slicecam::FitsInfo fitsinfo;
 

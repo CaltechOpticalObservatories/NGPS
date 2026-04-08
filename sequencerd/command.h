@@ -112,7 +112,7 @@ namespace Sequencer {
           transitions(transitions) { }
 
       /**
-       * @brief      primary interface to sending commands 
+       * @brief      primary interface to sending commands
        * @details    This validates the number of args, validates the
        *             transition state, that this command is allowed to be used
        *             in the current state, and sends the command.

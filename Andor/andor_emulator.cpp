@@ -1144,8 +1144,8 @@ namespace Andor {
    * @return     ERROR | NO_ERROR
    *
    */
-  long SkySim::generate_image( const std::string_view &headerfile,
-                               const std::string_view &outputfile,
+  long SkySim::generate_image( const std::string headerfile,
+                               const std::string outputfile,
                                const float exptime,
                                const bool ismex,
                                const int simsize ) {

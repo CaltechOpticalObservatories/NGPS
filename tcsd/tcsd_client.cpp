@@ -25,7 +25,7 @@
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long TcsDaemonClient::init( std::string_view which, std::string &retstring ) {
+  long TcsDaemonClient::init( std::string which, std::string &retstring ) {
     std::string function = "TcsDaemonClient::init";
     std::stringstream message;
     std::string reply, tcsname;

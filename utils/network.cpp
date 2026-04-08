@@ -174,8 +174,8 @@ namespace Network {
    * @return     0 on success, -1 on error
    *
    */
-  int UdpSocket::Send(std::string_view message) {
-    std::string_view function = "Network::UdpSocket::Send";
+  int UdpSocket::Send(std::string message) {
+    std::string function = "Network::UdpSocket::Send";
     std::ostringstream errstm;
     ssize_t nbytes;
 

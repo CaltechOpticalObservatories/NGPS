@@ -175,7 +175,7 @@ void close_log() {
  * log filestream isn't open.
  *
  */
-void logwrite( std::string_view function, std::string_view message ) {
+void logwrite( std::string function, std::string message ) {
   std::ostringstream logmsg;
 
   std::lock_guard<std::mutex> lock(loglock);     // lock mutex to protect from multiple access

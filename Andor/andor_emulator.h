@@ -41,7 +41,7 @@ namespace Andor {
 
       PyObject* pSkySimModule;
 
-      long generate_image( const std::string_view &headerfile, const std::string_view &outputfile,
+      long generate_image( const std::string headerfile, const std::string outputfile,
                            const float exptime, const bool ismex, const int simsize );
 
       void log_python_arguments(PyObject* pFunction, PyObject* pArgs, PyObject* pKwArgs);

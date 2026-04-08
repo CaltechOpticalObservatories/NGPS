@@ -376,7 +376,7 @@ namespace Slit {
     }
 
     while (1) {
-      std::string_view message = slit.interface.async.dequeue();   // get the latest message from the queue (blocks)
+      std::string message = slit.interface.async.dequeue();   // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
         std::stringstream errstm;
