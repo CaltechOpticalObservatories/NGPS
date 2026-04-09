@@ -754,7 +754,7 @@ namespace Slicecam {
         applied++;
       }
       else
-      if ( config.param[entry] == "FINE_ACQUIRE_AIMPOINT=" ) {
+      if ( config.param[entry] == "FINE_ACQUIRE_AIMPOINT" ) {
         std::string which;
         double x,y;
         std::istringstream iss(config.arg[entry]);
@@ -766,7 +766,7 @@ namespace Slicecam {
         this->fineacquire_state.aimpoint = { x, y };
       }
       else
-      if ( config.param[entry] == "FINE_ACQUIRE_BACKGROUND=" ) {
+      if ( config.param[entry] == "FINE_ACQUIRE_BACKGROUND" ) {
         long x1, x2, y1, y2;
         std::istringstream iss(config.arg[entry]);
         if (!(iss >> x1 >> x2 >> y1 >> y2)) {
