@@ -29,17 +29,17 @@ namespace Sequencer {
   long Sequence::run( const Operation &op,
                       std::string caller ) {
     long error=NO_ERROR;
-    logwrite(caller, "starting "+op.name);
+    logwrite(caller, "starting "+op.name());
 
     try {
       error = op.func();
 
       if (error != NO_ERROR) {
-        this->async.enqueue_and_log(caller, "ERROR in "+op.name);
+        this->async.enqueue_and_log(caller, "ERROR in "+op.name());
       }
     }
     catch (const std::exception &e) {
-      logwrite(caller, "ERROR in "+op.name+": "+e.what());
+      logwrite(caller, "ERROR in "+op.name()+": "+e.what());
       error = ERROR;
     }
     return error;
@@ -74,10 +74,10 @@ namespace Sequencer {
     for (size_t i=0; i < futures.size(); ++i) {
       try {
         error |= futures[i].get();
-        logwrite(caller, "completed "+ops[i].name);
+        logwrite(caller, "completed "+thread_names.at(ops[i].thr));
       }
       catch (const std::exception &e) {
-        logwrite(caller, "ERROR in "+ops[i].name+": "+e.what());
+        logwrite(caller, "ERROR in "+ops[i].name()+": "+e.what());
         error |= ERROR;
       }
     }
@@ -161,7 +161,7 @@ namespace Sequencer {
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
       sequence.push_back( { OperationType::PARALLEL,
-                          { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
+                          { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
       this->target.pointmode = Acam::POINTMODE_SLIT;
@@ -169,12 +169,12 @@ namespace Sequencer {
       // these are the default operations prior to exposure,
       // they can be done in parallel
       sequence.push_back( { OperationType::PARALLEL,
-          { { "move_to_target", THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
-            { "camera_set",     THR_CAMERA_SET,     [this]{ return camera_set(); } },
-            { "focus_set",      THR_FOCUS_SET,      [this]{ return focus_set(); } },
-            { "flexure_set",    THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
-            { "calib_set",      THR_CALIB_SET,      [this]{ return calib_set(); } },
-            { "slit_set",       THR_SLIT_SET,       [this]{ return slit_set(this->target.iscal ? VSM_DATABASE
+          { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
+            { THR_CAMERA_SET,     [this]{ return camera_set(); } },
+            { THR_FOCUS_SET,      [this]{ return focus_set(); } },
+            { THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
+            { THR_CALIB_SET,      [this]{ return calib_set(); } },
+            { THR_SLIT_SET,       [this]{ return slit_set(this->target.iscal ? VSM_DATABASE
                                                                                                : VSM_ACQUIRE); } }
           } } );
     }
@@ -183,16 +183,16 @@ namespace Sequencer {
 
     if (this->target.pointmode != Acam::POINTMODE_ACAM) {
       sequence.push_back( { OperationType::SERIAL,
-          { { "target_acquire", THR_ACQUISITION,
+          { { THR_ACQUISITION,
               [this,caller]() { return this->do_target_acquisition(caller); } },
 
-            { "target_offset", THR_MOVE_TO_TARGET,
+            { THR_MOVE_TO_TARGET,
               [this]() { return this->target_offset(); } },
 
-            { "slit_set", THR_SLIT_SET,
+            { THR_SLIT_SET,
               [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
 
-            { "expose", THR_EXPOSURE,
+            { THR_EXPOSURE,
               [this,caller]() { return this->do_exposure(caller); } }
           }
           } );
@@ -215,11 +215,15 @@ namespace Sequencer {
   long Sequence::run_script(const std::string &filename) {
     const std::string function("Sequencer::Sequence::run_script");
 
+    // ---------- PARSE -------------------------------------------------------
+
     std::vector<ParsedCommand> commands;
     if ( parse_script(filename, commands) != NO_ERROR ) {
       logwrite(function, "ERROR parsing '"+filename+"'");
       return ERROR;
     }
+
+    // ---------- BUILD -------------------------------------------------------
 
     std::vector<OperationGroup> sequence;
     if ( build_sequence(commands, sequence) != NO_ERROR ) {
@@ -227,10 +231,14 @@ namespace Sequencer {
       return ERROR;
     }
 
+    // ---------- VALIDATE ----------------------------------------------------
+
     if ( validate_sequence(sequence) != NO_ERROR ) {
       logwrite(function, "ERROR validating sequence from '"+filename+"'");
       return ERROR;
     }
+
+    // ---------- RUN ---------------------------------------------------------
 
     return run_sequence(sequence, function);
   }
@@ -324,10 +332,10 @@ namespace Sequencer {
       // group is a vector of Operations
       for (const auto &op : group.operations) {
 
-        if (op.name == "expose") {
+        if (op.name() == "expose") {
         }
         else
-        if (op.name == "slit_set") {
+        if (op.name() == "slit_set") {
         }
       }
     }
@@ -2579,7 +2587,6 @@ namespace Sequencer {
   long Sequence::repeat_exposure() {
     const std::string function("Sequencer::Sequence::repeat_exposure");
     std::stringstream message;
-    long error = NO_ERROR;
 
     // can only repeat when state is READY
     //
@@ -2603,49 +2610,16 @@ namespace Sequencer {
 
     logwrite( function, targetstatus );
 
-    // threads to start, pair their ThreadStatusBit with the function to call
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
-
-    worker_threads = { { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)  },
-//                     { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this) }
-                     };
-
-    // pair their ThreadStatusBit with their future
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
-
-    // start the threads
-    for ( const auto &[thr, func] : worker_threads ) {
-      worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
-    }
-
-    // wait for the threads to complete. these can be cancelled.
-    for ( auto &[thr, future] : worker_futures) {
-      try {
-        error |= future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+    std::vector<OperationGroup> sequence = {
+      { OperationType::SERIAL, {
+        { THR_SLIT_SET,
+          [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
+        { THR_EXPOSURE,
+          [this,function]() { return this->do_exposure(function); } } }
       }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
-        return ERROR;
-      }
-    }
+    };
 
-    if ( this->cancel_flag.load() ) {
-      this->async.enqueue_and_log( function, "NOTICE: cancelled repeat exposure" );
-      return NO_ERROR;
-    }
-
-    // Start the exposure in a thread...
-    //
-    auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
-    try {
-      error |= start_exposure.get();
-    }
-    catch (const std::exception& e) {
-      logwrite( function, "ERROR repeat_exposure exception: "+std::string(e.what()) );
-      return ERROR;
-    }
-    return NO_ERROR;
+    return run_sequence(sequence, function);
   }
   /***** Sequencer::Sequence::repeat_exposure *********************************/
 
@@ -2828,48 +2802,27 @@ namespace Sequencer {
     // Everything (except TCS) needs the power control to be running 
     // so initialize the power control first.
     //
-    auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    error = start_power.get();
+    error = run( { THR_POWER_INIT, [this]{ return power_init(); }, { } }, function );
 
     if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR starting power control. Will try to continue (but don't hold your breath)" );
+      this->async.enqueue_and_log(function, "ERROR starting power control");
+      return ERROR;
     }
 
-    // threads to start, pair their ThreadStatusBit with the function to call
+    // run these in parallel
     //
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads = {
-      { THR_CALIB_INIT,   std::bind(&Sequence::calib_init, this)   },
-      { THR_CAMERA_INIT,  std::bind(&Sequence::camera_init, this)  },
-      { THR_FLEXURE_INIT, std::bind(&Sequence::flexure_init, this) },
-      { THR_FOCUS_INIT,   std::bind(&Sequence::focus_init, this)   },
-      { THR_SLIT_INIT,    std::bind(&Sequence::slit_init, this)    },
-      { THR_TCS_INIT,     std::bind(&Sequence::tcs_init, this)     }
-    };
+    error = run_parallel( {
+      { THR_CALIB_INIT,   [this]{ return calib_init(); },   { } },
+      { THR_CAMERA_INIT,  [this]{ return camera_init(); },  { } },
+      { THR_FLEXURE_INIT, [this]{ return flexure_init(); }, { } },
+      { THR_FOCUS_INIT,   [this]{ return focus_init(); },   { } },
+      { THR_SLIT_INIT,    [this]{ return slit_init(); },    { } },
+      { THR_TCS_INIT,     [this]{ return tcs_init(); },     { } }
+      }, function );
 
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
-
-    // launch all of the worker threads listed in the vector
-    //
-    for ( const auto &[thr, func] : worker_threads ) {
-      worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
-    }
-
-    // get() will block, waiting for the threads to complete
-    //
-    for ( auto &[thr, future] : worker_futures) {
-      try {
-        // wait for this worker to finish
-        if ( future.get() != NO_ERROR ) {
-          logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
-          error = ERROR;
-        }
-        else logwrite(function, Sequencer::thread_names.at(thr)+" success");
-      }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
-        error = ERROR;
-        break;
-      }
+    if ( error != NO_ERROR ) {
+      this->async.enqueue_and_log(function, "ERROR starting something");  // TODO need granularity here
+      return ERROR;
     }
 
     // Now the Andor cameras must be done individually, first slicecam,
@@ -3037,48 +2990,28 @@ namespace Sequencer {
     // Everything (except TCS) needs the power control to be running 
     // so make sure power control is initialized before continuing.
     //
-    auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    if ( start_power.get() != NO_ERROR ) {
+    error = run( { THR_POWER_INIT, [this]{ return power_init(); }, { } }, function );
+
+    if ( error != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
     }
 
     // container of shutdown threads to launch,
     // pair their ThreadStatusBit with the function to call
     //
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads = {
-      { THR_ACAM_SHUTDOWN,     std::bind(&Sequence::acam_shutdown, this)     },
-      { THR_CALIB_SHUTDOWN,    std::bind(&Sequence::calib_shutdown, this)    },
-      { THR_CAMERA_SHUTDOWN,   std::bind(&Sequence::camera_shutdown, this)   },
-      { THR_FLEXURE_SHUTDOWN,  std::bind(&Sequence::flexure_shutdown, this)  },
-      { THR_FOCUS_SHUTDOWN,    std::bind(&Sequence::focus_shutdown, this)    },
-      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slit_shutdown, this)     },
-      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slicecam_shutdown, this) },
-      { THR_TCS_SHUTDOWN,      std::bind(&Sequence::tcs_shutdown, this)      }
-    };
+    error = run_parallel( {
+      { THR_ACAM_SHUTDOWN,     [this]{ return acam_shutdown(); },     { } },
+      { THR_CALIB_SHUTDOWN,    [this]{ return calib_shutdown(); },    { } },
+      { THR_CAMERA_SHUTDOWN,   [this]{ return camera_shutdown(); },   { } },
+      { THR_FLEXURE_SHUTDOWN,  [this]{ return flexure_shutdown(); },  { } },
+      { THR_FOCUS_SHUTDOWN,    [this]{ return focus_shutdown(); },    { } },
+      { THR_SLIT_SHUTDOWN,     [this]{ return slit_shutdown(); },     { } },
+      { THR_SLICECAM_SHUTDOWN, [this]{ return slicecam_shutdown(); }, { } },
+      { THR_TCS_SHUTDOWN,      [this]{ return tcs_shutdown(); },      { } }
+      }, function );
 
-    std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
-
-    // launch the shutdown threads
-    //
-    for ( const auto &[thr, func] : worker_threads ) {
-      worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
-    }
-
-    // wait for the threads to complete
-    //
-    for ( auto &[thr, future] : worker_futures) {
-      try {
-        error=future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
-      }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
-        error=ERROR;
-      }
-    }
-
-    std::stringstream message;
-    if (error==NO_ERROR) {
+    std::ostringstream message;
+    if (error==NO_ERROR) {                                      // TODO need granularity here
       message << "NOTICE: instrument is shut down";
     }
     else {

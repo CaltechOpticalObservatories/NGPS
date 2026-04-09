@@ -41,7 +41,7 @@ namespace Sequencer {
 
       if (command.name == "move_to_target") {
         group.operations.emplace_back( Operation {
-          "move_to_target", THR_MOVE_TO_TARGET,
+          THR_MOVE_TO_TARGET,
           [this,params=command.params]() {
             if (params.has("ra") && params.has("dec")) {
               this->target.ra_hms = params.get(std::string("ra"),std::string(""));
@@ -56,7 +56,7 @@ namespace Sequencer {
 
       if (command.name == "slit_set") {
         group.operations.emplace_back( Operation {
-          "slit_set", THR_SLIT_SET,
+          THR_SLIT_SET,
           [this,params=command.params]() {
             size_t mode = params.get<size_t>("mode", VSM_DATABASE);
             return slit_set(static_cast<VirtualSlitMode>(mode));
@@ -69,7 +69,7 @@ namespace Sequencer {
 
       if (command.name == "expose") {
         group.operations.emplace_back( Operation {
-          "expose", THR_EXPOSURE,
+          THR_EXPOSURE,
           [this]() {
             return do_exposure("placeholder");
           },

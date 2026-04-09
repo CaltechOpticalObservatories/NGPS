@@ -335,10 +335,12 @@ namespace Sequencer {
       /** @brief  sequencer operation contains name, status bit, function and params
        */
       struct Operation {
-        std::string name;
         ThreadStatusBits thr;
         std::function<long()> func;
         OperationParams params;
+        std::string name() const {
+          return (thread_names.find(thr)==thread_names.end()?"":thread_names.at(thr));
+        }
       };
 
       /** @brief  a group of operations stored in a vector with the operation type
