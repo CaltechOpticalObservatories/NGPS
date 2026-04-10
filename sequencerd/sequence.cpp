@@ -18,6 +18,42 @@ namespace Sequencer {
 
   constexpr long CAMERA_PROLOG_TIMEOUT = 6000;  ///< timeout msec to send camera prolog command
 
+  /***** Sequencer::Sequence::operation_sleep ********************************/
+  /**
+   * @brief      interruptable sleep for operations
+   * @details    Use this if an Operation needs to sleep. Can be cancelled.
+   * @param[in]  delay_ms  delay in milliseconds
+   *
+   */
+  void Sequence::operation_sleep(int delay_ms) {
+    std::unique_lock<std::mutex> lock(cv_mutex);
+    cv.wait_for(lock,
+                std::chrono::milliseconds(delay_ms),
+                [this]() { return is_cancelled(); });
+  }
+  /***** Sequencer::Sequence::operation_sleep ********************************/
+
+
+  /***** Sequencer::Sequence::handle_operation_exception *********************/
+  /**
+   * @brief      logs exceptions thrown by operations
+   * @param[in]  eptr    exception pointer
+   * @param[in]  name    name of operation
+   * @param[in]  caller  calling function
+   *
+   */
+  void Sequence::handle_operation_exception( std::exception_ptr eptr,
+                                             std::string name, std::string caller ) {
+    try {
+      if (eptr) std::rethrow_exception(eptr);
+    }
+    catch (const std::exception &e) {
+      logwrite(caller, "ERROR in "+name+": "+std::string(e.what()));
+    }
+  }
+  /***** Sequencer::Sequence::handle_operation_exception *********************/
+
+
   /***** Sequencer::Sequence::run ********************************************/
   /**
    * @brief      executes a single operation
@@ -29,20 +65,40 @@ namespace Sequencer {
   long Sequence::run( const Operation &op,
                       std::string caller ) {
     long error=NO_ERROR;
+    int attempt=1;
+
     logwrite(caller, "starting "+op.name());
 
-    try {
-      error = op.func();
+    while (!is_cancelled()) {
 
-      if (error != NO_ERROR) {
-        this->async.enqueue_and_log(caller, "ERROR in "+op.name());
+      try {
+        error = op.func();
+        if (error==NO_ERROR) return NO_ERROR;
+        if (error==ABORT ||
+            is_cancelled())  return ABORT;
+      }
+      catch (...) {
+        error=ERROR;
+        handle_operation_exception( std::current_exception(), op.name(), caller );
+      }
+
+      if (attempt >= op.max_attempts) {
+        logwrite(caller, "ERROR "+op.name()+
+                         " failed after "+std::to_string(attempt)+
+                         " attempt(s)");
+        return ERROR;
+      }
+
+      ++attempt;
+
+      if (op.on_retry) {
+        logwrite(caller, "retrying operation "+op.name()+
+                         " attempt "+std::to_string(attempt));
+        if (!is_cancelled()) op.on_retry();
+        if (!is_cancelled()) operation_sleep(op.retry_delay);
       }
     }
-    catch (const std::exception &e) {
-      logwrite(caller, "ERROR in "+op.name()+": "+e.what());
-      error = ERROR;
-    }
-    return error;
+    return ( is_cancelled() ? ABORT : error );
   }
   /***** Sequencer::Sequence::run ********************************************/
 
@@ -64,25 +120,43 @@ namespace Sequencer {
     // start a thread for each operation
     //
     for (const auto &op : ops) {
-      futures.emplace_back(std::async(std::launch::async, op.func));
+      futures.emplace_back( std::async( std::launch::async, [this, op, &caller]() {
+        if (is_cancelled()) return ABORT;
+        return run(op, caller);
+        } ) );
     }
 
-    long error = NO_ERROR;
+    bool is_error=false;
+    bool is_abort=false;
 
-    // wait for all threads, collect errors
+    // wait for all threads to complete before returning,
+    // logging each status as they arrive
     //
     for (size_t i=0; i < futures.size(); ++i) {
+      std::ostringstream oss;
+      long ret;
       try {
-        error |= futures[i].get();
-        logwrite(caller, "completed "+thread_names.at(ops[i].thr));
+        ret = futures[i].get();
+        oss << ops[i].name();
+        if (ret==ABORT) { is_abort=true; oss << " cancelled"; }
+        else
+        oss << " completed" << ( (ret==NO_ERROR) ? "" : " with error");
       }
       catch (const std::exception &e) {
-        logwrite(caller, "ERROR in "+ops[i].name()+": "+e.what());
-        error |= ERROR;
+        oss << " received exception: " << e.what();
+        is_error=true;
       }
+      catch (...) {
+        oss << " received unknown exception";
+        is_error=true;
+      }
+      logwrite(caller, oss.str());
     }
 
-    return error;
+    if (is_abort) return ABORT;
+    if (is_error) return ERROR;
+
+    return NO_ERROR;
   }
   /***** Sequencer::Sequence::run_parallel ***********************************/
 
@@ -102,8 +176,7 @@ namespace Sequencer {
    *
    */
   long Sequence::run_sequence( const std::vector<OperationGroup> &sequence,
-                               std::string caller,
-                               bool continue_on_error ) {
+                               std::string caller ) {
     long error = NO_ERROR;
 
     logwrite(caller, "starting sequence");
@@ -117,7 +190,8 @@ namespace Sequencer {
         long ret = run_parallel(group.operations, caller);
         error |= ret;
 
-        if (ret != NO_ERROR && !continue_on_error) return error;
+        if (ret != NO_ERROR &&
+            group.on_error == OnError::STOP) return error;
       }
       // SERIAL Groups are executed one at a time
       //
@@ -128,7 +202,8 @@ namespace Sequencer {
           long ret = run(op, caller);
           error |= ret;
 
-          if (ret != NO_ERROR && !continue_on_error) return error;
+          if (ret != NO_ERROR &&
+              group.on_error == OnError::STOP) return error;
         }
       }
     }
@@ -160,7 +235,7 @@ namespace Sequencer {
     //
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
-      sequence.push_back( { OperationType::PARALLEL,
+      sequence.push_back( { OperationType::PARALLEL, OnError::STOP,
                           { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
@@ -168,7 +243,7 @@ namespace Sequencer {
 
       // these are the default operations prior to exposure,
       // they can be done in parallel
-      sequence.push_back( { OperationType::PARALLEL,
+      sequence.push_back( { OperationType::PARALLEL, OnError::STOP,
           { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
             { THR_CAMERA_SET,     [this]{ return camera_set(); } },
             { THR_FOCUS_SET,      [this]{ return focus_set(); } },
@@ -182,7 +257,7 @@ namespace Sequencer {
     // ---------- RUN THESE IN SERIES ----------------------
 
     if (this->target.pointmode != Acam::POINTMODE_ACAM) {
-      sequence.push_back( { OperationType::SERIAL,
+      sequence.push_back( { OperationType::SERIAL, OnError::STOP,
           { { THR_ACQUISITION,
               [this,caller]() { return this->do_target_acquisition(caller); } },
 
@@ -359,9 +434,14 @@ namespace Sequencer {
 
     if (args.empty()) return ERROR;
 
-    // build a mini-sequence of one command in order to validate it
-    //
-    auto commands = { *parse_command(args) };
+    // ----- build a mini-sequence of one command in order to validate it -----
+
+    auto parsed = parse_command(args);
+    if (!parsed) {
+      logwrite(function, "ERROR parsing '"+args+"'");
+      return ERROR;
+    }
+    auto commands = { *parsed };
 
     std::vector<OperationGroup> sequence;
 
@@ -376,8 +456,8 @@ namespace Sequencer {
 
     Operation op = sequence[0].operations[0];
 
-    // ---------- RUN THE COMMAND --------------------------
-    //
+    // ---------- RUN THE COMMAND ---------------------------------------------
+
     return run(op, function);
   }
   /***** Sequencer::Sequence::handle_cli_operation ***************************/
@@ -2610,7 +2690,7 @@ namespace Sequencer {
     logwrite( function, targetstatus );
 
     std::vector<OperationGroup> sequence = {
-      { OperationType::SERIAL, {
+      { OperationType::SERIAL, OnError::STOP, {
         { THR_SLIT_SET,
           [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
         { THR_EXPOSURE,
@@ -2776,7 +2856,6 @@ namespace Sequencer {
   long Sequence::startup() {
     const std::string function("Sequencer::Sequence::startup");
     std::stringstream message;
-    long error=NO_ERROR;
 
     if ( ! seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_NOTREADY ) ) {
       message << "ERROR cannot perform system startup while "
@@ -2798,147 +2877,33 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
-    // Everything (except TCS) needs the power control to be running 
-    // so initialize the power control first.
-    //
-    error = run( { THR_POWER_INIT, [this]{ return power_init(); }, { } }, function );
+    Ops ops(this);
 
-    if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log(function, "ERROR starting power control");
-      return ERROR;
-    }
+    // ---------- DEFINE STARTUP SEQUENCE -------------------------------------
 
-    // run these in parallel
-    //
-    error = run_parallel( {
-      { THR_CALIB_INIT,   [this]{ return calib_init(); },   { } },
-      { THR_CAMERA_INIT,  [this]{ return camera_init(); },  { } },
-      { THR_FLEXURE_INIT, [this]{ return flexure_init(); }, { } },
-      { THR_FOCUS_INIT,   [this]{ return focus_init(); },   { } },
-      { THR_SLIT_INIT,    [this]{ return slit_init(); },    { } },
-      { THR_TCS_INIT,     [this]{ return tcs_init(); },     { } }
-      }, function );
-
-    if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log(function, "ERROR starting something");  // TODO need granularity here
-      return ERROR;
-    }
-
-    // Now the Andor cameras must be done individually, first slicecam,
-    // then the acam.
-    // Sometimes the Andors lose connection with the driver and the only
-    // recovery seems to be power-cycling the Andor and restarting the
-    // daemon. Try up to maxattempts times if necessary.
-    //
-    const int maxattempts=3;
-
-    // slicecam_init
-    {
-    long __error=NO_ERROR;  // keep track of the error just for this scope
-    int attempt=1;
-    while (attempt <= maxattempts) {
-      try {
-        // launch slicecam_init async task and wait for result
-        std::async(std::launch::async, &Sequence::slicecam_init, this).get();
-        logwrite(function, Sequencer::thread_names.at(THR_SLICECAM_INIT)+" success");
-        break;
+    std::vector<OperationGroup> sequence = {
+      // stop on error in power_init because everything else needs that
+      { OperationType::SERIAL, OnError::STOP,
+        { ops.power_init() }
+      },
+      // everything else can continue on error
+      { OperationType::PARALLEL, OnError::CONTINUE,
+        { ops.calib_init(),
+          ops.camera_init(),
+          ops.flexure_init(),
+          ops.focus_init(),
+          ops.slit_init(),
+          ops.tcs_init() }
+      },
+      { OperationType::SERIAL, OnError::CONTINUE,
+        { ops.acam_init(),
+          ops.slicecam_init() }
       }
-      catch (const SlicecamException &e) {
-        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
+    };
 
-        // If there was an error with the SLICECAM cameras, turn them off,
-        // restart the slicecam daemon, then loop to try again.
-        if (attempt < maxattempts) {
-          if ( set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(5)) != NO_ERROR ) {
-            async.enqueue_and_log( function, "ERROR switching off slicecams" );
-            __error=ERROR;
-            break;
-          }
-          logwrite(function, "slicecams powered off");
+    // ---------- RUN THE SEQUENCE --------------------------------------------
 
-          // restart slicecamd
-          __error=this->daemon_restart(this->slicecamd);
-
-          logwrite(function, "retrying slicecam_init");
-          ++attempt;
-          continue;
-        }
-        else {
-          async.enqueue_and_log( function, "ERROR exceeded max attempts starting slicecam" );
-          __error=ERROR;
-        }
-      }
-      catch (const std::exception &e) {
-        logwrite( function, "ERROR slicecam_init exception: "+std::string(e.what()) );
-        __error=ERROR;
-        break;
-      }
-      catch (...) {
-        logwrite(function, "ERROR unknown slicecam_init exception");
-        __error=ERROR;
-        break;
-      }
-    }  // end while
-    if (__error == ERROR) {
-      async.enqueue_and_log( function, "ERROR slicecam not initialized" );
-      error=ERROR;
-    }
-    }
-
-    // acam_init
-    {
-    long __error=NO_ERROR;  // keep track of the error just for this scope
-    int attempt=1;
-    while (attempt <= maxattempts) {
-      try {
-        // launch acam_init async task and wait for result
-        std::async(std::launch::async, &Sequence::acam_init, this).get();
-        logwrite(function, Sequencer::thread_names.at(THR_ACAM_INIT)+" success");
-        break;
-      }
-      catch (const AcamException &e) {
-        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
-
-        // If there was an error with the ACAM camera, turn it off,
-        // restart the acam daemon, then loop to try again.
-        if (e.code == ErrorCode::ERROR_ACAM_CAMERA) {
-          if (attempt < maxattempts) {
-            if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
-              async.enqueue_and_log( function, "ERROR switching off acam camera" );
-              __error=ERROR;
-            }
-            logwrite(function, "acam camera powered off");
-
-            // restart acamd
-            __error=this->daemon_restart(this->acamd);
-
-            logwrite(function, "retrying acam_init");
-            attempt++;
-            continue;
-          }
-          else {
-            async.enqueue_and_log( function, "ERROR exceeded max attempts starting acam" );
-            __error=ERROR;
-          }
-        }
-	break;
-      }
-      catch (const std::exception &e) {
-        logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
-        __error=ERROR;
-        break;
-      }
-      catch (...) {
-        logwrite(function, "ERROR unknown acam_init exception");
-        __error=ERROR;
-        break;
-      }
-    }  // end while
-    if (__error == ERROR) {
-      async.enqueue_and_log( function, "ERROR acam not initialized" );
-      error=ERROR;
-    }
-    }
+    long error = run_sequence(sequence, function);
 
     // change state to READY if all daemons ready w/o error
     if ( error==NO_ERROR && daemon_manager.are_all_set() ) {

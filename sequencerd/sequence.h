@@ -343,12 +343,23 @@ namespace Sequencer {
           auto it = thread_names.find(thr);
           return(it==thread_names.end() ? empty : it->second);
         }
+        int max_attempts=1;
+        int retry_delay=0;
+        std::function<void()> on_retry;
+      };
+
+      /** @brief what to do with an OperationGroup on error
+       */
+      enum class OnError {
+        CONTINUE,
+        STOP
       };
 
       /** @brief  a group of operations stored in a vector with the operation type
        */
       struct OperationGroup {
         OperationType type;
+        OnError on_error;
         std::vector<Operation> operations;
       };
 
@@ -357,6 +368,23 @@ namespace Sequencer {
       struct ParsedCommand {
         std::string name;
         OperationParams params;
+      };
+
+      class Ops {
+        private:
+          Sequence* seq;
+        public:
+          explicit Ops(Sequence* seq);
+
+          Operation acam_init();
+          Operation calib_init();
+          Operation camera_init();
+          Operation flexure_init();
+          Operation focus_init();
+          Operation power_init();
+          Operation slicecam_init();
+          Operation slit_init();
+          Operation tcs_init();
       };
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
@@ -547,12 +575,13 @@ namespace Sequencer {
 
       // ---------- sequencer scripting and execution tools --------------------
       //
-      long run(const Operation &op, std::string function);
+      void operation_sleep(int delay_ms);
+      void handle_operation_exception(std::exception_ptr eptr, std::string name, std::string caller);
+      long run(const Operation &op, std::string caller);
       long run_parallel(const std::vector<Operation> &ops, std::string function);
       long run_default_sequence(std::string caller);
       long run_sequence( const std::vector<OperationGroup> &groups,
-                         std::string caller,
-                         bool continue_on_error=false );
+                         std::string caller );
 
       long run_script(const std::string &filename);                        ///< run user script
       long parse_script(const std::string &filename,
@@ -690,7 +719,6 @@ namespace Sequencer {
       long do_slicecam_fineacquire();
       long do_target_acquisition(std::string caller);
       long do_target_virtualslit(VirtualSlitMode mode);
-
 
       long acam_init();                                        ///< initializes connection to acamd
       long calib_init();                                       ///< initializes connection to calibd
