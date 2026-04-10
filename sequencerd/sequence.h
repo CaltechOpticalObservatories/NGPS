@@ -332,14 +332,16 @@ namespace Sequencer {
         }
       };
 
-      /** @brief  sequencer operation contains name, status bit, function and params
+      /** @brief  sequencer operation contains status bit, function and params
        */
       struct Operation {
         ThreadStatusBits thr;
         std::function<long()> func;
         OperationParams params;
-        std::string name() const {
-          return (thread_names.find(thr)==thread_names.end()?"":thread_names.at(thr));
+        const std::string &name() const {
+          static const std::string empty;
+          auto it = thread_names.find(thr);
+          return(it==thread_names.end() ? empty : it->second);
         }
       };
 
@@ -444,7 +446,13 @@ namespace Sequencer {
         this->is_usercontinue.store(false);
       }
 
-      inline void reset_cancel_flag() { this->cancel_flag.store(false); }
+      inline bool is_cancelled() const { return this->cancel_flag.load(std::memory_order_acquire); }
+
+      inline void clear_cancel_flag() { this->cancel_flag.store(false, std::memory_order_release); }
+      inline void set_cancel_flag() {
+        this->cancel_flag.store(true, std::memory_order_release);
+        this->cv.notify_all();
+      }
 
       std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
 

@@ -109,7 +109,7 @@ namespace Sequencer {
     logwrite(caller, "starting sequence");
 
     for (const auto &group : sequence) {
-      if (this->cancel_flag.load()) return ABORT;
+      if (is_cancelled()) return ABORT;
 
       // PARALLEL Groups are executed in parallel threads
       //
@@ -123,7 +123,7 @@ namespace Sequencer {
       //
       else {
         for (const auto &op : group.operations) {
-          if (this->cancel_flag.load()) return ABORT;
+          if (is_cancelled()) return ABORT;
 
           long ret = run(op, caller);
           error |= ret;
@@ -855,7 +855,7 @@ namespace Sequencer {
 
     // clear stop flags
     //
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
@@ -939,7 +939,7 @@ namespace Sequencer {
         break;
       }
 
-      if (this->cancel_flag.load()) {
+      if (is_cancelled()) {
         this->async.enqueue_and_log(function, "NOTICE: sequence cancelled");
         break;
       }
@@ -2269,19 +2269,19 @@ namespace Sequencer {
 
     this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
 
-    while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
+    while ( !is_cancelled() && !this->is_ontarget.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
-      this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
+      this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || is_cancelled() ); } );
     }
 
     this->async.enqueue_and_log( function, "NOTICE: received "
-                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
+                                           +(is_cancelled() ? std::string("cancel") : std::string("ontarget"))
                                            +" signal!" );
     }
 
     // If waiting for TCS operator was cancelled then don't continue
     //
-    if ( this->cancel_flag.load() ) return NO_ERROR;
+    if ( is_cancelled() ) return NO_ERROR;
 
     this->is_ontarget.store(false);
 
@@ -2442,7 +2442,7 @@ namespace Sequencer {
                      << " cover=" << ( calinfo.calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
-    if ( !this->cancel_flag.load() &&
+    if ( !is_cancelled() &&
           this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
       this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
       throw std::runtime_error("moving calib door and/or cover");
@@ -2451,7 +2451,7 @@ namespace Sequencer {
     // set the internal calibration lamps
     //
     for ( const auto &[lamp,state] : calinfo.lamp ) {
-      if ( this->cancel_flag.load() ) break;
+      if ( is_cancelled() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
       logwrite( function, message.str() );
@@ -2467,7 +2467,7 @@ namespace Sequencer {
 //  // set the dome lamps
 //  //
 //  for ( const auto &[lamp,state] : calinfo.domelamp ) {
-//    if ( this->cancel_flag.load() ) break;
+//    if ( is_cancelled() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
 //      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
@@ -2478,7 +2478,7 @@ namespace Sequencer {
     // set the lamp modulators
     //
     for ( const auto &[mod,state] : calinfo.lampmod ) {
-      if ( this->cancel_flag.load() ) break;
+      if ( is_cancelled() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
         this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
@@ -2486,7 +2486,7 @@ namespace Sequencer {
       }
     }
 
-    if ( this->cancel_flag.load() ) {
+    if ( is_cancelled() ) {
       this->async.enqueue_and_log( function, "NOTICE: abort may have left calib system partially set" );
     }
 
@@ -2506,7 +2506,7 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
 
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
 
     // stop any exposure that may be in progress
     //
@@ -2520,8 +2520,7 @@ namespace Sequencer {
 
     // set the cancel flag to stop any cancel-able tasks
     //
-    this->cancel_flag.store(true);
-    this->cv.notify_all();
+    set_cancel_flag();
 
     // drop into do-one to prevent auto increment to next target
     //
@@ -2548,7 +2547,7 @@ namespace Sequencer {
       return;
     }
 
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
 
     // Send command to the camera to stop the exposure.
     //
@@ -2601,7 +2600,7 @@ namespace Sequencer {
 
     // clear stop flags
     //
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
@@ -2795,7 +2794,7 @@ namespace Sequencer {
 
     // clear stop flags
     //
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
@@ -2979,7 +2978,7 @@ namespace Sequencer {
 
     // clear stop flags
     //
-    this->cancel_flag.store(false);
+    clear_cancel_flag();
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
@@ -4495,7 +4494,7 @@ namespace Sequencer {
 
       // clear stop flags
       //
-      this->cancel_flag.store(false);
+      clear_cancel_flag();
       this->is_ontarget.store(false);
       this->is_usercontinue.store(false);
 
