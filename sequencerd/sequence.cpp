@@ -116,11 +116,13 @@ namespace Sequencer {
                                std::string caller ) {
 
     std::vector<std::future<long>> futures;
+    futures.reserve(ops.size());
 
-    // start a thread for each operation
+    // start each operation in a thread from the pool
     //
     for (const auto &op : ops) {
-      futures.emplace_back( std::async( std::launch::async, [this, op, &caller]() {
+      if (is_cancelled()) return ABORT;
+      futures.emplace_back( pool.enqueue( [this, op, caller]() {
         if (is_cancelled()) return ABORT;
         return run(op, caller);
         } ) );
@@ -333,19 +335,46 @@ namespace Sequencer {
    */
   long Sequence::parse_script(const std::string &filename,
                               std::vector<ParsedCommand> &commands_out) {
+    const std::string function("Sequencer::Sequence::parse_script");
+
     std::ifstream file(filename);
     if (!file.is_open()) {
-      logwrite("Sequencer::Sequence::parse_script", "ERROR opening '"+filename+"'");
+      logwrite(function, "ERROR opening '"+filename+"'");
       return ERROR;
     }
 
+    commands_out.clear();
     std::string line;
+    int linenum=0;
 
     while (std::getline(file, line)) {
+      ++linenum;
+
+      // trim off leading and trailing spaces
+      lrtrim(line);
+
+      // skip empty lines
+      if (line.empty()) continue;
+
+      // skip comment lines
+      if (line[0] == '#') continue;
+
+      // strip inline comments, everything after '#'
+      auto pos = line.find('#');
+      if (pos != std::string::npos) line = line.substr(0, pos);
 
       auto command = parse_command(line);
 
-      if (command) commands_out.push_back(*command);
+      if (!command) continue;
+
+      command->linenum = linenum;
+
+      commands_out.push_back(std::move(command.value()));
+    }
+
+    if (commands_out.empty()) {
+      logwrite(function, "ERROR empty script");
+      return ERROR;
     }
 
     return NO_ERROR;
@@ -363,10 +392,6 @@ namespace Sequencer {
    *
    */
   std::optional<Sequence::ParsedCommand> Sequence::parse_command(std::string &args) {
-
-    // strip comments, everything after '#'
-    auto pos = args.find('#');
-    if (pos != std::string::npos) args = args.substr(0, pos);
 
     std::istringstream iss(args);
     std::string word;

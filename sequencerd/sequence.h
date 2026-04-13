@@ -34,6 +34,7 @@
 #include "tcsd_commands.h"
 #include "sequencerd_commands.h"
 #include "message_keys.h"
+#include "thread_pool.h"
 /*** Work-In-Progress
  * #include "command.h"
  * #include "command_rules.h"
@@ -49,6 +50,8 @@
  *
  */
 namespace Sequencer {
+
+  constexpr size_t NTHREADS = 10;  ///< number of simultaneous operation threads
 
   /**
    * @enum  ErrorCodes
@@ -299,6 +302,8 @@ namespace Sequencer {
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
+      ThreadPool pool;
+
       /** @brief operation type can be SERIAL or PARALLEL
        */
       enum class OperationType {
@@ -368,6 +373,7 @@ namespace Sequencer {
       struct ParsedCommand {
         std::string name;
         OperationParams params;
+        int linenum{0};
       };
 
       class Ops {
@@ -411,6 +417,7 @@ namespace Sequencer {
           is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
+          pool(NTHREADS),
           acquisition_timeout(0),
           acquisition_max_retrys(-1),
           tcs_offsetrate_ra(45),

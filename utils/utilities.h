@@ -144,6 +144,10 @@ double angular_separation( double ra1, double dec1, double ra2, double dec2 );  
 static inline void rtrim(std::string &s) {          /// trim off trailing whitespace from a string
   s.erase( std::find_if( s.rbegin(), s.rend(), [](unsigned char ch) { return !std::isspace(ch); } ).base(), s.end() );
 }
+static inline void ltrim(std::string &s) {          /// trim off leading white space
+  s.erase(std::find_if(s.begin(), s.end(), [](unsigned char ch) { return !std::isspace(ch); } ) );
+}
+static inline void lrtrim(std::string &s) { rtrim(s); ltrim(s); }
 
 inline bool caseCompareChar( char a, char b ) { return ( std::toupper(a) == std::toupper(b) ); }
 
