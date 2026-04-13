@@ -28,6 +28,14 @@ class ThreadPool {
     std::queue<std::function<void()>> tasks;
     size_t max_queue_size;
     std::atomic<bool> stop;
+    std::atomic<size_t> active_tasks;
+
+    void log_exception(std::exception_ptr eptr) {
+      try { if (eptr) std::rethrow_exception(eptr); }
+      catch (const std::exception &e) {
+        std::cerr << get_timestamp() << "(ThreadPool::worker_loop) exception: " << e.what();
+      }
+    }
 
     void worker_loop() {
       while (true) {
@@ -40,18 +48,25 @@ class ThreadPool {
 
         task = std::move(tasks.front());
         tasks.pop();
+        active_tasks++;
         }
         // notify backlogged tasks waiting for a free slot
         cv_backlog.notify_one();
         // execute the task outside the lock
-        task();
+        try { task(); }
+        catch (...) {
+          log_exception(std::current_exception());
+        }
+        active_tasks--;
       }
     }
 
   public:
     explicit ThreadPool(size_t nthreads, size_t max_tasks=100)
       : max_queue_size(max_tasks),
-        stop(false) {
+        stop(false),
+        active_tasks(0)
+    {
       if (nthreads==0) throw std::invalid_argument("ThreadPool requires at least one thread");
       if (max_queue_size==0) throw std::invalid_argument("max_queue_size must be at least 1");
       workers.reserve(nthreads);
@@ -77,6 +92,17 @@ class ThreadPool {
     // not copyable
     ThreadPool(const ThreadPool&) = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
+
+    // return number of active tasks
+    size_t get_active()  const { return active_tasks.load(std::memory_order_relaxed); }
+
+    // return number of backlogged tasks
+    size_t get_backlog() {
+      std::lock_guard<std::mutex> lock(mtx);
+      size_t backlog = tasks.size();
+      size_t avail   = workers.size() - active_tasks;
+      return (backlog > avail) ? (backlog-avail) : 0;
+    }
 
     // accepts any callable + arguments, returns future
     template<typename F, typename... Args>

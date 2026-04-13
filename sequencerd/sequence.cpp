@@ -3917,6 +3917,7 @@ namespace Sequencer {
       retstring.append( "   tablenames [ ? ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
       retstring.append( "   update ? | { pending | complete | unassigned }\n" );
+      retstring.append( "   threadpool [ ? ]\n" );
       return HELP;
     }
     else
@@ -4772,6 +4773,47 @@ namespace Sequencer {
         std::thread( &Sequencer::Sequence::dothread_test_fpoffset, this ).detach();
         message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
         logwrite( function, message.str() );
+      }
+    }
+    else
+
+    // ---------------------------------------------------------
+    // threadpool -- unit test for thread pool
+    // ---------------------------------------------------------
+    //
+    if ( testname == "threadpool" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = SEQUENCERD_TEST;
+        retstring.append( " threadpool\n" );
+        retstring.append( "  unit test ThreadPool object\n" );
+        return HELP;
+      }
+      std::vector<std::future<void>> futures;
+      futures.reserve(10);
+
+      // add 15 2+ sec timers to the pool
+      for (int i=0; i<15; i++) {
+        std::ostringstream oss;
+        oss << "pooling timer " << i << ". tasks=" << pool.get_active() << " backlog=" << pool.get_backlog();
+        logwrite(function, oss.str());
+        futures.emplace_back( pool.enqueue( [this,i]() {
+          PreciseTimer timer;
+          timer.delay( 2000+(i*200) );
+          } ) );
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+      }
+
+      // wait for timer completion
+      for (size_t i=0; i < futures.size(); ++i) {
+        try {
+          futures[i].get();
+          std::ostringstream oss;
+          oss << "timer " << i << " complete. tasks=" << pool.get_active() << " backlog=" << pool.get_backlog();
+          logwrite(function, oss.str());
+        }
+        catch (const std::exception &e) {
+          logwrite(function, "received exception: "+std::string(e.what()));
+        }
       }
     }
     else {
