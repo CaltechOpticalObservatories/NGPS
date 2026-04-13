@@ -190,10 +190,10 @@ namespace Sequencer {
       //
       if (group.type == OperationType::PARALLEL) {
         long ret = run_parallel(group.operations, caller);
-        error |= ret;
+        error |= ret;  // accumulate any errors
 
         if (ret != NO_ERROR &&
-            group.on_error == OnError::STOP) return error;
+            group.on_error == OnError::STOP) return ret;
       }
       // SERIAL Groups are executed one at a time
       //
@@ -202,17 +202,17 @@ namespace Sequencer {
           if (is_cancelled()) return ABORT;
 
           long ret = run(op, caller);
-          error |= ret;
+          error |= ret;  // accumulate any errors
 
           if (ret != NO_ERROR &&
-              group.on_error == OnError::STOP) return error;
+              group.on_error == OnError::STOP) return ret;
         }
       }
     }
 
     logwrite(caller, "sequence complete");
 
-    return error;
+    return (error==NO_ERROR) ? NO_ERROR : ERROR;
   }
   /***** Sequencer::Sequence::run_sequence ***********************************/
 
