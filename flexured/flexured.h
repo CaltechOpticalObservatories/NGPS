@@ -29,7 +29,5 @@
 
 #define  CONN_TIMEOUT 3000        ///< incoming (non-blocking) connection timeout in milliseconds
 
-Flexure::Server flexured;         ///< global Flexure::Server object so that the main daemon can access the namespace
-
 void signal_handler(int signo);   ///< handles ctrl-C
 int main(int argc, char **argv);  ///< the main function
