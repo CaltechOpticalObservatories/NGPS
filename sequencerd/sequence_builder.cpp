@@ -12,8 +12,15 @@ namespace Sequencer {
   /***** Sequencer::Sequence::build_sequence *********************************/
   /**
    * @brief      build a sequence from parsed commands
+   * @details    This accepts a vector of ParsedCommands and returns by reference
+   *             a sequence, which is one or more OperationGroups. Accepts special
+   *             ".dsl" commands for the Sequencer Domain Specific Language.
+   *             Start a group with "parallel:" or "serial:", finish group
+   *             with "end". Include "on_error stop|continue" to set behavior
+   *             of that group when an error occurs in an operation in that
+   *             group.
    * @param[in]  commands      vector of ParsedCommands
-   * @param[out] sequence_out  the operation group to execute
+   * @param[out] sequence_out  vector of Operation Groups (sequence) to execute
    * @return     ERROR|NO_ERROR|ABORT
    *
    */
@@ -27,29 +34,22 @@ namespace Sequencer {
       return ERROR;
     };
 
-    // group of operations currently being processed
+    // create temporay group of operations currently being processed
     std::optional<OperationGroup> current_group;
 
+    // empty the sequence
     sequence_out.clear();
 
+    // loop through vector of commands
+    //
     for (const auto &command : commands) {
 
       const std::string &name = command.name;
 
-      if (name == "on_error") {
-        if (!current_group) return fail(command, "'on_error' out of a group");
-        if (!command.params.has("action")) return fail(command, "on_error requires action=stop|continue");
+      // ---------- SPECIAL COMMAND { parallel: | serial: } ------------------
 
-        const std::string val = command.params.get<std::string>("action","");
-
-        if (val == "stop") current_group->on_error = OnError::STOP;
-        else
-        if (val == "continue") current_group->on_error = OnError::CONTINUE;
-        else {
-          return fail(command, "on_error requires action=stop|continue");
-        }
-      }
-
+      // start a group
+      //
       if (name == "parallel:" || name == "serial:") {
 
         if (current_group) return fail(command, "group already open");
@@ -63,17 +63,46 @@ namespace Sequencer {
         continue;
       }
 
+      // ---------- SPECIAL COMMAND { end } ----------------------------------
+
+      // finish a group
+      //
       if (name == "end") {
         if (!current_group) return fail(command, "unexpected 'end' outside group");
 
-        // end of group, add it to the sequence now
+        // add it to the sequence now
         sequence_out.push_back(std::move(*current_group));
 
         current_group.reset();
         continue;
       }
 
+      // ---------- SPECIAL COMMAND { on_error } -----------------------------
+
+      // set how does the group behave on error
+      //
+      if (name == "on_error") {
+        // must be in a group for on_error to mean anything
+        if (!current_group) return fail(command, "'on_error' out of a group");
+        if (!command.params.has("action")) return fail(command, "on_error requires action=stop|continue");
+
+        const std::string val = command.params.get<std::string>("action","");
+
+        if (val == "stop") current_group->on_error = OnError::STOP;
+        else
+        if (val == "continue") current_group->on_error = OnError::CONTINUE;
+        else {
+          return fail(command, "on_error requires action=stop|continue");
+        }
+        continue;
+      }
+
+      // anything other than { parallel | serial | end | on_error } is a
+      // command to parse, so a group must have been started first.
+      //
       if (!current_group) return fail(command, "command outside group");
+
+      // ---------- MAKE OPERATION FOR GIVEN COMMAND -------------------------
 
       Operation &op = current_group->operations.emplace_back();
 
@@ -102,8 +131,17 @@ namespace Sequencer {
 
       if (name == "expose") {
         op.thr  = THR_EXPOSURE;
+        op.func = [this,function]() {
+                    return do_exposure(function);
+                  };
+        op.params = command.params;
+      }
+      else
+
+      if (name == "focus_set") {
+        op.thr  = THR_FOCUS_SET;
         op.func = [this]() {
-                    return do_exposure("placeholder");
+                    return focus_set();
                   };
         op.params = command.params;
       }

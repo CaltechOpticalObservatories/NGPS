@@ -393,6 +393,12 @@ namespace Sequencer {
           Operation tcs_init();
       };
 
+      using OperationBuilder = std::function<void(Operation&, const ParsedCommand&)>;
+
+      std::unordered_map<std::string, OperationBuilder> op_builders;
+
+      void init_operation_builders();
+
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
       void safe_thread(long (Sequence::*method)(), std::string function) {

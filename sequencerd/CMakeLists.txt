@@ -40,6 +40,7 @@ add_executable(sequencerd
         ${SEQUENCER_DIR}/sequence_acquisition.cpp
         ${SEQUENCER_DIR}/sequence_wait.cpp
         ${SEQUENCER_DIR}/sequence_builder.cpp
+        ${SEQUENCER_DIR}/operation_builders.cpp
         ${SEQUENCER_DIR}/sequence_operations.cpp
         ${SEQUENCER_DIR}/sequence.cpp 
         ${MYSQL_INCLUDES}
