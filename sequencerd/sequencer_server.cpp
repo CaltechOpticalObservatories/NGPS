@@ -1484,6 +1484,17 @@ namespace Sequencer {
       }
       else
 
+      // Set/Get Engineering mode.
+      // When enabled, validate_sequence allows single-subsystem operation
+      // (per-daemon checks instead of SEQ_READY) and permits parallel-unsafe
+      // operation pairs in SERIAL groups.
+      //
+      if ( cmd == SEQUENCERD_ENGINEERING ) {
+                  ret = this->sequence.engineering( args, retstring );
+                  retstring.append( " " );
+      }
+      else
+
       // Report the Sequencer State,
       // which will be returned, logged, and written to the async message port.
       //

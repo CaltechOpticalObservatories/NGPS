@@ -10,6 +10,7 @@
 const std::string SEQUENCERD_ABORT      = "abort";
 const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
+const std::string SEQUENCERD_ENGINEERING = "engineering";
 const std::string SEQUENCERD_EXIT       = "exit";
 const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
@@ -36,7 +37,10 @@ const std::string SEQUENCERD_ACAM       = "acam";
 const std::string SEQUENCERD_CALIB      = "calib";
 const std::string SEQUENCERD_CAMERA     = "camera";
 const std::string SEQUENCERD_FILTER     = "filter";
+const std::string SEQUENCERD_FLEXURE    = "flexure";
+const std::string SEQUENCERD_FOCUS      = "focus";
 const std::string SEQUENCERD_POWER      = "power";
+const std::string SEQUENCERD_SLICECAM   = "slicecam";
 const std::string SEQUENCERD_SLIT       = "slit";
 const std::string SEQUENCERD_TCS        = "tcs";
 const std::vector<std::string> SEQUENCERD_SYNTAX = {
@@ -44,13 +48,17 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_CALIB+" ...",
                                                      SEQUENCERD_CAMERA+" ...",
                                                      SEQUENCERD_FILTER+" ...",
+                                                     SEQUENCERD_FLEXURE+" ...",
+                                                     SEQUENCERD_FOCUS+" ...",
                                                      SEQUENCERD_POWER+" ...",
+                                                     SEQUENCERD_SLICECAM+" ...",
                                                      SEQUENCERD_SLIT+" ...",
                                                      SEQUENCERD_TCS+" ...",
                                                      "",
                                                      SEQUENCERD_ABORT,
                                                      SEQUENCERD_CONFIG,
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
+                                                     SEQUENCERD_ENGINEERING+" [ true | false ]",
                                                      SEQUENCERD_EXIT,
                                                      SEQUENCERD_GETONETARGET,
                                                      SEQUENCERD_GUIDE,

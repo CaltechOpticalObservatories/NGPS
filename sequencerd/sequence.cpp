@@ -18,6 +18,97 @@ namespace Sequencer {
 
   constexpr long CAMERA_PROLOG_TIMEOUT = 6000;  ///< timeout msec to send camera prolog command
 
+  namespace {
+    // ------------------------------------------------------------------------
+    // Maps each Operation::thr to the DaemonBit it depends on. Operations
+    // that manage daemon state themselves (startup, shutdown, power_init,
+    // power_shutdown) are intentionally absent from this map.
+    // Used exclusively by validate_sequence().
+    // ------------------------------------------------------------------------
+    const std::unordered_map<ThreadStatusBits, DaemonBit> thr_to_daemon = {
+      { THR_EXPOSURE,         DAEMON_CAMERA   },
+      { THR_CAMERA_SET,       DAEMON_CAMERA   },
+      { THR_CAMERA_INIT,      DAEMON_CAMERA   },
+      { THR_CAMERA_SHUTDOWN,  DAEMON_CAMERA   },
+      { THR_SLIT_SET,         DAEMON_SLIT     },
+      { THR_SLIT_INIT,        DAEMON_SLIT     },
+      { THR_SLIT_SHUTDOWN,    DAEMON_SLIT     },
+      { THR_MOVE_TO_TARGET,   DAEMON_TCS      },
+      { THR_TCS_INIT,         DAEMON_TCS      },
+      { THR_TCS_SHUTDOWN,     DAEMON_TCS      },
+      { THR_FLEXURE_SET,      DAEMON_FLEXURE  },
+      { THR_FLEXURE_INIT,     DAEMON_FLEXURE  },
+      { THR_FLEXURE_SHUTDOWN, DAEMON_FLEXURE  },
+      { THR_FOCUS_SET,        DAEMON_FOCUS    },
+      { THR_FOCUS_INIT,       DAEMON_FOCUS    },
+      { THR_FOCUS_SHUTDOWN,   DAEMON_FOCUS    },
+      { THR_CALIB_SET,        DAEMON_CALIB    },
+      { THR_CALIBRATOR_SET,   DAEMON_CALIB    },
+      { THR_CALIB_INIT,       DAEMON_CALIB    },
+      { THR_CALIB_SHUTDOWN,   DAEMON_CALIB    },
+      { THR_ACAM_INIT,        DAEMON_ACAM     },
+      { THR_ACAM_SHUTDOWN,    DAEMON_ACAM     },
+      { THR_SLICECAM_INIT,    DAEMON_SLICECAM },
+      { THR_SLICECAM_SHUTDOWN,DAEMON_SLICECAM }
+    };
+
+    // ------------------------------------------------------------------------
+    // Returns true if the two Operation::thr values are unsafe to run in the
+    // same PARALLEL group. Serial ordering of any such pair is fine.
+    // ------------------------------------------------------------------------
+    inline bool is_parallel_unsafe_pair(ThreadStatusBits a, ThreadStatusBits b) {
+      // normalize ordering so each pair is checked once
+      if (a > b) std::swap(a, b);
+
+      // global sequence ops conflict with anything big
+      if (a == THR_STARTUP && b == THR_SHUTDOWN)     return true;
+      if (a == THR_STARTUP && b == THR_EXPOSURE)     return true;
+
+      // startup runs all inits internally; parallelling any init with startup is a double-init
+      auto is_init = [](ThreadStatusBits t) {
+        return t == THR_ACAM_INIT     || t == THR_CALIB_INIT  ||
+               t == THR_CAMERA_INIT   || t == THR_FLEXURE_INIT||
+               t == THR_FOCUS_INIT    || t == THR_POWER_INIT  ||
+               t == THR_SLICECAM_INIT || t == THR_SLIT_INIT   ||
+               t == THR_TCS_INIT;
+      };
+      auto is_shutdown = [](ThreadStatusBits t) {
+        return t == THR_ACAM_SHUTDOWN     || t == THR_CALIB_SHUTDOWN  ||
+               t == THR_CAMERA_SHUTDOWN   || t == THR_FLEXURE_SHUTDOWN||
+               t == THR_FOCUS_SHUTDOWN    || t == THR_POWER_SHUTDOWN  ||
+               t == THR_SLICECAM_SHUTDOWN || t == THR_SLIT_SHUTDOWN   ||
+               t == THR_TCS_SHUTDOWN;
+      };
+
+      if (a == THR_STARTUP  && is_init(b))     return true;
+      if (a == THR_SHUTDOWN && is_init(b))     return true;
+
+      // power_init vs power_shutdown
+      if (a == THR_POWER_INIT && b == THR_POWER_SHUTDOWN) return true;
+
+      // matching init/shutdown pair for the same subsystem
+      if (is_init(a) && is_shutdown(b)) {
+        auto subsystem_of = [](ThreadStatusBits t) -> int {
+          switch (t) {
+            case THR_ACAM_INIT:      case THR_ACAM_SHUTDOWN:      return 1;
+            case THR_CALIB_INIT:     case THR_CALIB_SHUTDOWN:     return 2;
+            case THR_CAMERA_INIT:    case THR_CAMERA_SHUTDOWN:    return 3;
+            case THR_FLEXURE_INIT:   case THR_FLEXURE_SHUTDOWN:   return 4;
+            case THR_FOCUS_INIT:     case THR_FOCUS_SHUTDOWN:     return 5;
+            case THR_POWER_INIT:     case THR_POWER_SHUTDOWN:     return 6;
+            case THR_SLICECAM_INIT:  case THR_SLICECAM_SHUTDOWN:  return 7;
+            case THR_SLIT_INIT:      case THR_SLIT_SHUTDOWN:      return 8;
+            case THR_TCS_INIT:       case THR_TCS_SHUTDOWN:       return 9;
+            default: return 0;
+          }
+        };
+        if (subsystem_of(a) == subsystem_of(b)) return true;
+      }
+
+      return false;
+    }
+  } // anonymous namespace
+
   /***** Sequencer::Sequence::operation_sleep ********************************/
   /**
    * @brief      interruptable sleep for operations
@@ -72,6 +163,7 @@ namespace Sequencer {
     while (!is_cancelled()) {
 
       try {
+        this->current_op_params = op.params;  // expose params to op member functions
         error = op.func();
         if (error==NO_ERROR) return NO_ERROR;
         if (error==ABORT ||
@@ -402,13 +494,20 @@ namespace Sequencer {
     ParsedCommand command;
     command.name = word;
 
-    // any additional words are parameters, expected to be key=val pairs
+    // Additional words are either key=val params (INTERNAL) or positional
+    // args (PASSTHROUGH). Both collections are populated; each op_builder
+    // chooses which to consume.
     while (iss >> word) {
+      // key=value parameters
       auto eq = word.find('=');
       if (eq != std::string::npos) {
         std::string key = word.substr(0, eq);
         std::string val = word.substr(eq+1);
         command.params.map[key] = val;
+      }
+      // positional arguments
+      else {
+        command.args.push_back(word);
       }
     }
 
@@ -425,21 +524,204 @@ namespace Sequencer {
    *
    */
   long Sequence::validate_sequence(const std::vector<OperationGroup> &sequence) {
+    const std::string function("Sequencer::Sequence::validate_sequence");
+    long error = NO_ERROR;
 
-    // sequence is a vector of OperationGroups
+    // ---------- RULE -------------------------------------------------------
+    // Sequencer must not already be running, stopping, starting, or paused.
+    // Only READY or NOTREADY states allow a new sequence.
+
+    if ( seq_state_manager.is_set(Sequencer::SEQ_RUNNING) ) {
+      this->async.enqueue_and_log(function, "ERROR sequence rejected: sequencer already running");
+      return ERROR;
+    }
+
+    if ( seq_state_manager.is_set(Sequencer::SEQ_STOPPING) ) {
+      this->async.enqueue_and_log(function, "ERROR sequence rejected: sequencer is stopping");
+      return ERROR;
+    }
+
+    if ( seq_state_manager.is_set(Sequencer::SEQ_STARTING) ) {
+      this->async.enqueue_and_log(function, "ERROR sequence rejected: sequencer is starting");
+      return ERROR;
+    }
+
+    if ( seq_state_manager.is_set(Sequencer::SEQ_PAUSED) ) {
+      this->async.enqueue_and_log(function, "ERROR sequence rejected: sequencer is paused");
+      return ERROR;
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // Sequence must not be empty.
+
+    if ( sequence.empty() ) {
+      this->async.enqueue_and_log(function, "ERROR sequence is empty");
+      return ERROR;
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // Every group must contain at least one operation.
+
     for (const auto &group : sequence) {
+      if ( group.operations.empty() ) {
+        this->async.enqueue_and_log(function, "ERROR sequence contains an empty operation group");
+        return ERROR;
+      }
+    }
 
-      // group is a vector of Operations
+    // ---------- RULE -------------------------------------------------------
+    // Collect presence flags + counts by Operation::thr identifier.
+    // Used by subsequent rules.
+
+    bool has_expose     = false;
+    bool has_camera_set = false;
+    bool has_slit_set   = false;
+    int  expose_count   = 0;
+
+    for (const auto &group : sequence) {
       for (const auto &op : group.operations) {
-
-        if (op.name() == "expose") {
-        }
-        else
-        if (op.name() == "slit_set") {
+        switch (op.thr) {
+          case THR_EXPOSURE:    has_expose     = true; ++expose_count; break;
+          case THR_CAMERA_SET:  has_camera_set = true;                 break;
+          case THR_SLIT_SET:    has_slit_set   = true;                 break;
+          default: break;
         }
       }
     }
-    return NO_ERROR;
+
+    // ---------- RULE -------------------------------------------------------
+    // If expose is present, camera_set must also be present.
+
+    if ( has_expose && !has_camera_set ) {
+      this->async.enqueue_and_log(function,
+        "ERROR sequence contains 'expose' without 'camera_set'");
+      error = ERROR;
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // Daemon readiness.
+    //   Science mode (engineering_mode == false):
+    //     If the sequence contains any op that depends on a daemon, SEQ_READY
+    //     must be set (meaning all daemons are up, established by startup()).
+    //   Engineering mode (engineering_mode == true):
+    //     Only the specific daemons needed by the operations in the sequence
+    //     are required. All failures are reported together.
+
+    {
+    // collect the set of daemons this sequence depends on
+    std::bitset<NUM_DAEMONS> required;
+    for (const auto &group : sequence) {
+      for (const auto &op : group.operations) {
+        auto it = thr_to_daemon.find(op.thr);
+        if ( it != thr_to_daemon.end() ) required.set(it->second);
+      }
+    }
+
+    if ( required.any() ) {
+      // for engineering mode it is sufficient if only the required subsystem
+      // is ready.
+      if ( this->engineering_mode.load() ) {
+        for (std::size_t bit = 0; bit < NUM_DAEMONS; ++bit) {
+          if ( required.test(bit) &&
+               !daemon_manager.is_set(static_cast<DaemonBit>(bit)) ) {
+            std::ostringstream oss;
+            oss << "ERROR sequence requires daemon '"
+                << daemon_name.at(static_cast<DaemonBit>(bit))
+                << "' but it is not ready";
+            this->async.enqueue_and_log(function, oss.str());
+            error = ERROR;
+          }
+        }
+      }
+      else
+      // for science mode (non-engineering) all subsystems must be ready
+      if ( !seq_state_manager.is_set(Sequencer::SEQ_READY) ) {
+        this->async.enqueue_and_log(function,
+          "ERROR sequence requires SEQ_READY (all daemons ready) in science mode");
+        error = ERROR;
+      }
+    }
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // Parallel-unsafe pairs.
+    //   Always (either mode):
+    //     No PARALLEL group may contain a parallel-unsafe pair of operations.
+    //   Science mode only:
+    //     A parallel-unsafe pair is also rejected if it appears anywhere in
+    //     the sequence (across groups), because scripted science ops should
+    //     not mix startup/shutdown/expose even in serial form.
+    //   Engineering mode:
+    //     SERIAL placement of any parallel-unsafe pair is allowed; ordering
+    //     is explicit and on_error STOP handles failures.
+
+    {
+    // intra-group check: no PARALLEL group may contain a parallel-unsafe pair
+    for (const auto &group : sequence) {
+      if ( group.type != OperationType::PARALLEL ) continue;
+      for (std::size_t i = 0; i < group.operations.size(); ++i) {
+        for (std::size_t j = i+1; j < group.operations.size(); ++j) {
+          if ( is_parallel_unsafe_pair(group.operations[i].thr,
+                                       group.operations[j].thr) ) {
+            std::ostringstream oss;
+            oss << "ERROR parallel group contains unsafe pair: '"
+                << thread_names.at(group.operations[i].thr) << "' and '"
+                << thread_names.at(group.operations[j].thr) << "'";
+            this->async.enqueue_and_log(function, oss.str());
+            error = ERROR;
+          }
+        }
+      }
+    }
+
+    // science-mode cross-group check: reject parallel-unsafe pairs anywhere
+    if ( !this->engineering_mode.load() ) {
+      std::vector<ThreadStatusBits> all_thrs;
+      all_thrs.reserve(NUM_THREAD_STATES);
+      for (const auto &group : sequence) {
+        for (const auto &op : group.operations) all_thrs.push_back(op.thr);
+      }
+      for (std::size_t i = 0; i < all_thrs.size(); ++i) {
+        for (std::size_t j = i+1; j < all_thrs.size(); ++j) {
+          if ( is_parallel_unsafe_pair(all_thrs[i], all_thrs[j]) ) {
+            std::ostringstream oss;
+            oss << "ERROR sequence contains unsafe pair in science mode: '"
+                << thread_names.at(all_thrs[i]) << "' and '"
+                << thread_names.at(all_thrs[j])
+                << "' (use 'engineering true' to allow in SERIAL groups)";
+            this->async.enqueue_and_log(function, oss.str());
+            error = ERROR;
+          }
+        }
+      }
+    }
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // TBD should I allow expose to not appear more than once across all groups?
+
+    if ( expose_count > 1 ) {
+      this->async.enqueue_and_log(function,
+        "NOTICE sequence contains multiple 'expose' operations -- placeholder check");
+      // not a hard error yet; pending clarification of multi-expose DSL usage
+    }
+
+    // ---------- RULE -------------------------------------------------------
+    // PLACEHOLDER: parallel contention check.
+    //   Parallel groups must not contain operations that share a subsystem wait
+    //   state, since they would contend on the same daemon.
+    //
+    //   When Operation gains a wait_bit field (WaitStateBits), check here that
+    //   no two operations in the same PARALLEL group share the same wait_bit.
+    //   For now this is a no-op stub that compiles and runs cleanly.
+
+    if (false) {
+      // stub -- replace with real contention check
+      this->async.enqueue_and_log(function,
+        "PLACEHOLDER parallel contention check not yet implemented");
+    }
+
+    return error;
   }
   /***** Sequencer::Sequence::validate_sequence ******************************/
 
@@ -2265,6 +2547,38 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
 
+    // Apply optional CLI/DSL coordinate overrides carried in current_op_params
+    // (e.g. "move_to_target ra=01:23:45 dec=+45:00:00"). Overrides are written
+    // into this->target for the duration of this call and restored on exit so
+    // the database-backed target fields are not permanently mutated.
+    //
+    struct TargetCoordGuard {
+      TargetInfo    &t;
+      mysqlx::string saved_ra;
+      mysqlx::string saved_dec;
+      bool           ra_overridden;
+      bool           dec_overridden;
+      TargetCoordGuard(TargetInfo &t_, bool ra_ov, bool dec_ov)
+        : t(t_),
+          saved_ra(t_.ra_hms),
+          saved_dec(t_.dec_dms),
+          ra_overridden(ra_ov),
+          dec_overridden(dec_ov) {}
+      ~TargetCoordGuard() {
+        if (ra_overridden)  t.ra_hms  = saved_ra;
+        if (dec_overridden) t.dec_dms = saved_dec;
+      }
+    };
+    const bool ra_override  = this->current_op_params.has("ra");
+    const bool dec_override = this->current_op_params.has("dec");
+    TargetCoordGuard coord_guard( this->target, ra_override, dec_override );
+    if (ra_override) {
+      this->target.ra_hms  = this->current_op_params.get<std::string>("ra",  std::string(this->target.ra_hms));
+    }
+    if (dec_override) {
+      this->target.dec_dms = this->current_op_params.get<std::string>("dec", std::string(this->target.dec_dms));
+    }
+
     // If RA and DEC fields are both empty then no telescope move
     //
     if ( this->target.ra_hms.empty() && this->target.dec_dms.empty() ) {
@@ -3272,6 +3586,55 @@ namespace Sequencer {
     return( error );
   }
   /***** Sequencer::Sequence::dotype ******************************************/
+
+
+  /***** Sequencer::Sequence::engineering *************************************/
+  /**
+   * @brief      set or get the engineering-mode flag
+   * @param[in]  args       empty (query) or { "true"|"false"|"1"|"0"|"enable"|"disable" }
+   * @param[out] retstring  returns "true" or "false"
+   * @return     NO_ERROR | ERROR
+   *
+   * When engineering_mode is true, validate_sequence() applies per-daemon
+   * readiness checks instead of requiring SEQ_READY, and it allows
+   * parallel-unsafe operation pairs when they are in SERIAL groups.
+   *
+   * Intended for single-subsystem / bench / engineering operation. Should not
+   * be used for science operations.
+   *
+   */
+  long Sequence::engineering( std::string args, std::string &retstring ) {
+    const std::string function("Sequencer::Sequence::engineering");
+    std::stringstream message;
+    long error = NO_ERROR;
+
+    if ( not args.empty() ) {
+      std::transform( args.begin(), args.end(), args.begin(), ::tolower );
+
+      if ( args == "true" || args == "1" || args == "enable" ) {
+        this->engineering_mode.store( true );
+        logwrite( function, "WARNING engineering mode ENABLED: validate_sequence will bypass full-instrument checks" );
+      }
+      else
+      if ( args == "false" || args == "0" || args == "disable" ) {
+        this->engineering_mode.store( false );
+        logwrite( function, "engineering mode DISABLED: validate_sequence will require SEQ_READY for full-instrument operations" );
+      }
+      else {
+        message.str(""); message << "ERROR unrecognized argument " << args << ": expected {true|false|1|0|enable|disable}";
+        logwrite( function, message.str() );
+        error = ERROR;
+      }
+    }
+
+    retstring = ( this->engineering_mode.load() ? "true" : "false" );
+
+    message.str(""); message << "ENGINEERING: " << retstring;
+    this->async.enqueue( message.str() );
+
+    return( error );
+  }
+  /***** Sequencer::Sequence::engineering *************************************/
 
 
   /***** Sequencer::Sequence::get_dome_position *******************************/

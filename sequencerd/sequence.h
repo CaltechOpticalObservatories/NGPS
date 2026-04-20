@@ -289,6 +289,7 @@ namespace Sequencer {
    * @brief the Sequence class defines the "sequences", i.e. functions of the sequencer
    */
   class Sequence {
+    friend struct SequenceTestAccess;  ///< test-only friend (see sequencerd/test_sequence.cpp)
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
@@ -301,6 +302,7 @@ namespace Sequencer {
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
+      std::atomic<bool> engineering_mode{false}; ///< when true, validate_sequence applies per-daemon checks instead of SEQ_READY
 
       ThreadPool pool;
 
@@ -372,9 +374,17 @@ namespace Sequencer {
        */
       struct ParsedCommand {
         std::string name;
-        OperationParams params;
+        OperationParams params;           ///< key=value pairs (for Internal Operations)
+        std::vector<std::string> args;    ///< positional args (for Passthrough Operations)
         int linenum{0};
       };
+
+      /** @brief   key=value params of the currently executing operation
+       *  @details set by run() just before op.func() is invoked and consumed
+       *           by Sequence:: member functions that accept optional overrides
+       *           (e.g. move_to_target, slit_set)
+       */
+      OperationParams current_op_params;
 
       class Ops {
         private:
@@ -384,18 +394,31 @@ namespace Sequencer {
 
           Operation acam_init();
           Operation calib_init();
+          Operation calib_set();
           Operation camera_init();
+          Operation camera_set();
+          Operation do_expose();
+          Operation do_shutdown();
+          Operation do_startup();
           Operation flexure_init();
+          Operation flexure_set();
           Operation focus_init();
+          Operation focus_set();
+          Operation move_to_target();
           Operation power_init();
+          Operation repeat_exposure();
           Operation slicecam_init();
           Operation slit_init();
+          Operation slit_set();
+          Operation target_offset();
           Operation tcs_init();
       };
 
       using OperationBuilder = std::function<void(Operation&, const ParsedCommand&)>;
 
       std::unordered_map<std::string, OperationBuilder> op_builders;
+
+      Ops ops{ this };  ///< factory used by op_builders to build Internal Operations
 
       void init_operation_builders();
 
@@ -442,6 +465,7 @@ namespace Sequencer {
           is_subscriber_thread_running(false),
           should_subscriber_thread_run(false)
           {
+            init_operation_builders();
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_seqstate(); });
             wait_state_manager.set_callback([this](const std::bitset<NUM_WAIT_STATES>& states) { broadcast_waitstate(); });
             thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { publish_threadstate(); });
@@ -674,6 +698,7 @@ namespace Sequencer {
       std::string seqstate_string( uint32_t state );                           ///< returns string form of states set in state word
       long dotype( std::string args );                                         ///< set do type (one/all)
       long dotype( std::string args, std::string &retstring );                 ///< set or get do type (one/all)
+      long engineering( std::string args, std::string &retstring );            ///< set or get engineering mode (true/false)
       long poll_dome_position( double &domeazi, double &telazi );
       long get_dome_position( double &domeazi, double &telazi );
       long get_dome_position( bool poll, double &domeazi, double &telazi );

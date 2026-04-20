@@ -97,61 +97,22 @@ namespace Sequencer {
         continue;
       }
 
+      // ---------- MAKE OPERATION FOR GIVEN COMMAND -------------------------
+
       // anything other than { parallel | serial | end | on_error } is a
       // command to parse, so a group must have been started first.
       //
       if (!current_group) return fail(command, "command outside group");
 
-      // ---------- MAKE OPERATION FOR GIVEN COMMAND -------------------------
+      // find the command in the operation builders map
+      //
+      auto it = op_builders.find(name);
+
+      if (it == op_builders.end()) return fail(command, "unrecognized command");
 
       Operation &op = current_group->operations.emplace_back();
 
-      if (name == "move_to_target") {
-        op.thr  = THR_MOVE_TO_TARGET;
-        op.func = [this,params=command.params]() {
-                    if (params.has("ra") && params.has("dec")) {
-                      this->target.ra_hms = params.get(std::string("ra"),std::string(""));
-                      this->target.dec_dms = params.get(std::string("dec"),std::string(""));
-                    }
-                    return move_to_target();
-                  };
-        op.params = command.params;
-      }
-      else
-
-      if (name == "slit_set") {
-        op.thr  = THR_SLIT_SET;
-        op.func = [this,params=command.params]() {
-                    size_t mode = params.get<size_t>("mode", VSM_DATABASE);
-                    return slit_set(static_cast<VirtualSlitMode>(mode));
-                  };
-        op.params = command.params;
-      }
-      else
-
-      if (name == "expose") {
-        op.thr  = THR_EXPOSURE;
-        op.func = [this,function]() {
-                    return do_exposure(function);
-                  };
-        op.params = command.params;
-      }
-      else
-
-      if (name == "focus_set") {
-        op.thr  = THR_FOCUS_SET;
-        op.func = [this]() {
-                    return focus_set();
-                  };
-        op.params = command.params;
-      }
-
-      else {
-        this->async.enqueue_and_log("Sequencer::Sequence::build_sequence",
-                                    "ERROR unknown command '"+command.name+"'");
-        continue;
-      }
-      current_group->operations.emplace_back(std::move(op));
+      it->second(op, command);
     }
 
     return NO_ERROR;
