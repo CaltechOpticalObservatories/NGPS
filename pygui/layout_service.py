@@ -193,15 +193,16 @@ class LayoutService:
 
         # Create a mapping for status colors
         status_map = {
-            "stopped": QColor(169, 169, 169),  # Grey
-            "idle": QColor(255, 255, 0),       # Yellow
-            "paused": QColor(255, 165, 0),     # Orange
-            "exposing": QColor(0, 255, 0),     # Green
-            "readout": QColor(0, 255, 0),      # Green
-            "acquire": QColor(255, 255, 0),    # Yellow           
-            "focus": QColor(255, 255, 0),      # Yellow     
-            "calib": QColor(255, 255, 0),      # Yellow     
-            "user": QColor(255, 255, 0),      # Yellow     
+            "stopped": QColor(169, 169, 169),   # Grey
+            "not_ready": QColor(255, 0, 0),     # Red
+            "idle": QColor(255, 255, 0),        # Yellow
+            "paused": QColor(255, 165, 0),      # Orange
+            "exposing": QColor(0, 255, 0),      # Green
+            "readout": QColor(0, 255, 0),       # Green
+            "acquire": QColor(255, 255, 0),     # Yellow
+            "focus": QColor(255, 255, 0),       # Yellow
+            "calib": QColor(255, 255, 0),       # Yellow
+            "user": QColor(255, 255, 0),        # Yellow
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable
@@ -223,7 +224,7 @@ class LayoutService:
             status_color_rect.setStyleSheet(f"background-color: {color.name()};")
 
             # Label showing the status
-            status_label = QLabel(status.capitalize())
+            status_label = QLabel(status.replace("_", " ").title())
             status_label.setMargin(0)  # Remove extra margin around the label
 
             # Layout for each status (color + label)
