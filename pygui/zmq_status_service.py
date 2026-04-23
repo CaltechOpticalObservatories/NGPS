@@ -3,7 +3,7 @@ import os
 import logging
 import json
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
-from typing import Dict
+from typing import Dict, Any, Optional
 
 class ZmqStatusService(QObject):
     # Signal to send a new message
@@ -29,6 +29,8 @@ class ZmqStatusService(QObject):
         self.socket = None
         self.is_connected = False
         self.subscribed_topics = set()  # Set of subscribed topics
+        self._last_seq_lifecycle_status = "stopped"
+        self._last_seq_wait_status = None
 
         # Set up logging
         self.setup_logging()
@@ -104,6 +106,7 @@ class ZmqStatusService(QObject):
         self.subscribed_topics.clear()  # Clear the current subscriptions
         self.logger.info("Subscribed to all topics.")
 
+
     def listen(self):
         """ Listen for incoming messages from the broker. """
         if not self.is_connected:
@@ -113,45 +116,41 @@ class ZmqStatusService(QObject):
         try:
             self.logger.info("Starting to listen for messages from the broker...")
             while True:
-                message = self.socket.recv_multipart()  # Receive the message as multipart (topic, payload)
-                if len(message) == 2:  # Ensure there are exactly two parts: topic and payload
-                    topic = message[0].decode('utf-8')  # The topic is the first part (byte array -> string)
-                    payload = message[1].decode('utf-8')  # The payload is the second part
+                message = self.socket.recv_multipart()
+                if len(message) == 2:
+                    topic = message[0].decode("utf-8")
+                    payload = message[1].decode("utf-8")
 
-                    self.logger.info(f"Received message: Topic = {topic}, Payload = {payload}")
+                    self.logger.info(f'Received message: Topic = {topic}, Payload = {payload}')
 
-                    # Assuming the payload is a JSON string, parse it into a dictionary
                     try:
                         data = json.loads(payload)
-                        # Emit the message to the UI thread
-                        
-                        # If the topic is "acamd"
+
                         if topic == "acamd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
-                        # If the topic is "seq_daemonstate"
-                        if topic == "seq_waitstate":
-                            status = self._status_from_seq_waitstate(data)
-                            self.system_status_signal.emit(status) 
-                        
-                        # If the topic is "slitd"
+                        elif topic == "seq_seqstate":
+                            self._last_seq_lifecycle_status = self._status_from_seq_seqstate(data)
+                            self._emit_resolved_system_status()
+
+                        elif topic == "seq_waitstate":
+                            self._last_seq_wait_status = self._status_from_seq_waitstate(data)
+                            self._emit_resolved_system_status()
+
                         if topic == "slitd":
                             slit_width = data.get("SLITW", None)
                             slit_offset = data.get("SLITO", None)
                             if slit_width is not None and slit_offset is not None:
                                 self.slit_info_signal.emit(slit_width, slit_offset)
 
-                        # If the topic is "calibd", update modulator states
                         if topic == "calibd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
                             self.update_modulator_states(data)
 
-                        # If the topic is "powerinfo", update lamp states
                         if topic == "powerd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-                            self.update_lamp_states(data)  # Update lamp statesi
+                            self.update_lamp_states(data)
 
-                        # If the topic is "tcsd", handle TCS information
                         if topic == "tcsd":
                             self.update_tcs_info(data)
 
@@ -159,7 +158,7 @@ class ZmqStatusService(QObject):
                         self.logger.error(f"Error parsing JSON payload: {e}")
                 else:
                     self.logger.warning("Received malformed message (not two parts).")
-                    
+
         except Exception as e:
             self.logger.error(f"Error while listening for messages: {e}")
         finally:
@@ -241,17 +240,80 @@ class ZmqStatusService(QObject):
         else:
             self.logger.warning("AIRMASS data is not available.")
 
-    def _status_from_seq_waitstate(self, flags: Dict[str, bool]) -> str:
-        f = {k: bool(v) for k, v in (flags or {}).items()}
+    def _emit_resolved_system_status(self):
+        """
+        If a wait-state is active, show that.
+        Otherwise show the broader sequencer lifecycle state.
+        """
+        status = self._last_seq_wait_status or self._last_seq_lifecycle_status
+        self.system_status_signal.emit(status)
 
-        if f.get("READOUT"):  return "readout"
-        if f.get("EXPOSE"):   return "exposing"
-        if f.get("ACQUIRE"):  return "acquire"
-        if f.get("FOCUS"):    return "focus"
-        if f.get("CALIB"):    return "calib" 
-        if f.get("USER"):     return "user" 
-        return "idle"
+    def _status_from_seq_seqstate(self, data: Dict[str, Any]) -> str:
+        """
+        Parse the overall sequencer lifecycle state.
+        """
+        if not isinstance(data, dict):
+            return "stopped"
 
+        seqstate = str(data.get("seqstate", "")).strip().upper()
+
+        state_map = {
+            "NOTREADY": "not_ready",
+            "READY": "idle",
+            "IDLE": "idle",
+            "PAUSED": "paused",
+            "STOPPED": "stopped",
+            "ERROR": "stopped",
+        }
+
+        return state_map.get(seqstate, seqstate.lower() if seqstate else "stopped")
+
+    def _status_from_seq_waitstate(self, flags: Dict[str, Any]) -> Optional[str]:
+        """
+        Return the active wait-state if one is true, else None.
+        Returning None falls back to seq_seqstate.
+        """
+        if not isinstance(flags, dict):
+            return None
+
+        # Ignore metadata fields like "source"
+        f = {
+            str(k).upper(): bool(v)
+            for k, v in flags.items()
+            if str(k).lower() != "source"
+        }
+
+        # Precedence matters if more than one field is true.
+        # Put the most user-meaningful states first.
+        wait_order = [
+            ("READOUT", "readout"),
+            ("EXPOSE", "exposing"),
+
+            # New replacement states for old ACQUIRE
+            ("MOVETO", "moveto"),
+            ("ACAM_ACQUIRE", "acam_acquire"),
+            ("SLICECAM_FINEACQUIRE", "slicecam_fineacquire"),
+
+            ("FOCUS", "focus"),
+            ("CALIB", "calib"),
+            ("CAMERA", "camera"),
+            ("FLEXURE", "flexure"),
+            ("POWER", "power"),
+            ("SLIT", "slit"),
+            ("TCSOP", "tcsop"),
+            ("TCS", "tcs"),
+            ("USER", "user"),
+
+            ("ACAM", "acam"),
+            ("SLICECAM", "slicecam"),
+            ("ACQUIRE", "acquire"),
+        ]
+
+        for key, ui_status in wait_order:
+            if f.get(key, False):
+                return ui_status
+
+        return None
 
 class ZmqStatusServiceThread(QThread):
     def __init__(self, zmq_status_service):
