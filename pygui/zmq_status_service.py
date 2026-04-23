@@ -3,7 +3,7 @@ import os
 import logging
 import json
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
-from typing import Dict
+from typing import Dict, Any, Optional
 
 class ZmqStatusService(QObject):
     # Signal to send a new message
