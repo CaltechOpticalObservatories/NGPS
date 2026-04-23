@@ -29,6 +29,8 @@ class ZmqStatusService(QObject):
         self.socket = None
         self.is_connected = False
         self.subscribed_topics = set()  # Set of subscribed topics
+        self._last_seq_lifecycle_status = "stopped"
+        self._last_seq_wait_status = None
 
         # Set up logging
         self.setup_logging()
@@ -127,10 +129,13 @@ class ZmqStatusService(QObject):
                         if topic == "acamd":
                             self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
 
-                        # support both old and new sequencer topics
-                        if topic in ("seq_waitstate", "seq_seqstate"):
-                            status = self._status_from_seq_waitstate(data)
-                            self.system_status_signal.emit(status)
+                        elif topic == "seq_seqstate":
+                            self._last_seq_lifecycle_status = self._status_from_seq_seqstate(data)
+                            self._emit_resolved_system_status()
+
+                        elif topic == "seq_waitstate":
+                            self._last_seq_wait_status = self._status_from_seq_waitstate(data)
+                            self._emit_resolved_system_status()
 
                         if topic == "slitd":
                             slit_width = data.get("SLITW", None)
@@ -235,38 +240,80 @@ class ZmqStatusService(QObject):
         else:
             self.logger.warning("AIRMASS data is not available.")
 
-    def _status_from_seq_waitstate(self, data) -> str:
+    def _emit_resolved_system_status(self):
+        """
+        If a wait-state is active, show that.
+        Otherwise show the broader sequencer lifecycle state.
+        """
+        status = self._last_seq_wait_status or self._last_seq_lifecycle_status
+        self.system_status_signal.emit(status)
+
+    def _status_from_seq_seqstate(self, data: Dict[str, Any]) -> str:
+        """
+        Parse the overall sequencer lifecycle state.
+        """
         if not isinstance(data, dict):
             return "stopped"
 
-        seqstate = data.get("seqstate")
-        if seqstate is not None:
-            state = str(seqstate).strip().upper()
-            state_map = {
-                "NOTREADY": "not_ready",
-                "READY": "idle",
-                "IDLE": "idle",
-                "READOUT": "readout",
-                "EXPOSE": "exposing",
-                "EXPOSING": "exposing",
-                "ACQUIRE": "acquire",
-                "FOCUS": "focus",
-                "CALIB": "calib",
-                "USER": "user",
-                "PAUSED": "paused",
-                "STOPPED": "stopped",
-                "ERROR": "stopped",
-            }
-            return state_map.get(state, "stopped")
+        seqstate = str(data.get("seqstate", "")).strip().upper()
 
-        f = {str(k).upper(): bool(v) for k, v in data.items()}
-        if f.get("READOUT"): return "readout"
-        if f.get("EXPOSE"):  return "exposing"
-        if f.get("ACQUIRE"): return "acquire"
-        if f.get("FOCUS"):   return "focus"
-        if f.get("CALIB"):   return "calib"
-        if f.get("USER"):    return "user"
-        return "idle"
+        state_map = {
+            "NOTREADY": "not_ready",
+            "READY": "idle",
+            "IDLE": "idle",
+            "PAUSED": "paused",
+            "STOPPED": "stopped",
+            "ERROR": "stopped",
+        }
+
+        return state_map.get(seqstate, seqstate.lower() if seqstate else "stopped")
+
+    def _status_from_seq_waitstate(self, flags: Dict[str, Any]) -> Optional[str]:
+        """
+        Return the active wait-state if one is true, else None.
+        Returning None falls back to seq_seqstate.
+        """
+        if not isinstance(flags, dict):
+            return None
+
+        # Ignore metadata fields like "source"
+        f = {
+            str(k).upper(): bool(v)
+            for k, v in flags.items()
+            if str(k).lower() != "source"
+        }
+
+        # Precedence matters if more than one field is true.
+        # Put the most user-meaningful states first.
+        wait_order = [
+            ("READOUT", "readout"),
+            ("EXPOSE", "exposing"),
+
+            # New replacement states for old ACQUIRE
+            ("MOVETO", "moveto"),
+            ("ACAM_ACQUIRE", "acam_acquire"),
+            ("SLICECAM_FINEACQUIRE", "slicecam_fineacquire"),
+
+            ("FOCUS", "focus"),
+            ("CALIB", "calib"),
+            ("CAMERA", "camera"),
+            ("FLEXURE", "flexure"),
+            ("POWER", "power"),
+            ("SLIT", "slit"),
+            ("TCSOP", "tcsop"),
+            ("TCS", "tcs"),
+            ("USER", "user"),
+
+            ("ACAM", "acam"),
+            ("SLICECAM", "slicecam"),
+            ("ACQUIRE", "acquire"),
+        ]
+
+        for key, ui_status in wait_order:
+            if f.get(key, False):
+                return ui_status
+
+        return None
 
 class ZmqStatusServiceThread(QThread):
     def __init__(self, zmq_status_service):
