@@ -8,13 +8,39 @@
 
 #include <string>
 
+namespace Daemon {
+  inline const std::string ACAMD     = "acamd";
+  inline const std::string CALIBD    = "calibd";
+  inline const std::string CAMERAD   = "camerad";
+  inline const std::string FLEXURED  = "flexured";
+  inline const std::string FOCUSD    = "focusd";
+  inline const std::string POWERD    = "powerd";
+  inline const std::string SEQUENCER = "sequencerd";
+  inline const std::string SLICECAMD = "slicecamd";
+  inline const std::string SLITD     = "slitd";
+  inline const std::string TCSD      = "tcsd";
+  inline const std::string THERMALD  = "thermald";
+}
+
+namespace Severity {
+  inline const std::string NOTICE  = "NOTICE";
+  inline const std::string WARNING = "WARNING";
+  inline const std::string ERROR   = "ERROR";
+}
+
 namespace Topic {
   inline const std::string SNAPSHOT   = "_snapshot";
   inline const std::string TARGETINFO = "targetinfo";
+  inline const std::string BROADCAST  = "broadcast";
   inline const std::string TCSD       = "tcsd";
   inline const std::string SLITD      = "slitd";
   inline const std::string CAMERAD    = "camerad";
   inline const std::string ACAMD      = "acamd";
+  inline const std::string CALIBD     = "calibd";
+  inline const std::string FLEXURED   = "flexured";
+  inline const std::string FOCUSD     = "focusd";
+  inline const std::string POWERD     = "powerd";
+  inline const std::string THERMALD   = "thermald";
   inline const std::string SEQ_DAEMONSTATE = "seq_daemonstate";
   inline const std::string SEQ_SEQSTATE = "seq_seqstate";
   inline const std::string SEQ_THREADSTATE = "seq_threadstate";
@@ -26,13 +52,23 @@ namespace Key {
 
   inline const std::string SOURCE = "source";
 
+  namespace Broadcast {
+    inline const std::string SEVERITY = "severity";
+    inline const std::string MESSAGE  = "message";
+  }
+
   namespace Sequencer {
     inline const std::string SEQSTATE = "seqstate";
   }
 
   namespace Camerad {
-    inline const std::string READY       = "ready";
-    inline const std::string SHUTTERTIME = "shuttime_sec";
+    inline const std::string READY         = "ready";
+    inline const std::string SHUTTERTIME   = "shuttime_sec";
+    inline const std::string EXPTIME       = "exptime";
+    inline const std::string IMNUM         = "imnum";
+    inline const std::string IMNAME        = "imname";
+    inline const std::string FRAMECOUNT    = "framecount";
+    inline const std::string FRAMETRANSFER = "frametransfer";
   }
 
   namespace Acamd {

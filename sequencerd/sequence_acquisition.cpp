@@ -20,7 +20,7 @@ namespace Sequencer {
     std::string reply;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACAM_ACQUIRE );
 
     // form and send the ACQUIRE command to ACAM
     //
@@ -29,17 +29,17 @@ namespace Sequencer {
     double angle_in = this->target.slitangle;
 
     if ( std::isnan(ra_in) || std::isnan(dec_in) ) {
-      this->async.enqueue_and_log( function, "ERROR converting target coordinates to decimal" );
+      this->broadcast( function, Severity::ERROR, "converting target coordinates to decimal" );
       return ERROR;
     }
 
     std::ostringstream cmd;
     cmd << ACAMD_ACQUIRE << " " << ra_in << " " << dec_in << " " << angle_in;
 
-    this->async.enqueue_and_log( function, "NOTICE: starting ACAM acquisition" );
+    this->broadcast( function, Severity::NOTICE, "starting ACAM acquisition" );
 
     if ( this->acamd.command( cmd.str(), reply ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR sending acquire command to acamd" );
+      this->broadcast( function, Severity::ERROR, "sending acquire command to acamd" );
       return ERROR;
     }
 
@@ -58,7 +58,7 @@ namespace Sequencer {
 
     if (this->cancel_flag.load()) return ABORT;
     if (use_timeout && !this->is_acam_guiding.load()) {
-      this->async.enqueue_and_log(function, "ERROR ACAM acquisition timed out!");
+      this->broadcast( function, Severity::ERROR, "ACAM acquisition timed out!" );
       return TIMEOUT;
     }
 
@@ -77,12 +77,12 @@ namespace Sequencer {
   long Sequence::do_slicecam_fineacquire() {
     const std::string function("Sequencer::Sequence::do_slicecam_fineacquire");
 
-    ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE);
+    ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_FINEACQUIRE);
 
     // TODO don't hard-code the arguments here:
     std::string reply;
     if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start L", reply ) != NO_ERROR) {
-      this->async.enqueue_and_log(function, "ERROR starting slicecam fine acquisition");
+      this->broadcast( function, Severity::ERROR, "starting slicecam fine acquisition" );
       return ERROR;
     }
 
@@ -91,7 +91,7 @@ namespace Sequencer {
       return ERROR;
     }
 
-    this->async.enqueue_and_log(function, "NOTICE: slicecam fine acquisition started");
+    this->broadcast( function, Severity::NOTICE, "slicecam fine acquisition started" );
 
     const bool use_timeout = ( this->acquisition_timeout > 0 );
     const auto timeout_time = std::chrono::steady_clock::now()
@@ -108,7 +108,7 @@ namespace Sequencer {
 
     if (this->cancel_flag.load()) return ABORT;
     if (use_timeout && !this->is_fineacquire_locked.load()) {
-      this->async.enqueue_and_log(function, "ERROR slicecam fine acquisition timed out!");
+      this->broadcast( function, Severity::ERROR, "slicecam fine acquisition timed out!" );
       return TIMEOUT;
     }
 
@@ -132,7 +132,7 @@ namespace Sequencer {
     // ---------- ACAM acquire -----------------------------
     //
     if ( this->do_acam_acquire() != NO_ERROR ) {
-      this->async.enqueue_and_log(caller, "WARNING acam acquisition failed");
+      this->broadcast( caller, Severity::WARNING, "acam acquisition failed" );
 
       // on ACAM acquisition failure wait for user to continue or cancel
       if ( this->wait_for_user(caller) == ABORT ) return ABORT;
@@ -143,7 +143,7 @@ namespace Sequencer {
     // ---------- SLICECAM fineacquire ---------------------
     //
     if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
-      this->async.enqueue_and_log(caller, "WARNING slicecam fine acquisition failed");
+      this->broadcast( caller, Severity::WARNING, "slicecam fine acquisition failed" );
     }
 
     return NO_ERROR;
