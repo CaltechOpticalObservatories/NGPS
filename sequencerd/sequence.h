@@ -125,6 +125,8 @@ namespace Sequencer {
     SEQ_STOPPING,            ///< set when sequencer is shutting down
     SEQ_PAUSED,              ///< set when sequencer is paused
     SEQ_STARTING,            ///< set when sequencer is starting up
+    SEQ_FAILED,              ///< set on a fatal/indeterminate failure; cleared only by startup or shutdown
+    SEQ_ABORTING,            ///< transitory; set/cleared via RAII in abort_process()
     NUM_SEQ_STATES
   };
 
@@ -134,7 +136,9 @@ namespace Sequencer {
     {SEQ_RUNNING,       "RUNNING"},
     {SEQ_STOPPING,      "STOPPING"},
     {SEQ_PAUSED,        "PAUSED"},
-    {SEQ_STARTING,      "STARTING"}
+    {SEQ_STARTING,      "STARTING"},
+    {SEQ_FAILED,        "FAILED"},
+    {SEQ_ABORTING,      "ABORTING"}
   };
 
   /**
@@ -153,7 +157,9 @@ namespace Sequencer {
     SEQ_WAIT_SLIT,           ///< set when waiting for slit
     SEQ_WAIT_TCS,            ///< set when waiting for tcs
     // states
-    SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_MOVETO,         ///< set when waiting for move-to-target
+    SEQ_WAIT_ACAM_ACQUIRE,   ///< set when waiting for ACAM acquire
+    SEQ_WAIT_FINEACQUIRE,    ///< set when waiting for slicecam fineacquire
     SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
     SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
     SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
@@ -163,21 +169,23 @@ namespace Sequencer {
 
   const std::map<size_t, std::string> wait_state_names = {
     // daemons
-    {SEQ_WAIT_ACAM,     "ACAM"},
-    {SEQ_WAIT_CALIB,    "CALIB"},
-    {SEQ_WAIT_CAMERA,   "CAMERA"},
-    {SEQ_WAIT_FLEXURE,  "FLEXURE"},
-    {SEQ_WAIT_FOCUS,    "FOCUS"},
-    {SEQ_WAIT_POWER,    "POWER"},
-    {SEQ_WAIT_SLICECAM, "SLICECAM"},
-    {SEQ_WAIT_SLIT,     "SLIT"},
-    {SEQ_WAIT_TCS,      "TCS"},
+    {SEQ_WAIT_ACAM,         "ACAM"},
+    {SEQ_WAIT_CALIB,        "CALIB"},
+    {SEQ_WAIT_CAMERA,       "CAMERA"},
+    {SEQ_WAIT_FLEXURE,      "FLEXURE"},
+    {SEQ_WAIT_FOCUS,        "FOCUS"},
+    {SEQ_WAIT_POWER,        "POWER"},
+    {SEQ_WAIT_SLICECAM,     "SLICECAM"},
+    {SEQ_WAIT_SLIT,         "SLIT"},
+    {SEQ_WAIT_TCS,          "TCS"},
     // states
-    {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
-    {SEQ_WAIT_EXPOSE,   "EXPOSE"},
-    {SEQ_WAIT_READOUT,  "READOUT"},
-    {SEQ_WAIT_TCSOP,    "TCSOP"},
-    {SEQ_WAIT_USER,     "USER"}
+    {SEQ_WAIT_MOVETO,       "MOVETO"},
+    {SEQ_WAIT_ACAM_ACQUIRE, "ACAM_ACQUIRE"},
+    {SEQ_WAIT_FINEACQUIRE,  "FINEACQUIRE"},
+    {SEQ_WAIT_EXPOSE,       "EXPOSE"},
+    {SEQ_WAIT_READOUT,      "READOUT"},
+    {SEQ_WAIT_TCSOP,        "TCSOP"},
+    {SEQ_WAIT_USER,         "USER"}
   };
 
   /**
@@ -499,8 +507,12 @@ namespace Sequencer {
 ///   void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void broadcast_daemonstate();             ///<
       void broadcast_threadstate();             ///<
-      void broadcast_seqstate();                ///< writes the seqstate string to the async port
-      void broadcast_waitstate();               ///< writes the waitstate string to the async port
+      void broadcast_seqstate();                ///< publishes the seqstate on the seq_seqstate topic
+      void broadcast_waitstate();               ///< publishes the waitstate on the seq_waitstate topic
+
+      void broadcast( const std::string &function,
+                      const std::string &severity,
+                      const std::string &message );  ///< logs and publishes a narrative message on Topic::BROADCAST
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 

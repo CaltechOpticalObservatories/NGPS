@@ -257,15 +257,13 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
-   * @brief      writes string of seq_state to the async port
-   * @details    This broadcasts the seqstate as a string with the "SEQSTATE:"
-   *             message tag.
+   * @brief      publishes seq_state on the SEQ_SEQSTATE topic
+   * @details    Legacy UDP "SEQSTATE:" async strings have been removed.
+   *             Seqstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_seqstate() {
     this->publish_seqstate();
-    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate",
-                                 "SEQSTATE: "+seq_state_manager.get_set_states() );
     this->cv.notify_all();
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
@@ -273,18 +271,49 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::broadcast_waitstate *****************************/
   /**
-   * @brief      writes string of all set wait_state bits to the asyn port
-   * @details    This broadcasts the seqstate as a string with the "WAITSTATE:"
-   *             message tag.
+   * @brief      publishes wait_state on the SEQ_WAITSTATE topic
+   * @details    Legacy UDP "WAITSTATE:" async strings have been removed.
+   *             Waitstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_waitstate() {
     this->publish_waitstate();
-    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_waitstate",
-                                 "WAITSTATE: "+wait_state_manager.get_set_states() );
     this->cv.notify_all();
   }
   /***** Sequencer::Sequence::broadcast_waitstate *****************************/
+
+
+  /***** Sequencer::Sequence::broadcast ***************************************/
+  /**
+   * @brief      logs a narrative message and publishes it on Topic::BROADCAST
+   * @param[in]  function  name of caller (used for log line)
+   * @param[in]  severity  one of Severity::NOTICE, Severity::WARNING, Severity::ERROR
+   * @param[in]  message   operator-facing narrative text
+   * @details    Replaces the legacy pattern of enqueuing narrative strings onto
+   *             the UDP async queue. Narrative messages are now routed through
+   *             the PUB-SUB broadcast topic. Logging is preserved.
+   *
+   */
+  void Sequence::broadcast( const std::string &function,
+                            const std::string &severity,
+                            const std::string &message ) {
+    logwrite( function, severity+": "+message );
+
+    if ( ! this->publisher ) return;
+
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE]              = Sequencer::DAEMON_NAME;
+    jmessage[Key::Broadcast::SEVERITY] = severity;
+    jmessage[Key::Broadcast::MESSAGE]  = message;
+
+    try {
+      this->publisher->publish( jmessage, Topic::BROADCAST );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( function, "ERROR publishing broadcast: "+std::string(e.what()) );
+    }
+  }
+  /***** Sequencer::Sequence::broadcast ***************************************/
 
 
   /***** Sequencer::Sequence::dothread_sequencer_async_listener ***************/
@@ -1960,6 +1989,7 @@ namespace Sequencer {
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
+    ScopedState wait_moveto( wait_state_manager, Sequencer::SEQ_WAIT_MOVETO );
 
     // If RA and DEC fields are both empty then no telescope move
     //
@@ -1972,7 +2002,7 @@ namespace Sequencer {
     //
     if ( this->target.ra_hms == this->last_ra_hms &&
          this->target.dec_dms == this->last_dec_dms ) {
-      this->async.enqueue_and_log( function, "NOTICE: no move required for repeat target" );
+      this->broadcast( function, Severity::NOTICE, "no move required for repeat target" );
       return NO_ERROR;
     }
 
@@ -1996,7 +2026,7 @@ namespace Sequencer {
       if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
-      this->async.enqueue_and_log( function, "ERROR "+message.str() );
+      this->broadcast( function, Severity::ERROR, message.str() );
       this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       throw std::runtime_error(message.str());
     }
@@ -2014,9 +2044,9 @@ namespace Sequencer {
     double _solved_angle = ( angle_out < 0 ? angle_out + 360.0 : angle_out );
 
     if ( std::abs(_solved_angle) - std::abs(this->target.casangle) > 0.01 ) {
-      message.str(""); message << "NOTICE: Calculated angle " << angle_out
+      message.str(""); message << "Calculated angle " << angle_out
                                << " is not equivalent to casangle " << this->target.casangle;
-      this->async.enqueue_and_log( function, message.str() );
+      this->broadcast( function, Severity::NOTICE, message.str() );
     }
 
     // Send coordinates using TCS-native COORDS command.
@@ -2046,8 +2076,8 @@ namespace Sequencer {
       error  = this->tcsd.send( coords_cmd.str(), coords_reply );                  // send to the TCS
       // second failure return error
       if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-        message.str(""); message << "ERROR sending COORDS command. TCS reply: " << coords_reply;
-        this->async.enqueue_and_log( function, message.str() );
+        message.str(""); message << "sending COORDS command. TCS reply: " << coords_reply;
+        this->broadcast( function, Severity::ERROR, message.str() );
         this->thread_error_manager.set( THR_MOVE_TO_TARGET );
         throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
@@ -2060,7 +2090,7 @@ namespace Sequencer {
     std::stringstream ringgo_cmd;
     std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
     ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
-    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    this->broadcast( function, Severity::NOTICE, "sending "+ringgo_cmd.str()+" to TCS" );
     error = this->tcsd.send( ringgo_cmd.str(), noreply );
     }
 
@@ -2068,16 +2098,16 @@ namespace Sequencer {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
-    this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
+    this->broadcast( function, Severity::NOTICE, "waiting for TCS operator to send \"ontarget\" signal" );
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
       this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
     }
 
-    this->async.enqueue_and_log( function, "NOTICE: received "
-                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
-                                           +" signal!" );
+    this->broadcast( function, Severity::NOTICE, "received "
+                                                 +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
+                                                 +" signal!" );
     }
 
     // If waiting for TCS operator was cancelled then don't continue
@@ -2300,12 +2330,39 @@ namespace Sequencer {
   /***** Sequencer::Sequence::abort_process *********************************/
   /**
    * @brief      tries to abort everything happening
+   * @details    Sets SEQ_ABORTING via RAII for the duration of the abort,
+   *             then on exit:
+   *               - if aborting during RUNNING or PAUSED, restores SEQ_READY
+   *               - if aborting during STARTING or STOPPING, sets SEQ_FAILED
+   *                 (indeterminate lifecycle state; requires startup/shutdown
+   *                  to clear)
+   *               - otherwise leaves seqstate unchanged on exit
    *
    */
   void Sequence::abort_process() {
     const std::string function("Sequencer::Sequence::abort_process");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
+
+    // Decide post-abort seqstate before entering SEQ_ABORTING.
+    //
+    const bool abort_during_run = this->seq_state_manager.are_any_set(
+                                    Sequencer::SEQ_RUNNING,
+                                    Sequencer::SEQ_PAUSED );
+    const bool abort_during_lifecycle = this->seq_state_manager.are_any_set(
+                                    Sequencer::SEQ_STARTING,
+                                    Sequencer::SEQ_STOPPING );
+
+    // RAII: SEQ_ABORTING set on entry, cleared on scope exit.
+    //
+    ScopedState seq_state( this->seq_state_manager, Sequencer::SEQ_ABORTING );
+
+    if ( abort_during_run ) {
+      seq_state.destruct_set( Sequencer::SEQ_READY );
+    }
+    else if ( abort_during_lifecycle ) {
+      seq_state.destruct_set( Sequencer::SEQ_FAILED );
+    }
 
     this->cancel_flag.store(false);
 
@@ -2328,7 +2385,7 @@ namespace Sequencer {
     //
     this->do_once.store(true);
 
-    this->async.enqueue_and_log( function, "NOTICE: cancel signal sent" );
+    this->broadcast( function, Severity::NOTICE, "cancel signal sent" );
   }
 
   /***** Sequencer::Sequence::stop_exposure *********************************/
