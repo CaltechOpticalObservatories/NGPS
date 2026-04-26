@@ -414,9 +414,6 @@ namespace Sequencer {
 
       std::atomic<bool> do_once;            ///< set if "do one" selected, clear if "do all" selected
 
-      std::mutex seqstate_mtx;
-      std::condition_variable seqstate_cv;
-
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error_manager{ Sequencer::thread_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_WAIT_STATES)>   wait_state_manager{Sequencer::wait_state_names};
@@ -513,6 +510,8 @@ namespace Sequencer {
       void broadcast( const std::string &function,
                       const std::string &severity,
                       const std::string &message );  ///< logs and publishes a narrative message on Topic::BROADCAST
+
+      std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 

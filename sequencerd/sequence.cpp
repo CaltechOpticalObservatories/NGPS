@@ -232,23 +232,25 @@ namespace Sequencer {
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
   /**
    * @brief      publishes daemonstate and can control seqstate
-   * @details    If not STARTING or STOPPING and not all daemons ready then
-   *             this ensures that the seqstate drops into NOTREADY.
+   * @details    Daemon-readiness changes may only force the sequencer into
+   *             NOTREADY when the current seqstate is itself READY or
+   *             NOTREADY. Lifecycle states (STARTING, STOPPING, RUNNING,
+   *             PAUSED, ABORTING, FAILED) are owned by the lifecycle
+   *             functions and are never overridden here. The one-hot
+   *             seqstate contract is preserved.
    *
    */
   void Sequence::broadcast_daemonstate() {
     // always publish daemonstate when called
     this->publish_daemonstate();
 
-    // If any daemon isn't ready then the sequencer can't be ready,
-    // but don't override STARTING or STOPPING, unless none are ready.
-    if ( daemon_manager.are_all_clear() ) {
-      seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
-    }
-    else
-    if ( ! seq_state_manager.is_set(SEQ_STARTING) &&
-         ! seq_state_manager.is_set(SEQ_STOPPING) &&
-         ! daemon_manager.are_all_set() ) {
+    // Only degrade seqstate to NOTREADY when the sequencer is currently
+    // READY or NOTREADY. Never override an active lifecycle transition
+    // (STARTING, STOPPING, RUNNING, PAUSED, ABORTING) or FAILED.
+    //
+    if ( ! daemon_manager.are_all_set() &&
+         seq_state_manager.are_any_set( Sequencer::SEQ_READY,
+                                        Sequencer::SEQ_NOTREADY ) ) {
       seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
     }
   }
@@ -263,8 +265,23 @@ namespace Sequencer {
    *
    */
   void Sequence::broadcast_seqstate() {
+    const std::string function("Sequencer::Sequence::broadcast_seqstate");
+
+    // publish the structured seqstate topic
+    //
     this->publish_seqstate();
     this->cv.notify_all();
+
+    // emit a NOTICE on Topic::BROADCAST only when the lifecycle state has
+    // actually changed, so operators (and logs) get a breadcrumb trail of
+    // state transitions without noise from repeated identical callbacks.
+    //
+    std::string current( this->seq_state_manager.get_set_states() );
+    rtrim( current );
+    if ( current != this->last_seqstate_str ) {
+      this->last_seqstate_str = current;
+      this->broadcast( function, Severity::NOTICE, "sequencer state: "+current );
+    }
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
 
@@ -2344,7 +2361,9 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
 
-    // Decide post-abort seqstate before entering SEQ_ABORTING.
+    // Decide post-abort seqstate before entering SEQ_ABORTING. These snapshots
+    // must be taken before any seqstate mutation below, because set_only()
+    // clears all other lifecycle bits.
     //
     const bool abort_during_run = this->seq_state_manager.are_any_set(
                                     Sequencer::SEQ_RUNNING,
@@ -2353,16 +2372,9 @@ namespace Sequencer {
                                     Sequencer::SEQ_STARTING,
                                     Sequencer::SEQ_STOPPING );
 
-    // RAII: SEQ_ABORTING set on entry, cleared on scope exit.
+    // Enter SEQ_ABORTING as a strict one-hot state.
     //
-    ScopedState seq_state( this->seq_state_manager, Sequencer::SEQ_ABORTING );
-
-    if ( abort_during_run ) {
-      seq_state.destruct_set( Sequencer::SEQ_READY );
-    }
-    else if ( abort_during_lifecycle ) {
-      seq_state.destruct_set( Sequencer::SEQ_FAILED );
-    }
+    this->seq_state_manager.set_only( {Sequencer::SEQ_ABORTING} );
 
     this->cancel_flag.store(false);
 
@@ -2386,7 +2398,24 @@ namespace Sequencer {
     this->do_once.store(true);
 
     this->broadcast( function, Severity::NOTICE, "cancel signal sent" );
+
+    // Exit SEQ_ABORTING to a strict one-hot terminal state chosen from the
+    // snapshot taken at entry. If neither condition applies (e.g. abort
+    // invoked while READY/NOTREADY/FAILED) we leave the state at NOTREADY
+    // so callers never see SEQ_ABORTING linger and no prior bit is retained.
+    //
+    if ( abort_during_run ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
+    }
+    else if ( abort_during_lifecycle ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+    }
+    else {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
+    }
   }
+  /***** Sequencer::Sequence::abort_process *********************************/
+
 
   /***** Sequencer::Sequence::stop_exposure *********************************/
   /**
@@ -2855,16 +2884,34 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::shutdown");
     long error=ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
+    // Reject if a conflicting lifecycle transition is already in progress.
+    // All other states (READY, NOTREADY, FAILED, RUNNING, PAUSED) are valid
+    // starting points for a shutdown.
+    //
+    if ( seq_state_manager.are_any_set( Sequencer::SEQ_STOPPING,
+                                        Sequencer::SEQ_STARTING,
+                                        Sequencer::SEQ_ABORTING ) ) {
+      std::stringstream message;
+      message << "cannot perform system shutdown while "
+              << seq_state_manager.get_set_states();
+      this->broadcast( function, Severity::ERROR, message.str() );
+      return ERROR;
+    }
 
-    // set only STOPPING (and clear everything else)
-    ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STOPPING, true );     // state=STOPPING (only)
-
-    seq_state.destruct_set( Sequencer::SEQ_NOTREADY );                             // set state=NOTREADY on exit
-
-    // stop everything
+    // stop everything first
     //
     this->abort_process();
+
+    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
+
+    // Enter SEQ_STOPPING as a strict one-hot state. Explicit management (not
+    // ScopedState RAII) is used here because abort_process() below independently
+    // transitions seqstate, and an RAII destructor using set_and_clear would
+    // re-add NOTREADY on top of any FAILED bit left by abort_process, producing
+    // a non-one-hot state. The terminal transition is made explicitly before
+    // every return from this function.
+    //
+    seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
 
     // clear stop flags
     //
@@ -2925,8 +2972,14 @@ namespace Sequencer {
     }
     else {
       message << "ERROR occurred during shutdown and may not have completed";
-      seq_state.destruct_set( Sequencer::SEQ_FAILED );                           // override exit state on failure
     }
+
+    // Always end in NOTREADY regardless of worker errors. SEQ_FAILED is
+    // reserved for startup failures and aborted lifecycle transitions.
+    // Worker errors during shutdown are logged above but do not prevent
+    // the instrument from being considered shut down (not ready).
+    //
+    seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
 
     this->async.enqueue_and_log( function, message.str() );
 

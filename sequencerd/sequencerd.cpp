@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }
-  sequencerd.sequence.seq_state_manager.set(Sequencer::SEQ_NOTREADY);
+  sequencerd.sequence.seq_state_manager.set_only({Sequencer::SEQ_NOTREADY});
 
   std::this_thread::sleep_for( std::chrono::milliseconds(100) );
   sequencerd.sequence.publish_snapshot();

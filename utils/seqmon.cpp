@@ -3,12 +3,19 @@
  * @brief   terminal-based subscriber that mimics the sequencer operator display
  * @author  David Hale <dhale@astro.caltech.edu>
  *
- * Subscribes to three sequencer topics on the ZMQ broker and renders a simple
+ * Subscribes to sequencer topics on the ZMQ broker and renders a simple
  * color-coded terminal display:
  *
- *   seq_seqstate  lifecycle state (top line, color by value)
- *   seq_waitstate active wait bits (second line, list of set labels)
- *   broadcast     operator messages (scrolling log, color by severity)
+ *   seq_seqstate   lifecycle state (top line, color by value)
+ *   seq_waitstate  active wait bits (second line, list of set labels)
+ *   seq_daemonstate daemon online/offline status
+ *   acamd          acquisition mode, acquired flag, seeing
+ *   slicecamd      fine-acquisition locked/running flags
+ *   broadcast      operator messages (scrolling log, color by severity)
+ *
+ * On startup a Topic::SNAPSHOT request is published so that sequencerd,
+ * acamd, and slicecamd immediately re-publish their current telemetry,
+ * avoiding a stale display until the next natural update.
  *
  * This is a standalone utility intended as a stand-in for the GUI message
  * window during testing. It has no dependencies on the sequencer sources;
@@ -17,19 +24,23 @@
  */
 
 #include <zmqpp/zmqpp.hpp>
-#include <nlohmann/json.hpp>
+#include <json.hpp>
 #include "message_keys.h"
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 namespace {
 
-  constexpr const char *BROKER_ENDPOINT = "tcp://localhost:5556";
+  constexpr const char *BROKER_ENDPOINT     = "tcp://localhost:5556";  // subscribers connect here
+  constexpr const char *BROKER_PUB_ENDPOINT = "tcp://localhost:5555";  // publishers connect here
 
   // ANSI escape codes
   //
@@ -56,7 +67,13 @@ namespace {
   // reprint the fixed top lines.
   //
   std::string last_seqstate = "(unknown)";
-  std::string last_waitstate;
+  std::string last_waitstate = "(none)";
+  std::string last_daemonstate = "(none)";
+  std::string last_acq_mode    = "?";      // "stopped" | "guiding" | "acquiring"
+  bool        last_is_acquired = false;    // Key::Acamd::IS_ACQUIRED
+  bool        last_fa_locked   = false;    // Key::Slicecamd::FINEACQUIRE_LOCKED
+  bool        last_fa_running  = false;    // Key::Slicecamd::FINEACQUIRE_RUNNING
+  double      last_seeing      = 0.0;      // Key::Acamd::SEEING
 
   /***** color_for_state ******************************************************/
   /**
@@ -92,6 +109,32 @@ namespace {
   /***** color_for_severity ***************************************************/
 
 
+  /***** color_for_daemonstate ************************************************/
+  /**
+   * @brief   map a broadcast severity label to an ANSI color
+   * @param   severity  severity string (NOTICE|WARNING|ERROR)
+   * @return  ANSI escape sequence
+   */
+  const char *color_for_daemonstate( bool state) {
+    return ( state ? ANSI_GREEN : ANSI_RED );
+  }
+  /***** color_for_daemonstate ************************************************/
+
+
+  /***** color_for_acqmode ****************************************************/
+  /**
+   * @brief   map an acquisition mode string to an ANSI color
+   * @param   mode  "acquiring" | "guiding" | "stopped"
+   * @return  ANSI escape sequence
+   */
+  const char *color_for_acqmode( const std::string &mode ) {
+    if ( mode == "acquiring" ) return ANSI_GREEN;
+    if ( mode == "guiding"   ) return ANSI_CYAN;
+    return ANSI_GRAY;   // "stopped" or unknown
+  }
+  /***** color_for_acqmode ****************************************************/
+
+
   /***** timestamp ************************************************************/
   /**
    * @brief   local time as HH:MM:SS
@@ -118,10 +161,26 @@ namespace {
     std::cout << CURSOR_SAVE
               << CURSOR_HOME
               << CLEAR_LINE
-              << "STATE:   " << color_for_state(last_seqstate)
+              << "STATE:       " << color_for_state(last_seqstate)
               << last_seqstate << ANSI_RESET << "\n"
               << CLEAR_LINE
-              << "WAITING: " << last_waitstate << "\n"
+              << "WAITING:     " << last_waitstate << ANSI_RESET << "\n"
+              << CLEAR_LINE
+              << "SUBSYSTEMS:  " << last_daemonstate << "\n"
+              << CLEAR_LINE
+              << "ACQUISITION: "
+              << "ACAM: " << color_for_acqmode(last_acq_mode)
+              << last_acq_mode << ANSI_RESET
+              << " " << ( last_is_acquired ? ANSI_GREEN : ANSI_GRAY )
+              << "[acquired]" << ANSI_RESET
+              << "  SLICECAM: "
+              << ( last_fa_locked  ? ANSI_GREEN : ANSI_GRAY ) << "locked"  << ANSI_RESET
+              << " "
+              << ( last_fa_running ? ANSI_GREEN : ANSI_GRAY ) << "running" << ANSI_RESET
+              << "  SEEING: " << std::fixed << std::setprecision(2)
+              << ANSI_BLUE << last_seeing << ANSI_RESET
+              << "\n"
+              << std::string(60, '-') << "\n"
               << CURSOR_RESTORE
               << std::flush;
   }
@@ -180,6 +239,83 @@ namespace {
   /***** handle_waitstate *****************************************************/
 
 
+  void handle_daemonstate( const std::string &payload ) {
+    try {
+      auto j = nlohmann::json::parse(payload);
+      std::ostringstream oss;
+      for (auto it = j.begin(); it != j.end(); ++it) {
+        if (!it.value().is_boolean()) continue;
+        bool daemonstate = it.value().get<bool>();
+        oss << color_for_daemonstate(daemonstate)
+          << it.key() << ANSI_RESET << " ";
+      }
+      last_daemonstate = oss.str();
+      redraw_status();
+    }
+    catch (const std::exception &e) {
+      std::cerr << "daemonstate parse error: " << e.what() << "\n";
+    }
+  }
+
+
+  /***** handle_acamd *********************************************************/
+  /**
+   * @brief   parse an acamd payload and update acquisition mode/status
+   * @param   payload  JSON payload as string
+   * @details Handles partial payloads; only keys present are updated.
+   */
+  void handle_acamd( const std::string &payload ) {
+    try {
+      auto j = nlohmann::json::parse( payload );
+      bool changed = false;
+      if ( j.contains( Key::Acamd::ACQUIRE_MODE ) ) {
+        last_acq_mode    = j[Key::Acamd::ACQUIRE_MODE].get<std::string>();
+        changed = true;
+      }
+      if ( j.contains( Key::Acamd::IS_ACQUIRED ) ) {
+        last_is_acquired = j[Key::Acamd::IS_ACQUIRED].get<bool>();
+        changed = true;
+      }
+      if ( j.contains( Key::Acamd::SEEING ) && !j[Key::Acamd::SEEING].is_null() ) {
+        last_seeing      = j[Key::Acamd::SEEING].get<double>();
+        changed = true;
+      }
+      if ( changed ) redraw_status();
+    }
+    catch ( const std::exception &e ) {
+      std::cerr << "acamd parse error: " << e.what() << "\n";
+    }
+  }
+  /***** handle_acamd *********************************************************/
+
+
+  /***** handle_slicecamd *****************************************************/
+  /**
+   * @brief   parse a slicecamd payload and update fine-acquisition status
+   * @param   payload  JSON payload as string
+   * @details Handles partial payloads; only keys present are updated.
+   */
+  void handle_slicecamd( const std::string &payload ) {
+    try {
+      auto j = nlohmann::json::parse( payload );
+      bool changed = false;
+      if ( j.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) {
+        last_fa_locked  = j[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>();
+        changed = true;
+      }
+      if ( j.contains( Key::Slicecamd::FINEACQUIRE_RUNNING ) ) {
+        last_fa_running = j[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>();
+        changed = true;
+      }
+      if ( changed ) redraw_status();
+    }
+    catch ( const std::exception &e ) {
+      std::cerr << "slicecamd parse error: " << e.what() << "\n";
+    }
+  }
+  /***** handle_slicecamd *****************************************************/
+
+
   /***** handle_broadcast *****************************************************/
   /**
    * @brief   parse a broadcast payload and append a colored line to the log
@@ -203,6 +339,28 @@ namespace {
     }
   }
   /***** handle_broadcast *****************************************************/
+
+
+  /***** request_snapshot *****************************************************/
+  /**
+   * @brief   publish a Topic::SNAPSHOT request to named daemons
+   * @details Each daemon whose name appears as a key in the payload will
+   *          respond by re-publishing its current telemetry snapshot, allowing
+   *          seqmon to populate the status header immediately on startup rather
+   *          than waiting for the next natural update from each daemon.
+   * @param   publisher  connected ZMQ publish socket
+   */
+  void request_snapshot( zmqpp::socket &publisher ) {
+    nlohmann::json j;
+    j[Daemon::SEQUENCER] = true;
+    j[Daemon::ACAMD]     = true;
+    j[Daemon::SLICECAMD] = true;
+    zmqpp::message zmsg;
+    zmsg.add( Topic::SNAPSHOT );
+    zmsg.add( j.dump() );
+    publisher.send( zmsg );
+  }
+  /***** request_snapshot *****************************************************/
 
 
   /***** signal_handler *******************************************************/
@@ -239,16 +397,22 @@ int main( int argc, char *argv[] ) {
   std::signal( SIGINT,  signal_handler );
   std::signal( SIGTERM, signal_handler );
 
-  // set up ZMQ subscriber
+  // set up ZMQ subscriber and publisher
   //
   zmqpp::context context;
   zmqpp::socket  subscriber( context, zmqpp::socket_type::subscribe );
+  zmqpp::socket  publisher ( context, zmqpp::socket_type::publish   );
 
   try {
     subscriber.connect( endpoint );
     subscriber.subscribe( Topic::BROADCAST );
     subscriber.subscribe( Topic::SEQ_SEQSTATE );
     subscriber.subscribe( Topic::SEQ_WAITSTATE );
+    subscriber.subscribe( Topic::SEQ_DAEMONSTATE );
+    subscriber.subscribe( Topic::ACAMD );
+    subscriber.subscribe( Topic::SLICECAMD );
+
+    publisher.connect( BROKER_PUB_ENDPOINT );
   }
   catch ( const std::exception &e ) {
     std::cerr << "ERROR connecting to " << endpoint << ": " << e.what() << "\n";
@@ -258,12 +422,24 @@ int main( int argc, char *argv[] ) {
   // initial screen: clear, draw status header, leave room for scrolling log
   //
   std::cout << CLEAR_SCREEN << CURSOR_HOME
-            << "STATE:   " << last_seqstate << "\n"
-            << "WAITING: " << last_waitstate << "\n"
+            << "STATE:       " << last_seqstate   << "\n"
+            << "WAITING:     " << last_waitstate  << "\n"
+            << "SUBSYSTEMS:  " << last_daemonstate << "\n"
+            << "ACQUISITION: ACAM: " << last_acq_mode
+            << "  SLICECAM: locked running"
+            << "  SEEING: " << std::fixed << std::setprecision(2) << last_seeing << "\n"
             << std::string(60, '-') << "\n"
             << "seqmon subscribed to " << endpoint
             << " (Ctrl-C to exit)\n"
             << std::flush;
+
+  // ZMQ PUB sockets have a slow-joiner problem: messages sent immediately
+  // after connect are dropped before the broker registers the connection.
+  // A brief sleep ensures the publisher is ready before we send the snapshot
+  // request.
+  //
+  std::this_thread::sleep_for( std::chrono::milliseconds(200) );
+  request_snapshot( publisher );
 
   // poll so Ctrl-C can break out promptly
   //
@@ -276,12 +452,16 @@ int main( int argc, char *argv[] ) {
 
     zmqpp::message zmsg;
     subscriber.receive( zmsg );
+    if ( zmsg.parts() < 2 ) continue;          // guard against malformed/partial messages
     std::string topic, payload;
     zmsg >> topic >> payload;
 
-    if      ( topic == Topic::SEQ_SEQSTATE  ) handle_seqstate( payload );
-    else if ( topic == Topic::SEQ_WAITSTATE ) handle_waitstate( payload );
-    else if ( topic == Topic::BROADCAST     ) handle_broadcast( payload );
+    if      ( topic == Topic::SEQ_SEQSTATE  )   handle_seqstate( payload );
+    else if ( topic == Topic::SEQ_WAITSTATE )   handle_waitstate( payload );
+    else if ( topic == Topic::SEQ_DAEMONSTATE ) handle_daemonstate( payload );
+    else if ( topic == Topic::ACAMD         )   handle_acamd( payload );
+    else if ( topic == Topic::SLICECAMD     )   handle_slicecamd( payload );
+    else if ( topic == Topic::BROADCAST     )   handle_broadcast( payload );
     // unrecognized topics silently ignored
   }
 
