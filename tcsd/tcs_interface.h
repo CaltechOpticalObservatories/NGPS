@@ -445,13 +445,13 @@ logwrite(function,message.str());
       std::condition_variable publish_condition;
       std::condition_variable collect_condition;
 
-      std::atomic<bool> publish_enable;
+      std::atomic<bool> should_publish;
       std::atomic<bool> collect_enable;
 
       Interface()
         : context(),
           offsetrate(0),
-          publish_enable(false),
+          should_publish(true),
           collect_enable(false),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
@@ -487,6 +487,7 @@ logwrite(function,message.str());
 
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
+      void do_continuous_snapshot();
 
       /**
        * These are the functions for communicating with the TCS
@@ -499,6 +500,7 @@ logwrite(function,message.str());
       long isopen( std::string &retstring );
       long isopen( const std::string &arg, std::string &retstring );
       long close();
+      long publish_state( const std::string &arg, std::string &retstring );
       long get_name( const std::string &arg, std::string &retstring );
       long get_weather_coords( const std::string &arg, std::string &retstring );
       long get_coords( const std::string &arg, std::string &retstring );

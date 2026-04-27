@@ -132,6 +132,9 @@ int main(int argc, char **argv) {
   // publish my snapshot so the world knows I'm online
   tcsd.interface.publish_snapshot();
 
+  // thread to publish snapshot when connected
+  std::thread( std::ref(TCS::Interface::do_continuous_snapshot) ).detach();
+
   // This will pre-thread N_THREADS threads, a little differently from other
   // daemons.  There will be N_THREADS-1 non-blocking threads as before then
   // loop forever on Accept to dynamically spawn a new thread for each blocking
