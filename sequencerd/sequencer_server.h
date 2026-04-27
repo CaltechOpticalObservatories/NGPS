@@ -145,7 +145,7 @@ namespace Sequencer {
       static void block_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> );    ///< main function for blocking connection thread
       static void thread_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock);  ///< main function for all non-blocked threads
       static void gui_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock );     ///< main function for gui threads
-      static void async_main( Sequencer::Server &server, Network::UdpSocket sock );    ///< asynchronous message sending thread
+//    static void async_main( Sequencer::Server &server, Network::UdpSocket sock );    ///< asynchronous message sending thread
 
       void handle_signal( int signo );
 
