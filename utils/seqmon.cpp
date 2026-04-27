@@ -61,6 +61,20 @@ namespace {
   constexpr const char *CLEAR_SCREEN   = "\033[2J";
   constexpr const char *CLEAR_LINE     = "\033[2K";
 
+  // DECSTBM scrolling-region control. The header occupies HEADER_ROWS fixed
+  // rows at the top of the terminal; broadcast messages scroll within the
+  // region starting at row HEADER_ROWS+1 and extending to the bottom. Using
+  // 999 as the bottom bound lets the terminal clamp to its actual height.
+  //
+  // NOTE: the "6" in SCROLL_REGION_SET and CURSOR_LOG_START is HEADER_ROWS+1.
+  // If HEADER_ROWS changes, update these literals to match.
+  //
+  constexpr int         HEADER_ROWS         = 5;
+  constexpr const char *SCROLL_REGION_SET   = "\033[6;999r";   // top = HEADER_ROWS+1
+  constexpr const char *SCROLL_REGION_RESET = "\033[r";        // full-screen scrolling
+  constexpr const char *CURSOR_LOG_START    = "\033[6;1H";     // row HEADER_ROWS+1, col 1
+  constexpr const char *CURSOR_LOG_END      = "\033[999;1H";   // bottom of scroll region
+
   std::atomic<bool> running{true};
 
   // Cached last-known state so a redraw after a broadcast message can
@@ -327,7 +341,12 @@ namespace {
       std::string severity = j.value( Key::Broadcast::SEVERITY, std::string("NOTICE") );
       std::string message  = j.value( Key::Broadcast::MESSAGE,  std::string("") );
       std::string source   = j.value( Key::SOURCE,              std::string("?") );
-      std::cout << color_for_severity(severity)
+      // Park the cursor at the bottom of the scroll region before emitting the
+      // newline so the message lands inside the region and the header above
+      // it is not scrolled.
+      //
+      std::cout << CURSOR_LOG_END
+                << color_for_severity(severity)
                 << "[" << timestamp() << "] "
                 << "[" << source << "] "
                 << severity << ": " << message
@@ -429,6 +448,8 @@ int main( int argc, char *argv[] ) {
             << "  SLICECAM: locked running"
             << "  SEEING: " << std::fixed << std::setprecision(2) << last_seeing << "\n"
             << std::string(60, '-') << "\n"
+            << SCROLL_REGION_SET
+            << CURSOR_LOG_START
             << "seqmon subscribed to " << endpoint
             << " (Ctrl-C to exit)\n"
             << std::flush;
@@ -465,6 +486,6 @@ int main( int argc, char *argv[] ) {
     // unrecognized topics silently ignored
   }
 
-  std::cout << "\nseqmon exiting\n" << std::flush;
+  std::cout << SCROLL_REGION_RESET << "\nseqmon exiting\n" << std::flush;
   return 0;
 }
