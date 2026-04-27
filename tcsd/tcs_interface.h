@@ -13,6 +13,7 @@
 #include "common.h"
 #include "tcs_constants.h"
 #include "tcsd_commands.h"
+#include "message_keys.h"
 #include <sys/stat.h>
 #include <map>
 #include <memory>
@@ -427,6 +428,7 @@ logwrite(function,message.str());
     private:
       zmqpp::context context;
       std::string default_tcs;                     ///< default TCS to use specified in .cfg
+      std::mutex tcs_info_mtx;                     ///< protects tcs_info
 
     public:
       inline void set_default_tcs(const std::string &which) { this->default_tcs=which; }

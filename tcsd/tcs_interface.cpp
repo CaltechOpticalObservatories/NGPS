@@ -94,7 +94,7 @@ namespace TCS {
   void Interface::do_continuous_snapshot() {
     auto next = std::chrono::steady_clock::now();
     while (should_publish.load()) {
-      bool isopen = false
+      bool isopen = false;
       {
       std::lock_guard<std::mutex> lock(tcs_info_mtx);
       isopen = this->tcs_info.isopen;
@@ -433,7 +433,6 @@ namespace TCS {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
     this->tcs_info.isopen  = ( ! _name.empty() ? true : false );
     this->tcs_info.tcsname = _name;
-
     retstring = ( this->tcs_info.isopen ? "true" : "false" );  // return string is the state
     }
 
@@ -1198,10 +1197,10 @@ namespace TCS {
 
     // parse the reply which stores it in the TcsInfo class
     //
+    std::ostringstream oss;
+    this->tcs_info.parse_pa(tcsreply);
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
-    this->tcs_info.parse_pa(tcsreply);
-    std::ostringstream oss;
     oss << this->tcs_info.pa;
     }
     retstring = oss.str();
