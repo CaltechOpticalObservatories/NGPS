@@ -1600,7 +1600,7 @@ namespace Acam {
    */
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
 
-    std::lockguard<std::mutex> lock(tcsdata_mtx);
+    std::lock_guard<std::mutex> lock(tcsdata_mtx);
 
     // extract and store values in the class
     //
@@ -4074,6 +4074,10 @@ logwrite( function, message.str() );
     //
     if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
 
+    // diable target acquisition
+    //
+    error |= this->acquire( "stop", dontcare);
+
     // stop the framegrab thread
     //
     error |= this->framegrab( "stop", dontcare );
@@ -5009,14 +5013,14 @@ logwrite( function, message.str() );
    */
   long Interface::assemble_header_info() {
 
+    double angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;  // outputs from fpoffsets
+
     // ---------- scope lock tcsdata --------------
     {
-    std::lockguard<std::mutex> lock(tcsdata_mtx);
+    std::lock_guard<std::mutex> lock(tcsdata_mtx);
 
     bool _tcs = tcsdata.is_tcs_open;
     std::string tcsname = ( _tcs ? tcsdata.tcsname : "offline" );
-
-    double angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;  // outputs from fpoffsets
 
     if ( _tcs ) this->target.save_casangle( tcsdata.angle_scope );      // store in the Target class, required for acquisition
 
