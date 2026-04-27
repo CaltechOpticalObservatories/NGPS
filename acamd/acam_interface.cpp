@@ -1507,7 +1507,7 @@ namespace Acam {
 
   /***** Acam::Interface::request_snapshot ************************************/
   /**
-   * @brief      publises request for snapshot
+   * @brief      [obsolete] publises request for snapshot
    * @details    publishing Topic::SNAPSHOT induces subscribers to publish a
    *             snapshot of their telemetry
    *
@@ -1534,7 +1534,7 @@ namespace Acam {
 
   /***** Acam::Interface::wait_for_snapshots **********************************/
   /**
-   * @brief      wait for everyone to publish their snaphots
+   * @brief      [obsolete] wait for everyone to publish their snaphots
    * @details    When forcing subscribers to publish their telemetry,
    *             this waits until they have done so.
    *
@@ -1599,33 +1599,32 @@ namespace Acam {
    *
    */
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
-    {
-    std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status[Topic::TCSD]=true;
-    }
+
+    std::lockguard<std::mutex> lock(tcsdata_mtx);
+
     // extract and store values in the class
     //
-    Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
-    Common::extract_telemetry_value( jmessage, "CASANGLE",   telem.angle_scope );
-    Common::extract_telemetry_value( jmessage, "TELRA",      telem.ra_scope_hms );
-    Common::extract_telemetry_value( jmessage, "TELDEC",     telem.dec_scope_dms );
-    Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
-    Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
-    Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
-    Common::extract_telemetry_value( jmessage, "DECLOFFS",   telem.offsetdec );
-    Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
-    Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
-    Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
+    Common::extract_telemetry_value( jmessage, "TCSNAME",    tcsdata.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",     tcsdata.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, "CASANGLE",   tcsdata.angle_scope );
+    Common::extract_telemetry_value( jmessage, "TELRA",      tcsdata.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, "TELDEC",     tcsdata.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",         tcsdata.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",        tcsdata.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "RAOFFSET",   tcsdata.offsetra );
+    Common::extract_telemetry_value( jmessage, "DECLOFFS",   tcsdata.offsetdec );
+    Common::extract_telemetry_value( jmessage, "AZ",         tcsdata.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS",   tcsdata.telfocus );
+    Common::extract_telemetry_value( jmessage, "AIRMASS",    tcsdata.airmass );
 
     // save them to the database
     //
-    this->database.add_key_val<double>( "CASANGLE", telem.angle_scope );
-    this->database.add_key_val<double>( "RAtel",    telem.ra_scope_h );
-    this->database.add_key_val<double>( "DECLtel",  telem.dec_scope_d );
-    this->database.add_key_val<double>( "AZ",       telem.az );
-    this->database.add_key_val<double>( "focus",    telem.telfocus );
-    this->database.add_key_val<double>( "AIRMASS",  telem.airmass );
+    this->database.add_key_val<double>( "CASANGLE", tcsdata.angle_scope );
+    this->database.add_key_val<double>( "RAtel",    tcsdata.ra_scope_h );
+    this->database.add_key_val<double>( "DECLtel",  tcsdata.dec_scope_d );
+    this->database.add_key_val<double>( "AZ",       tcsdata.az );
+    this->database.add_key_val<double>( "focus",    tcsdata.telfocus );
+    this->database.add_key_val<double>( "AIRMASS",  tcsdata.airmass );
   }
   /***** Acam::Interface::handletopic_tcsd ************************************/
 
@@ -1638,10 +1637,6 @@ namespace Acam {
    *
    */
   void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
-    {
-    std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status[Topic::TARGETINFO]=true;
-    }
     this->database.add_from_json<int>( jmessage, "OBS_ID" );
     this->database.add_from_json<std::string>( jmessage, "NAME" );
     this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
@@ -1659,10 +1654,6 @@ namespace Acam {
    *
    */
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
-    {
-    std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status[Topic::SLITD]=true;
-    }
     this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
     this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
   }
@@ -2706,7 +2697,7 @@ namespace Acam {
     do {
       if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
 
-      if ( iface.collect_header_info() == ERROR ) {                   // collect header information
+      if ( iface.assemble_header_info() == ERROR ) {                  // assemble header keyword information
         logwrite(function,"ERROR collecting header info");
         continue;
       }
@@ -4375,7 +4366,7 @@ logwrite( function, message.str() );
         do {
           logwrite( function, std::to_string(nacquires) );
           error |= this->camera.andor.acquire_one();                     // acquire a single image
-          error |= this->collect_header_info();                          // collect header information
+          error |= this->assemble_header_info();                         // assemble header keyword information
           error |= this->camera.write_frame( "",
                                              this->imagename,
                                              this->tcs_online.load() );  // write to FITS file
@@ -4420,7 +4411,7 @@ logwrite( function, message.str() );
         do {
           logwrite( function, std::to_string(nacquires) );
           error |= this->camera.andor.get_recent(3000);                  // 
-          error |= this->collect_header_info();                          // collect header information
+          error |= this->assemble_header_info();                         // assemble header keyword information
           error |= this->camera.write_frame( "",
                                              this->imagename,
                                              this->tcs_online.load() );  // write to FITS file
@@ -4454,7 +4445,7 @@ logwrite( function, message.str() );
       //
       if ( tokens[1]=="getrecent" ) {
         error = this->camera.andor.get_recent(3000);
-        error |= this->collect_header_info();                          // collect header information
+        error |= this->assemble_header_info();                         // assemble header keyword information
         error |= this->camera.write_frame( "",
                                            this->imagename,
                                            this->tcs_online.load() );  // write to FITS file
@@ -4583,7 +4574,7 @@ logwrite( function, message.str() );
         retstring.append( "  Gather information and add it to the internal keyword database.\n" );
         return HELP;
       }
-      else error = this->collect_header_info();             // collect header information
+      else error = this->assemble_header_info();            // assemble header keyword information
     }
     else
     // --------------------------------
@@ -5005,7 +4996,7 @@ logwrite( function, message.str() );
   /***** Acam::Interface::solve ***********************************************/
 
 
-  /***** Acam::Interface::collect_header_info *********************************/
+  /***** Acam::Interface::assemble_header_info ********************************/
   /**
    * @brief      gather information and add it to the internal keyword database
    * @details    Some of the keys are fixed, some come from the Andor::Information
@@ -5016,24 +5007,24 @@ logwrite( function, message.str() );
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::collect_header_info() {
-    // force subscribers to publish now, then wait
-    // esults in struct telem.
-    this->request_snapshot();
-    this->wait_for_snapshots();
+  long Interface::assemble_header_info() {
 
-    bool _tcs = telem.is_tcs_open;
-    std::string tcsname = ( _tcs ? telem.tcsname : "offline" );
+    // ---------- scope lock tcsdata --------------
+    {
+    std::lockguard<std::mutex> lock(tcsdata_mtx);
+
+    bool _tcs = tcsdata.is_tcs_open;
+    std::string tcsname = ( _tcs ? tcsdata.tcsname : "offline" );
 
     double angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;  // outputs from fpoffsets
 
-    if ( _tcs ) this->target.save_casangle( telem.angle_scope );      // store in the Target class, required for acquisition
+    if ( _tcs ) this->target.save_casangle( tcsdata.angle_scope );      // store in the Target class, required for acquisition
 
     // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
     // Results in degrees.
     //
-    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (telem.ra_scope_h*TO_DEGREES), telem.dec_scope_d, telem.angle_scope,
+    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (tcsdata.ra_scope_h*TO_DEGREES), tcsdata.dec_scope_d, tcsdata.angle_scope,
                                                                  ra_acam, dec_acam, angle_acam );
 
     // Get some info from the Andor::Information class,
@@ -5054,11 +5045,21 @@ logwrite( function, message.str() );
 
     this->camera.fitsinfo.fitskeys.addkey( "TCS",  tcsname, "" );
 
+    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", tcsdata.telfocus, "telescope focus (mm)" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",  tcsdata.airmass, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "RA",       tcsdata.ra_scope_hms, "Telecscope Right Ascension" );
+    this->camera.fitsinfo.fitskeys.addkey( "DEC",      tcsdata.dec_scope_dms, "Telescope Declination" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELRA",    tcsdata.ra_scope_h, "Telecscope Right Ascension hours" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",   tcsdata.dec_scope_d, "Telescope Declination degrees" );
+    this->camera.fitsinfo.fitskeys.addkey( "RAOFFS",   tcsdata.offsetra, "Telescope RA offset" );
+    this->camera.fitsinfo.fitskeys.addkey( "DECLOFFS", tcsdata.offsetdec, "Telescope DEC offset" );
+    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE", tcsdata.angle_scope, "Cassegrain ring angle" );
+    }
+    // ---------- end scope lock tcsdata ----------
+
     this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", telem.telfocus, "telescope focus (mm)" );
-    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",  telem.airmass, "" );
 
     // get parameters from FPOffsets, results are stored in the class
     //
@@ -5109,13 +5110,6 @@ logwrite( function, message.str() );
 
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "TARGET",    this->target.get_name(), "target name" );
-    this->camera.fitsinfo.fitskeys.addkey( "RA",        telem.ra_scope_hms, "Telecscope Right Ascension" );
-    this->camera.fitsinfo.fitskeys.addkey( "DEC",       telem.dec_scope_dms, "Telescope Declination" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELRA",     telem.ra_scope_h, "Telecscope Right Ascension hours" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    telem.dec_scope_d, "Telescope Declination degrees" );
-    this->camera.fitsinfo.fitskeys.addkey( "RAOFFS",    telem.offsetra, "Telescope RA offset" );
-    this->camera.fitsinfo.fitskeys.addkey( "DECLOFFS",  telem.offsetdec, "Telescope DEC offset" );
-    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  telem.angle_scope, "Cassegrain ring angle" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
@@ -5137,7 +5131,7 @@ logwrite( function, message.str() );
 
     return NO_ERROR;
   }
-  /***** Acam::Interface::collect_header_info *********************************/
+  /***** Acam::Interface::assemble_header_info ********************************/
 
 
   /***** Acam::Interface::target_coords ***************************************/
