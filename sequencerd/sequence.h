@@ -440,8 +440,6 @@ namespace Sequencer {
 
       std::string daemon_control;     ///< daemon control script
 
-      Common::Queue async;            ///< asynchronous message queue
-
       // Here are all the daemon client objects that the Sequencer connects to.
       //
       Common::DaemonClient acamd { "acamd" };
@@ -507,9 +505,7 @@ namespace Sequencer {
       void broadcast_seqstate();                ///< publishes the seqstate on the seq_seqstate topic
       void broadcast_waitstate();               ///< publishes the waitstate on the seq_waitstate topic
 
-      void broadcast( const std::string &function,
-                      const std::string &severity,
-                      const std::string &message );  ///< logs and publishes a narrative message on Topic::BROADCAST
+      Common::Broadcaster broadcast { this->publisher, Sequencer::DAEMON_NAME };  ///< logs and publishes a narrative message on Topic::BROADCAST
 
       std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
 
