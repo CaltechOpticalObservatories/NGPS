@@ -24,15 +24,15 @@ namespace Common {
                           const std::string &message ) {
     logwrite( function, severity+": "+message );
 
-    if ( ! this->_publisher ) return;
+    if ( ! this->publisher ) return;
 
     nlohmann::json jmessage;
-    jmessage[Key::SOURCE]              = this->_source;
+    jmessage[Key::SOURCE]              = this->source;
     jmessage[Key::Broadcast::SEVERITY] = severity;
     jmessage[Key::Broadcast::MESSAGE]  = message;
 
     try {
-      this->_publisher->publish( jmessage, Topic::BROADCAST );
+      this->publisher->publish( jmessage, Topic::BROADCAST );
     }
     catch ( const std::exception &e ) {
       logwrite( function, "ERROR publishing broadcast: "+std::string(e.what()) );
