@@ -4102,7 +4102,7 @@ namespace Sequencer {
       }
 
       message.str(""); message << "STATES: " << this->seq_state_manager.get_set_states();
-      this->broadcast.notice( message.str() );
+      this->broadcast.notice( function, message.str() );
       logwrite( function, message.str() );
 
       message.str(""); message << "THREADS: " << this->thread_state_manager.get_set_states();
@@ -4388,7 +4388,7 @@ namespace Sequencer {
       message.str(""); message << this->target.state
                                << " TARGET:" << this->target.name
                                << " ("       << this->target.obsid << ")";
-      this->broadcast.notice( message.str() );
+      this->broadcast.notice( function, message.str() );
     }
     else
 
@@ -4419,7 +4419,7 @@ namespace Sequencer {
         message.str(""); message << this->target.state
                                  << " TARGET:" << this->target.name
                                  << " ("       << this->target.obsid << ")";
-        this->broadcast.notice( message.str() );
+        this->broadcast.notice( function, message.str() );
       }
     }
     else

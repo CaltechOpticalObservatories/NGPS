@@ -232,6 +232,7 @@ int main(int argc, char **argv) {
   // Create my own asynchronous listener thread.
   // This thread allows the sequencer to listen for asynchronous messages.
   //
+  Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
   std::thread( std::ref( Sequencer::Sequence::dothread_sequencer_async_listener ), 
                std::ref( sequencerd.sequence),
                msg

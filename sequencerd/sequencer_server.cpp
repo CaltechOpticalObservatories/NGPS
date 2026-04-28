@@ -884,7 +884,7 @@ namespace Sequencer {
           return ERROR;
         }
         message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( "SEQUENCERD", function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
