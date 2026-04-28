@@ -5069,6 +5069,13 @@ logwrite(function, message.str());
     int detrows_new, detcols_new;
     pcontroller->logical_to_physical(spat, spec, detrows_new, detcols_new);
 
+    // Capture the original requested overscan in physical (row/col) form
+    // before any modulo-binning trim below, so that osrows0/oscols0 retain
+    // the true requested overscan across repeated bin commands.
+    //
+    int osrows0_new, oscols0_new;
+    pcontroller->logical_to_physical(osspat, osspec, osrows0_new, oscols0_new);
+
     // Remove those skipped pixels from the image size
     spat -= skipspat;
     spec -= skipspec;
@@ -5094,8 +5101,8 @@ logwrite(function, message.str());
     //
     pcontroller->detrows = detrows_new;
     pcontroller->detcols = detcols_new;
-    pcontroller->osrows0 = osrows;
-    pcontroller->oscols0 = oscols;
+    pcontroller->osrows0 = osrows_new;
+    pcontroller->oscols0 = oscols_new;
     pcontroller->skipcols = skipcols;
     pcontroller->skiprows = skiprows;
 
