@@ -5061,6 +5061,14 @@ logwrite(function, message.str());
     //
     if (pcontroller->has_boi()) { skipspat = 0; }
 
+    // Capture the unbinned, unskipped detector dimensions before trimming
+    // so that detrows/detcols remain the full requested size across
+    // repeated bin commands. These are preserved even when the per-call
+    // geometry is shortened by the skip-modulo adjustment below.
+    //
+    int detrows_new, detcols_new;
+    pcontroller->logical_to_physical(spat, spec, detrows_new, detcols_new);
+
     // Remove those skipped pixels from the image size
     spat -= skipspat;
     spec -= skipspec;
@@ -5084,8 +5092,8 @@ logwrite(function, message.str());
     // unchanged by binning, so that when reverting to binning=1 from some
     // binnnig factor, this is the default image size to revert to.
     //
-    pcontroller->detrows = rows;
-    pcontroller->detcols = cols;
+    pcontroller->detrows = detrows_new;
+    pcontroller->detcols = detcols_new;
     pcontroller->osrows0 = osrows;
     pcontroller->oscols0 = oscols;
     pcontroller->skipcols = skipcols;
@@ -5836,7 +5844,7 @@ logwrite(function, message.str());
                               int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
     if (!pcontroller) return;
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->osrows0, pcontroller->oscols0, osspat, osspec );
     pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
   }
@@ -6145,6 +6153,7 @@ logwrite(function, message.str());
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
       retstring.append( "   async [ ? | <message> ]\n" );
+      retstring.append( "   axes [ ? ]\n" );
       retstring.append( "   bw [ ? ]\n" );
       retstring.append( "   fitsname [ ? ]\n" );
       retstring.append( "   frametransfer ? | R | I | U | G \n" );
@@ -6205,6 +6214,47 @@ logwrite(function, message.str());
         logwrite( function, msg );                                   // log ths fitsname
       }
     } // end if (testname == fitsname)
+    else
+
+    // ----------------------------------------------------
+    // axes
+    // ----------------------------------------------------
+    // Show axes calculations and related geometry state for every
+    // configured controller.
+    //
+    if (testname == "axes") {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
+        retstring = CAMERAD_TEST;
+        retstring.append( " axes\n" );
+        retstring.append( "  Show axes calculations.\n" );
+        return HELP;
+      }
+      for ( auto &con : this->controller ) {
+        if (!con.second.configured) continue;  // skip controllers not configured
+        auto &info = con.second.info;
+        message.str("");
+        message << "chan " << con.second.channel
+                << " devnum=" << con.second.devnum
+                << " detrows=" << con.second.detrows
+                << " detcols=" << con.second.detcols
+                << " osrows0=" << con.second.osrows0
+                << " oscols0=" << con.second.oscols0
+                << " osrows=" << con.second.osrows
+                << " oscols=" << con.second.oscols
+                << " skiprows=" << con.second.skiprows
+                << " skipcols=" << con.second.skipcols
+                << " binning[0]=" << info.binning[0]
+                << " binning[1]=" << info.binning[1]
+                << " detector_pixels[0]=" << info.detector_pixels[0]
+                << " detector_pixels[1]=" << info.detector_pixels[1]
+                << " axes[0]=" << info.axes[0]
+                << " axes[1]=" << info.axes[1];
+        logwrite( function, message.str() );
+        this->camera.async.enqueue( message.str() );
+      }
+      retstring = "ok";
+      return NO_ERROR;
+    } // end if (testname == axes)
     else
 
     // ----------------------------------------------------
