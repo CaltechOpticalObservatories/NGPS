@@ -942,11 +942,10 @@ namespace Sequencer {
   /***** Sequencer::Sequence::power_init **************************************/
   /**
    * @brief      initializes the power system for control from the Sequencer
-   * @return     NO_ERROR
    * @throws     std::runtime_error
    *
    */
-  long Sequence::power_init() {
+  void Sequence::power_init() {
     const std::string function("Sequencer::Sequence::power_init");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_POWER_INIT );
@@ -960,8 +959,6 @@ namespace Sequencer {
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
-
-    return NO_ERROR;
   }
   /***** Sequencer::Sequence::power_init **************************************/
 
@@ -2649,10 +2646,12 @@ namespace Sequencer {
     // so initialize the power control first.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    error = start_power.get();
-
-    if ( error != NO_ERROR ) {
-      this->broadcast.error( function, "starting power control. Will try to continue (but don't hold your breath)" );
+    try {
+      start_power.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR intializing power control: "+std::string(e.what()) );
+      return ERROR;
     }
 
     // threads to start, pair their ThreadStatusBit with the function to call
@@ -2876,8 +2875,12 @@ namespace Sequencer {
     // so make sure power control is initialized before continuing.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    if ( start_power.get() != NO_ERROR ) {
-      this->broadcast.error( function, "from power control. Will try to continue (but don't hold your breath)" );
+    try {
+      start_power.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR intializing power control: "+std::string(e.what()) );
+      return ERROR;
     }
 
     // container of shutdown threads to launch,

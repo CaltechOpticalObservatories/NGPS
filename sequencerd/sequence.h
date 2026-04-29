@@ -589,7 +589,7 @@ namespace Sequencer {
       long camera_init();                                      ///< initializes connection to camerad
       long flexure_init();                                     ///< initializes connection to flexured
       long focus_init();                                       ///< initializes connection to focusd
-      long power_init();                                       ///< initializes connection to powerd
+      void power_init();                                       ///< initializes connection to powerd
       long slicecam_init();                                    ///< initializes connection to slicecamd
       long slit_init();                                        ///< initializes connection to slitd
       long tcs_init();                                         ///< initializes connection to tcsd
