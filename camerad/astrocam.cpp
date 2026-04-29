@@ -5061,6 +5061,21 @@ logwrite(function, message.str());
     //
     if (pcontroller->has_boi()) { skipspat = 0; }
 
+    // Capture the unbinned, unskipped detector dimensions before trimming
+    // so that detrows/detcols remain the full requested size across
+    // repeated bin commands. These are preserved even when the per-call
+    // geometry is shortened by the skip-modulo adjustment below.
+    //
+    int detrows_new, detcols_new;
+    pcontroller->logical_to_physical(spat, spec, detrows_new, detcols_new);
+
+    // Capture the original requested overscan in physical (row/col) form
+    // before any modulo-binning trim below, so that osrows0/oscols0 retain
+    // the true requested overscan across repeated bin commands.
+    //
+    int osrows0_new, oscols0_new;
+    pcontroller->logical_to_physical(osspat, osspec, osrows0_new, oscols0_new);
+
     // Remove those skipped pixels from the image size
     spat -= skipspat;
     spec -= skipspec;
@@ -5084,10 +5099,10 @@ logwrite(function, message.str());
     // unchanged by binning, so that when reverting to binning=1 from some
     // binnnig factor, this is the default image size to revert to.
     //
-    pcontroller->detrows = rows;
-    pcontroller->detcols = cols;
-    pcontroller->osrows0 = osrows;
-    pcontroller->oscols0 = oscols;
+    pcontroller->detrows = detrows_new;
+    pcontroller->detcols = detcols_new;
+    pcontroller->osrows0 = osrows0_new;
+    pcontroller->oscols0 = oscols0_new;
     pcontroller->skipcols = skipcols;
     pcontroller->skiprows = skiprows;
 
@@ -5836,7 +5851,7 @@ logwrite(function, message.str());
                               int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
     if (!pcontroller) return;
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->osrows0, pcontroller->oscols0, osspat, osspec );
     pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
   }
