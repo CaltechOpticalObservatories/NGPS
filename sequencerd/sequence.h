@@ -527,8 +527,6 @@ namespace Sequencer {
         this->cv.notify_all();
       }
 
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
-
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
@@ -658,12 +656,8 @@ namespace Sequencer {
       void publish_daemonstate();
       void publish_threadstate();
 
-      /** @brief  publishes a narrative operator message on Topic::BROADCAST and logs it */
-      void broadcast( const std::string &function,
-                      const std::string &severity,
-                      const std::string &message );
-
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      Common::Broadcaster broadcast { this->publisher, Sequencer::DAEMON_NAME };  ///< logs and publishes a narrative message on Topic::BROADCAST
       std::string publisher_address;                   ///< publish socket endpoint
       std::string publisher_topic;                     ///< my default topic for publishing
       std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object

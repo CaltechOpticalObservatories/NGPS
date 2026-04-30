@@ -21,7 +21,7 @@ namespace Sequencer {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
-    this->broadcast( caller, Severity::NOTICE, "waiting for TCS operator to send 'ontarget' signal" );
+    this->broadcast.notice( caller, "waiting for TCS operator to send 'ontarget' signal" );
 
     while ( !this->cancel_flag.load() &&
             !this->is_ontarget.load() ) {
@@ -31,7 +31,7 @@ namespace Sequencer {
                                               this->cancel_flag.load() ); } );
     }
 
-    this->broadcast( caller, Severity::NOTICE, "received "
+    this->broadcast.notice( caller, "received "
                                         +(this->cancel_flag.load() ? std::string("cancel")
                                                                    : std::string("ontarget"))
                                         +" signal!" );
@@ -56,20 +56,20 @@ namespace Sequencer {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
 
-    this->broadcast( caller, Severity::NOTICE, "waiting for USER to send 'continue' signal" );
+    this->broadcast.notice( caller, "waiting for USER to send 'continue' signal" );
 
     while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
       this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
     }
 
-    this->broadcast( caller, Severity::NOTICE, "received "
+    this->broadcast.notice( caller, "received "
                                            +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
                                            +" signal!" );
     }  // end scope for wait_state = WAIT_USER
 
     if ( this->cancel_flag.load() ) {
-      this->broadcast( caller, Severity::NOTICE, "sequence cancelled" );
+      this->broadcast.notice( caller, "sequence cancelled" );
       return ABORT;
     }
 
@@ -97,7 +97,7 @@ namespace Sequencer {
     }
 
     if (this->cancel_flag.load()) {
-      this->broadcast( caller, Severity::NOTICE, "exposure cancelled" );
+      this->broadcast.notice( caller, "exposure cancelled" );
       return ABORT;
     }
 
@@ -128,7 +128,7 @@ namespace Sequencer {
     }
 
     if (this->cancel_flag.load()) {
-      this->broadcast( caller, Severity::NOTICE, "wait for readout cancelled" );
+      this->broadcast.notice( caller, "wait for readout cancelled" );
       return ABORT;
     }
 
@@ -146,7 +146,7 @@ namespace Sequencer {
    */
   long Sequence::wait_for_canexpose(std::string caller) {
 
-    this->broadcast( caller, Severity::NOTICE, "waiting for camera to be ready to expose" );
+    this->broadcast.notice( caller, "waiting for camera to be ready to expose" );
 
     while ( !this->cancel_flag.load() &&
             !this->can_expose.load() ) {
@@ -157,7 +157,7 @@ namespace Sequencer {
     }
 
     if (this->cancel_flag.load()) {
-      this->broadcast( caller, Severity::NOTICE, "wait for can_expose cancelled" );
+      this->broadcast.notice( caller, "wait for can_expose cancelled" );
       return ABORT;
     }
 

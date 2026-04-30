@@ -98,12 +98,12 @@ namespace Key {
   }
 
   namespace Tcsd {
-    inline const std::string TELRA    = "telra";
-    inline const std::string TELDEC   = "teldec";
-    inline const std::string ALT      = "alt";
-    inline const std::string AZ       = "az";
-    inline const std::string AIRMASS  = "airmass";
-    inline const std::string CASANGLE = "casangle";
+    inline const std::string TELRA    = "TELRA";
+    inline const std::string TELDEC   = "TELDEC";
+    inline const std::string ALT      = "ALT";
+    inline const std::string AZ       = "AZ";
+    inline const std::string AIRMASS  = "AIRMASS";
+    inline const std::string CASANGLE = "CASANGLE";
   }
 
 }

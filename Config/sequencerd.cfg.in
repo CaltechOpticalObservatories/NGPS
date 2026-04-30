@@ -190,16 +190,6 @@ CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off
 #
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
 
-# -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
-#
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
-# Provide one per line.
-#
-TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(camerad    @CAMERAD_NB_PORT@)
 #
 SUBSCRIBE_TO=(slitd      "tcp://127.0.0.1:@SLITD_PUB_PORT@")
 SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
