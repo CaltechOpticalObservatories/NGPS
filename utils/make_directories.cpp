@@ -17,23 +17,23 @@ namespace fs = std::filesystem;
 std::string get_date() {
   std::stringstream current_date;    // String to contain the return value
   std::time_t t=std::time(nullptr);  // Container for system time
-  struct timespec timenow;;          // Time of day container
   struct tm mytime;                  // time container
 
-  // Get the system time, return a bad datestamp on error
-  if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return( "" );
+  // UTC now
+  if ( gmtime_r( &t, &mytime ) == nullptr ) return( "" );
 
-  // this runs at local noon to create the next UTC directory
-  t = timenow.tv_sec + 86400;        // advance local by 24 hours
-  if ( localtime_r( &t, &mytime ) == nullptr ) return( "" );
+  // at local noon we want tonight's UTC
+  mytime.tm_mday += 1;
 
-  current_date.setf(std::ios_base::right);
+  // normalize struct handles rollovers
+  if (timegm(&mytime)==-1) return "";
+
   current_date << std::setfill('0') << std::setprecision(0)
                << std::setw(4) << mytime.tm_year + 1900
                << std::setw(2) << mytime.tm_mon  + 1
                << std::setw(2) << mytime.tm_mday;
 
-  return( current_date.str() );
+  return current_date.str();
 }
 
 int main() {
