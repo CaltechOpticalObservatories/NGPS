@@ -23,15 +23,15 @@ std::string get_date() {
   // Get the system time, return a bad datestamp on error
   if ( clock_gettime( CLOCK_REALTIME, &timenow ) != 0 ) return( "" );
 
-  // Convert the time of day to local or GMT
-  t = timenow.tv_sec;
+  // this runs at local noon to create the next UTC directory
+  t = timenow.tv_sec + 86400;        // advance local by 24 hours
   if ( localtime_r( &t, &mytime ) == nullptr ) return( "" );
 
   current_date.setf(std::ios_base::right);
   current_date << std::setfill('0') << std::setprecision(0)
                << std::setw(4) << mytime.tm_year + 1900
                << std::setw(2) << mytime.tm_mon  + 1
-               << std::setw(2) << mytime.tm_mday + 1;  // tomorrow!
+               << std::setw(2) << mytime.tm_mday;
 
   return( current_date.str() );
 }
