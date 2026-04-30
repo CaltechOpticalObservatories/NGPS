@@ -26,6 +26,7 @@ const std::string TCSD_NATIVE = "native";
 const std::string TCSD_OFFSETRATE = "offsetrate";
 const std::string TCSD_OPEN = "open";
 const std::string TCSD_PTOFFSET = "offset";
+const std::string TCSD_PUBLISHSTATE = "publishstate";
 const std::string TCSD_RETOFFSETS = "retoffsets";
 const std::string TCSD_RINGGO = "ringgo";
 const std::string TCSD_SET_FOCUS = "setfocus";
@@ -51,6 +52,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_OFFSETRATE+" [ ? | <raoff> <decoff> ]",
                                                TCSD_OPEN+" ? | <name>",
                                                TCSD_PTOFFSET+" ? | <ra> <dec>",
+                                               TCSD_PUBLISHSTATE+" ? | on | off",
                                                TCSD_RETOFFSETS+" [ ? ]",
                                                TCSD_RINGGO+" ? | <angle>",
                                                TCSD_SET_FOCUS+" ? | <value>",
