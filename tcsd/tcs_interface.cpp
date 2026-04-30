@@ -47,26 +47,26 @@ namespace TCS {
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
 
-    jmessage_out["ISOPEN"]     = this->tcs_info.isopen;
-    jmessage_out["TCSNAME"]    = this->tcs_info.tcsname;
+    jmessage_out["ISOPEN"]          = this->tcs_info.isopen;
+    jmessage_out["TCSNAME"]         = this->tcs_info.tcsname;
 
-    jmessage_out["PA"]         = this->tcs_info.pa;         // double
-    jmessage_out["CASANGLE"]   = this->tcs_info.cassangle;  // double
-    jmessage_out["HA"]         = this->tcs_info.ha;         // string
-    jmessage_out["RAOFFSET"]   = this->tcs_info.offsetra;   // double
-    jmessage_out["DECLOFFS"]   = this->tcs_info.offsetdec;  // double
-    jmessage_out["TELRA"]      = this->tcs_info.ra_hms;     // string "hh:mm:ss.s"
-    jmessage_out["TELDEC"]     = this->tcs_info.dec_dms;    // string "dd:mm:ss.s"
-    jmessage_out["RA"]         = radec_to_decimal( this->tcs_info.ra_hms );
-    jmessage_out["DEC"]        = radec_to_decimal( this->tcs_info.dec_dms );
-    jmessage_out["AZ"]         = this->tcs_info.azimuth;
-    jmessage_out["ALT"]        = 90. - this->tcs_info.zenithangle;
-    jmessage_out["ZENANGLE"]   = this->tcs_info.zenithangle;
-    jmessage_out["DOMEAZ"]     = this->tcs_info.domeazimuth;
-    jmessage_out["DOMESHUT"]   = this->tcs_info.domeshutters==1?"open":"closed";
-    jmessage_out["TELFOCUS"]   = this->tcs_info.focus;
-    jmessage_out["AIRMASS"]    = this->tcs_info.airmass;
-    jmessage_out["MOTION"]     = this->tcs_info.motion;
+    jmessage_out["PA"]              = this->tcs_info.pa;         // double
+    jmessage_out[Key::Tcsd::CASANGLE] = this->tcs_info.cassangle;  // double
+    jmessage_out["HA"]              = this->tcs_info.ha;         // string
+    jmessage_out["RAOFFSET"]        = this->tcs_info.offsetra;   // double
+    jmessage_out["DECLOFFS"]        = this->tcs_info.offsetdec;  // double
+    jmessage_out[Key::Tcsd::TELRA]  = this->tcs_info.ra_hms;     // string "hh:mm:ss.s"
+    jmessage_out[Key::Tcsd::TELDEC] = this->tcs_info.dec_dms;    // string "dd:mm:ss.s"
+    jmessage_out["RA"]              = radec_to_decimal( this->tcs_info.ra_hms );
+    jmessage_out["DEC"]             = radec_to_decimal( this->tcs_info.dec_dms );
+    jmessage_out[Key::Tcsd::AZ]     = this->tcs_info.azimuth;
+    jmessage_out[Key::Tcsd::ALT]    = 90. - this->tcs_info.zenithangle;
+    jmessage_out["ZENANGLE"]        = this->tcs_info.zenithangle;
+    jmessage_out["DOMEAZ"]          = this->tcs_info.domeazimuth;
+    jmessage_out["DOMESHUT"]        = this->tcs_info.domeshutters==1?"open":"closed";
+    jmessage_out["TELFOCUS"]        = this->tcs_info.focus;
+    jmessage_out[Key::Tcsd::AIRMASS] = this->tcs_info.airmass;
+    jmessage_out["MOTION"]          = this->tcs_info.motion;
     }
 
     // for backwards compatibility

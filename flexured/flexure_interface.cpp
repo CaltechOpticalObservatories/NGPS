@@ -520,8 +520,8 @@ namespace Flexure {
       else
       if ( messagetype == "tcsinfo" ) {
         double casangle=NAN, alt=NAN;
-        Common::extract_telemetry_value( message_in, "CASANGLE", casangle );
-        Common::extract_telemetry_value( message_in, "ALT", alt );
+        Common::extract_telemetry_value( message_in, Key::Tcsd::CASANGLE, casangle );
+        Common::extract_telemetry_value( message_in, Key::Tcsd::ALT,      alt );
         message.str(""); message << "casangle=" << casangle << " alt=" << alt;
         logwrite( function, message.str() );
       }

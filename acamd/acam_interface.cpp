@@ -1604,18 +1604,18 @@ namespace Acam {
 
     // extract and store values in the class
     //
-    Common::extract_telemetry_value( jmessage, "TCSNAME",    tcsdata.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",     tcsdata.is_tcs_open );
-    Common::extract_telemetry_value( jmessage, "CASANGLE",   tcsdata.angle_scope );
-    Common::extract_telemetry_value( jmessage, "TELRA",      tcsdata.ra_scope_hms );
-    Common::extract_telemetry_value( jmessage, "TELDEC",     tcsdata.dec_scope_dms );
-    Common::extract_telemetry_value( jmessage, "RA",         tcsdata.ra_scope_h );
-    Common::extract_telemetry_value( jmessage, "DEC",        tcsdata.dec_scope_d );
-    Common::extract_telemetry_value( jmessage, "RAOFFSET",   tcsdata.offsetra );
-    Common::extract_telemetry_value( jmessage, "DECLOFFS",   tcsdata.offsetdec );
-    Common::extract_telemetry_value( jmessage, "AZ",         tcsdata.az );
-    Common::extract_telemetry_value( jmessage, "TELFOCUS",   tcsdata.telfocus );
-    Common::extract_telemetry_value( jmessage, "AIRMASS",    tcsdata.airmass );
+    Common::extract_telemetry_value( jmessage, "TCSNAME",           tcsdata.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",            tcsdata.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, tcsdata.angle_scope );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    tcsdata.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   tcsdata.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",                tcsdata.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",               tcsdata.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "RAOFFSET",          tcsdata.offsetra );
+    Common::extract_telemetry_value( jmessage, "DECLOFFS",          tcsdata.offsetdec );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AZ,       tcsdata.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS",          tcsdata.telfocus );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  tcsdata.airmass );
 
     // save them to the database
     //

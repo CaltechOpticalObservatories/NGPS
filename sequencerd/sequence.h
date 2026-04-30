@@ -353,6 +353,10 @@ namespace Sequencer {
                   [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
               { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -384,8 +388,6 @@ namespace Sequencer {
 
       inline void reset_cancel_flag() { this->cancel_flag.store(false); }
 
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
-
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
@@ -404,6 +406,10 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      std::mutex slitd_mtx;
+      std::condition_variable slitd_cv;
+      std::mutex tcsd_mtx;
+      std::condition_variable tcsd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -471,8 +477,9 @@ namespace Sequencer {
       void handletopic_camerad( const nlohmann::json &jmessage );
       void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slicecamd( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
-      void publish_snapshot(std::string &retstring);
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();
@@ -545,8 +552,6 @@ namespace Sequencer {
       long target_offset();
 
       void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
-      void get_external_telemetry();                                ///< collect telemetry from another daemon
-      long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
@@ -589,7 +594,7 @@ namespace Sequencer {
       long camera_init();                                      ///< initializes connection to camerad
       long flexure_init();                                     ///< initializes connection to flexured
       long focus_init();                                       ///< initializes connection to focusd
-      void power_init();                                       ///< initializes connection to powerd
+      long power_init();                                       ///< initializes connection to powerd
       long slicecam_init();                                    ///< initializes connection to slicecamd
       long slit_init();                                        ///< initializes connection to slitd
       long tcs_init();                                         ///< initializes connection to tcsd
