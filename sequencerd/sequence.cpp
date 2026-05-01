@@ -700,14 +700,22 @@ namespace Sequencer {
         }
         else
         // start SLICECAM fine acquisition
-        if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
+        if ( this->should_fineacquire.load() &&
+             this->do_slicecam_fineacquire() != NO_ERROR ) {
           this->broadcast.warning( function, "slicecam fine acquisition failed" );
+        }
+        else
+        // wait for user if either fineacquire failed or wasn't turned on
+        if (this->wait_for_user()==ABORT) {
+          this->broadcast.notice( function, "cancelled" );
+          return;
         }
       }
 
       if ( !this->target.iscal ) {
-        // send offsets. wait for user if that fails to continue or cancel.
-        if ( this->target_offset() == ERROR ) {
+        // send offsets only on fineacquire, otherwise user needs to fix things
+        if ( this->is_fineacquire_locked.load() &&
+            this->target_offset() == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
             return;
@@ -3797,6 +3805,40 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::daemon_restart **********************************/
+
+
+  /***** Sequencer::Sequence::fine_acquire ************************************/
+  /**
+   * @brief      enable or disable automatic fine acquisition step
+   * @param[in]  args       enable|disable
+   * @param[out] retstring  state {enabled|disabled}
+   * @return     ERROR|NO_ERROR|HELP
+   *
+   */
+  long Sequence::fine_acquire(std::string args, std::string &retstring) {
+    if (args=="help"||args=="?") {
+      retstring = SLICECAMD_FINEACQUIRE;
+      retstring.append( " [ enable | disable ]\n" );
+      retstring.append( "   enables or disables the automatic fine acquisition step\n" );
+      retstring.append( "   no arg returns state only\n" );
+      return HELP;
+    }
+    else
+    if (args=="enable") this->should_fineacquire.store(true);
+    else
+    if (args=="disable") this->should_fineacquire.store(false);
+    else
+    if (!args.empty()) {
+      logwrite("Sequencer::Sequence::fineacquire",
+               "ERROR invalid '"+args+"' expected enable|disable");
+      return ERROR;
+    }
+
+    retstring = this->should_fineacquire.load() ? "enabled" : "disabled";
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::fine_acquire ************************************/
 
 
   /***** Sequencer::Sequence::test ********************************************/

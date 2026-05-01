@@ -44,9 +44,12 @@ namespace TCS {
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Daemon::TCSD;
 
+    std::string motion;
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
 
+    motion = this->tcs_info.motion;
+    jmessage_out[Key::Tcsd::MOTION] = motion;
     jmessage_out["ISOPEN"]          = this->tcs_info.isopen;
     jmessage_out["TCSNAME"]         = this->tcs_info.tcsname;
 
@@ -66,7 +69,12 @@ namespace TCS {
     jmessage_out["DOMESHUT"]        = this->tcs_info.domeshutters==1?"open":"closed";
     jmessage_out["TELFOCUS"]        = this->tcs_info.focus;
     jmessage_out[Key::Tcsd::AIRMASS] = this->tcs_info.airmass;
-    jmessage_out["MOTION"]          = this->tcs_info.motion;
+    }
+
+    // broadcast motion status if it changed
+    if (motion != this->last_published_motion) {
+      this->broadcast.notice("TCS::Interface::publish_snapshot", "telescope "+motion);
+      this->last_published_motion = motion;
     }
 
     // for backwards compatibility
@@ -883,7 +891,7 @@ namespace TCS {
 
     if ( arg.empty() ) { retstring="missing_argument"; return ERROR; }
 
-    double value;
+    double value=NAN;
 
     try {
       value = std::stod( arg );

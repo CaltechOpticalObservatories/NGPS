@@ -104,6 +104,7 @@ namespace Key {
     inline const std::string AZ       = "AZ";
     inline const std::string AIRMASS  = "AIRMASS";
     inline const std::string CASANGLE = "CASANGLE";
+    inline const std::string MOTION   = "MOTION";
   }
 
 }

@@ -429,6 +429,7 @@ logwrite(function,message.str());
       zmqpp::context context;
       std::string default_tcs;                     ///< default TCS to use specified in .cfg
       std::mutex tcs_info_mtx;                     ///< protects tcs_info
+      std::string last_published_motion;           ///< last published motion (publish on change)
 
     public:
       inline void set_default_tcs(const std::string &which) { this->default_tcs=which; }
@@ -531,6 +532,7 @@ logwrite(function,message.str());
       long get_tcs_info();                         ///< fills the tcs_info class
 
       Common::Queue async;                         ///< asynchronous message queue object
+      Common::Broadcaster broadcast { this->publisher, Daemon::TCSD };
   };
   /***** TCS::Interface *******************************************************/
 

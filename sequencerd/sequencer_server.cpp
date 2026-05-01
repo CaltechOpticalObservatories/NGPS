@@ -1159,6 +1159,10 @@ namespace Sequencer {
                   this->exit_cleanly();                        // shutdown the sequencer
       }
       else
+      if ( cmd == SEQUENCERD_FINEACQUIRE ) {
+                  this->sequence.fine_acquire(args, retstring);
+      }
+      else
 
       // These commands go to acamd
       //

@@ -296,6 +296,7 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<bool> should_fineacquire{true};  ///< should I use fineacquire? (user-switchable)
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
 
@@ -531,6 +532,7 @@ namespace Sequencer {
       long parse_calibration_target();
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
+      long fine_acquire( std::string args, std::string &retstring );           ///< enable|disable fineacquisition step
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
