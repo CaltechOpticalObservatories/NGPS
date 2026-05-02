@@ -13,7 +13,8 @@ from calib.calibration import CalibrationGUI
 from etc_popup import EtcPopup
 from control_tab import ControlTab 
 from daemon_status_bar import DaemonStatusBar, DaemonState
-
+from calibration_procedure import make_calibration_targets, make_calibration_csv_text
+from datetime import datetime
 
 DAEMONS = [
     "acamd",
@@ -290,13 +291,105 @@ class NgpsGUI(QMainWindow):
         return False  # If not READY or an error occurs, return False
 
     def open_calibration_gui(self):
-        """Method to open the Calibration GUI"""
-        if self.calibration_gui is None or not self.calibration_gui.isVisible():
-            self.calibration_gui = CalibrationGUI()
-            self.calibration_gui.show()
-        else:
-            self.calibration_gui.raise_()  # Brings the window to the front if already open
-            self.calibration_gui.activateWindow()
+        """
+        Generate a calibration target list from slit width and binning.
+        """
+
+        slitwidth, ok = QInputDialog.getDouble(
+            self,
+            "Calibration Setup",
+            "Slit width:",
+            0.5,      # default
+            0.001,    # min
+            100.0,    # max
+            3,        # decimals
+        )
+
+        if not ok:
+            return
+
+        xbin, ok = QInputDialog.getInt(
+            self,
+            "Calibration Setup",
+            "Spatial binning / xbin:",
+            1,        # default
+            1,        # min
+            16,       # max
+            1,        # step
+        )
+
+        if not ok:
+            return
+
+        ybin, ok = QInputDialog.getInt(
+            self,
+            "Calibration Setup",
+            "Spectral binning / ybin:",
+            1,        # default
+            1,        # min
+            16,       # max
+            1,        # step
+        )
+
+        if not ok:
+            return
+
+        try:
+            rows = make_calibration_targets(
+                slitwidth=slitwidth,
+                xbin=xbin,
+                ybin=ybin,
+            )
+
+        except ValueError as e:
+            QMessageBox.critical(
+                self,
+                "Invalid Calibration Inputs",
+                str(e)
+            )
+            return
+
+        if not rows:
+            QMessageBox.warning(
+                self,
+                "No Calibration Rows",
+                "No calibration rows were generated."
+            )
+            return
+
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        target_list_name = f"CAL_{timestamp}_slit{slitwidth:g}_bin{xbin}x{ybin}"
+
+        set_id = self.logic_service.upload_generated_targets_to_mysql(
+            rows,
+            target_list_name,
+        )
+
+        if set_id is None:
+            return
+
+        self.current_target_list_name = target_list_name
+
+        # Make calibration mode active
+        if hasattr(self, "layout_service"):
+            if getattr(self.layout_service, "target_list_mode_toggle", None) is not None:
+                self.layout_service.target_list_mode_toggle.setChecked(True)
+                self.layout_service.target_list_mode_toggle.setText("Mode: Calibration")
+
+            self.layout_service.load_target_lists()
+
+        QMessageBox.information(
+            self,
+            "Calibration Target List Created",
+            (
+                f"Created calibration target list '{target_list_name}'.\n\n"
+                f"SET_ID: {set_id}\n"
+                f"Slit width: {slitwidth:g}\n"
+                f"Spatial binning / xbin: {xbin}\n"
+                f"Spectral binning / ybin: {ybin}\n"
+                f"Rows generated: {len(rows)}"
+            )
+        )
 
     def open_etc_popup(self):
 

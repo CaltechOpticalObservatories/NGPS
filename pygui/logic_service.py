@@ -191,6 +191,139 @@ class LogicService:
             print(f"Error inserting data into MySQL: {err}")
             self.parent.show_popup("Error uploading target list! Please try again.")
 
+    def upload_generated_targets_to_mysql(self, rows, target_set_name):
+        """
+        Upload already-generated target rows to MySQL and associate them
+        with a new target set owned by the current logged-in user.
+
+        This is the in-memory version of upload_csv_to_mysql().
+        """
+        owner = getattr(self.parent, "current_owner", None)
+
+        if not owner:
+            print("No logged-in owner. Cannot upload generated target list.")
+            self.parent.show_popup("Please log in before creating a target list.")
+            return None
+
+        if not rows:
+            print("No generated rows to upload.")
+            self.parent.show_popup("No calibration rows were generated.")
+            return None
+
+        connection = None
+        cursor = None
+
+        all_columns = [
+            'OBSERVATION_ID', 'STATE', 'OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER', 'NAME',
+            'RA', 'DECL', 'OFFSET_RA', 'OFFSET_DEC', 'EXPTIME', 'SLITWIDTH', 'SLITOFFSET', 'OBSMODE',
+            'BINSPECT', 'BINSPAT', 'SLITANGLE', 'AIRMASS_MAX', 'WRANGE_LOW', 'WRANGE_HIGH', 'CHANNEL',
+            'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass',
+            'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start',
+            'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR',
+            'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE',
+            'POINTMODE', 'PRIORITY'
+        ]
+
+        try:
+            connection = self.connect_to_mysql("config/db_config.ini")
+
+            if connection is None:
+                print("Failed to connect to MySQL. Cannot upload generated target list.")
+                self.parent.show_popup("Failed to connect to MySQL.")
+                return None
+
+            cursor = connection.cursor()
+
+            # 1. Create target set for the logged-in user
+            cursor.execute(
+                """
+                INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP)
+                VALUES (%s, %s, NOW())
+                """,
+                (target_set_name, owner),
+            )
+            connection.commit()
+
+            cursor.execute("SELECT LAST_INSERT_ID()")
+            set_id = cursor.fetchone()[0]
+
+            print(f"Created generated target set '{target_set_name}' with SET_ID={set_id}")
+
+            # 2. Insert generated rows into targets
+            for idx, row in enumerate(rows):
+                row_data = [set_id]
+                insert_columns = ['SET_ID']
+                insert_placeholders = ['%s']
+
+                for column in all_columns:
+                    value = row.get(column)
+
+                    if value is None or value == "":
+                        if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER']:
+                            value = 0
+                        elif column == 'BINSPECT':
+                            value = 1
+                        elif column == 'BINSPAT':
+                            value = 2
+                        elif column == 'STATE':
+                            value = "pending"
+                        elif column in ['RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
+                            value = ""
+                        elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
+                            value = None
+                        else:
+                            value = None
+
+                    if column in ['OFFSET_RA', 'OFFSET_DEC'] and (value == "" or value is None):
+                        value = 0.0
+
+                    if column == "PRIORITY" and (value == "" or value is None):
+                        value = "1"
+
+                    if column == "OWNER" and (value == "" or value is None):
+                        value = owner
+
+                    insert_columns.append(column)
+                    insert_placeholders.append('%s')
+                    row_data.append(value)
+
+                insert_query = f"""
+                    INSERT INTO targets ({", ".join(insert_columns)})
+                    VALUES ({", ".join(insert_placeholders)})
+                """
+
+                print(f"Inserting generated calibration row {idx + 1}: {row.get('NAME')}")
+                cursor.execute(insert_query, row_data)
+
+            connection.commit()
+
+            # 3. Refresh state/UI
+            self.parent.current_target_list_name = target_set_name
+            self.fetch_and_update_target_list()
+
+            print(
+                f"Successfully uploaded {len(rows)} generated targets "
+                f"to target set '{target_set_name}' for owner '{owner}'."
+            )
+
+            return set_id
+
+        except mysql.connector.Error as err:
+            print(f"Error uploading generated targets: {err}")
+
+            if connection is not None:
+                connection.rollback()
+
+            self.parent.show_popup(f"Error uploading generated calibration list:\n{err}")
+            return None
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+
+            if connection is not None:
+                connection.close()
+
     def get_or_create_target_set(self, connection, target_set_name):
         """
         Checks if a target set with the given name exists. If it exists, returns the existing `SET_ID`.
