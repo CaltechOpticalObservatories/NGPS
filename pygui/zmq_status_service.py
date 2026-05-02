@@ -21,11 +21,22 @@ class ZmqStatusService(QObject):
     
     system_status_signal = pyqtSignal(str)
 
-    def __init__(self, parent, broker_publish_endpoint="tcp://127.0.0.1:5556"):
+    def __init__(
+        self,
+        parent,
+        broker_publish_endpoint="tcp://127.0.0.1:5556",
+        emit_debug_messages=False,
+    ):
         super().__init__()
         self.parent = parent  # Reference to the parent window or main UI
         self.broker_publish_endpoint = broker_publish_endpoint
-        self.context = zmq.Context()  # Create the ZeroMQ context
+
+        # Debug/raw-message UI output flag
+        # False = do not flood the GUI message box
+        # True  = emit raw topic/payload messages through new_message_signal
+        self.emit_debug_messages = emit_debug_messages
+
+        self.context = zmq.Context()
         self.socket = None
         self.is_connected = False
         self.subscribed_topics = set()  # Set of subscribed topics
@@ -35,6 +46,19 @@ class ZmqStatusService(QObject):
         # Set up logging
         self.setup_logging()
         self.logger.info("StatusService initialized.")
+
+    def set_debug_messages(self, enabled: bool):
+        """
+        Enable or disable raw ZMQ messages in the GUI message box.
+        """
+        self.emit_debug_messages = bool(enabled)
+
+    def _emit_debug_message(self, message: str):
+        """
+        Emit raw/debug messages only when debug UI output is enabled.
+        """
+        if self.emit_debug_messages:
+            self.new_message_signal.emit(message)
 
     def setup_logging(self):
         """ Set up logging for the status service in a 'logs' folder. """
@@ -108,59 +132,65 @@ class ZmqStatusService(QObject):
 
 
     def listen(self):
-        """ Listen for incoming messages from the broker. """
+        """Listen for incoming messages from the broker."""
         if not self.is_connected:
             self.logger.warning("Not connected to broker. Call 'connect()' first.")
             return
 
         try:
             self.logger.info("Starting to listen for messages from the broker...")
+
             while True:
                 message = self.socket.recv_multipart()
-                if len(message) == 2:
-                    topic = message[0].decode("utf-8")
-                    payload = message[1].decode("utf-8")
 
-                    self.logger.info(f'Received message: Topic = {topic}, Payload = {payload}')
-
-                    try:
-                        data = json.loads(payload)
-
-                        if topic == "acamd":
-                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-
-                        elif topic == "seq_seqstate":
-                            self._last_seq_lifecycle_status = self._status_from_seq_seqstate(data)
-                            self._emit_resolved_system_status()
-
-                        elif topic == "seq_waitstate":
-                            self._last_seq_wait_status = self._status_from_seq_waitstate(data)
-                            self._emit_resolved_system_status()
-
-                        if topic == "slitd":
-                            slit_width = data.get("SLITW", None)
-                            slit_offset = data.get("SLITO", None)
-                            if slit_width is not None and slit_offset is not None:
-                                self.slit_info_signal.emit(slit_width, slit_offset)
-
-                        if topic == "calibd":
-                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-                            self.update_modulator_states(data)
-
-                        if topic == "powerd":
-                            self.new_message_signal.emit(f"Topic: {topic}, Payload: {payload}")
-                            self.update_lamp_states(data)
-
-                        if topic == "tcsd":
-                            self.update_tcs_info(data)
-
-                    except json.JSONDecodeError as e:
-                        self.logger.error(f"Error parsing JSON payload: {e}")
-                else:
+                if len(message) != 2:
                     self.logger.warning("Received malformed message (not two parts).")
+                    continue
+
+                topic = message[0].decode("utf-8")
+                payload = message[1].decode("utf-8")
+
+                # Always log to file, even when GUI debug messages are disabled.
+                self.logger.info(f"Received message: Topic = {topic}, Payload = {payload}")
+
+                try:
+                    data = json.loads(payload)
+
+                    if topic == "acamd":
+                        self._emit_debug_message(f"Topic: {topic}, Payload: {payload}")
+
+                    elif topic == "seq_seqstate":
+                        self._last_seq_lifecycle_status = self._status_from_seq_seqstate(data)
+                        self._emit_resolved_system_status()
+
+                    elif topic == "seq_waitstate":
+                        self._last_seq_wait_status = self._status_from_seq_waitstate(data)
+                        self._emit_resolved_system_status()
+
+                    if topic == "slitd":
+                        slit_width = data.get("SLITW", None)
+                        slit_offset = data.get("SLITO", None)
+
+                        if slit_width is not None and slit_offset is not None:
+                            self.slit_info_signal.emit(slit_width, slit_offset)
+
+                    if topic == "calibd":
+                        self._emit_debug_message(f"Topic: {topic}, Payload: {payload}")
+                        self.update_modulator_states(data)
+
+                    if topic == "powerd":
+                        self._emit_debug_message(f"Topic: {topic}, Payload: {payload}")
+                        self.update_lamp_states(data)
+
+                    if topic == "tcsd":
+                        self.update_tcs_info(data)
+
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"Error parsing JSON payload from topic '{topic}': {e}")
 
         except Exception as e:
             self.logger.error(f"Error while listening for messages: {e}")
+
         finally:
             self.disconnect()
 
