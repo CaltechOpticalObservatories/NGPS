@@ -193,15 +193,31 @@ class LayoutService:
 
         # Create a mapping for status colors
         status_map = {
-            "stopped": QColor(169, 169, 169),  # Grey
-            "idle": QColor(255, 255, 0),       # Yellow
-            "paused": QColor(255, 165, 0),     # Orange
-            "exposing": QColor(0, 255, 0),     # Green
-            "readout": QColor(0, 255, 0),      # Green
-            "acquire": QColor(255, 255, 0),    # Yellow           
-            "focus": QColor(255, 255, 0),      # Yellow     
-            "calib": QColor(255, 255, 0),      # Yellow     
-            "user": QColor(255, 255, 0),      # Yellow     
+            "stopped": QColor(169, 169, 169),
+            "not_ready": QColor(255, 0, 0),
+            "idle": QColor(255, 255, 0),
+            "paused": QColor(255, 165, 0),
+            "exposing": QColor(0, 255, 0),
+            "readout": QColor(0, 255, 0),
+
+            "moveto": QColor(255, 255, 0),
+            "acam_acquire": QColor(255, 255, 0),
+            "slicecam_fineacquire": QColor(255, 255, 0),
+
+            "focus": QColor(255, 255, 0),
+            "calib": QColor(255, 255, 0),
+            "camera": QColor(255, 255, 0),
+            "flexure": QColor(255, 255, 0),
+            "power": QColor(255, 255, 0),
+            "slit": QColor(255, 255, 0),
+            "tcs": QColor(255, 255, 0),
+            "tcsop": QColor(255, 255, 0),
+            "user": QColor(255, 255, 0),
+
+            # transitional / backward compatibility
+            "acam": QColor(255, 255, 0),
+            "slicecam": QColor(255, 255, 0),
+            "acquire": QColor(255, 255, 0),
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable
@@ -223,7 +239,7 @@ class LayoutService:
             status_color_rect.setStyleSheet(f"background-color: {color.name()};")
 
             # Label showing the status
-            status_label = QLabel(status.capitalize())
+            status_label = QLabel(status.replace("_", " ").title())
             status_label.setMargin(0)  # Remove extra margin around the label
 
             # Layout for each status (color + label)

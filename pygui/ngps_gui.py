@@ -54,6 +54,7 @@ class NgpsGUI(QMainWindow):
         self.current_owner = None
         self.current_target_list_name = None
         self.zmq_status_service = None
+        self.zmq_debug_messages = False
         
         # Login status flag
         self.logged_in = False
@@ -178,7 +179,10 @@ class NgpsGUI(QMainWindow):
         self.status_service.shutter_status_signal.connect(self.layout_service.update_shutter_status)
 
         # Initialize the ZMQStatusService
-        self.zmq_status_service = ZmqStatusService(self)
+        self.zmq_status_service = ZmqStatusService(
+            self,
+            emit_debug_messages=self.zmq_debug_messages,
+        )
         self.zmq_status_service.connect()
         
         # # Start the ZMQStatusService in a separate thread
@@ -485,6 +489,16 @@ class NgpsGUI(QMainWindow):
             dec = target_data.get("DECL", "")
 
             self.etc_popup.set_target_info(name, ra, dec)
+
+    def set_zmq_debug_messages(self, enabled: bool):
+        """Enable or disable raw ZMQ messages in the GUI message log."""
+        self.zmq_debug_messages = bool(enabled)
+
+        if self.zmq_status_service is not None:
+            self.zmq_status_service.set_debug_messages(enabled)
+
+        state = "enabled" if enabled else "disabled"
+        self.layout_service.update_message_log(f"ZMQ debug messages {state}.")
 
 
 if __name__ == '__main__':
