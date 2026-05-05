@@ -424,7 +424,8 @@ namespace Common {
       }
       else
       if constexpr ( std::is_same<T, int16_t>::value || std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ) {
-        if ( jvalue.type() == json::value_t::number_integer ) {
+        if ( jvalue.type() == json::value_t::number_integer ||
+             jvalue.type() == json::value_t::number_unsigned ) {
           value = jvalue.template get<T>();
         }
       }
