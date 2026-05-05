@@ -90,21 +90,30 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // cached status must be fresh enough to trust
-    if (!this->is_acam_status_fresh()) {
-      const int64_t age_ms = ( get_time_us() - this->last_acam_pubtime.load() ) / 1000;
-      message.str(""); message << "ERROR ACAM status is stale or never received (age="
-                               << age_ms << " ms)";
-      logwrite(function, message.str());
-      retstring="stopped";
+    // Wait briefly for ACAM status to be fresh and guiding. This absorbs the
+    // pub/sub propagation lag where sequencerd has seen the ACAM acquire
+    // publish but slicecamd's subscriber thread has not yet delivered it.
+    {
+    const auto wait_duration = std::chrono::microseconds( ACAM_WAIT_TIMEOUT_US );
+    std::unique_lock<std::mutex> lock(this->acam_mtx);
+    const bool ready = this->acam_cv.wait_for( lock, wait_duration, [this]() {
+      return this->is_acam_status_fresh() &&
+             this->is_acam_guiding.load(std::memory_order_relaxed);
+    });
+
+    if ( !ready ) {
+      if ( !this->is_acam_status_fresh() ) {
+        const int64_t age_ms = ( get_time_us() - this->last_acam_pubtime.load() ) / 1000;
+        message.str(""); message << "ERROR timed out waiting for fresh ACAM status (age="
+                                 << age_ms << " ms)";
+      }
+      else {
+        message.str(""); message << "ERROR timed out waiting for ACAM to guide";
+      }
+      logwrite( function, message.str() );
+      retstring = "stopped";
       return ERROR;
     }
-
-    // and if it is then ACAM must be guiding
-    if (!this->is_acam_guiding.load(std::memory_order_acquire)) {
-      logwrite(function, "ERROR ACAM is not guiding");
-      retstring="stopped";
-      return ERROR;
     }
 
     // <which> <x> <y> are optional but if specified then require all three
@@ -436,6 +445,10 @@ namespace Slicecam {
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
     this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
+
+    // wake any thread waiting on ACAM state (e.g. fineacquire)
+    std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->acam_cv.notify_all();
   }
   /***** Slicecam::Interface::handletopic_acamd *******************************/
 

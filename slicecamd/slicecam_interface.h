@@ -119,6 +119,9 @@ namespace Slicecam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      std::mutex acam_mtx;                 ///< guards waiters on acam_cv
+      std::condition_variable acam_cv;     ///< notified when cached ACAM state updates
+
       FineAcqState fineacquire_state;
 
     public:
@@ -144,6 +147,9 @@ namespace Slicecam {
 
       /// Max acceptable age (us) for cached ACAM status used by fineacquire.
       static constexpr int64_t ACAM_STATUS_MAX_AGE_US = 10'000'000;
+
+      /// Max time (us) fineacquire() will wait for a fresh, guiding ACAM status before failing.
+      static constexpr int64_t ACAM_WAIT_TIMEOUT_US = 2'000'000;
 
       bool is_acam_status_fresh() const;
 
