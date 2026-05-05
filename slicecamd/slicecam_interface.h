@@ -140,6 +140,13 @@ namespace Slicecam {
       std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
+      std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
+
+      /// Max acceptable age (us) for cached ACAM status used by fineacquire.
+      static constexpr int64_t ACAM_STATUS_MAX_AGE_US = 10'000'000;
+
+      bool is_acam_status_fresh() const;
+
       /** these are set by Interface::saveframes()
        */
       std::atomic<int> nsave_preserve_frames;  ///< number of frames to preserve (normally overwritten)

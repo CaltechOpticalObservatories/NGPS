@@ -50,7 +50,8 @@ namespace Topic {
 
 namespace Key {
 
-  inline const std::string SOURCE = "source";
+  inline const std::string SOURCE  = "source";
+  inline const std::string PUBTIME = "pubtime";
 
   namespace Broadcast {
     inline const std::string SEVERITY = "severity";

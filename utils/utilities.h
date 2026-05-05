@@ -43,6 +43,7 @@
 #include <cstdlib>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <cstdint>
 
 #define TO_DEGREES ( 360. / 24. )
 #define TO_HOURS   ( 24. / 360. )
@@ -76,6 +77,12 @@ std::chrono::system_clock::time_point next_occurrence( int hour, int minute, int
 
 long get_time( int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
 long get_time( const std::string &tmzone_in, int &year, int &mon, int &mday, int &hour, int &min, int &sec, int &usec );
+
+inline int64_t get_time_us() {
+  struct timespec ts;
+  clock_gettime( CLOCK_REALTIME, &ts );
+  return int64_t(ts.tv_sec) * 1000000 + ts.tv_nsec/1000;
+}
 
 std::string timestamp_from( struct timespec &time_n );  /// return time from input timespec struct in formatted string "YYYY-MM-DDTHH:MM:SS.sss"
 std::string timestamp_from( const std::string &tmzone_in, struct timespec &time_in );

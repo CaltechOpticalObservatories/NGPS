@@ -90,7 +90,17 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // ACAM must be guiding
+    // cached status must be fresh enough to trust
+    if (!this->is_acam_status_fresh()) {
+      const int64_t age_ms = ( get_time_us() - this->last_acam_pubtime.load() ) / 1000;
+      message.str(""); message << "ERROR ACAM status is stale or never received (age="
+                               << age_ms << " ms)";
+      logwrite(function, message.str());
+      retstring="stopped";
+      return ERROR;
+    }
+
+    // and if it is then ACAM must be guiding
     if (!this->is_acam_guiding.load(std::memory_order_acquire)) {
       logwrite(function, "ERROR ACAM is not guiding");
       retstring="stopped";
@@ -421,8 +431,28 @@ namespace Slicecam {
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+
+    // acam's publish time
+    int64_t pubtime=0;
+    Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
+    this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
   }
   /***** Slicecam::Interface::handletopic_acamd *******************************/
+
+
+  /***** Slicecam::Interface::is_acam_status_fresh ****************************/
+  /**
+   * @brief      check whether cached ACAM status is fresh enough to trust
+   * @return     true if cached status has been received at least once and is
+   *             within ACAM_STATUS_MAX_AGE_US of the current time
+   *
+   */
+  bool Interface::is_acam_status_fresh() const {
+    const int64_t last = this->last_acam_pubtime.load();
+    if ( last == 0 ) return false;
+    return ( get_time_us() - last ) <= ACAM_STATUS_MAX_AGE_US;
+  }
+  /***** Slicecam::Interface::is_acam_status_fresh ****************************/
 
 
   /***** Slicecam::Interface::handletopic_slitd *******************************/

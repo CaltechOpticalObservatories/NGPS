@@ -38,6 +38,13 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "starting ACAM acquisition" );
 
+    // Freshness boundary: any ACAMD status publish strictly newer than this
+    // timestamp is considered fresh for this acquire cycle. The guard-band
+    // absorbs jitter and the timing race between this command send and
+    // ACAM's forced publish triggered by the command.
+    //
+    const int64_t freshness_boundary_us = get_time_us() - ACAM_FRESHNESS_GUARD_US;
+
     if ( this->acamd.command( cmd.str(), reply ) != NO_ERROR ) {
       this->broadcast.error( function, "sending acquire command to acamd" );
       return ERROR;
@@ -47,16 +54,23 @@ namespace Sequencer {
     const auto timeout_time = std::chrono::steady_clock::now()
                             + std::chrono::duration<double>( this->acquisition_timeout );
 
-    // wait for is_acam_guiding (I subscribe to this)
-    // or cancel, or timeout
+    // wait for is_acam_guiding (I subscribe to this) with a fresh ACAMD publish
+    // since the acquire command was sent, or cancel, or timeout
     //
     std::unique_lock<std::mutex> lock(this->acam_mtx);
     this->acam_cv.wait(lock, [&]() {
-        return this->is_acam_guiding.load() || this->cancel_flag.load() ||
-               (use_timeout && std::chrono::steady_clock::now() > timeout_time);
+        const bool fresh = this->acam_pubtime.load() > freshness_boundary_us;
+        return ( fresh && this->is_acam_guiding.load() ) || this->cancel_flag.load() ||
+               ( use_timeout && std::chrono::steady_clock::now() > timeout_time );
     });
 
     if (this->cancel_flag.load()) return ABORT;
+
+    if (use_timeout && this->acam_pubtime.load() <= freshness_boundary_us) {
+      this->broadcast.error( function, "timed out waiting for fresh ACAM status" );
+      return TIMEOUT;
+    }
+
     if (use_timeout && !this->is_acam_guiding.load()) {
       this->broadcast.error( function, "ACAM acquisition timed out!" );
       return TIMEOUT;

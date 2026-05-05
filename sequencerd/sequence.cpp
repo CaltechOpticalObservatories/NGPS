@@ -128,6 +128,12 @@ namespace Sequencer {
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+
+    // what time did acamd publish this
+    int64_t pubtime=0;
+    Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
+    this->acam_pubtime.store( pubtime, std::memory_order_relaxed );
+
     std::lock_guard<std::mutex> lock(this->acam_mtx);
     this->acam_cv.notify_all();
   }

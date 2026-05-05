@@ -1492,6 +1492,7 @@ namespace Acam {
     jmessage_out[Key::Acamd::ATTEMPTS]     = this->target.attempts;
     jmessage_out[Key::Acamd::SEEING]       = this->astrometry.get_seeing();
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
+    jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
       this->publisher->publish( jmessage_out, Topic::ACAMD );
@@ -3368,7 +3369,11 @@ logwrite( function, message.str() );
 
     this->acquire_mode = requested_mode;
 
-    iface->publish_status();
+    // acam needs to publish status on every acquire command to initialize
+    // a freshness timer in the sequencer. The extra pub noise is a small
+    // price to pay for the simplicity of not adding another mechanism.
+    //
+    iface->publish_status(true);
 
     return NO_ERROR;
   }

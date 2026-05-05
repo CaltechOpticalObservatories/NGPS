@@ -299,6 +299,14 @@ namespace Sequencer {
       std::atomic<bool> should_fineacquire{true};  ///< should I use fineacquire? (user-switchable)
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
+      std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
+
+      /** @brief guard-band (us) subtracted from the acquire-command send time
+       *         when computing the freshness boundary in do_acam_acquire. Tolerates
+       *         jitter and the race between the command send and ACAM's forced publish.
+       *         Adjust here to tune.
+       */
+      static constexpr int64_t ACAM_FRESHNESS_GUARD_US = 500'000;
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
