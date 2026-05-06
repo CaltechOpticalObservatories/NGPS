@@ -93,9 +93,8 @@ namespace Sequencer {
 
     ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_FINEACQUIRE);
 
-    // TODO don't hard-code the arguments here:
     std::string reply;
-    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start L", reply ) != NO_ERROR) {
+    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start", reply ) != NO_ERROR) {
       this->broadcast.error( function, "starting slicecam fine acquisition" );
       return ERROR;
     }

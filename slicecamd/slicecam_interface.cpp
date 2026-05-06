@@ -68,7 +68,7 @@ namespace Slicecam {
     else
 
     // not empty, stop or start is an error
-    if (action != "start" || tokens.size() < 2) {
+    if (action != "start") {
       logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
       retstring="invalid_argument";
       return ERROR;
@@ -117,20 +117,30 @@ namespace Slicecam {
     }
 
     // <which> <x> <y> are optional but if specified then require all three
-    if (tokens.size() > 1 && tokens.size() != 4) {
-      logwrite(function, "ERROR ACAM is not guiding");
-      retstring="stopped";
+    if ( tokens.size() != 1 && tokens.size() != 4 ) {
+      logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
+      retstring="invalid_argument";
       return ERROR;
     }
-    else
-    // override the default camera and aimpoint if provided
-    if (tokens.size() > 1 && tokens.size() == 4) {
+
+    if ( tokens.size() == 1 ) {
+      // no which/aimpoint args so use defaults from config file
+      if ( this->default_which.empty() || !this->default_aimpoint.is_valid() ) {
+        logwrite(function, "ERROR fineacquire defaults not configured");
+        retstring="not_configured";
+        return ERROR;
+      }
+      this->fineacquire_state.which    = this->default_which;
+      this->fineacquire_state.aimpoint = this->default_aimpoint;
+    }
+    else {
+      // use the passed-in values
       try {
         const std::string which = tokens.at(1);
-        double x = std::stod(tokens.at(2));
-        double y = std::stod(tokens.at(3));
+        const double x = std::stod(tokens.at(2));
+        const double y = std::stod(tokens.at(3));
         if ( (which != "L" && which != "R") ||
-             std::isnan(x) || std::isnan(y) || x<0 || y<0) {
+             std::isnan(x) || std::isnan(y) || x<0 || y<0 ) {
           logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
           retstring="invalid_argument";
           return ERROR;
@@ -145,6 +155,12 @@ namespace Slicecam {
       }
     }
 
+    // log the effective camera and aimpoint for this invocation
+    message.str(""); message << "using camera=" << this->fineacquire_state.which
+                             << " aimpoint=(" << this->fineacquire_state.aimpoint.x
+                             << ", " << this->fineacquire_state.aimpoint.y << ")";
+    logwrite(function, message.str());
+
     // start the state machine
     this->fineacquire_state.reset();
     this->is_fineacquire_locked.store(false, std::memory_order_release);
@@ -153,9 +169,9 @@ namespace Slicecam {
     // publishes status on change only
     this->publish_status();
 
-    logwrite(function, "fine target acquisition enabled");
-
     retstring=is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+
+    logwrite(function, "fine target acquisition "+retstring);
 
     return NO_ERROR;
   }
@@ -805,6 +821,13 @@ namespace Slicecam {
           logwrite(function, "ERROR invalid FINE_ACQUIRE_AIMPOINT='"+config.arg[entry]+"' expected <which> <x> <y>");
           return ERROR;
         }
+        if ( which != "L" && which != "R" ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_AIMPOINT which=\"" << which
+                                   << "\" : expected { L R }";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        // store in the class for validation
         this->fineacquire_state.which    = which;
         this->fineacquire_state.aimpoint = { x, y };
       }
@@ -823,7 +846,12 @@ namespace Slicecam {
 
     // FINE_ACQUIRE parameters must have been configured properly
     //
-    if (!this->fineacquire_state.is_valid()) {
+    if (this->fineacquire_state.is_valid()) {
+      // if so then save these as the defaults
+      this->default_which    = this->fineacquire_state.which;
+      this->default_aimpoint = this->fineacquire_state.aimpoint;
+    }
+    else {
       logwrite(function, "ERROR bad or missing FINE_ACQUIRE configuration");
       return ERROR;
     }

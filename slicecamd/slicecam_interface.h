@@ -81,7 +81,7 @@ namespace Slicecam {
    */
   struct FineAcqState {
     std::string which;
-    Point       aimpoint;           ///< 1-based pixel aim point
+    Point       aimpoint { NAN, NAN };  ///< 1-based pixel aim point; NAN until configured
     Rect        bg_region;          ///< background ROI (1-based)
     std::vector<double> dra_samp;   ///< dRA*cos(dec) samples, degrees
     std::vector<double> ddec_samp;  ///< dDEC samples, degrees
@@ -123,6 +123,9 @@ namespace Slicecam {
       std::condition_variable acam_cv;     ///< notified when cached ACAM state updates
 
       FineAcqState fineacquire_state;
+
+      std::string default_which;                    ///< configured default camera for fineacquire
+      Point       default_aimpoint { NAN, NAN };    ///< configured default aimpoint for fineacquire
 
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
