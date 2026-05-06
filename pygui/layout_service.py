@@ -560,6 +560,86 @@ class LayoutService:
             cursor.movePosition(cursor.End)
             self.parent.message_log.setTextCursor(cursor)
 
+    def _connect_button_once(self, button, slot):
+        """
+        Replace all existing clicked handlers with one handler.
+        Useful when the same button changes meaning after login.
+        """
+        try:
+            button.clicked.disconnect()
+        except TypeError:
+            pass
+
+        button.clicked.connect(slot)
+
+
+    def update_target_list_login_ui(self, has_target_lists=False):
+        """
+        Update the target-list area after login/logout.
+
+        - Before login: show login prompt.
+        - After login with no target lists: show upload/create prompt.
+        - After login with target lists: hide the banner and show the table.
+        """
+        logged_in = bool(getattr(self.parent, "logged_in", False))
+        username = getattr(self.parent, "current_owner", None)
+
+        if not hasattr(self, "load_target_button") or self.load_target_button is None:
+            return
+
+        if not logged_in:
+            self.load_target_button.setVisible(True)
+            self.load_target_button.setText("Please login or load your target list to start")
+            self.load_target_button.setToolTip("Login before loading target lists.")
+            self._connect_button_once(self.load_target_button, self.parent.on_login)
+
+            if self.target_list_display is not None:
+                self.target_list_display.setVisible(False)
+
+            self.add_row_button.setEnabled(False)
+            return
+
+        # Logged in: the table area should be visible even if empty.
+        if self.target_list_display is not None:
+            self.target_list_display.setVisible(True)
+
+        if has_target_lists:
+            # User has one or more target sets. The combo/table are enough.
+            self.load_target_button.setVisible(False)
+            self.add_row_button.setEnabled(True)
+            return
+
+        # Logged in, but no target lists yet.
+        self.load_target_button.setVisible(True)
+        self.load_target_button.setText(
+            f"Logged in as {username}. No target lists yet — click to upload a CSV."
+        )
+        self.load_target_button.setToolTip(
+            "Upload a target list CSV here, or use the dropdown above to create an empty target list."
+        )
+        self.load_target_button.setStyleSheet("""
+            QPushButton {
+                background-color: #2E7D32;
+                border: none;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QPushButton:hover {
+                background-color: #1B5E20;
+            }
+            QPushButton:pressed {
+                background-color: #0B3D0B;
+            }
+        """)
+        self._connect_button_once(self.load_target_button, self.upload_new_target_list)
+
+        self.add_row_button.setEnabled(False)
+
+        if self.target_list_display is not None:
+            self.target_list_display.clearContents()
+            self.target_list_display.setRowCount(0)
+
     def create_target_list_group(self):
         target_list_group = QGroupBox()
         bottom_section_layout = QVBoxLayout()
@@ -1393,7 +1473,9 @@ class LayoutService:
             if self.target_list_mode_toggle.isChecked():
                 # Calibration mode
                 print("Loading Calibration target lists...")
-                target_lists = self.logic_service.load_calibration_target_sets("config/db_config.ini")
+                target_lists = self.logic_service.load_calibration_target_sets(
+                    "config/db_config.ini"
+                )
 
                 if not isinstance(target_lists, (list, tuple)):
                     print("Error: Calibration data is not a valid iterable.")
@@ -1403,7 +1485,9 @@ class LayoutService:
                 # Science mode
                 print("Loading Science target lists...")
                 if target_lists is None:
-                    target_lists = self.logic_service.load_mysql_and_fetch_target_sets("config/db_config.ini")
+                    target_lists = self.logic_service.load_mysql_and_fetch_target_sets(
+                        "config/db_config.ini"
+                    )
 
                     if not isinstance(target_lists, (list, tuple)):
                         print("Error: Fetched data is not a valid iterable.")
@@ -1413,46 +1497,48 @@ class LayoutService:
             print(f"Error fetching target lists: {e}")
             target_lists = []
 
-        # Fallback if no data is found
-        if not target_lists:
-            target_lists = ["No Target Lists Available"]
-            self.add_row_button.setEnabled(False)
-        else:
-            self.add_row_button.setEnabled(True)
+        has_real_target_lists = bool(target_lists)
 
-        # Populate the combo box
+        if not has_real_target_lists:
+            display_items = ["No Target Lists Available"]
+            self.parent.current_target_list_name = None
+        else:
+            display_items = list(target_lists)
+
         if isinstance(self.target_list_name, QComboBox):
             self.target_list_name.blockSignals(True)
             self.target_list_name.clear()
 
-            for set_name in target_lists:
+            for set_name in display_items:
                 self.target_list_name.addItem(set_name)
 
             # Sentinels at the end
             self.target_list_name.addItem("Upload new target list")
             self.target_list_name.addItem("Create empty target list")
 
-            # Prefer selecting what LogicService marked as current
             preferred = getattr(self.parent, "current_target_list_name", None)
-            if preferred:
+
+            if has_real_target_lists and preferred:
                 idx = self.target_list_name.findText(str(preferred))
-                if idx >= 0:
-                    self.target_list_name.setCurrentIndex(idx)
-                else:
-                    self.target_list_name.setCurrentIndex(0 if target_lists else -1)
+                self.target_list_name.setCurrentIndex(idx if idx >= 0 else 0)
             else:
-                self.target_list_name.setCurrentIndex(0 if target_lists else -1)
+                self.target_list_name.setCurrentIndex(0)
 
             self.target_list_name.blockSignals(False)
 
-            # Rewire handler safely and trigger once
             try:
                 self.target_list_name.currentIndexChanged.disconnect()
             except TypeError:
                 pass
+
             self.target_list_name.currentIndexChanged.connect(
                 lambda *_: self.on_target_set_changed()
             )
+
+        self.update_target_list_login_ui(has_real_target_lists)
+
+        # Only auto-filter if the selected item is a real DB target list.
+        if has_real_target_lists:
             self.on_target_set_changed()
             self.hide_default_columns()
 
@@ -1492,63 +1578,60 @@ class LayoutService:
                 self.target_list_name.setCurrentIndex(max(0, min(prev_idx, self.target_list_name.count() - 2)))
             print("File selection cancelled.")
 
-
     def on_target_set_changed(self, *_):
         combo = self.target_list_name
-        idx   = combo.currentIndex()
-        text  = combo.currentText().strip()
+        text = combo.currentText().strip()
 
-        # enable Add Row only on real sets
-        self.add_row_button.setEnabled(text not in ("Upload new target list", "Create empty target list", "No Target Lists Available", ""))
+        non_real_items = (
+            "",
+            "No Target Lists Available",
+            "Upload new target list",
+            "Create empty target list",
+        )
 
-        last_real = max(0, combo.count() - 3)
+        # Enable Add Row only for real target lists
+        self.add_row_button.setEnabled(text not in non_real_items)
 
+        # No real target list exists yet
+        if text in ("", "No Target Lists Available"):
+            self.parent.current_target_list_name = None
+
+            table = self.target_list_display
+            if table is not None:
+                table.clearContents()
+                table.setRowCount(0)
+
+            return
+
+        # Upload new target list
         if text == "Upload new target list":
+            last_real = max(0, combo.count() - 3)
+
             with QSignalBlocker(combo):
                 combo.setCurrentIndex(last_real)
+
             self.upload_new_target_list()
             return
 
+        # Create empty target list
         if text == "Create empty target list":
+            last_real = max(0, combo.count() - 3)
+
             with QSignalBlocker(combo):
                 combo.setCurrentIndex(last_real)
-            name, ok = QInputDialog.getText(self.parent, "Create empty target list", "Target list name:")
+
+            name, ok = QInputDialog.getText(
+                self.parent,
+                "Create empty target list",
+                "Target list name:"
+            )
+
             if ok and name.strip():
-                # create empty set; UI refreshes to show the newest (empty) set
                 self.logic_service.create_empty_target_set(name.strip())
+
             return
 
-        # Real selection → remember name and filter from DB
-        self.parent.current_target_list_name = text
-        self.logic_service.filter_target_list()
-        self.hide_default_columns()
-
-    def on_target_set_changed(self, *_):
-        combo = self.target_list_name
-        idx   = combo.currentIndex()
-        text  = combo.currentText().strip()
-
-        # enable Add Row only on real sets
-        self.add_row_button.setEnabled(text not in ("Upload new target list", "Create empty target list", "No Target Lists Available", ""))
-
-        last_real = max(0, combo.count() - 3)
-
-        if text == "Upload new target list":
-            with QSignalBlocker(combo):
-                combo.setCurrentIndex(last_real)
-            self.upload_new_target_list()
-            return
-
-        if text == "Create empty target list":
-            with QSignalBlocker(combo):
-                combo.setCurrentIndex(last_real)
-            name, ok = QInputDialog.getText(self.parent, "Create empty target list", "Target list name:")
-            if ok and name.strip():
-                # create empty set; UI refreshes to show the newest (empty) set
-                self.logic_service.create_empty_target_set(name.strip())
-            return
-
-        # Real selection → remember name and filter from DB
+        # Real target list selection
         self.parent.current_target_list_name = text
         self.logic_service.filter_target_list()
         self.hide_default_columns()

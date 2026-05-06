@@ -224,17 +224,21 @@ class NgpsGUI(QMainWindow):
         """Handle the login action from the menu."""
         self.login_dialog = LoginDialog(self, self.connection)
 
-        # If the login is successful, load data from MySQL
         if self.login_dialog.exec_() == QDialog.Accepted:
-            # Call the function to load data from MySQL
-            self.load_mysql_data(self.login_dialog.all_targets)
-            self.user_set_data = self.login_dialog.set_data
+            self.logged_in = True
             self.current_owner = self.login_dialog.owner
-            # After loading data, populate the target lists dropdown
+            self.user_set_data = self.login_dialog.set_data
+            self.all_targets = self.login_dialog.all_targets or []
+
+            self.load_mysql_data(self.all_targets)
+
+            has_target_lists = bool(self.login_dialog.set_name)
+
+            # Refresh dropdown and target-list UI.
             self.layout_service.load_target_lists(self.login_dialog.set_name)
-            
-            # if self.layout_service.control_tab.startup_shutdown_button.text() == "Startup":
-            #     self.layout_service.control_tab.toggle_startup_shutdown()
+            self.layout_service.update_target_list_login_ui(has_target_lists)
+
+            print(f"Logged in as {self.current_owner}. Target lists found: {has_target_lists}")
 
     def load_mysql_data(self, all_targets):
         """Load data from MySQL after successful login."""
