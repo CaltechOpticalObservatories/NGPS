@@ -704,17 +704,19 @@ namespace Sequencer {
             return;
           }
         }
-        else
-        // start SLICECAM fine acquisition
-        if ( this->should_fineacquire.load() &&
-             this->do_slicecam_fineacquire() != NO_ERROR ) {
-          this->broadcast.warning( function, "slicecam fine acquisition failed" );
-        }
-        else
-        // wait for user if either fineacquire failed or wasn't turned on
-        if (this->wait_for_user()==ABORT) {
-          this->broadcast.notice( function, "cancelled" );
-          return;
+        else {  // ACAM success...
+          // start SLICECAM fine acquisition if enabled
+          long ret=NO_ERROR;
+          bool dofine = this->should_fineacquire.load();
+          if ( dofine ) ret = this->do_slicecam_fineacquire();
+          if ( ret!=NO_ERROR ) this->broadcast.warning( function, "slicecam fine acquisition failed" );
+
+          // wait for user if either fineacquire failed or wasn't turned on
+          if ( (!dofine || ret!=NO_ERROR) &&
+              this->wait_for_user()==ABORT) {
+            this->broadcast.notice( function, "cancelled" );
+            return;
+          }
         }
       }
 
