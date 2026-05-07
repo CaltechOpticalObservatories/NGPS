@@ -1480,7 +1480,7 @@ namespace Sequencer {
       if ( cmd == SEQUENCERD_PAUSE ) {
                   // Can only pause during an exposure
                   //
-                  if ( ! this->sequence.seq_wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                  if ( ! this->sequence.wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
                     this->sequence.broadcast.error( function, "can only pause during an active exposure" );
                     ret = ERROR;
                   }
