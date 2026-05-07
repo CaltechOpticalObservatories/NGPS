@@ -86,11 +86,15 @@ namespace Slicecam {
     std::vector<double> dra_samp;   ///< dRA*cos(dec) samples, degrees
     std::vector<double> ddec_samp;  ///< dDEC samples, degrees
     int    max_samples  = 10;       ///< samples before evaluating a move
+    int    min_samples  = 3;        ///< minimum samples before scatter-gated early exit
+    double prec_arcsec  = 0.1;      ///< MAD scatter threshold per axis for early exit (arcsec)
     double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
     double gain         = 0.7;      ///< gain applied to commanded offset
     int    skip_frames  = 0;        ///< frames to skip after a telescope move
+    int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
 
-    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0; }
+    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0;
+                   consecutive_centroid_failures = 0; }
     bool is_valid() const noexcept {
       return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
     }

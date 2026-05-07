@@ -232,9 +232,17 @@ namespace Slicecam {
                                    this->fineacquire_state.bg_region,
                                    this->fineacquire_state.aimpoint,
                                    centroid) != NO_ERROR ) {
-      logwrite(function, "WARNING: failed to find centroid, skipping frame");
+      const int max_failures = 3 * this->fineacquire_state.max_samples;
+      if ( ++this->fineacquire_state.consecutive_centroid_failures >= max_failures ) {
+        logwrite(function, "ERROR: too many consecutive centroid failures, stopping fine acquisition");
+        this->is_fineacquire_running.store( false, std::memory_order_release );
+        this->publish_status();
+      } else {
+        logwrite(function, "WARNING: failed to find centroid, skipping frame");
+      }
       return;
     }
+    this->fineacquire_state.consecutive_centroid_failures = 0;
 
     // convert centroid pixel -> sky using WCS from FITS header
     //
@@ -271,23 +279,44 @@ namespace Slicecam {
     this->fineacquire_state.dra_samp.push_back( offsets.first );
     this->fineacquire_state.ddec_samp.push_back( offsets.second );
 
-    // wait until there are enough samples to evaluate a move
-    //
+    const int n           = static_cast<int>( this->fineacquire_state.dra_samp.size() );
     const int max_samples = this->fineacquire_state.max_samples;
-    if ( static_cast<int>(this->fineacquire_state.dra_samp.size()) < max_samples ) {
-      return;
-    }
+    const int min_samples = this->fineacquire_state.min_samples;
 
-    // calculate median from accumulated samples
+    // wait for the minimum number of samples before evaluating anything
     //
-    std::vector<double> dra_sorted = this->fineacquire_state.dra_samp;
+    if ( n < min_samples ) return;
+
+    // compute running median
+    //
+    std::vector<double> dra_sorted  = this->fineacquire_state.dra_samp;
     std::vector<double> ddec_sorted = this->fineacquire_state.ddec_samp;
 
     std::sort( dra_sorted.begin(),  dra_sorted.end() );
     std::sort( ddec_sorted.begin(), ddec_sorted.end() );
 
-    const double med_dra  = dra_sorted[ max_samples / 2 ];
-    const double med_ddec = ddec_sorted[ max_samples / 2 ];
+    const double med_dra  = dra_sorted[ n / 2 ];
+    const double med_ddec = ddec_sorted[ n / 2 ];
+
+    // compute MAD-derived scatter per axis to gate early exit
+    //
+    std::vector<double> abs_dra( n ), abs_ddec( n );
+    for ( int i = 0; i < n; i++ ) {
+      abs_dra[i]  = std::abs( this->fineacquire_state.dra_samp[i]  - med_dra  );
+      abs_ddec[i] = std::abs( this->fineacquire_state.ddec_samp[i] - med_ddec );
+    }
+    std::sort( abs_dra.begin(),  abs_dra.end() );
+    std::sort( abs_ddec.begin(), abs_ddec.end() );
+
+    const double sig_dra  = 1.4826 * abs_dra[ n / 2 ]  * 3600.0;  // arcsec
+    const double sig_ddec = 1.4826 * abs_ddec[ n / 2 ] * 3600.0;  // arcsec
+
+    const double prec      = this->fineacquire_state.prec_arcsec;
+    const bool   scatter_ok = ( sig_dra <= prec && sig_ddec <= prec );
+
+    // keep accumulating if scatter is still too high and max not reached
+    //
+    if ( !scatter_ok && n < max_samples ) return;
 
     // convert to arcsec only for the threshold comparison and logging
     //
@@ -310,7 +339,9 @@ namespace Slicecam {
     oss << "offset dRA=" << med_dra * 3600.0
         << " dDEC=" << med_ddec * 3600.0
         << " arcsec (r=" << offset_arcsec
-        << " arcsec) -- applying correction";
+        << " arcsec, n=" << n
+        << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+        << " -- applying correction";
     logwrite( function, oss.str() );
 
     const double cmd_dra  = this->fineacquire_state.gain * med_dra;
