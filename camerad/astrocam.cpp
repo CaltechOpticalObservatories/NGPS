@@ -31,6 +31,7 @@ namespace AstroCam {
     // build JSON message with my telemetry
     jmessage_out[Key::SOURCE] = "camerad";
     jmessage_out[Key::Camerad::READY] = this->can_expose.load();
+    jmessage_out[Key::Camerad::SHUTTERTIME] = this->camera.shutter.get_duration();
 
     // publish JSON message
     try {

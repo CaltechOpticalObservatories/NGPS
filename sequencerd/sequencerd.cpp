@@ -131,11 +131,13 @@ int main(int argc, char **argv) {
   //
   if ( sequencerd.sequence.init_pubsub( { Topic::CAMERAD,
                                           Topic::ACAMD,
-                                          Topic::SLICECAMD } ) == ERROR ) {
+                                          Topic::SLICECAMD,
+                                          Topic::SLITD,
+                                          Topic::TCSD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }
-  sequencerd.sequence.seq_state_manager.set(Sequencer::SEQ_NOTREADY);
+  sequencerd.sequence.seq_state_manager.set_only({Sequencer::SEQ_NOTREADY});
 
   std::this_thread::sleep_for( std::chrono::milliseconds(100) );
   sequencerd.sequence.publish_snapshot();
@@ -222,14 +224,17 @@ int main(int argc, char **argv) {
 
   // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages
   //
-  Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
-  std::thread( std::ref(Sequencer::Server::async_main),
-               std::ref(sequencerd),
-               msg ).detach();
+/***
+ *Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
+ *std::thread( std::ref(Sequencer::Server::async_main),
+ *             std::ref(sequencerd),
+ *             msg ).detach();
+ ***/
 
   // Create my own asynchronous listener thread.
   // This thread allows the sequencer to listen for asynchronous messages.
   //
+  Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
   std::thread( std::ref( Sequencer::Sequence::dothread_sequencer_async_listener ), 
                std::ref( sequencerd.sequence),
                msg

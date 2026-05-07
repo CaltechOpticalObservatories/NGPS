@@ -22,6 +22,7 @@
 
 #include "logentry.h"
 #include "network.h"
+#include "message_keys.h"
 
 const long NOTHING = -1;
 const long NO_ERROR = 0;
@@ -369,6 +370,56 @@ namespace Common {
   };
 
 
+  /**************** Common::Broadcaster ***************************************/
+  /**
+   * @class   Broadcaster
+   * @brief   logs a narrative message and publishes it on Topic::BROADCAST
+   * @details Captures a reference to a publisher and the source daemon name
+   *          at construction time so that call sites need only supply the
+   *          caller function name and message (and severity, for emit).
+   *          The publisher reference is to the daemon's Common::PubSub, which
+   *          may be null at the time this Broadcaster is constructed and gets
+   *          populated later by init_pubsub.
+   *
+   */
+  class Broadcaster {
+    private:
+      const std::unique_ptr<Common::PubSub> &publisher;  ///< reference to owner's publisher
+      std::string source;                                ///< source daemon name
+
+    public:
+      Broadcaster( const std::unique_ptr<Common::PubSub> &publisher,
+                   std::string source )
+        : publisher(publisher), source(std::move(source)) { }
+
+      /**
+       * @brief  publish a NOTICE severity broadcast
+       */
+      inline void notice( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::NOTICE, message );
+      }
+
+      /**
+       * @brief  publish a WARNING severity broadcast
+       */
+      inline void warning( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::WARNING, message );
+      }
+
+      /**
+       * @brief  publish an ERROR severity broadcast
+       */
+      inline void error( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::ERROR, message );
+      }
+
+      void emit( const std::string &function,
+                 const std::string &severity,
+                 const std::string &message );
+  };
+  /**************** Common::Broadcaster ***************************************/
+
+
   void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
 
   /***** Common::extract_telemetry_value **************************************/
@@ -424,7 +475,8 @@ namespace Common {
       }
       else
       if constexpr ( std::is_same<T, int16_t>::value || std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ) {
-        if ( jvalue.type() == json::value_t::number_unsigned ) {
+        if ( jvalue.type() == json::value_t::number_integer ||
+             jvalue.type() == json::value_t::number_unsigned ) {
           value = jvalue.template get<T>();
         }
       }

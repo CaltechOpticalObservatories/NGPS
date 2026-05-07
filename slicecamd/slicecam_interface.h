@@ -81,16 +81,20 @@ namespace Slicecam {
    */
   struct FineAcqState {
     std::string which;
-    Point       aimpoint;           ///< 1-based pixel aim point
+    Point       aimpoint { NAN, NAN };  ///< 1-based pixel aim point; NAN until configured
     Rect        bg_region;          ///< background ROI (1-based)
     std::vector<double> dra_samp;   ///< dRA*cos(dec) samples, degrees
     std::vector<double> ddec_samp;  ///< dDEC samples, degrees
     int    max_samples  = 10;       ///< samples before evaluating a move
+    int    min_samples  = 3;        ///< minimum samples before scatter-gated early exit
+    double prec_arcsec  = 0.1;      ///< MAD scatter threshold per axis for early exit (arcsec)
     double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
     double gain         = 0.7;      ///< gain applied to commanded offset
     int    skip_frames  = 0;        ///< frames to skip after a telescope move
+    int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
 
-    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0; }
+    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0;
+                   consecutive_centroid_failures = 0; }
     bool is_valid() const noexcept {
       return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
     }
@@ -119,7 +123,13 @@ namespace Slicecam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      std::mutex acam_mtx;                 ///< guards waiters on acam_cv
+      std::condition_variable acam_cv;     ///< notified when cached ACAM state updates
+
       FineAcqState fineacquire_state;
+
+      std::string default_which;                    ///< configured default camera for fineacquire
+      Point       default_aimpoint { NAN, NAN };    ///< configured default aimpoint for fineacquire
 
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
@@ -139,6 +149,16 @@ namespace Slicecam {
       std::atomic<bool> is_fineacquire_running;  ///< set if fine target acquisition is running
       std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
+
+      std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
+
+      /// Max acceptable age (us) for cached ACAM status used by fineacquire.
+      static constexpr int64_t ACAM_STATUS_MAX_AGE_US = 10'000'000;
+
+      /// Max time (us) fineacquire() will wait for a fresh, guiding ACAM status before failing.
+      static constexpr int64_t ACAM_WAIT_TIMEOUT_US = 2'000'000;
+
+      bool is_acam_status_fresh() const;
 
       /** these are set by Interface::saveframes()
        */

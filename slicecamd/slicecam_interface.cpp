@@ -68,7 +68,7 @@ namespace Slicecam {
     else
 
     // not empty, stop or start is an error
-    if (action != "start" || tokens.size() < 2) {
+    if (action != "start") {
       logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
       retstring="invalid_argument";
       return ERROR;
@@ -90,28 +90,57 @@ namespace Slicecam {
       return ERROR;
     }
 
-    // ACAM must be guiding
-    if (!this->is_acam_guiding.load(std::memory_order_acquire)) {
-      logwrite(function, "ERROR ACAM is not guiding");
-      retstring="stopped";
+    // Wait briefly for ACAM status to be fresh and guiding. This absorbs the
+    // pub/sub propagation lag where sequencerd has seen the ACAM acquire
+    // publish but slicecamd's subscriber thread has not yet delivered it.
+    {
+    const auto wait_duration = std::chrono::microseconds( ACAM_WAIT_TIMEOUT_US );
+    std::unique_lock<std::mutex> lock(this->acam_mtx);
+    const bool ready = this->acam_cv.wait_for( lock, wait_duration, [this]() {
+      return this->is_acam_status_fresh() &&
+             this->is_acam_guiding.load(std::memory_order_relaxed);
+    });
+
+    if ( !ready ) {
+      if ( !this->is_acam_status_fresh() ) {
+        const int64_t age_ms = ( get_time_us() - this->last_acam_pubtime.load() ) / 1000;
+        message.str(""); message << "ERROR timed out waiting for fresh ACAM status (age="
+                                 << age_ms << " ms)";
+      }
+      else {
+        message.str(""); message << "ERROR timed out waiting for ACAM to guide";
+      }
+      logwrite( function, message.str() );
+      retstring = "stopped";
       return ERROR;
+    }
     }
 
     // <which> <x> <y> are optional but if specified then require all three
-    if (tokens.size() > 1 && tokens.size() != 4) {
-      logwrite(function, "ERROR ACAM is not guiding");
-      retstring="stopped";
+    if ( tokens.size() != 1 && tokens.size() != 4 ) {
+      logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
+      retstring="invalid_argument";
       return ERROR;
     }
-    else
-    // override the default camera and aimpoint if provided
-    if (tokens.size() > 1 && tokens.size() == 4) {
+
+    if ( tokens.size() == 1 ) {
+      // no which/aimpoint args so use defaults from config file
+      if ( this->default_which.empty() || !this->default_aimpoint.is_valid() ) {
+        logwrite(function, "ERROR fineacquire defaults not configured");
+        retstring="not_configured";
+        return ERROR;
+      }
+      this->fineacquire_state.which    = this->default_which;
+      this->fineacquire_state.aimpoint = this->default_aimpoint;
+    }
+    else {
+      // use the passed-in values
       try {
         const std::string which = tokens.at(1);
-        double x = std::stod(tokens.at(2));
-        double y = std::stod(tokens.at(3));
+        const double x = std::stod(tokens.at(2));
+        const double y = std::stod(tokens.at(3));
         if ( (which != "L" && which != "R") ||
-             std::isnan(x) || std::isnan(y) || x<0 || y<0) {
+             std::isnan(x) || std::isnan(y) || x<0 || y<0 ) {
           logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
           retstring="invalid_argument";
           return ERROR;
@@ -126,6 +155,12 @@ namespace Slicecam {
       }
     }
 
+    // log the effective camera and aimpoint for this invocation
+    message.str(""); message << "using camera=" << this->fineacquire_state.which
+                             << " aimpoint=(" << this->fineacquire_state.aimpoint.x
+                             << ", " << this->fineacquire_state.aimpoint.y << ")";
+    logwrite(function, message.str());
+
     // start the state machine
     this->fineacquire_state.reset();
     this->is_fineacquire_locked.store(false, std::memory_order_release);
@@ -134,9 +169,9 @@ namespace Slicecam {
     // publishes status on change only
     this->publish_status();
 
-    logwrite(function, "fine target acquisition enabled");
-
     retstring=is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+
+    logwrite(function, "fine target acquisition "+retstring);
 
     return NO_ERROR;
   }
@@ -197,9 +232,17 @@ namespace Slicecam {
                                    this->fineacquire_state.bg_region,
                                    this->fineacquire_state.aimpoint,
                                    centroid) != NO_ERROR ) {
-      logwrite(function, "WARNING: failed to find centroid, skipping frame");
+      const int max_failures = 3 * this->fineacquire_state.max_samples;
+      if ( ++this->fineacquire_state.consecutive_centroid_failures >= max_failures ) {
+        logwrite(function, "ERROR: too many consecutive centroid failures, stopping fine acquisition");
+        this->is_fineacquire_running.store( false, std::memory_order_release );
+        this->publish_status();
+      } else {
+        logwrite(function, "WARNING: failed to find centroid, skipping frame");
+      }
       return;
     }
+    this->fineacquire_state.consecutive_centroid_failures = 0;
 
     // convert centroid pixel -> sky using WCS from FITS header
     //
@@ -236,23 +279,44 @@ namespace Slicecam {
     this->fineacquire_state.dra_samp.push_back( offsets.first );
     this->fineacquire_state.ddec_samp.push_back( offsets.second );
 
-    // wait until there are enough samples to evaluate a move
-    //
+    const int n           = static_cast<int>( this->fineacquire_state.dra_samp.size() );
     const int max_samples = this->fineacquire_state.max_samples;
-    if ( static_cast<int>(this->fineacquire_state.dra_samp.size()) < max_samples ) {
-      return;
-    }
+    const int min_samples = this->fineacquire_state.min_samples;
 
-    // calculate median from accumulated samples
+    // wait for the minimum number of samples before evaluating anything
     //
-    std::vector<double> dra_sorted = this->fineacquire_state.dra_samp;
+    if ( n < min_samples ) return;
+
+    // compute running median
+    //
+    std::vector<double> dra_sorted  = this->fineacquire_state.dra_samp;
     std::vector<double> ddec_sorted = this->fineacquire_state.ddec_samp;
 
     std::sort( dra_sorted.begin(),  dra_sorted.end() );
     std::sort( ddec_sorted.begin(), ddec_sorted.end() );
 
-    const double med_dra  = dra_sorted[ max_samples / 2 ];
-    const double med_ddec = ddec_sorted[ max_samples / 2 ];
+    const double med_dra  = dra_sorted[ n / 2 ];
+    const double med_ddec = ddec_sorted[ n / 2 ];
+
+    // compute MAD-derived scatter per axis to gate early exit
+    //
+    std::vector<double> abs_dra( n ), abs_ddec( n );
+    for ( int i = 0; i < n; i++ ) {
+      abs_dra[i]  = std::abs( this->fineacquire_state.dra_samp[i]  - med_dra  );
+      abs_ddec[i] = std::abs( this->fineacquire_state.ddec_samp[i] - med_ddec );
+    }
+    std::sort( abs_dra.begin(),  abs_dra.end() );
+    std::sort( abs_ddec.begin(), abs_ddec.end() );
+
+    const double sig_dra  = 1.4826 * abs_dra[ n / 2 ]  * 3600.0;  // arcsec
+    const double sig_ddec = 1.4826 * abs_ddec[ n / 2 ] * 3600.0;  // arcsec
+
+    const double prec      = this->fineacquire_state.prec_arcsec;
+    const bool   scatter_ok = ( sig_dra <= prec && sig_ddec <= prec );
+
+    // keep accumulating if scatter is still too high and max not reached
+    //
+    if ( !scatter_ok && n < max_samples ) return;
 
     // convert to arcsec only for the threshold comparison and logging
     //
@@ -275,7 +339,9 @@ namespace Slicecam {
     oss << "offset dRA=" << med_dra * 3600.0
         << " dDEC=" << med_ddec * 3600.0
         << " arcsec (r=" << offset_arcsec
-        << " arcsec) -- applying correction";
+        << " arcsec, n=" << n
+        << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+        << " -- applying correction";
     logwrite( function, oss.str() );
 
     const double cmd_dra  = this->fineacquire_state.gain * med_dra;
@@ -421,8 +487,32 @@ namespace Slicecam {
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+
+    // acam's publish time
+    int64_t pubtime=0;
+    Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
+    this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
+
+    // wake any thread waiting on ACAM state (e.g. fineacquire)
+    std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->acam_cv.notify_all();
   }
   /***** Slicecam::Interface::handletopic_acamd *******************************/
+
+
+  /***** Slicecam::Interface::is_acam_status_fresh ****************************/
+  /**
+   * @brief      check whether cached ACAM status is fresh enough to trust
+   * @return     true if cached status has been received at least once and is
+   *             within ACAM_STATUS_MAX_AGE_US of the current time
+   *
+   */
+  bool Interface::is_acam_status_fresh() const {
+    const int64_t last = this->last_acam_pubtime.load();
+    if ( last == 0 ) return false;
+    return ( get_time_us() - last ) <= ACAM_STATUS_MAX_AGE_US;
+  }
+  /***** Slicecam::Interface::is_acam_status_fresh ****************************/
 
 
   /***** Slicecam::Interface::handletopic_slitd *******************************/
@@ -462,16 +552,16 @@ namespace Slicecam {
     //
     Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
     Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
-    Common::extract_telemetry_value( jmessage, "CASANGLE",   telem.angle_scope );
-    Common::extract_telemetry_value( jmessage, "TELRA",      telem.ra_scope_hms );
-    Common::extract_telemetry_value( jmessage, "TELDEC",     telem.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, telem.angle_scope );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    telem.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   telem.dec_scope_dms );
     Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
     Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
     Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
     Common::extract_telemetry_value( jmessage, "DECLOFFS",   telem.offsetdec );
-    Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AZ,       telem.az );
     Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
-    Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  telem.airmass );
   }
   /***** Slicecam::Interface::handletopic_tcsd ********************************/
 
@@ -762,6 +852,13 @@ namespace Slicecam {
           logwrite(function, "ERROR invalid FINE_ACQUIRE_AIMPOINT='"+config.arg[entry]+"' expected <which> <x> <y>");
           return ERROR;
         }
+        if ( which != "L" && which != "R" ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_AIMPOINT which=\"" << which
+                                   << "\" : expected { L R }";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        // store in the class for validation
         this->fineacquire_state.which    = which;
         this->fineacquire_state.aimpoint = { x, y };
       }
@@ -780,7 +877,12 @@ namespace Slicecam {
 
     // FINE_ACQUIRE parameters must have been configured properly
     //
-    if (!this->fineacquire_state.is_valid()) {
+    if (this->fineacquire_state.is_valid()) {
+      // if so then save these as the defaults
+      this->default_which    = this->fineacquire_state.which;
+      this->default_aimpoint = this->fineacquire_state.aimpoint;
+    }
+    else {
       logwrite(function, "ERROR bad or missing FINE_ACQUIRE configuration");
       return ERROR;
     }

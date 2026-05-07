@@ -668,6 +668,13 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       }
       else
 
+      // publishstate
+      //
+      if ( cmd.compare( TCSD_PUBLISHSTATE ) == 0 ) {
+                      ret = this->interface.publish_state( args, retstring );
+      }
+      else
+
       // llist
       //
       if ( cmd.compare( TCSD_LLIST ) == 0 ) {
