@@ -2066,6 +2066,16 @@ namespace Sequencer {
       this->broadcast.notice( function, message.str() );
     }
 
+    // Before moving the telescope, disable guiding.
+    // Not a show-stopper if there's an error here so warn only.
+    //
+    if ( this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping fine acquisition");
+    }
+    if ( this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping guiding");
+    }
+
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
     // so convert that as it's being sent here.

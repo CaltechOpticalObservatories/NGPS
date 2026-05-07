@@ -596,7 +596,9 @@ namespace Sequencer {
        * these are in sequence_acquisition.cpp
        */
       long do_acam_acquire();
+      long do_acam_stop();
       long do_slicecam_fineacquire();
+      long do_slicecam_stop();
 
 
       long acam_init();                                        ///< initializes connection to acamd
