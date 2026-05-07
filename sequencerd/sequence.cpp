@@ -2400,11 +2400,11 @@ namespace Sequencer {
 
     // aborts incomplete acquisitions in progress
     //
-    if (this->seq_state_manager.is_set(Sequencer::SEQ_WAIT_FINEACQUIRE) &&
+    if (this->seq_wait_state_manager.is_set(Sequencer::SEQ_WAIT_FINEACQUIRE) &&
         this->do_slicecam_stop() != NO_ERROR ) {
       this->broadcast.warning(function, "stopping fine acquisition");
     }
-    if (this->seq_state_manager.is_set(Sequencer::SEQ_WAIT_ACAM_ACQUIRE) &&
+    if (this->seq_wait_state_manager.is_set(Sequencer::SEQ_WAIT_ACAM_ACQUIRE) &&
         this->do_acam_stop() != NO_ERROR ) {
       this->broadcast.warning(function, "stopping guiding");
     }
