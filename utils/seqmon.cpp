@@ -340,7 +340,7 @@ namespace {
       auto j = nlohmann::json::parse( payload );
       std::string severity = j.value( Key::Broadcast::SEVERITY, std::string("") );
       std::string message  = j.value( Key::Broadcast::MESSAGE,  std::string("(empty)") );
-      std::string source   = j.value( Key::SOURCE,              std::string("unknown );
+      std::string source   = j.value( Key::SOURCE,              std::string("unknown") );
       // Park the cursor at the bottom of the scroll region before emitting the
       // newline so the message lands inside the region and the header above
       // it is not scrolled.
