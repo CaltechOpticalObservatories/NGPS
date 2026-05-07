@@ -91,14 +91,6 @@ namespace Sequencer {
   long Sequence::do_acam_stop() {
     const std::string function("Sequencer::Sequence::do_acam_stop");
 
-    // nothing to do
-    if (!this->is_acam_guiding.load()) return NO_ERROR;
-
-    if ( wait_state_manager.is_set( Sequencer::SEQ_WAIT_ACAM_ACQUIRE ) ) {
-      logwrite( function, "ERROR acquisition still in progress" );
-      return ERROR;
-    }
-
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
 
     // any acamd status newer than this timestamp is considered fresh
@@ -203,14 +195,6 @@ namespace Sequencer {
    */
   long Sequence::do_slicecam_stop() {
     const std::string function("Sequencer::Sequence::do_slicecam_stop");
-
-    // nothing to do
-    if (!this->is_fineacquire_locked.load()) return NO_ERROR;
-
-    if ( wait_state_manager.is_set( Sequencer::SEQ_WAIT_FINEACQUIRE ) ) {
-      logwrite( function, "ERROR fine acquisition still in progress" );
-      return ERROR;
-    }
 
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
 

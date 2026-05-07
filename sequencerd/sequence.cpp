@@ -2398,6 +2398,17 @@ namespace Sequencer {
       logwrite( function, "ERROR stop_exposure exception: "+std::string(e.what()) );
     }
 
+    // aborts incomplete acquisitions in progress
+    //
+    if (this->seq_state_manager.is_set(Sequencer::SEQ_WAIT_FINEACQUIRE) &&
+        this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping fine acquisition");
+    }
+    if (this->seq_state_manager.is_set(Sequencer::SEQ_WAIT_ACAM_ACQUIRE) &&
+        this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping guiding");
+    }
+
     // set the cancel flag to stop any cancel-able tasks
     //
     this->cancel_flag.store(true);
