@@ -29,7 +29,7 @@ namespace AstroCam {
     nlohmann::json jmessage_out;
 
     // build JSON message with my telemetry
-    jmessage_out[Key::SOURCE] = "camerad";
+    jmessage_out[Key::SOURCE] = Topic::CAMERAD;
     jmessage_out[Key::Camerad::READY] = this->can_expose.load();
     jmessage_out[Key::Camerad::SHUTTERTIME] = this->camera.shutter.get_duration();
 
@@ -49,6 +49,21 @@ namespace AstroCam {
     }
   }
   /**** AstroCam::Interface::publish_snapshot *********************************/
+
+
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      what to do when the topic is Topic::SNAPSHOT
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_snapshot();
+  }
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
 
 
   long NewAstroCam::new_expose( std::string nseq_in ) {

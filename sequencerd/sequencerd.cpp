@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
   }
   sequencerd.sequence.seq_state_manager.set_only({Sequencer::SEQ_NOTREADY});
 
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  std::this_thread::sleep_for( std::chrono::milliseconds(200) );
   sequencerd.sequence.publish_snapshot();
 
   // This will pre-thread N_THREADS threads.

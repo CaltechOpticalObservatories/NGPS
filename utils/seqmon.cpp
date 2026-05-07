@@ -338,9 +338,9 @@ namespace {
   void handle_broadcast( const std::string &payload ) {
     try {
       auto j = nlohmann::json::parse( payload );
-      std::string severity = j.value( Key::Broadcast::SEVERITY, std::string("NOTICE") );
-      std::string message  = j.value( Key::Broadcast::MESSAGE,  std::string("") );
-      std::string source   = j.value( Key::SOURCE,              std::string("?") );
+      std::string severity = j.value( Key::Broadcast::SEVERITY, std::string("") );
+      std::string message  = j.value( Key::Broadcast::MESSAGE,  std::string("(empty)") );
+      std::string source   = j.value( Key::SOURCE,              std::string("unknown );
       // Park the cursor at the bottom of the scroll region before emitting the
       // newline so the message lands inside the region and the header above
       // it is not scrolled.
@@ -349,7 +349,8 @@ namespace {
                 << color_for_severity(severity)
                 << "[" << timestamp() << "] "
                 << "[" << source << "] "
-                << severity << ": " << message
+                << (severity != Severity::NOTICE ? severity+": " : "")
+                << message
                 << ANSI_RESET << "\n"
                 << std::flush;
     }
