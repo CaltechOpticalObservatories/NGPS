@@ -28,6 +28,7 @@ export RUBIN_SIM_DATA_DIR="/data/rubin_sim/"
 
 #alias ngps-plan="/usr/local/palomar/deployment/NGPS_GUI/ngpsgui.sh PLAN"
 alias sourcemacro="source ~/.bashrc"
+alias gecko="/home/observer/gecko/gecko/gecko"
 
 export XPA_NSUSERS="*"  # Allow this user's XPA to access ds9 windows from any other user
 
