@@ -10,6 +10,7 @@
 
 #include "slicecam_interface.h"
 #include "slicecam_math.h"
+#include "fits_header_defs.h"
 
 namespace Slicecam {
 
@@ -534,11 +535,13 @@ namespace Slicecam {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
     snapshot_status[Topic::SLITD]=true;
     }
-    Common::extract_telemetry_value( jmessage, "SLITO",  telem.slitoffset );
-    Common::extract_telemetry_value( jmessage, "SLITW",  telem.slitwidth );
+    Common::extract_telemetry_value( jmessage, Key::Slitd::SLITO,  telem.slitoffset );
+    Common::extract_telemetry_value( jmessage, Key::Slitd::SLITW,  telem.slitwidth );
 
-    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
-    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
+    for ( const auto &keyinfo : FitsHeaderKeys::SlitdTelemKeys ) {
+      this->telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword,
+                                   keyinfo.comment, keyinfo.type, false);
+    }
   }
   /***** Slicecam::Interface::handletopic_slitd *******************************/
 

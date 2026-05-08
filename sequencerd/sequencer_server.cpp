@@ -27,7 +27,6 @@ namespace Sequencer {
       case SIGTERM:
       case SIGINT:
         logwrite(function, "received termination signal");
-        Server::instance->sequence.broadcast.notice(function, message.str());
         Server::instance->exit_cleanly();                      // shutdown the daemon
         break;
       case SIGHUP:  // TODO reconfigure?
@@ -54,6 +53,7 @@ namespace Sequencer {
   void Server::exit_cleanly(void) {
     std::string function = "Sequencer::Server::exit_cleanly";
     logwrite( function, "exiting" );
+    Server::instance->sequence.broadcast.notice(function, "sequencerd terminated");
 
     exit(EXIT_SUCCESS);
   }
@@ -1534,7 +1534,7 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_MODEXPTIME ) == 0 ) {
                       Tokenize( args, tokens, " " );
                       if ( tokens.size() != 1 ) {
-                        this->sequence.broadcast.error( function, "expected MODEXPTIME <exptime>" );
+                        logwrite( function, "ERROR expected MODEXPTIME <exptime>" );
                         ret = ERROR;
                       }
                       else {
@@ -1543,13 +1543,13 @@ namespace Sequencer {
                         double exptime_req=0;
                         try { exptime_req = std::stod( tokens.at(0) ); }
                         catch( std::out_of_range &e ) {
-                          message.str(""); message << "out of range parsing args " << args << ": " << e.what();
-                          this->sequence.broadcast.error( function, message.str() );
+                          message.str(""); message << "ERROR out of range parsing args " << args << ": " << e.what();
+                          logwrite( function, message.str() );
                           ret = ERROR;
                         }
                         catch( std::invalid_argument &e ) {
-                          message.str(""); message << "invalid argument parsing args " << args << ": " << e.what();
-                          this->sequence.broadcast.error( function, message.str() );
+                          message.str(""); message << "ERROR invalid argument parsing args " << args << ": " << e.what();
+                          logwrite( function, message.str() );
                           ret = ERROR;
                         }
 
@@ -1589,8 +1589,8 @@ namespace Sequencer {
       // Unknown commands generate an error
       //
       else {
-        message.str(""); message << "unknown command: " << cmd;
-        this->sequence.broadcast.error( function, message.str() );
+        message.str(""); message << "ERROR unknown command: " << cmd;
+        logwrite( function, message.str() );
         ret = ERROR;
       }
 

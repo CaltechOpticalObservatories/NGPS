@@ -72,7 +72,8 @@ namespace TCS {
     }
 
     // broadcast motion status if it changed
-    if (motion != this->last_published_motion) {
+    if (!motion.empty() &&
+        motion != this->last_published_motion) {
       this->broadcast.notice("TCS::Interface::publish_snapshot", "telescope "+motion);
       this->last_published_motion = motion;
     }
@@ -242,7 +243,7 @@ namespace TCS {
    */
   long Interface::llist( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::llist";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
 
     // Help
     //
@@ -265,9 +266,6 @@ namespace TCS {
 
     retstring = message.str();
 
-    asyncmsg << "TCSD:llist:" << retstring;
-    this->async.enqueue( asyncmsg.str() );
-
     return NO_ERROR;
   }
   /***** TCS::Interface::llist ************************************************/
@@ -282,7 +280,7 @@ namespace TCS {
    */
   long Interface::open( std::string arg, std::string &retstring ) {
     const std::string function("TCS::Interface::open");
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -417,7 +415,7 @@ namespace TCS {
    */
   long Interface::isopen( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::isopen";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
 
     // Help
     //
@@ -444,12 +442,6 @@ namespace TCS {
     retstring = ( this->tcs_info.isopen ? "true" : "false" );  // return string is the state
     }
 
-    asyncmsg.str(""); asyncmsg << "TCSD:open:" << retstring;
-    this->async.enqueue( asyncmsg.str() );              // broadcast the state
-
-    asyncmsg.str(""); asyncmsg << "TCSD:name:" << ( ! _name.empty() ? _name : "offline" );
-    this->async.enqueue( asyncmsg.str() );              // broadcast the name
-
     return NO_ERROR;
   }
   /***** TCS::Interface::isopen ***********************************************/
@@ -463,7 +455,7 @@ namespace TCS {
    */
   long Interface::close( ) {
     std::string function = "TCS::Interface::close";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     for ( const auto &[key,tcs] : this->tcsmap ) {
@@ -513,13 +505,10 @@ namespace TCS {
           logwrite( function, "connection open to "+tcs->getname() );
         }
         retstring = tcs->getname();      // Found the connected TCS
-        this->async.enqueue( "TCSD:name:"+retstring );
         return NO_ERROR;
       }
     }
     retstring="offline";
-
-    this->async.enqueue( "TCSD:name:offline" );
 
     return NO_ERROR;
   }
@@ -537,7 +526,7 @@ namespace TCS {
    */
   long Interface::get_weather_coords( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_weather_coords";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     std::string weather;
     long error = NO_ERROR;
 
@@ -594,9 +583,6 @@ namespace TCS {
 
     retstring = message.str();
 
-    asyncmsg << "TCSD:weathercoords:" << ( error==NO_ERROR ? message.str() : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_weather_coords ***********************************/
@@ -614,7 +600,7 @@ namespace TCS {
    */
   long Interface::get_coords( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_coords";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -689,9 +675,6 @@ namespace TCS {
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:coords:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_coords *******************************************/
@@ -709,7 +692,7 @@ namespace TCS {
    */
   long Interface::get_cass( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_cass";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     std::stringstream reply;
     long error = NO_ERROR;
 
@@ -786,9 +769,6 @@ namespace TCS {
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:cassangle:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_cass *********************************************/
@@ -806,7 +786,7 @@ namespace TCS {
    */
   long Interface::get_dome( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_dome";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     std::string weather;
     long error = NO_ERROR;
 
@@ -858,9 +838,6 @@ namespace TCS {
 
     if ( !retstring.empty() ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:dome:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_dome *********************************************/
@@ -877,7 +854,7 @@ namespace TCS {
    */
   long Interface::set_focus( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::set_focus";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -957,7 +934,7 @@ namespace TCS {
    */
   long Interface::get_focus( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_focus";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     std::stringstream reply;
     long error = NO_ERROR;
 
@@ -1042,9 +1019,6 @@ namespace TCS {
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
-    asyncmsg << "TCSD:focus:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_focus ********************************************/
@@ -1081,9 +1055,6 @@ namespace TCS {
       retstring = message.str();
       logwrite( function, retstring );
     }
-
-    message.str(""); message << "TCSD:offsets:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( message.str() );
 
     return NO_ERROR;
   }
@@ -1215,10 +1186,6 @@ namespace TCS {
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
 
-    std::stringstream asyncmsg;
-    asyncmsg << "TCSD:parallactic:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return NO_ERROR;
   }
   /***** TCS::Interface::get_pa ***********************************************/
@@ -1235,7 +1202,7 @@ namespace TCS {
    */
   long Interface::pt_offsetrate( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::pt_offsetrate";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -1303,7 +1270,7 @@ namespace TCS {
    */
   long Interface::get_motion( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_motion";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -1322,9 +1289,6 @@ namespace TCS {
       error = ERROR;
     }
 
-    asyncmsg << "TCSD:motion:" << ( !retstring.empty() ? retstring : "ERROR" );
-    this->async.enqueue( asyncmsg.str() );
-
     return error;
   }
   /***** TCS::Interface::get_motion *******************************************/
@@ -1341,7 +1305,7 @@ namespace TCS {
    */
   long Interface::ringgo( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::ringgo";
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
     long error = ERROR;
 
     double angle = NAN;
@@ -1424,7 +1388,7 @@ namespace TCS {
   long Interface::coords( std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::coords";
     std::string retcode;
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
 
     // Help
     //
@@ -1452,9 +1416,6 @@ namespace TCS {
     cmd << "COORDS " << args;
 
     long error = this->send_command( cmd.str(), retstring, TCS::FAST_RESPONSE );
-
-    asyncmsg << "TCSD:coords:" << ( error == ERROR ? "ERROR" : retstring );
-    this->async.enqueue( asyncmsg.str() );
 
     return error;
   }
@@ -1563,7 +1524,7 @@ namespace TCS {
   long Interface::zero_offsets( const std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::zero_offsets";
     std::string retcode;
-    std::stringstream message, asyncmsg;
+    std::stringstream message;
 
     // Help
     //

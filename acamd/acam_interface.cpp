@@ -9,6 +9,7 @@
  */
 
 #include "acam_interface.h"
+#include "fits_header_defs.h"
 
 namespace Acam {
 
@@ -1655,8 +1656,10 @@ namespace Acam {
    *
    */
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
-    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
-    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
+    for ( const auto &keyinfo : FitsHeaderKeys::SlitdTelemKeys ) {
+      telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword,
+                             keyinfo.comment, keyinfo.type, false);
+    }
   }
   /***** Acam::Interface::handletopic_slitd ***********************************/
 
