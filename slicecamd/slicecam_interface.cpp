@@ -193,8 +193,8 @@ namespace Slicecam {
 
     // skip frames if we are waiting for the telescope to settle after a move
     //
-    if (this->fineacquire_state.skip_frames > 0) {
-      this->fineacquire_state.skip_frames--;
+    if (this->fineacquire_state.settle_frames > 0) {
+      this->fineacquire_state.settle_frames--;
       return;
     }
 
@@ -333,6 +333,12 @@ namespace Slicecam {
       return;
     }
 
+    // select gain: use gain_large when offset is well above the goal threshold
+    //
+    const double effective_gain = ( offset_arcsec > this->fineacquire_state.gain_threshold_arcsec )
+                                  ? this->fineacquire_state.gain_large
+                                  : this->fineacquire_state.gain;
+
     // send gain-weighted offsets to acam
     //
     std::ostringstream oss;
@@ -341,11 +347,12 @@ namespace Slicecam {
         << " arcsec (r=" << offset_arcsec
         << " arcsec, n=" << n
         << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+        << " gain=" << effective_gain
         << " -- applying correction";
     logwrite( function, oss.str() );
 
-    const double cmd_dra  = this->fineacquire_state.gain * med_dra;
-    const double cmd_ddec = this->fineacquire_state.gain * med_ddec;
+    const double cmd_dra  = effective_gain * med_dra;
+    const double cmd_ddec = effective_gain * med_ddec;
 
     if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
       logwrite( function, "ERROR failed to send offset to ACAM" );
@@ -354,9 +361,9 @@ namespace Slicecam {
       return;
     }
 
-    // reset samples and skip a couple of frames for telescope settling
+    // reset samples and discard settle_count frames for telescope settling
     this->fineacquire_state.reset();
-    this->fineacquire_state.skip_frames = 2;
+    this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
   }
   /***** Slicecam::Interface::do_fineacquire **********************************/
 
@@ -871,6 +878,71 @@ namespace Slicecam {
           return ERROR;
         }
         this->fineacquire_state.bg_region = { x1, x2, y1, y2 };
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_MIN_SAMPLES" ) {
+        try { this->fineacquire_state.min_samples = std::stoi( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_MIN_SAMPLES "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_SETTLE_FRAMES" ) {
+        try { this->fineacquire_state.settle_count = std::stoi( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_FRAMES "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_GAIN" ) {
+        try { this->fineacquire_state.gain = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_GAIN "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_GAIN_LARGE" ) {
+        try { this->fineacquire_state.gain_large = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_GAIN_LARGE "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_GAIN_THRESHOLD" ) {
+        try { this->fineacquire_state.gain_threshold_arcsec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_GAIN_THRESHOLD "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
       }
 
     }

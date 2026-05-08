@@ -76,8 +76,8 @@ namespace Slicecam {
    *   goal_arcsec - convergence threshold; loop stops when median offset
    *                 magnitude falls below this value
    *   gain        - fraction of the median offset commanded each cycle (0..1)
-   *   skip_frames - counts down frames to discard while telescope settles
-   *                 after a commanded move
+   *   settle_count  - configured frames to discard after each commanded move
+   *   settle_frames - runtime countdown; decremented to zero before resuming
    */
   struct FineAcqState {
     std::string which;
@@ -89,11 +89,14 @@ namespace Slicecam {
     int    min_samples  = 3;        ///< minimum samples before scatter-gated early exit
     double prec_arcsec  = 0.1;      ///< MAD scatter threshold per axis for early exit (arcsec)
     double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
-    double gain         = 0.7;      ///< gain applied to commanded offset
-    int    skip_frames  = 0;        ///< frames to skip after a telescope move
+    double gain         = 0.7;      ///< gain applied when offset <= gain_threshold_arcsec
+    double gain_large   = 1.0;      ///< gain applied when offset > gain_threshold_arcsec
+    double gain_threshold_arcsec = 2.0; ///< offset above which gain_large is used
+    int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
+    int    settle_count  = 2;       ///< configured: frames to discard after each move
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
 
-    void reset() { dra_samp.clear(); ddec_samp.clear(); skip_frames = 0;
+    void reset() { dra_samp.clear(); ddec_samp.clear(); settle_frames = 0;
                    consecutive_centroid_failures = 0; }
     bool is_valid() const noexcept {
       return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
