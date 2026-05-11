@@ -87,8 +87,8 @@ namespace Sequencer {
    */
   void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
     // updates my internal state whether fineacquire is locked
-    bool fineacquirelocked;
-    Common::extract_telemetry_value( jmessage, Key::Slicecamd::FINEACQUIRE_LOCKED, fineacquirelocked );
+    if ( !jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) return;
+    bool fineacquirelocked = jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>();
     this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
     this->fineacquire_cv.notify_all();
@@ -157,8 +157,10 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::publish_seqstate ********************************/
   /**
-   * @brief      publishes sequencer state with topic "seq_seqstate"
-   * @details    seqstate is a single string
+   * @brief      publishes sequencer state under Topic::SEQ_SEQSTATE
+   * @details    The payload carries the sequencer state (Key::Sequencer::SEQSTATE)
+   *             plus Key::Sequencer::SHOULD_FINEACQUIRE, which is a user-settable
+   *             sequencer config and so rides along on this topic.
    *
    */
   void Sequence::publish_seqstate() {
@@ -169,6 +171,9 @@ namespace Sequencer {
     std::string seqstate( this->seq_state_manager.get_set_states() );
     rtrim( seqstate );
     jmessage_out[Key::Sequencer::SEQSTATE] = seqstate;
+
+    // user-settable: should automatic fine acquisition run?
+    jmessage_out[Key::Sequencer::SHOULD_FINEACQUIRE] = this->should_fineacquire.load();
 
     try {
       this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
@@ -3872,7 +3877,9 @@ namespace Sequencer {
       retstring.append( "   no arg returns state only\n" );
       return HELP;
     }
-    else
+
+    const bool prev = this->should_fineacquire.load();
+
     if (args=="enable") this->should_fineacquire.store(true);
     else
     if (args=="disable") this->should_fineacquire.store(false);
@@ -3884,6 +3891,11 @@ namespace Sequencer {
     }
 
     retstring = this->should_fineacquire.load() ? "enabled" : "disabled";
+
+    // publish on change
+    if ( this->should_fineacquire.load() != prev ) {
+      this->publish_seqstate();
+    }
 
     return NO_ERROR;
   }
