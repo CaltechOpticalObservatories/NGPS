@@ -2423,6 +2423,10 @@ namespace Sequencer {
     //
     this->cancel_flag.store(true);
     this->cv.notify_all();
+    // Wake threads blocked on subsystem CVs so they can check cancel_flag.
+    { std::lock_guard<std::mutex> lock(this->acam_mtx);        this->acam_cv.notify_all();        }
+    { std::lock_guard<std::mutex> lock(this->fineacquire_mtx); this->fineacquire_cv.notify_all(); }
+    { std::lock_guard<std::mutex> lock(this->camerad_mtx);     this->camerad_cv.notify_all();     }
 
     // drop into do-one to prevent auto increment to next target
     //
