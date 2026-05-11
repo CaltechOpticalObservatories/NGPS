@@ -59,7 +59,8 @@ namespace Key {
   }
 
   namespace Sequencer {
-    inline const std::string SEQSTATE = "seqstate";
+    inline const std::string SEQSTATE           = "seqstate";
+    inline const std::string SHOULD_FINEACQUIRE = "should_fineacquire";
   }
 
   namespace Camerad {
