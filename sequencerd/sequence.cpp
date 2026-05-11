@@ -583,8 +583,7 @@ namespace Sequencer {
         this->dotype( "ONE" );                         // single-target mode must set dotype=ONE
       }
 
-      message.str(""); message << "NOTICE: " << targetstatus;
-      this->broadcast.notice(function, message.str());
+      logwrite(function, "targetstatus: "+targetstatus);
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                      // target found, get the threads going
 
@@ -669,11 +668,17 @@ namespace Sequencer {
       //
       for ( auto &[thr, future] : worker_futures) {
         try {
-          error |= future.get(); // wait for this worker to finish
-          logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+          long worker_error = future.get(); // wait for this worker to finish
+          error |= worker_error;
+          if ( worker_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+          }
+          else {
+            this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+          }
         }
         catch (const std::exception& e) {
-          logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" : "+std::string(e.what()) );
           return;
         }
       }
@@ -886,14 +891,14 @@ namespace Sequencer {
     if (!activechans.str().empty()) {
       std::string cmd = CAMERAD_ACTIVATE + activechans.str();
       if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->broadcast.error( function, "sending \""+cmd+"\": "+reply);
+        logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
         throw std::runtime_error("camera returned "+reply);
       }
     }
     if (!deactivechans.str().empty()) {
       std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
       if (this->camerad.send(cmd, reply)!=NO_ERROR) {
-        this->broadcast.error( function, "sending \""+cmd+"\": "+reply);
+        logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
         throw std::runtime_error("camera returned "+reply);
       }
     }
@@ -906,7 +911,7 @@ namespace Sequencer {
     long exptime_msec = (long)( this->target.exptime_req * 1000 );
     camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->broadcast.error( function, "sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
 
@@ -914,12 +919,12 @@ namespace Sequencer {
     //
     camcmd.str(""); camcmd << CAMERAD_BIN << " spat " << this->target.binspat;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->broadcast.error( function, "sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
     camcmd.str(""); camcmd << CAMERAD_BIN << " spec " << this->target.binspect;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->broadcast.error( function, "sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
 
@@ -978,7 +983,7 @@ namespace Sequencer {
     this->broadcast.notice(function, "moving slit to "+modestr+" position");
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-      this->broadcast.error( function, "setting slit" );
+      logwrite( function, "ERROR setting slit" );
       this->thread_error_manager.set( THR_SLIT_SET );
       throw std::runtime_error("slit returned: "+reply);
     }
@@ -1004,7 +1009,7 @@ namespace Sequencer {
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
     if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing power control" );
+      logwrite( function, "ERROR initializing power control" );
       throw std::runtime_error("could not initialize power control");
     }
 
@@ -1055,13 +1060,13 @@ namespace Sequencer {
     this->thread_error_manager.set( THR_SLIT_INIT );       // assume the worst, clear on success
 
     if ( this->set_power_switch(ON, POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering slit hardware" );
+      logwrite( function, "ERROR powering slit hardware" );
       throw std::runtime_error("could not power slit hardware");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->slitd, was_opened) != NO_ERROR ) {
-      this->broadcast.error( function, "connecting to slit" );
+      logwrite( function, "ERROR connecting to slit" );
       throw std::runtime_error("could not open connection to slit hardware");
     }
 
@@ -1070,7 +1075,7 @@ namespace Sequencer {
     bool ishomed=false;
     std::string reply;
     if ( this->slitd.command( SLITD_ISHOME, reply ) ) {
-      this->broadcast.error( function, "communicating with slit hardware" );
+      logwrite( function, "ERROR communicating with slit hardware" );
       throw std::runtime_error("could not communicate with slit hardware: "+reply);
     }
     this->parse_state( function, reply, ishomed );
@@ -1080,7 +1085,7 @@ namespace Sequencer {
     if ( !ishomed ) {
       logwrite( function, "sending home command" );
       if ( this->slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT ) != NO_ERROR ) {
-        this->broadcast.error( function, "communicating with slit hardware" );
+        logwrite( function, "ERROR communicating with slit hardware" );
         throw std::runtime_error("could not home slit hardware: "+reply);
       }
     }
@@ -1090,7 +1095,7 @@ namespace Sequencer {
     if ( was_opened && !this->config_init["SLIT"].empty() ) {
       std::string cmd = SLITD_SET+" "+this->config_init["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-        this->broadcast.error( function, "sending \""+cmd+"\" to slit" );
+        logwrite( function, "ERROR sending \""+cmd+"\" to slit" );
         throw std::runtime_error("slit "+cmd+" returned: "+reply);
       }
     }
@@ -1144,7 +1149,7 @@ namespace Sequencer {
     if (error==NO_ERROR && !this->config_shutdown["SLIT"].empty() ) {
       std::string cmd = SLITD_SET+" "+this->config_shutdown["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-        this->broadcast.error( function, "sending \""+cmd+"\" to slit" );
+        logwrite( function, "ERROR sending \""+cmd+"\" to slit" );
         throw std::runtime_error(cmd+" returned: "+reply);
       }
     }
@@ -1154,7 +1159,7 @@ namespace Sequencer {
     logwrite( function, "closing slit hardware" );
     error = this->slitd.command( SLITD_CLOSE, reply );
     if ( error != NO_ERROR ) {
-      this->broadcast.error( function, "closing connection to slit hardware" );
+      logwrite( function, "ERROR closing connection to slit hardware" );
       throw std::runtime_error("closing slit connection returned: "+reply);
     }
 
@@ -1191,14 +1196,14 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_SLICECAM, std::chrono::seconds(10)) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing slicecam control" );
+      logwrite( function, "ERROR initializing slicecam control" );
       throw std::runtime_error("could not power slicecam hardware");
     }
 
     // open connection is all that is needed, slicecamd takes care of everything
     //
     if ( this->open_hardware(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
-      this->broadcast.error( function, "starting slicecam" );
+      logwrite( function, "ERROR starting slicecam" );
       throw SlicecamException("could not start slicecam");
     }
 
@@ -1231,7 +1236,7 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_ACAM, std::chrono::seconds(10)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering acam hardware" );
+      logwrite( function, "ERROR powering acam hardware" );
       throw std::runtime_error("could not power acam hardware");
     }
 
@@ -1239,7 +1244,7 @@ namespace Sequencer {
     //
     bool was_opened=false;
     if ( this->open_hardware(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT, was_opened) != NO_ERROR ) {
-      this->broadcast.error( function, "opening acam camera" );
+      logwrite( function, "ERROR opening acam camera" );
       throw AcamException(ErrorCode::ERROR_ACAM_CAMERA, "could not open acam camera");
     }
 
@@ -1250,14 +1255,14 @@ namespace Sequencer {
       if ( ! this->config_init["ACAM_FILTER"].empty() ) {
         cmd = ACAMD_FILTER+" "+this->config_init["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_init["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_init["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
@@ -1306,14 +1311,14 @@ namespace Sequencer {
     }
 
     if ( (error=this->connect_to_daemon(this->slicecamd)) != NO_ERROR ) {
-      this->broadcast.error( function, "connecting to slicecamd");
+      logwrite( function, "ERROR connecting to slicecamd");
     }
 
     // close connections between slicecamd and the hardware with which it communicates
     //
     logwrite( function, "closing slicecam hardware" );
     if ( (error=this->slicecamd.command_timeout( SLICECAMD_SHUTDOWN, reply, SLICECAMD_SHUTDOWN_TIMEOUT )) != NO_ERROR ) {
-      this->broadcast.error( function, "closing connection to slicecam hardware" );
+      logwrite( function, "ERROR closing connection to slicecam hardware" );
     }
 
     // disconnect me from slicecamd, irrespective of any previous error
@@ -1324,7 +1329,7 @@ namespace Sequencer {
     // Turn off power to slicecam hardware.
     //
     if ( this->set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->broadcast.error( function, "switching off slicecam" );
+      logwrite( function, "ERROR switching off slicecam" );
       throw std::runtime_error("could not power off slicecam hardware");
     }
 
@@ -1364,14 +1369,14 @@ namespace Sequencer {
       if ( ! this->config_shutdown["ACAM_FILTER"].empty() ) {
         cmd = ACAMD_FILTER+" "+this->config_shutdown["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_shutdown["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_shutdown["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
@@ -1384,7 +1389,7 @@ namespace Sequencer {
     if ( error==NO_ERROR ) {
       logwrite( function, "closing acam hardware" );
       error = this->acamd.command_timeout( ACAMD_SHUTDOWN, ACAMD_SHUTDOWN_TIMEOUT );
-      if ( error != NO_ERROR ) this->broadcast.error( function, "shutting down acam" );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR shutting down acam" );
     }
 
     // disconnect me from acamd, irrespective of any previous error
@@ -1395,7 +1400,7 @@ namespace Sequencer {
     // Turn off power to acam hardware.
     //
     if ( this->set_power_switch(OFF, POWER_ACAM, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->broadcast.error( function, "switching off acam" );
+      logwrite( function, "ERROR switching off acam" );
       throw std::runtime_error("could not switch off acam");
     }
 
@@ -1425,14 +1430,14 @@ namespace Sequencer {
 
     // make sure calib hardware is powered
     if ( this->set_power_switch(ON, POWER_CALIB, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering focus control" );
+      logwrite( function, "ERROR powering focus control" );
       throw std::runtime_error("could not power focus control");
     }
 
     // connect to calibd
     bool was_opened=false;
     if ( this->open_hardware(this->calibd, was_opened) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing calib control" );
+      logwrite( function, "ERROR initializing calib control" );
       throw std::runtime_error("could not power calib control");
     }
 
@@ -1444,14 +1449,14 @@ namespace Sequencer {
       std::string reply;
       long error = this->calibd.command( CALIBD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
-        this->broadcast.error( function, "communicating with calib hardware" );
+        logwrite( function, "ERROR communicating with calib hardware" );
         throw std::runtime_error("could not communicate with calib hardware: "+reply);
       }
       // home calib actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->calibd.command_timeout( CALIBD_HOME, reply, CALIBD_HOME_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "communicating with calib hardware" );
+          logwrite( function, "ERROR communicating with calib hardware" );
           throw std::runtime_error("could not communicate with calib hardware: "+reply);
         }
       }
@@ -1464,7 +1469,7 @@ namespace Sequencer {
         if ( !this->config_init["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_init["CALIB_DOOR"];
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "moving calib door and/or cover" );
+          logwrite( function, "ERROR moving calib door and/or cover" );
           throw std::runtime_error("could not move calib door and/or cover");
         }
       }
@@ -1501,7 +1506,7 @@ namespace Sequencer {
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_CALIB, poweron ) != NO_ERROR ) {
-      this->broadcast.error( function, "checking calib power switch" );
+      logwrite( function, "ERROR checking calib power switch" );
       throw std::runtime_error("checking calib power switch");
     }
 
@@ -1519,7 +1524,7 @@ namespace Sequencer {
         if ( !this->config_shutdown["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_shutdown["CALIB_DOOR"];
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "moving calib door and/or cover" );
+          logwrite( function, "moving calib door and/or cover" );
           throw std::runtime_error("moving calib door and/or cover");
         }
       }
@@ -1532,7 +1537,7 @@ namespace Sequencer {
       std::string reply;
       logwrite( function, "closing calib hardware" );
       error = this->calibd.send( CALIBD_CLOSE, reply );
-      if ( error != NO_ERROR ) this->broadcast.error( function, "closing connection to calib hardware" );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR closing connection to calib hardware" );
     }
 
     // disconnect me from calibd, irrespective of any previous error
@@ -1543,14 +1548,14 @@ namespace Sequencer {
     // Turn off power to calib hardware.
     //
     if ( this->set_power_switch(OFF, POWER_CALIB, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->broadcast.error( function, "switching off calib hardware" );
+      logwrite( function, "ERROR switching off calib hardware" );
       error=ERROR;
     }
 
     // always turn off power to lamps
     //
     if ( this->set_power_switch(OFF, POWER_LAMP, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering off lamps" );
+      logwrite( function, "EROR powering off lamps" );
       error=ERROR;
     }
 
@@ -1584,7 +1589,7 @@ namespace Sequencer {
     this->daemon_manager.clear( Sequencer::DAEMON_TCS );  // tcsd not ready
 
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
-      this->broadcast.error( "Sequencer::Sequence::tcs_init", "initializing TCS" );
+      logwrite( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
       this->thread_error_manager.set( THR_TCS_INIT );
       throw std::runtime_error("could not initialize TCS");
     }
@@ -1628,7 +1633,7 @@ namespace Sequencer {
       std::string reply;
       error = this->tcsd.send( TCSD_CLOSE, reply );
       if ( error != NO_ERROR ) {
-        this->broadcast.error( function, "closing connection to TCS" );
+        logwrite( function, "ERROR closing connection to TCS" );
         throw std::runtime_error("closing TCS connection: "+reply);
       }
     }
@@ -1662,13 +1667,13 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_FLEXURE, std::chrono::seconds(21)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering flexure control" );
+      logwrite( function, "ERROR powering flexure control" );
       this->thread_error_manager.set( THR_FLEXURE_INIT );
       throw std::runtime_error("could not power flexure control");
     }
 
     if ( this->open_hardware(this->flexured) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing flexure control" );
+      logwrite( function, "ERROR initializing flexure control" );
       this->thread_error_manager.set( THR_FLEXURE_INIT );
       throw std::runtime_error("could not initialize flexure control");
     }
@@ -1715,7 +1720,7 @@ namespace Sequencer {
     }
 
     if ( this->connect_to_daemon(this->flexured) != NO_ERROR ) {
-      this->broadcast.error( function, "connecting to flexure hardware" );
+      logwrite( function, "ERROR connecting to flexure hardware" );
       error=ERROR;
     }
 
@@ -1724,7 +1729,7 @@ namespace Sequencer {
     //
     logwrite( function, "closing flexure hardware" );
     if (error==NO_ERROR && (error=this->flexured.command( FLEXURED_CLOSE, reply )) != NO_ERROR) {
-      this->broadcast.error( function, "closing connection to flexure hardware" );
+      logwrite( function, "ERROR closing connection to flexure hardware" );
     }
 
     // disconnect me from flexured, irrespective of any previous error
@@ -1735,7 +1740,7 @@ namespace Sequencer {
     // Turn off power to flexure hardware.
     //
     if ( this->set_power_switch(OFF, POWER_FLEXURE, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->broadcast.error( function, "switching off flexure" );
+      logwrite( function, "ERROR switching off flexure" );
       throw std::runtime_error("switching off flexure hardware");
     }
 
@@ -1762,14 +1767,14 @@ namespace Sequencer {
     this->thread_error_manager.set( THR_FOCUS_INIT );       // assume failure, clear on success
 
     if ( this->set_power_switch(ON, POWER_FOCUS, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering focus control" );
+      logwrite( function, "ERROR powering focus control" );
       throw std::runtime_error("could not power focus control");
     }
 
     // connect to focusd
     bool was_opened=false;
     if ( this->open_hardware(this->focusd, was_opened) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing focus control" );
+      logwrite( function, "ERROR initializing focus control" );
       throw std::runtime_error("could not open focus hardware");
     }
 
@@ -1781,14 +1786,14 @@ namespace Sequencer {
       std::string reply;
       long error = this->focusd.command( FOCUSD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
-        this->broadcast.error( function, "communicating with focus hardware" );
+        logwrite( function, "ERROR communicating with focus hardware" );
         throw std::runtime_error("focus "+FOCUSD_ISHOME+" returned: "+reply);
       }
       // home focus actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->focusd.command_timeout( FOCUSD_HOME, reply, FOCUSD_HOME_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "communicating with focus hardware" );
+          logwrite( function, "ERROR communicating with focus hardware" );
           throw std::runtime_error("focus "+FOCUSD_HOME+" returned: "+reply);
         }
       }
@@ -1798,7 +1803,7 @@ namespace Sequencer {
       for ( const auto &chan : chans ) {
         std::string command = "set " + chan + " nominal";
         if ( this->focusd.command_timeout( command, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "setting focus "+chan );
+          logwrite( function, "ERROR setting focus "+chan );
           throw std::runtime_error("focus "+command+" returned: "+reply);
         }
       }
@@ -1844,7 +1849,7 @@ namespace Sequencer {
     }
 
     if ( this->connect_to_daemon(this->focusd) != NO_ERROR ) {
-      this->broadcast.error( function, "connecting to focus hardware" );
+      logwrite( function, "ERROR connecting to focus hardware" );
       error=ERROR;
     }
 
@@ -1853,7 +1858,7 @@ namespace Sequencer {
     //
     logwrite( function, "closing focus hardware" );
     if (error==NO_ERROR && (error=this->focusd.command( FOCUSD_CLOSE, reply )) != NO_ERROR) {
-      this->broadcast.error( function, "closing connection to focus hardware" );
+      logwrite( function, "ERROR closing connection to focus hardware" );
     }
 
     // disconnect me from focusd, irrespective of any previous error
@@ -1864,7 +1869,7 @@ namespace Sequencer {
     // Turn off power to focus hardware.
     //
     if ( this->set_power_switch(OFF, POWER_FOCUS, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->broadcast.error( function, "switching off focus" );
+      logwrite( function, "ERROR switching off focus" );
       throw std::runtime_error("switching off focus hardware");
     }
 
@@ -1892,13 +1897,13 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering camera" );
+      logwrite( function, "ERROR powering camera" );
       throw std::runtime_error("switching on camera");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->camerad, "open", 12000, was_opened) != NO_ERROR ) {
-      this->broadcast.error( function, "initializing camera" );
+      logwrite( function, "ERROR initializing camera" );
       throw std::runtime_error("initializing camera");
     }
 
@@ -1908,7 +1913,7 @@ namespace Sequencer {
     if ( was_opened) {
       for ( const auto &cmd : this->camera_prologue ) {
         if ( this->camerad.command_timeout( cmd, reply, CAMERA_PROLOG_TIMEOUT ) != NO_ERROR ) {
-          this->broadcast.error( function, "sending \""+cmd+"\" to camera" );
+          logwrite( function, "ERROR sending \""+cmd+"\" to camera" );
           throw std::runtime_error("sending \""+cmd+"\" to camera");
         }
       }
@@ -1979,7 +1984,7 @@ namespace Sequencer {
     // turn off power to camera hardware
     //
     if ( this->set_power_switch(OFF, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->broadcast.error( function, "powering off camera" );
+      logwrite( function, "ERROR powering off camera" );
       throw std::runtime_error("switching off camera");
     }
 
@@ -2537,11 +2542,17 @@ namespace Sequencer {
     // wait for the threads to complete. these can be cancelled.
     for ( auto &[thr, future] : worker_futures) {
       try {
-        error |= future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+        long worker_error = future.get(); // wait for this worker to finish
+        error |= worker_error;
+        if ( worker_error != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+        }
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         return ERROR;
       }
     }
@@ -2751,13 +2762,15 @@ namespace Sequencer {
       try {
         // wait for this worker to finish
         if ( future.get() != NO_ERROR ) {
-          logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
           error = ERROR;
         }
-        else logwrite(function, Sequencer::thread_names.at(thr)+" success");
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         error = ERROR;
         break;
       }
@@ -2882,9 +2895,11 @@ namespace Sequencer {
     // change state to READY if all daemons ready w/o error
     if ( error==NO_ERROR && daemon_manager.are_all_set() ) {
       seq_state_manager.set_only( {Sequencer::SEQ_READY} );
+      this->broadcast.notice( function, "startup complete" );
     }
     else {
       seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+      this->broadcast.error( function, "startup failed" );
     }
 
     return error;
@@ -2981,11 +2996,16 @@ namespace Sequencer {
     //
     for ( auto &[thr, future] : worker_futures) {
       try {
-        error=future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+        if ( future.get() != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+          error = ERROR;
+        }
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" shutdown complete" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         error=ERROR;
       }
     }
@@ -3730,7 +3750,7 @@ namespace Sequencer {
     }
     // connection failed too many times
     if (attempt > maxattempts) {
-      this->broadcast.error( function, "exceeded max attempts connecting to " + daemon.name);
+      logwrite( function, "ERROR exceeded max attempts connecting to " + daemon.name);
       return ERROR;
     }
 
@@ -3739,7 +3759,7 @@ namespace Sequencer {
     error |= daemon.send( "isopen", reply );
     error |= this->parse_state( function, reply, isopen );
     if ( error != NO_ERROR ) {
-      this->broadcast.error( function, "opening "+daemon.name+" hardware" );
+      logwrite( function, "ERROR opening "+daemon.name+" hardware" );
       return ERROR;
     }
 
@@ -3749,7 +3769,7 @@ namespace Sequencer {
       logwrite( function, "opening "+daemon.name+" hardware connections with "
                           +std::to_string(opentimeout)+" ms timeout" );
       if ( daemon.command_timeout( opencmd, reply, opentimeout ) != NO_ERROR ) {
-        this->broadcast.error( function, "opening connection to "+daemon.name+" hardware" );
+        logwrite( function, "ERROR opening connection to "+daemon.name+" hardware" );
         return ERROR;
       }
       was_opened=true;
@@ -3778,7 +3798,7 @@ namespace Sequencer {
     if ( !daemon.socket.isconnected() ) {
       logwrite( function, "connecting to "+daemon.name+" daemon" );
       if ( daemon.connect() != NO_ERROR ) {
-        this->broadcast.error( function, "connecting to "+daemon.name );
+        logwrite( function, "ERROR connecting to "+daemon.name );
         return ERROR;
       }
     }
