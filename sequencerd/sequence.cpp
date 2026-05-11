@@ -86,12 +86,21 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
-    // updates my internal state whether fineacquire is locked
-    if ( !jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) return;
-    bool fineacquirelocked = jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>();
-    this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
-    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
-    this->fineacquire_cv.notify_all();
+    bool changed = false;
+    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING ) ) {
+      this->is_fineacquire_running.store(
+        jmessage[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>(), std::memory_order_relaxed );
+      changed = true;
+    }
+    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) {
+      this->is_fineacquire_locked.store(
+        jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>(), std::memory_order_relaxed );
+      changed = true;
+    }
+    if ( changed ) {
+      std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+      this->fineacquire_cv.notify_all();
+    }
   }
   /***** Sequencer::Sequence::handletopic_slicecamd **************************/
 
@@ -2086,6 +2095,8 @@ namespace Sequencer {
       this->broadcast.warning(function, "stopping guiding");
     }
 
+    if ( this->cancel_flag.load() ) return NO_ERROR;
+
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
     // so convert that as it's being sent here.
@@ -2433,6 +2444,22 @@ namespace Sequencer {
     this->do_once.store(true);
 
     this->broadcast.notice( function, "cancel signal sent" );
+
+    // Wait for sequence_start to fully exit before switching to SEQ_READY.
+    // Without this, we could have SEQ_READY set while THR_SEQUENCE_START is
+    // still set.  Workers just received cancel_flag + CV notifications above,
+    // so this loop exits after at most a few iterations.
+    //
+    if ( abort_during_run ) {
+      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
+              std::chrono::steady_clock::now() < drain_timeout ) {
+        std::this_thread::sleep_for( std::chrono::milliseconds(20) );
+      }
+      if ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+        logwrite( function, "WARNING: sequence_start did not exit within drain timeout" );
+      }
+    }
 
     // Exit SEQ_ABORTING to a strict one-hot terminal state chosen from the
     // snapshot taken at entry. If neither condition applies (e.g. abort

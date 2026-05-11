@@ -167,11 +167,17 @@ namespace Sequencer {
                             + std::chrono::duration<double>( this->acquisition_timeout );
 
     // wait for is_fineacquire_locked (I subscribe to this)
-    // or cancel, or timeout
+    // or slicecam stopped without locking (failure), or cancel, or timeout.
+    // was_running latches true once slicecamd confirms it started, so that
+    // !is_fineacquire_running only signals failure after the run began — not
+    // before slicecamd's first telemetry publish arrives.
     //
+    bool was_running = false;
     std::unique_lock<std::mutex> lock(this->fineacquire_mtx);
     this->fineacquire_cv.wait(lock, [&]() {
+        if ( this->is_fineacquire_running.load() ) was_running = true;
         return this->is_fineacquire_locked.load() || this->cancel_flag.load() ||
+               ( was_running && !this->is_fineacquire_running.load() ) ||
                (use_timeout && std::chrono::steady_clock::now() > timeout_time);
     });
 
@@ -179,6 +185,10 @@ namespace Sequencer {
     if (use_timeout && !this->is_fineacquire_locked.load()) {
       logwrite( function, "ERROR slicecam fine acquisition timed out!" );
       return TIMEOUT;
+    }
+    if (!this->is_fineacquire_locked.load()) {
+      logwrite( function, "ERROR slicecam fine acquisition stopped without locking" );
+      return ERROR;
     }
 
     this->broadcast.notice( function, "slicecam fine acquisition target acquired" );
