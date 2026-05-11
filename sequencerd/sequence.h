@@ -299,7 +299,8 @@ namespace Sequencer {
       std::atomic<bool> should_fineacquire{true};  ///< should I use fineacquire? (user-switchable)
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
       std::atomic<bool> is_fineacquire_running{false};  ///< is slicecam fine acquisition running?
-      std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
+      std::atomic<bool> is_acam_guiding{false};    ///< is acam guiding (IS_ACQUIRED)?
+      std::atomic<bool> is_acam_acquiring{false};  ///< is acam in an acquire mode?
       std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
 
       /** @brief guard-band (us) subtracted from the acquire-command send time

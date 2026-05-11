@@ -55,14 +55,11 @@ namespace Slicecam {
 
     // stop fine acquisition
     if (action=="stop") {
-      if (!this->is_fineacquire_running.load(std::memory_order_acquire)) {
-        logwrite(function, "stopped");
-      }
-      else {
-        this->is_fineacquire_running.store(false);
-        this->publish_status();
-        logwrite(function, "stop requested");
-      }
+      const bool was_running = this->is_fineacquire_running.load(std::memory_order_acquire);
+      this->is_fineacquire_locked.store(false, std::memory_order_release);
+      this->is_fineacquire_running.store(false, std::memory_order_release);
+      this->publish_status();
+      logwrite(function, was_running ? "stop requested" : "stopped");
       retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
       return NO_ERROR;
     }

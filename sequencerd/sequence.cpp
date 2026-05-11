@@ -133,12 +133,16 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
-    // updates my internal state whether acam is guiding
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
 
-    // what time did acamd publish this
+    // track whether acamd is actively trying to acquire (mode == "acquiring")
+    if ( jmessage.contains( Key::Acamd::ACQUIRE_MODE ) ) {
+      const std::string mode = jmessage[Key::Acamd::ACQUIRE_MODE].get<std::string>();
+      this->is_acam_acquiring.store( mode == "acquiring", std::memory_order_relaxed );
+    }
+
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
     this->acam_pubtime.store( pubtime, std::memory_order_relaxed );

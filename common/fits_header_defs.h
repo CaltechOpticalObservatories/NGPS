@@ -18,7 +18,7 @@ namespace FitsHeaderKeys {
     const char* jkey;     ///< key to extract from JSON message
     const char* keyword;  ///< FITS header keyword (uses jkey if empty)
     const char* comment;  ///< FITS keyword comment
-    const char* type;     ///< optional explicit datatype
+    const char* type = "";  ///< optional explicit datatype
   };
 
   /**
@@ -30,7 +30,7 @@ namespace FitsHeaderKeys {
     const char* jkey;     ///< key to extract from JSON message
     const char* keyword;  ///< FITS header keyword (uses jkey if empty)
     const char* comment;  ///< FITS keyword comment
-    const char* type;     ///< optional explicit datatype
+    const char* type = "";  ///< optional explicit datatype
   };
 
   const Primary CalibInfoKeys[] = {

@@ -55,25 +55,37 @@ namespace Sequencer {
                             + std::chrono::duration<double>( this->acquisition_timeout );
 
     // wait for is_acam_guiding (I subscribe to this) with a fresh ACAMD publish
-    // since the acquire command was sent, or cancel, or timeout
+    // since the acquire command was sent, or acamd stopped without acquiring
+    // (failure), or cancel, or timeout.
+    // was_acquiring latches true once acamd enters "acquiring" mode, so that
+    // !is_acam_acquiring only signals failure after the attempt began — not
+    // before acamd's first telemetry publish arrives.
     //
+    bool was_acquiring = false;
     std::unique_lock<std::mutex> lock(this->acam_mtx);
     this->acam_cv.wait(lock, [&]() {
+        if ( this->is_acam_acquiring.load() ) was_acquiring = true;
         const bool fresh = this->acam_pubtime.load() > freshness_boundary_us;
         return ( fresh && this->is_acam_guiding.load() ) || this->cancel_flag.load() ||
+               ( was_acquiring && !this->is_acam_acquiring.load() ) ||
                ( use_timeout && std::chrono::steady_clock::now() > timeout_time );
     });
 
     if (this->cancel_flag.load()) return ABORT;
 
-    if (use_timeout && this->acam_pubtime.load() <= freshness_boundary_us) {
-      logwrite( function, "ERROR timed out waiting for fresh ACAM status" );
-      return TIMEOUT;
-    }
-
-    if (use_timeout && !this->is_acam_guiding.load()) {
-      logwrite( function, "ERROR ACAM acquisition timed out!" );
-      return TIMEOUT;
+    // Determine outcome by reading state. If not guiding, then this is a
+    // failure of some kind; distinguish a true timeout from acamd stopping
+    // without acquiring by consulting the clock. This ordering ensures that
+    // a failure publish arriving at or near the timeout boundary is still
+    // reported as a failure (not mis-labeled as a timeout).
+    //
+    if (!this->is_acam_guiding.load()) {
+      if (use_timeout && std::chrono::steady_clock::now() >= timeout_time) {
+        logwrite( function, "ERROR ACAM acquisition timed out!" );
+        return TIMEOUT;
+      }
+      logwrite( function, "ERROR ACAM acquisition stopped without acquiring target" );
+      return ERROR;
     }
 
     this->broadcast.notice( function, "ACAM target acquired" );
@@ -182,11 +194,19 @@ namespace Sequencer {
     });
 
     if (this->cancel_flag.load()) return ABORT;
-    if (use_timeout && !this->is_fineacquire_locked.load()) {
-      logwrite( function, "ERROR slicecam fine acquisition timed out!" );
-      return TIMEOUT;
-    }
+
+    // Determine outcome by reading state. If not locked, then this is a
+    // failure of some kind; distinguish a true timeout from slicecamd
+    // stopping without locking by consulting the clock. This ordering
+    // ensures that a failure publish arriving at or near the timeout
+    // boundary is still reported as a failure (not mis-labeled as a
+    // timeout).
+    //
     if (!this->is_fineacquire_locked.load()) {
+      if (use_timeout && std::chrono::steady_clock::now() >= timeout_time) {
+        logwrite( function, "ERROR slicecam fine acquisition timed out!" );
+        return TIMEOUT;
+      }
       logwrite( function, "ERROR slicecam fine acquisition stopped without locking" );
       return ERROR;
     }
