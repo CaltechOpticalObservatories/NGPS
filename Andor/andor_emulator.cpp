@@ -1218,7 +1218,7 @@ namespace Andor {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    log_python_arguments(pFunction, pArgs, pKwArgs);
+//  log_python_arguments(pFunction, pArgs, pKwArgs);
 #endif
 
     // Call the Python function here

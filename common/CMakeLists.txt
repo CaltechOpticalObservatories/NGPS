@@ -11,22 +11,33 @@ set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/common)
 set( CMAKE_CXX_STANDARD 17 )
 set( CMAKE_CXX_STANDARD_REQUIRED ON )
 
-include_directories( ${PROJECT_BASE_DIR}/common )
-include_directories( ${PROJECT_BASE_DIR}/utils )    # needed for logentry
-
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
+if(NOT ZMQPP_LIB)
+    message(FATAL_ERROR "libzmqpp not found")
+endif()
+if(NOT ZMQ_LIB)
+    message(FATAL_ERROR "libzmq not found")
+endif()
+
+include_directories( ${PROJECT_BASE_DIR}/common )
+include_directories( ${PROJECT_BASE_DIR}/utils )    # needed for logentry
 include_directories( ${PYTHON_DEV} )
 
 add_library(common STATIC
         ${PROJECT_UTILS_DIR}/common.cpp
+        )
+target_link_libraries(common PUBLIC
         ${ZMQPP_LIB}
         ${ZMQ_LIB}
         )
+
 add_library(skyinfo STATIC
         ${PROJECT_UTILS_DIR}/skyinfo.cpp
+        )
+target_link_libraries(skyinfo
         ${PYTHON_LIB}
         )

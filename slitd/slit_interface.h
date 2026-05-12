@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "message_keys.h"
 #include "network.h"
 #include "pi.h"
 #include "logentry.h"
@@ -207,16 +208,24 @@ namespace Slit {
       SlitDimension minwidth;  ///< set by config file
       SlitDimension center;    ///< position of center in actuator units
 
-      typedef struct {
+      struct Status {
         SlitDimension width;
         SlitDimension offset;
         float posA=NAN;
         float posB=NAN;
         bool ishome=false;
         bool isopen=false;
-      } snapshot_t;
 
-      snapshot_t snapshot;
+        bool operator==(const Status& other) const {
+          return std::tie(width, offset, posA, posB, ishome, isopen) ==
+                 std::tie(other.width, other.offset, other.posA, other.posB, other.ishome, other.isopen);
+        }
+
+        bool operator!=(const Status& other) const { return !(*this == other); }
+      };
+
+      Status status;
+      Status last_published_status;
 
       Common::Queue async;
 
@@ -233,8 +242,7 @@ namespace Slit {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
-      void publish_snapshot();
-      void publish_snapshot(std::string &retstring);
+      void publish_status(bool force=false);
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection

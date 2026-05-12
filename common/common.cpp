@@ -9,6 +9,38 @@
 
 namespace Common {
 
+  /***** Common::Broadcaster::emit ********************************************/
+  /**
+   * @brief      logs a narrative message and publishes it on Topic::BROADCAST
+   * @param[in]  function  name of caller (used for log line)
+   * @param[in]  severity  one of Severity::NOTICE, Severity::WARNING, Severity::ERROR
+   * @param[in]  message   operator-facing narrative text
+   * @details    Logs message via logwrite, then publishes a JSON payload
+   *             on Topic::BROADCAST if the publisher has been initialized.
+   *
+   */
+  void Broadcaster::emit( const std::string &function,
+                          const std::string &severity,
+                          const std::string &message ) {
+    logwrite( function, severity+": "+message );
+
+    if ( ! this->publisher ) return;
+
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE]              = this->source;
+    jmessage[Key::Broadcast::SEVERITY] = severity;
+    jmessage[Key::Broadcast::MESSAGE]  = message;
+
+    try {
+      this->publisher->publish( jmessage, Topic::BROADCAST );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( function, "ERROR publishing broadcast: "+std::string(e.what()) );
+    }
+  }
+  /***** Common::Broadcaster::emit ********************************************/
+
+
   /***** Common::collect_telemetry ********************************************/
   /**
    * @brief      send the TELEMREQUEST command to daemon to get telemetry

@@ -66,3 +66,15 @@ target_link_libraries( listener PRIVATE utilities )
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
+add_executable( seqmon
+        ${PROJECT_UTILS_DIR}/seqmon.cpp
+        )
+target_include_directories( seqmon PRIVATE
+        ${PROJECT_BASE_DIR}/utils
+        ${PROJECT_BASE_DIR}/common
+        )
+target_link_libraries( seqmon PRIVATE
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
+        )
+

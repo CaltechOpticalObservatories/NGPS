@@ -555,7 +555,9 @@ namespace Acam {
         double az;
         double telfocus;
         double airmass;
-      } telem;
+      } tcsdata;
+
+      std::mutex tcsdata_mtx;
 
       std::mutex snapshot_mtx;
       std::unordered_map<std::string, bool> snapshot_status;
@@ -613,8 +615,14 @@ namespace Acam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
-      inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
+      inline void set_imagename( std::string name_in ) {
+        this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : std::move(name_in) );
+        return;
+      }
+      inline void set_wcsname( std::string name_in ) {
+        this->wcsname = std::move(name_in);
+          return;
+      }
 
       GuideManager guide_manager;
 
@@ -688,7 +696,7 @@ namespace Acam {
       long exptime( const std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
 
-      long collect_header_info();
+      long assemble_header_info();
 
       inline void init_names() { imagename=""; wcsname=""; return; }  // TODO still needed?
 

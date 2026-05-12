@@ -104,10 +104,10 @@ namespace Slit {
     std::string retstring;
 
     this->is_open( "", retstring );
-    snapshot.isopen = ( retstring=="true" ? true : false );
-    if ( snapshot.isopen ) {
+    status.isopen = ( retstring=="true" ? true : false );
+    if ( status.isopen ) {
       this->is_home( "", retstring );
-      snapshot.ishome = ( retstring=="true" ? true : false );
+      status.ishome = ( retstring=="true" ? true : false );
     }
 
     this->get( retstring );
@@ -285,14 +285,14 @@ namespace Slit {
       return HELP;
     }
 
-    if ( std::isnan(snapshot.width.arcsec()) ) {
+    if ( std::isnan(status.width.arcsec()) ) {
       logwrite( "Slit::Interface::offset", "ERROR width not previously set" );
       retstring="undefined_width";
       return ERROR;
     }
 
     std::stringstream cmd;
-    cmd << snapshot.width.arcsec() << " " << args;
+    cmd << status.width.arcsec() << " " << args;
 
     return this->set( cmd.str(), retstring );
   }
@@ -374,7 +374,7 @@ namespace Slit {
           else fval = std::round( fval * 10.0 ) / 10.0;  // round to nearest tenth
         }
         reqwidth = SlitDimension( fval, unit );
-        reqoffset = snapshot.offset;
+        reqoffset = status.offset;
       }
       if ( tokens.size() == 2 ) {
         if ( tokens.at(1).find("mm") != std::string::npos ) unit=Unit::MM; else unit=Unit::ARCSEC;
@@ -502,30 +502,27 @@ namespace Slit {
 
     // this call reads the controller and returns the numeric values
     //
-    error = this->read_positions( poswidth, posoffset, snapshot.posA, snapshot.posB );
+    error = this->read_positions( poswidth, posoffset, status.posA, status.posB );
 
     // store the current readings in the class
     //
-    snapshot.width  = SlitDimension( poswidth, Unit::MM );
-    snapshot.offset = SlitDimension( posoffset, Unit::MM );
+    status.width  = SlitDimension( poswidth, Unit::MM );
+    status.offset = SlitDimension( posoffset, Unit::MM );
 
     // form the return value
     //
     std::stringstream s;
     if ( args=="mm" ) {
-      s << std::setprecision(2) << std::fixed << snapshot.width.mm() << " "
-        << std::setprecision(3) << snapshot.offset.mm() << " mm";
+      s << std::setprecision(2) << std::fixed << status.width.mm() << " "
+        << std::setprecision(3) << status.offset.mm() << " mm";
     }
     else {
-      s << std::setprecision(2) << std::fixed << snapshot.width.arcsec() << " "
-        << std::setprecision(3) << snapshot.offset.arcsec();
+      s << std::setprecision(2) << std::fixed << status.width.arcsec() << " "
+        << std::setprecision(3) << status.offset.arcsec();
     }
     retstring = s.str();
 
-    message.str(""); message << "NOTICE:" << Slit::DAEMON_NAME << " " << retstring;
-    this->async.enqueue( message.str() );
-
-    this->publish_snapshot();
+    this->publish_status();
 
     return error;
   }
@@ -713,55 +710,42 @@ namespace Slit {
    * @param[in]  jmessage_in  subscribed-received JSON message
    *
    */
-  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
-    // If my name is in the jmessage then publish my snapshot
-    //
-    if ( jmessage_in.contains( Slit::DAEMON_NAME ) ) {
-      this->publish_snapshot();
-    }
-    else
-    if ( jmessage_in.contains( "test" ) ) {
-      logwrite( "Slit::Interface::handletopic_snapshot", jmessage_in.dump() );
-    }
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains(Topic::SLITD) ) this->publish_status();
   }
   /***** Slit::Interface::handletopic_snapshot ********************************/
 
 
-  /***** Slit::Interface::publish_snapshot ************************************/
+  /***** Slit::Interface::publish_status **************************************/
   /**
-   * @brief      publishes snapshot of my telemetry
-   * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry.
+   * @brief      publishes my status on change
+   * @param[in]  force  optional (default=false) force publish irrespective of change
    *
    */
-  void Interface::publish_snapshot() {
-    std::string dontcare;
-    this->publish_snapshot(dontcare);
-  }
-  void Interface::publish_snapshot(std::string &retstring) {
-    nlohmann::json jmessage_out;
-    jmessage_out["source"]   = "slitd";
-    jmessage_out["ISOPEN"]   = snapshot.isopen;
-    jmessage_out["ISHOME"]   = snapshot.ishome;
-    jmessage_out["SLITW"]    = snapshot.width.arcsec();
-    jmessage_out["SLITO"]    = snapshot.offset.arcsec();
-    jmessage_out["SLITPOSA"] = snapshot.posA;
-    jmessage_out["SLITPOSB"] = snapshot.posB;
+  void Interface::publish_status(bool force) {
 
-    // for backwards compatibility
-    jmessage_out["messagetype"] = "slitinfo";
-    retstring=jmessage_out.dump();
-    retstring.append(JEOF);
+    // unless forced, only publish if there was a change
+    if ( !force && this->status == this->last_published_status ) return;
+
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::SLITD;
+    jmessage_out[Key::Slitd::ISOPEN]   = this->status.isopen;
+    jmessage_out[Key::Slitd::ISHOME]   = this->status.ishome;
+    jmessage_out[Key::Slitd::SLITW]    = this->status.width.arcsec();
+    jmessage_out[Key::Slitd::SLITO]    = this->status.offset.arcsec();
+    jmessage_out[Key::Slitd::SLITPOSA] = this->status.posA;
+    jmessage_out[Key::Slitd::SLITPOSB] = this->status.posB;
+
+    this->last_published_status = this->status;
 
     try {
       this->publisher->publish( jmessage_out );
     }
     catch ( const std::exception &e ) {
-      logwrite( "Slit::Interface::publish_snapshot",
-                "ERROR publishing message: "+std::string(e.what()) );
-      return;
+      logwrite( "Slit::Interface::publish_status",
+                "ERROR publishing status: "+std::string(e.what()) );
     }
   }
-  /***** Slit::Interface::publish_snapshot ************************************/
+  /***** Slit::Interface::publish_status **************************************/
 
 }

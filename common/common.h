@@ -22,6 +22,7 @@
 
 #include "logentry.h"
 #include "network.h"
+#include "message_keys.h"
 
 const long NOTHING = -1;
 const long NO_ERROR = 0;
@@ -367,6 +368,56 @@ namespace Common {
       /***** Common::PubSubHandler::process_incomming_message *****************/
 
   };
+
+
+  /**************** Common::Broadcaster ***************************************/
+  /**
+   * @class   Broadcaster
+   * @brief   logs a narrative message and publishes it on Topic::BROADCAST
+   * @details Captures a reference to a publisher and the source daemon name
+   *          at construction time so that call sites need only supply the
+   *          caller function name and message (and severity, for emit).
+   *          The publisher reference is to the daemon's Common::PubSub, which
+   *          may be null at the time this Broadcaster is constructed and gets
+   *          populated later by init_pubsub.
+   *
+   */
+  class Broadcaster {
+    private:
+      const std::unique_ptr<Common::PubSub> &publisher;  ///< reference to owner's publisher
+      std::string source;                                ///< source daemon name
+
+    public:
+      Broadcaster( const std::unique_ptr<Common::PubSub> &publisher,
+                   std::string source )
+        : publisher(publisher), source(std::move(source)) { }
+
+      /**
+       * @brief  publish a NOTICE severity broadcast
+       */
+      inline void notice( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::NOTICE, message );
+      }
+
+      /**
+       * @brief  publish a WARNING severity broadcast
+       */
+      inline void warning( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::WARNING, message );
+      }
+
+      /**
+       * @brief  publish an ERROR severity broadcast
+       */
+      inline void error( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::ERROR, message );
+      }
+
+      void emit( const std::string &function,
+                 const std::string &severity,
+                 const std::string &message );
+  };
+  /**************** Common::Broadcaster ***************************************/
 
 
   void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
@@ -918,9 +969,13 @@ namespace Common {
        * @brief      template class adds key,value,comment to indicated keydb from json message
        * @details    This extracts the value from a JSON message and uses add_key to add the
        *             keyword to the indicated database map.
-       * @param[in]  type      reference to FitsKeys database object
-       * @param[in]  jmessage  JSON message is the source of the value
-       * @param[in]  comment   comment string for header keyword
+       * @param[in]  jmessage       JSON message is the source of the value
+       * @param[in]  jkey           key to index jmessage
+       * @param[in]  keyword        FITS header keyword
+       * @param[in]  comment        comment string for header keyword
+       * @param[in]  type           type of key can be optionally specified
+       * @param[in]  use_extension  extension or primary
+       * @param[in]  chan           channel selects keyword db
        *
        */
       void add_json_key( const json &jmessage,
