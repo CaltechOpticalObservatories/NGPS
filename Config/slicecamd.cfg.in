@@ -77,6 +77,40 @@ FINE_ACQUIRE_AIMPOINT=(L 150.0 115.5)
 #
 FINE_ACQUIRE_BACKGROUND=(80 165 30 210)
 
+# FINE_ACQUIRE_MIN_SAMPLES=<n>
+# Minimum centroid samples <n> before scatter-gated early exit is evaluated.
+# Once this many samples are collected and the MAD scatter per axis is below
+# the precision threshold, a correction is issued without waiting for MAX_SAMPLES.
+#
+FINE_ACQUIRE_MIN_SAMPLES=3
+
+# FINE_ACQUIRE_SETTLE_FRAMES=<n>
+# <n> frames discarded after each telescope move to allow settling before
+# centroid measurements resume.
+#
+FINE_ACQUIRE_SETTLE_FRAMES=2
+
+# FINE_ACQUIRE_GAIN=<g>
+# Proportional gain <g> = {0..1} applied to the commanded offset when the residual
+# is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.
+#
+FINE_ACQUIRE_GAIN=0.7
+
+# FINE_ACQUIRE_GAIN_LARGE=<g>
+# Proportional gain <g> applied when the residual exceeds FINE_ACQUIRE_GAIN_THRESHOLD.
+# Set to 1.0 for a full-correction step on large offsets to reduce
+# the number of correction cycles needed. Set equal to FINE_ACQUIRE_GAIN to
+# disable gain scheduling.
+#
+FINE_ACQUIRE_GAIN_LARGE=1.0
+
+# FINE_ACQUIRE_GAIN_THRESHOLD=<arcsec>
+# Offset magnitude (arcsec) above which FINE_ACQUIRE_GAIN_LARGE is used instead
+# of FINE_ACQUIRE_GAIN. Set to 0 to disable gain scheduling (GAIN is used for
+# all corrections.
+#
+FINE_ACQUIRE_GAIN_THRESHOLD=2.0
+
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
 # Sets the keyword argument "IMAGE_SIZE=<is>"

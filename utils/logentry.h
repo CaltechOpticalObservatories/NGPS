@@ -21,6 +21,6 @@ extern unsigned int nextday;                               /// number of seconds
 long init_log( std::string logpath, std::string name );    /// initialize the logging system
 long init_log( std::string logpath, std::string name, bool stderr_in );    /// initialize the logging system
 void close_log();                                          /// close the log file stream
-void logwrite(std::string function, std::string message);  /// create a time-stamped log entry "message" from "function"
+void logwrite(const std::string &function, std::string message);  /// create a time-stamped log entry "message" from "function"
 
 #endif

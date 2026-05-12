@@ -176,12 +176,12 @@ namespace Network {
    */
   int UdpSocket::Send(std::string message) {
     std::string function = "Network::UdpSocket::Send";
-    std::ostringstream errstm;
+    std::stringstream errstm;
     ssize_t nbytes;
 
     if ( !this->is_running() ) return 0;  // silently do nothing if the UDP multicast socket isn't running
 
-    if ( ( nbytes = sendto( this->fd, std::string(message).c_str(), (size_t)message.length(), 0,
+    if ( ( nbytes = sendto( this->fd, message.c_str(), (size_t)message.length(), 0, 
                             (struct sockaddr*) &this->addr, (socklen_t)sizeof(this->addr) ) ) < 0 ) {
       errstm << "error " << errno << " calling sendto: " << strerror(errno);
       logwrite(function, errstm.str());

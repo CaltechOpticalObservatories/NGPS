@@ -286,7 +286,7 @@ namespace Acam {
        * @details    the script pushes the indicated file to the Guider GUI display
        * @param[in]  filename  fits file to send
        */
-      void push_guider_image( std::string filename ) {
+      void push_guider_image( std::string_view filename ) {
         std::string function = "Acam::GuideManager::push_guider_image";
         std::stringstream cmd;
         cmd << push_image << " "
@@ -304,7 +304,7 @@ namespace Acam {
        * @brief      calls the push_message script with the supplied message string
        * @param[in]  message  message to send
        */
-      void push_guider_message( std::string message ) {
+      void push_guider_message( std::string_view message ) {
         std::string function = "Acam::GuideManager::push_guider_message";
         std::stringstream cmd;
         cmd << push_message << " "
@@ -555,7 +555,9 @@ namespace Acam {
         double az;
         double telfocus;
         double airmass;
-      } telem;
+      } tcsdata;
+
+      std::mutex tcsdata_mtx;
 
       std::mutex snapshot_mtx;
       std::unordered_map<std::string, bool> snapshot_status;
@@ -694,7 +696,7 @@ namespace Acam {
       long exptime( const std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
 
-      long collect_header_info();
+      long assemble_header_info();
 
       inline void init_names() { imagename=""; wcsname=""; return; }  // TODO still needed?
 

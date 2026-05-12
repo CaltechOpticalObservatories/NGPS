@@ -12,6 +12,7 @@ const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";
 const std::string SEQUENCERD_ENGINEERING = "engineering";
 const std::string SEQUENCERD_EXIT       = "exit";
+const std::string SEQUENCERD_FINEACQUIRE= "fineacquire";
 const std::string SEQUENCERD_GETONETARGET = "getone";
 const std::string SEQUENCERD_GUIDE      = "guide";
 const std::string SEQUENCERD_MODEXPTIME = "modexptime";
@@ -60,6 +61,7 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_DOTYPE+" [ one | all ]",
                                                      SEQUENCERD_ENGINEERING+" [ true | false ]",
                                                      SEQUENCERD_EXIT,
+                                                     SEQUENCERD_FINEACQUIRE+" [ enable | disable ]",
                                                      SEQUENCERD_GETONETARGET,
                                                      SEQUENCERD_GUIDE,
                                                      SEQUENCERD_MODEXPTIME+" <exptime>",

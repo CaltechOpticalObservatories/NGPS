@@ -832,13 +832,21 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
-    // set is_fineacquire_locked flag
-    bool fineacquirelocked;
-    Common::extract_telemetry_value( jmessage, Key::Slicecamd::FINEACQUIRE_LOCKED, fineacquirelocked );
-    this->is_fineacquire_locked.store(fineacquirelocked, std::memory_order_relaxed);
-
-    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
-    this->fineacquire_cv.notify_all();
+    bool changed = false;
+    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING ) ) {
+      this->is_fineacquire_running.store(
+        jmessage[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>(), std::memory_order_relaxed );
+      changed = true;
+    }
+    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) {
+      this->is_fineacquire_locked.store(
+        jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>(), std::memory_order_relaxed );
+      changed = true;
+    }
+    if ( changed ) {
+      std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+      this->fineacquire_cv.notify_all();
+    }
   }
   /***** Sequencer::Sequence::handletopic_slicecamd **************************/
 
@@ -870,10 +878,19 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
-    // set is_acam_guiding flag
     bool acquired;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+
+    // track whether acamd is actively trying to acquire (mode == "acquiring")
+    if ( jmessage.contains( Key::Acamd::ACQUIRE_MODE ) ) {
+      const std::string mode = jmessage[Key::Acamd::ACQUIRE_MODE].get<std::string>();
+      this->is_acam_acquiring.store( mode == "acquiring", std::memory_order_relaxed );
+    }
+
+    int64_t pubtime=0;
+    Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
+    this->acam_pubtime.store( pubtime, std::memory_order_relaxed );
 
     std::lock_guard<std::mutex> lock(this->acam_mtx);
     this->acam_cv.notify_all();
@@ -902,8 +919,10 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::publish_seqstate ********************************/
   /**
-   * @brief      publishes sequencer state with topic "seq_seqstate"
-   * @details    seqstate is a single string
+   * @brief      publishes sequencer state under Topic::SEQ_SEQSTATE
+   * @details    The payload carries the sequencer state (Key::Sequencer::SEQSTATE)
+   *             plus Key::Sequencer::SHOULD_FINEACQUIRE, which is a user-settable
+   *             sequencer config and so rides along on this topic.
    *
    */
   void Sequence::publish_seqstate() {
@@ -914,6 +933,9 @@ namespace Sequencer {
     std::string seqstate( this->seq_state_manager.get_set_states() );
     rtrim( seqstate );
     jmessage_out[Key::Sequencer::SEQSTATE] = seqstate;
+
+    // user-settable: should automatic fine acquisition run?
+    jmessage_out[Key::Sequencer::SHOULD_FINEACQUIRE] = this->should_fineacquire.load();
 
     try {
       this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
@@ -1021,23 +1043,25 @@ namespace Sequencer {
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
   /**
    * @brief      publishes daemonstate and can control seqstate
-   * @details    If not STARTING or STOPPING and not all daemons ready then
-   *             this ensures that the seqstate drops into NOTREADY.
+   * @details    Daemon-readiness changes may only force the sequencer into
+   *             NOTREADY when the current seqstate is itself READY or
+   *             NOTREADY. Lifecycle states (STARTING, STOPPING, RUNNING,
+   *             PAUSED, ABORTING, FAILED) are owned by the lifecycle
+   *             functions and are never overridden here. The one-hot
+   *             seqstate contract is preserved.
    *
    */
   void Sequence::broadcast_daemonstate() {
     // always publish daemonstate when called
     this->publish_daemonstate();
 
-    // If any daemon isn't ready then the sequencer can't be ready,
-    // but don't override STARTING or STOPPING, unless none are ready.
-    if ( daemon_manager.are_all_clear() ) {
-      seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
-    }
-    else
-    if ( ! seq_state_manager.is_set(SEQ_STARTING) &&
-         ! seq_state_manager.is_set(SEQ_STOPPING) &&
-         ! daemon_manager.are_all_set() ) {
+    // Only degrade seqstate to NOTREADY when the sequencer is currently
+    // READY or NOTREADY. Never override an active lifecycle transition
+    // (STARTING, STOPPING, RUNNING, PAUSED, ABORTING) or FAILED.
+    //
+    if ( ! daemon_manager.are_all_set() &&
+         seq_state_manager.are_any_set( Sequencer::SEQ_READY,
+                                        Sequencer::SEQ_NOTREADY ) ) {
       seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
     }
   }
@@ -1046,23 +1070,38 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
-   * @brief      publishes seq_state via PUB-SUB
-   * @details    The legacy "SEQSTATE:" UDP async string has been removed;
-   *             seqstate is published exclusively on the PUB-SUB topic now.
+   * @brief      publishes seq_state on the SEQ_SEQSTATE topic
+   * @details    Legacy UDP "SEQSTATE:" async strings have been removed.
+   *             Seqstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_seqstate() {
+    const std::string function("Sequencer::Sequence::broadcast_seqstate");
+
+    // publish the structured seqstate topic
+    //
     this->publish_seqstate();
     this->cv.notify_all();
+
+    // emit a NOTICE on Topic::BROADCAST only when the lifecycle state has
+    // actually changed, so operators (and logs) get a breadcrumb trail of
+    // state transitions without noise from repeated identical callbacks.
+    //
+    std::string current( this->seq_state_manager.get_set_states() );
+    rtrim( current );
+    if ( current != this->last_seqstate_str ) {
+      this->last_seqstate_str = current;
+      this->broadcast.notice( function, "sequencer state: "+current );
+    }
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
 
 
   /***** Sequencer::Sequence::broadcast_waitstate *****************************/
   /**
-   * @brief      publishes wait_state via PUB-SUB
-   * @details    The legacy "WAITSTATE:" UDP async string has been removed;
-   *             waitstate is published exclusively on the PUB-SUB topic now.
+   * @brief      publishes wait_state on the SEQ_WAITSTATE topic
+   * @details    Legacy UDP "WAITSTATE:" async strings have been removed.
+   *             Waitstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_waitstate() {
@@ -3647,6 +3686,47 @@ namespace Sequencer {
     return( error );
   }
   /***** Sequencer::Sequence::engineering *************************************/
+
+
+  /***** Sequencer::Sequence::fine_acquire ************************************/
+  /**
+   * @brief      enable or disable automatic fine acquisition step
+   * @param[in]  args       enable|disable
+   * @param[out] retstring  state {enabled|disabled}
+   * @return     ERROR|NO_ERROR|HELP
+   *
+   */
+  long Sequence::fine_acquire(std::string args, std::string &retstring) {
+    if (args=="help"||args=="?") {
+      retstring = SLICECAMD_FINEACQUIRE;
+      retstring.append( " [ enable | disable ]\n" );
+      retstring.append( "   enables or disables the automatic fine acquisition step\n" );
+      retstring.append( "   no arg returns state only\n" );
+      return HELP;
+    }
+
+    const bool prev = this->should_fineacquire.load();
+
+    if (args=="enable") this->should_fineacquire.store(true);
+    else
+    if (args=="disable") this->should_fineacquire.store(false);
+    else
+    if (!args.empty()) {
+      logwrite("Sequencer::Sequence::fineacquire",
+               "ERROR invalid '"+args+"' expected enable|disable");
+      return ERROR;
+    }
+
+    retstring = this->should_fineacquire.load() ? "enabled" : "disabled";
+
+    // publish on change
+    if ( this->should_fineacquire.load() != prev ) {
+      this->publish_seqstate();
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::fine_acquire ************************************/
 
 
   /***** Sequencer::Sequence::get_dome_position *******************************/

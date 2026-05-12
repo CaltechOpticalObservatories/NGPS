@@ -132,8 +132,8 @@ namespace Sequencer {
     SEQ_STOPPING,            ///< set when sequencer is shutting down
     SEQ_PAUSED,              ///< set when sequencer is paused
     SEQ_STARTING,            ///< set when sequencer is starting up
-    SEQ_FAILED,              ///< set when sequencer has failed in an unsafe/indeterminate way
-    SEQ_ABORTING,            ///< transitory state while aborting; cleared via RAII
+    SEQ_FAILED,              ///< set on a fatal/indeterminate failure; cleared only by startup or shutdown
+    SEQ_ABORTING,            ///< transitory; set/cleared via RAII in abort_process()
     NUM_SEQ_STATES
   };
 
@@ -308,8 +308,20 @@ namespace Sequencer {
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<bool> should_fineacquire{true};  ///< should I use fineacquire? (user-switchable)
       std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
-      std::atomic<bool> is_acam_guiding{false};  ///< is acam guiding?
+      std::atomic<bool> is_fineacquire_running{false};  ///< is slicecam fine acquisition running?
+      std::atomic<bool> is_acam_guiding{false};    ///< is acam guiding (IS_ACQUIRED)?
+      std::atomic<bool> is_acam_acquiring{false};  ///< is acam in an acquire mode?
+      std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
+
+      /** @brief guard-band (us) subtracted from the acquire-command send time
+       *         when computing the freshness boundary in do_acam_acquire. Tolerates
+       *         jitter and the race between the command send and ACAM's forced publish.
+       *         Adjust here to tune.
+       */
+      static constexpr int64_t ACAM_FRESHNESS_GUARD_US = 500'000;
+
       std::atomic<bool> engineering_mode{false}; ///< when true, validate_sequence applies per-daemon checks instead of SEQ_READY
 
       ThreadPool pool;
@@ -681,8 +693,10 @@ namespace Sequencer {
 ///   void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void broadcast_daemonstate();             ///<
       void broadcast_threadstate();             ///<
-      void broadcast_seqstate();                ///< writes the seqstate string to the async port
-      void broadcast_waitstate();               ///< writes the waitstate string to the async port
+      void broadcast_seqstate();                ///< publishes the seqstate on the seq_seqstate topic
+      void broadcast_waitstate();               ///< publishes the waitstate on the seq_waitstate topic
+
+      std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -699,6 +713,7 @@ namespace Sequencer {
       long parse_calibration_target();
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
+      long fine_acquire( std::string args, std::string &retstring );           ///< enable|disable fineacquisition step
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
@@ -761,7 +776,9 @@ namespace Sequencer {
        * these are in sequence_acquisition.cpp
        */
       long do_acam_acquire();
+      long do_acam_stop();
       long do_slicecam_fineacquire();
+      long do_slicecam_stop();
       long do_target_acquisition(std::string caller);
       long do_target_virtualslit(VirtualSlitMode mode);
 

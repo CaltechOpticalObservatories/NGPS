@@ -25,6 +25,7 @@ namespace Common {
     logwrite( function, severity+": "+message );
 
     if ( ! this->publisher ) return;
+
     nlohmann::json jmessage;
     jmessage[Key::SOURCE]              = this->source;
     jmessage[Key::Broadcast::SEVERITY] = severity;

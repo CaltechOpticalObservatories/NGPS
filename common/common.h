@@ -475,7 +475,8 @@ namespace Common {
       }
       else
       if constexpr ( std::is_same<T, int16_t>::value || std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ) {
-        if ( jvalue.type() == json::value_t::number_unsigned ) {
+        if ( jvalue.type() == json::value_t::number_integer ||
+             jvalue.type() == json::value_t::number_unsigned ) {
           value = jvalue.template get<T>();
         }
       }
@@ -968,9 +969,13 @@ namespace Common {
        * @brief      template class adds key,value,comment to indicated keydb from json message
        * @details    This extracts the value from a JSON message and uses add_key to add the
        *             keyword to the indicated database map.
-       * @param[in]  type      reference to FitsKeys database object
-       * @param[in]  jmessage  JSON message is the source of the value
-       * @param[in]  comment   comment string for header keyword
+       * @param[in]  jmessage       JSON message is the source of the value
+       * @param[in]  jkey           key to index jmessage
+       * @param[in]  keyword        FITS header keyword
+       * @param[in]  comment        comment string for header keyword
+       * @param[in]  type           type of key can be optionally specified
+       * @param[in]  use_extension  extension or primary
+       * @param[in]  chan           channel selects keyword db
        *
        */
       void add_json_key( const json &jmessage,

@@ -131,15 +131,15 @@ int main(int argc, char **argv) {
   //
   if ( sequencerd.sequence.init_pubsub( { Topic::CAMERAD,
                                           Topic::ACAMD,
-                                          Topic::TCSD,
+                                          Topic::SLICECAMD,
                                           Topic::SLITD,
-                                          Topic::SLICECAMD } ) == ERROR ) {
+                                          Topic::TCSD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }
-  sequencerd.sequence.seq_state_manager.set(Sequencer::SEQ_NOTREADY);
+  sequencerd.sequence.seq_state_manager.set_only({Sequencer::SEQ_NOTREADY});
 
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  std::this_thread::sleep_for( std::chrono::milliseconds(200) );
   sequencerd.sequence.publish_snapshot();
 
   // This will pre-thread N_THREADS threads.
