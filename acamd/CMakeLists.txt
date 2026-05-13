@@ -56,13 +56,15 @@ add_executable(acamd
         ${ACAMD_DIR}/acam_interface.cpp 
         ${ACAMD_DIR}/acam_fits.cpp
         ${ACAMD_DIR}/motion_interface.cpp 
+        )
+target_include_directories(acamd PRIVATE
         ${PYTHON_DEV}
         ${MYSQL_INCLUDES}
         )
 
 target_link_libraries(acamd
         andor
-        python3.9
+        ${PYTHON_LIB}
         physik_instrumente
         network
         common
@@ -73,32 +75,31 @@ target_link_libraries(acamd
         database
         ${ZMQPP_LIB}
         ${ZMQ_LIB}
-        ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}
         ${CMAKE_THREAD_LIBS_INIT}
         ${MYSQL_LIB}
         )
 
-target_compile_options(acamd PRIVATE -g -Wall -O1 -Wno-variadic-macros -ggdb)
+target_compile_options(acamd PRIVATE -g -Wall -O1 -Wno-deprecated-declarations -Wno-variadic-macros -ggdb)
 
 add_executable( newpytest
         ${ACAMD_DIR}/newpytest.cpp 
+        )
+target_include_directories( newpytest PRIVATE
         ${PYTHON_DEV}
         )
-
 target_link_libraries( newpytest
-        python3.9
         ${PYTHON_LIB}
         )
 
 add_executable( pytest
         ${ACAMD_DIR}/pytest.cpp 
+        )
+target_include_directories( pytest PRIVATE
         ${PYTHON_DEV}
         )
-
 target_link_libraries( pytest
-        python3.9
         ${PYTHON_LIB}
         )
 

@@ -16,6 +16,9 @@ include_directories( ${PROJECT_BASE_DIR}/common )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
+find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
 add_executable(flexured 
         ${FLEXURED_DIR}/flexured.cpp 
         ${FLEXURED_DIR}/flexure_server.cpp 
@@ -28,6 +31,8 @@ target_link_libraries(flexured
         common
         logentry
         utilities
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
         ${CMAKE_THREAD_LIBS_INIT}
         )
 

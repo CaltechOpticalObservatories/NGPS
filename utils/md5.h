@@ -10,6 +10,9 @@
 
 #ifndef MD5_H
 #define MD5_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*************************** HEADER FILES ***************************/
 #include <stddef.h>
@@ -33,4 +36,7 @@ void md5_init(MD5_CTX *ctx);
 void md5_update(MD5_CTX *ctx, const BYTE data[], size_t len);
 void md5_final(MD5_CTX *ctx, BYTE hash[]);
 
+#ifdef __cplusplus
+}
+#endif
 #endif   // MD5_H

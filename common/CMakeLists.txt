@@ -23,10 +23,14 @@ include_directories( ${PYTHON_DEV} )
 
 add_library(common STATIC
         ${PROJECT_UTILS_DIR}/common.cpp
+        )
+target_link_libraries(common PRIVATE
         ${ZMQPP_LIB}
         ${ZMQ_LIB}
         )
 add_library(skyinfo STATIC
         ${PROJECT_UTILS_DIR}/skyinfo.cpp
+        )
+target_link_libraries(skyinfo PRIVATE
         ${PYTHON_LIB}
         )

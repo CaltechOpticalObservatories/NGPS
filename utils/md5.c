@@ -11,6 +11,10 @@
 * obtained from https://github.com/B-Con/crypto-algorithms
 *********************************************************************/
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*************************** HEADER FILES ***************************/
 #include <stdlib.h>
 #include <memory.h>
@@ -189,3 +193,6 @@ void md5_final(MD5_CTX *ctx, BYTE hash[])
 		hash[i + 12] = (ctx->state[3] >> (i * 8)) & 0x000000ff;
 	}
 }
+#ifdef __cplusplus
+}
+#endif

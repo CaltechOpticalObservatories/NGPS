@@ -40,21 +40,20 @@ add_executable(slicecamd
         ${SLICECAMD_DIR}/slicecam_camera.cpp
         ${SLICECAMD_DIR}/slicecam_fits.cpp
         ${SLICECAMD_DIR}/slicecam_math.cpp
-        ${PYTHON_DEV}
         )
 
 target_link_libraries(slicecamd
         andor
-        python3.9
+        ${PYTHON_LIB}
         network
         common
         tcsd_client
         logentry
         utilities
+        md5
         skyinfo
         ${ZMQPP_LIB}
         ${ZMQ_LIB}
-        ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}
         ${CMAKE_THREAD_LIBS_INIT}

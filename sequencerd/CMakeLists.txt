@@ -10,7 +10,7 @@ set( SEQUENCER_DIR ${PROJECT_BASE_DIR}/sequencerd )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -O1 -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -O1 -Wno-variadic-macros -Wno-deprecated-declarations -ggdb )
 
 include_directories( ${PROJECT_BASE_DIR}/utils )
 include_directories( ${PROJECT_BASE_DIR}/common )
@@ -18,10 +18,14 @@ include_directories( ${PROJECT_BASE_DIR}/acamd )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+# C-Python API Development libraries and headers
+#
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 include_directories( ${PYTHON_DEV} )
 
+# ZMQ
+#
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
 
@@ -38,20 +42,21 @@ add_executable(sequencerd
         ${SEQUENCER_DIR}/sequencer_server.cpp 
         ${SEQUENCER_DIR}/sequencer_interface.cpp 
         ${SEQUENCER_DIR}/sequence_acquisition.cpp
+        ${SEQUENCER_DIR}/sequence.cpp
         ${SEQUENCER_DIR}/sequence_wait.cpp
         ${SEQUENCER_DIR}/sequence_builder.cpp
         ${SEQUENCER_DIR}/operation_builders.cpp
         ${SEQUENCER_DIR}/sequence_operations.cpp
-        ${SEQUENCER_DIR}/sequence.cpp 
-        ${MYSQL_INCLUDES}
+        )
+target_include_directories(sequencerd PRIVATE
         ${PYTHON_DEV}
         )
-
 target_link_libraries(sequencerd
         network
         common
         logentry
         utilities
+        md5
         skyinfo
         database
         ${CMAKE_THREAD_LIBS_INIT}
