@@ -309,12 +309,12 @@ namespace Slicecam {
       }
     }
 
-    {
-    std::ostringstream oss;
-    oss << "[DEBUG] bkg=" << bkg << " sigma=" << sigma
-        << " best_val=" << best_val << " best_x=" << best_x << " best_y=" << best_y;
-    logwrite("Slicecam::Math::calculate_centroid", oss.str());
-    }
+//  {
+//  std::ostringstream oss;
+//  oss << "[DEBUG] bkg=" << bkg << " sigma=" << sigma
+//      << " best_val=" << best_val << " best_x=" << best_x << " best_y=" << best_y;
+//  logwrite("Slicecam::Math::calculate_centroid", oss.str());
+//  }
 
     if ( best_x < 0 ) return ERROR;  // no source found
 

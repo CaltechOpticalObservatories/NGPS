@@ -22,7 +22,8 @@ namespace Sequencer {
     READY,      ///< open and ready to accept commands
     EXPOSING,   ///< exposure in progress
     READING,    ///< readout in progress
-    PAUSED      ///< exposure paused
+    PAUSED,     ///< exposure paused
+    INVALID     ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap camerad_specs = {
@@ -49,7 +50,27 @@ namespace Sequencer {
     { CAMERAD_READOUT,       {0, 2} },
     { CAMERAD_RESUME,        {0, 0} },
     { CAMERAD_SHUTTER,       {0, 1} },   ///< [ enable | 1 | disable | 0 ]
-    { CAMERAD_STOP,          {0, 0} }
+    { CAMERAD_STOP,          {0, 0} },
+    // Commands added for structural completeness; arg ranges from camerad_commands.h syntax.
+    // Transitions for these are all INVALID->INVALID so the sequencer cannot invoke them
+    // until the from/to states are verified against camerad behavior.
+    { CAMERAD_AUTODIR,       {0, 1} },
+    { CAMERAD_BASENAME,      {0, 1} },
+    { CAMERAD_BIAS,          {0, 4} },
+    { CAMERAD_BUFFER,        {1, 3} },   ///< ? | <dev#> | <chan> [ <bytes> | <cols> <rows> ]
+    { CAMERAD_CONFIG,        {0, 1} },
+    { CAMERAD_ECHO,          {0, 4} },
+    { CAMERAD_INTERFACE,     {0, 0} },
+    { CAMERAD_ISACTIVE,      {0, 0} },
+    { CAMERAD_ISOPEN,        {0, 1} },
+    { CAMERAD_LONGERROR,     {0, 0} },
+    { CAMERAD_MEX,           {0, 4} },
+    { CAMERAD_MEXAMPS,       {0, 4} },
+    { CAMERAD_NATIVE,        {1, 6} },   ///< ? | [<DEV>|<CHAN>] <CMD> [<ARG1>..<ARG4>]
+    { CAMERAD_PREEXPOSURES,  {0, 1} },
+    { CAMERAD_TEST,          {1, 8} },   ///< ? | <testname> ...
+    { CAMERAD_USEFRAMES,     {0, 1} },
+    { CAMERAD_WRITEKEYS,     {0, 0} }
   };
 
   const std::vector<Transition<CameraState>> camerad_transitions = {
@@ -79,7 +100,27 @@ namespace Sequencer {
     { CameraState::READING,  CAMERAD_READOUT,       CameraState::READY    },
     { CameraState::PAUSED,   CAMERAD_RESUME,        CameraState::EXPOSING },
     { CameraState::READY,    CAMERAD_SHUTTER,       CameraState::READY    },
-    { CameraState::EXPOSING, CAMERAD_STOP,          CameraState::READY    }
+    { CameraState::EXPOSING, CAMERAD_STOP,          CameraState::READY    },
+    // INVALID->INVALID transitions: these commands cannot be invoked by the
+    // sequencer until from/to states are verified. The unreachable-from-state
+    // condition rejects them at runtime via CommandClient::send().
+    { CameraState::INVALID,  CAMERAD_AUTODIR,       CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_BASENAME,      CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_BIAS,          CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_BUFFER,        CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_CONFIG,        CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_ECHO,          CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_INTERFACE,     CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_ISACTIVE,      CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_ISOPEN,        CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_LONGERROR,     CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_MEX,           CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_MEXAMPS,       CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_NATIVE,        CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_PREEXPOSURES,  CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_TEST,          CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_USEFRAMES,     CameraState::INVALID  },  // TODO: verify and assign real states
+    { CameraState::INVALID,  CAMERAD_WRITEKEYS,     CameraState::INVALID  }   // TODO: verify and assign real states
   };
 
 
@@ -89,7 +130,8 @@ namespace Sequencer {
     IDLE,       ///< not yet opened
     READY,      ///< open and ready to accept commands
     ACQUIRING,  ///< target acquisition in progress
-    GUIDING     ///< guiding in progress
+    GUIDING,    ///< guiding in progress
+    INVALID     ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap acamd_specs = {
@@ -114,7 +156,31 @@ namespace Sequencer {
     { ACAMD_SHUTDOWN,    {0, 0} },
     { ACAMD_TCSINIT,     {0, 1} },   ///< [ tcs | sim ]
     { ACAMD_OFFSETGOAL,  {0, 2} },   ///< [ <dRA> <dDEC> ]
-    { ACAMD_OFFSETPERIOD,{0, 1} }    ///< [ <sec> ]
+    { ACAMD_OFFSETPERIOD,{0, 1} },   ///< [ <sec> ]
+    // Commands added for structural completeness; arg ranges from acamd_commands.h syntax.
+    // Transitions for these are all INVALID->INVALID so the sequencer cannot invoke them
+    // until from/to states are verified against acamd behavior.
+    { ACAMD_AVGFRAMES,       {0, 1} },
+    { ACAMD_CONFIG,          {0, 1} },
+    { ACAMD_ECHO,            {0, 1} },
+    { ACAMD_EXIT,            {0, 0} },
+    { ACAMD_FRAMEGRABFIX,    {0, 1} },
+    { ACAMD_IMFLIP,          {0, 2} },
+    { ACAMD_IMROT,           {0, 1} },
+    { ACAMD_SPEED,           {0, 2} },
+    { ACAMD_EMULATOR,        {0, 1} },
+    { ACAMD_FAN,             {0, 1} },
+    { ACAMD_GUIDESET,        {0, 4} },
+    { ACAMD_LOADCALIBRATION, {0, 1} },
+    { ACAMD_MOTION,          {0, 4} },
+    { ACAMD_OFFSETCAL,       {0, 1} },
+    { ACAMD_QUALITY,         {0, 1} },
+    { ACAMD_SAVEFRAMES,      {0, 1} },
+    { ACAMD_SKIPFRAMES,      {0, 1} },
+    { ACAMD_TCSGET,          {0, 1} },
+    { ACAMD_TCSISCONNECTED,  {0, 1} },
+    { ACAMD_TCSISOPEN,       {0, 1} },
+    { ACAMD_TEST,            {1, 8} }
   };
 
   const std::vector<Transition<AcamState>> acamd_transitions = {
@@ -141,7 +207,29 @@ namespace Sequencer {
     { AcamState::READY,     ACAMD_SHUTDOWN,   AcamState::IDLE      },  // TODO: verify
     { AcamState::READY,     ACAMD_ISOPEN,     AcamState::READY     },  // TODO: verify
     { AcamState::READY,     ACAMD_ISHOME,     AcamState::READY     },  // TODO: verify
-    { AcamState::READY,     ACAMD_ISACQUIRED, AcamState::READY     }   // TODO: verify
+    { AcamState::READY,     ACAMD_ISACQUIRED, AcamState::READY     },  // TODO: verify
+    // INVALID->INVALID transitions: rejected at runtime until from/to verified.
+    { AcamState::INVALID,   ACAMD_AVGFRAMES,       AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_CONFIG,          AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_ECHO,            AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_EXIT,            AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_FRAMEGRABFIX,    AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_IMFLIP,          AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_IMROT,           AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_SPEED,           AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_EMULATOR,        AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_FAN,             AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_GUIDESET,        AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_LOADCALIBRATION, AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_MOTION,          AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_OFFSETCAL,       AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_QUALITY,         AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_SAVEFRAMES,      AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_SKIPFRAMES,      AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_TCSGET,          AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_TCSISCONNECTED,  AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_TCSISOPEN,       AcamState::INVALID },  // TODO: verify and assign real states
+    { AcamState::INVALID,   ACAMD_TEST,            AcamState::INVALID }   // TODO: verify and assign real states
   };
 
 
@@ -150,7 +238,8 @@ namespace Sequencer {
   enum class CalibState {
     IDLE,    ///< not yet opened
     READY,   ///< open and ready to accept commands
-    MOVING   ///< actuator motion in progress
+    MOVING,  ///< actuator motion in progress
+    INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap calibd_specs = {
@@ -162,31 +251,35 @@ namespace Sequencer {
     { CALIBD_ISHOME,  {0, 0} },
     { CALIBD_SET,     {1, 8} },   ///< <actuator>=open|close ... (variable)
     { CALIBD_LAMPMOD, {1, 4} },   ///< open | close | reconnect | default | <n> ...
-    { CALIBD_NATIVE,  {2, 2} }    ///< <addr> <cmd>
+    { CALIBD_NATIVE,  {2, 2} },   ///< <addr> <cmd>
+    // INVALID-transition commands: rejected at runtime until from/to verified.
+    { CALIBD_EXIT,    {0, 0} }
   };
 
   const std::vector<Transition<CalibState>> calibd_transitions = {
-    { CalibState::IDLE,   CALIBD_OPEN,    CalibState::READY  },  // TODO: verify
-    { CalibState::READY,  CALIBD_CLOSE,   CalibState::IDLE   },  // TODO: verify
-    { CalibState::READY,  CALIBD_ISOPEN,  CalibState::READY  },  // TODO: verify
-    { CalibState::READY,  CALIBD_GET,     CalibState::READY  },  // TODO: verify
-    { CalibState::READY,  CALIBD_HOME,    CalibState::MOVING },  // TODO: verify
-    { CalibState::MOVING, CALIBD_ISHOME,  CalibState::MOVING },  // TODO: verify
-    { CalibState::READY,  CALIBD_ISHOME,  CalibState::READY  },  // TODO: verify
-    { CalibState::READY,  CALIBD_SET,     CalibState::MOVING },  // TODO: verify
-    { CalibState::MOVING, CALIBD_SET,     CalibState::READY  },  // TODO: verify (completion)
-    { CalibState::READY,  CALIBD_LAMPMOD, CalibState::READY  },  // TODO: verify
-    { CalibState::READY,  CALIBD_NATIVE,  CalibState::READY  }   // TODO: verify
+    { CalibState::IDLE,    CALIBD_OPEN,    CalibState::READY   },  // TODO: verify
+    { CalibState::READY,   CALIBD_CLOSE,   CalibState::IDLE    },  // TODO: verify
+    { CalibState::READY,   CALIBD_ISOPEN,  CalibState::READY   },  // TODO: verify
+    { CalibState::READY,   CALIBD_GET,     CalibState::READY   },  // TODO: verify
+    { CalibState::READY,   CALIBD_HOME,    CalibState::MOVING  },  // TODO: verify
+    { CalibState::MOVING,  CALIBD_ISHOME,  CalibState::MOVING  },  // TODO: verify
+    { CalibState::READY,   CALIBD_ISHOME,  CalibState::READY   },  // TODO: verify
+    { CalibState::READY,   CALIBD_SET,     CalibState::MOVING  },  // TODO: verify
+    { CalibState::MOVING,  CALIBD_SET,     CalibState::READY   },  // TODO: verify (completion)
+    { CalibState::READY,   CALIBD_LAMPMOD, CalibState::READY   },  // TODO: verify
+    { CalibState::READY,   CALIBD_NATIVE,  CalibState::READY   },  // TODO: verify
+    { CalibState::INVALID, CALIBD_EXIT,    CalibState::INVALID }   // TODO: verify and assign real states
   };
 
 
   // ---------- SLITD ----------------------------------------------------------
 
   enum class SlitState {
-    IDLE,   ///< not yet opened
-    READY,  ///< open and ready to accept commands
-    MOVING, ///< slit motion in progress
-    HOMED   ///< slit has been homed
+    IDLE,    ///< not yet opened
+    READY,   ///< open and ready to accept commands
+    MOVING,  ///< slit motion in progress
+    HOMED,   ///< slit has been homed
+    INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap slitd_specs = {
@@ -226,11 +319,12 @@ namespace Sequencer {
   // ---------- TCSD -----------------------------------------------------------
 
   enum class TcsState {
-    IDLE,       ///< not yet opened
-    READY,      ///< open and ready to accept commands
-    SLEWING,    ///< telescope slew in progress
-    TRACKING,   ///< telescope tracking on target
-    OFFSETTING  ///< telescope offset in progress
+    IDLE,        ///< not yet opened
+    READY,       ///< open and ready to accept commands
+    SLEWING,     ///< telescope slew in progress
+    TRACKING,    ///< telescope tracking on target
+    OFFSETTING,  ///< telescope offset in progress
+    INVALID      ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap tcsd_specs = {
@@ -255,7 +349,10 @@ namespace Sequencer {
     { TCSD_NATIVE,         {1, 1} },   ///< <cmd>
     { TCSD_LIST,           {0, 0} },
     { TCSD_LLIST,          {0, 0} },
-    { TCSD_WEATHER_COORDS, {0, 0} }
+    { TCSD_WEATHER_COORDS, {0, 0} },
+    // INVALID-transition commands: rejected at runtime until from/to verified.
+    { TCSD_EXIT,           {0, 0} },
+    { TCSD_PUBLISHSTATE,   {0, 1} }
   };
 
   const std::vector<Transition<TcsState>> tcsd_transitions = {
@@ -300,16 +397,20 @@ namespace Sequencer {
     { TcsState::READY,      TCSD_LIST,           TcsState::READY      },  // TODO: verify
     { TcsState::READY,      TCSD_LLIST,          TcsState::READY      },  // TODO: verify
     { TcsState::READY,      TCSD_WEATHER_COORDS, TcsState::READY      },  // TODO: verify
-    { TcsState::TRACKING,   TCSD_WEATHER_COORDS, TcsState::TRACKING   }   // TODO: verify
+    { TcsState::TRACKING,   TCSD_WEATHER_COORDS, TcsState::TRACKING   },  // TODO: verify
+    // INVALID->INVALID transitions: rejected at runtime until from/to verified.
+    { TcsState::INVALID,    TCSD_EXIT,           TcsState::INVALID    },  // TODO: verify and assign real states
+    { TcsState::INVALID,    TCSD_PUBLISHSTATE,   TcsState::INVALID    }   // TODO: verify and assign real states
   };
 
 
   // ---------- FOCUSD ---------------------------------------------------------
 
   enum class FocusState {
-    IDLE,   ///< not yet opened
-    READY,  ///< open and ready to accept commands
-    MOVING  ///< focus motion in progress
+    IDLE,    ///< not yet opened
+    READY,   ///< open and ready to accept commands
+    MOVING,  ///< focus motion in progress
+    INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap focusd_specs = {
@@ -346,9 +447,10 @@ namespace Sequencer {
   // ---------- FLEXURED -------------------------------------------------------
 
   enum class FlexureState {
-    IDLE,   ///< not yet opened
-    READY,  ///< open and ready to accept commands
-    MOVING  ///< flexure compensation motion in progress
+    IDLE,    ///< not yet opened
+    READY,   ///< open and ready to accept commands
+    MOVING,  ///< flexure compensation motion in progress
+    INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap flexured_specs = {
@@ -382,8 +484,9 @@ namespace Sequencer {
   // ---------- POWERD ---------------------------------------------------------
 
   enum class PowerState {
-    IDLE,  ///< not yet opened
-    READY  ///< open and ready to accept commands
+    IDLE,    ///< not yet opened
+    READY,   ///< open and ready to accept commands
+    INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap powerd_specs = {
@@ -392,10 +495,9 @@ namespace Sequencer {
     { POWERD_ISOPEN, {0, 0} },
     { POWERD_STATUS, {0, 1} },   ///< [ ? ]
     { POWERD_REOPEN, {0, 0} },
-    { POWERD_LIST,   {0, 0} }
-    // NOTE: plug switching commands (<unit> <plug> ON|OFF|BOOT or <plugname> ON|OFF|BOOT)
-    // do not have a fixed first-word command name and so cannot be registered here by name.
-    // TODO: decide how plug switching is exposed via SEQUENCERD_OP.
+    { POWERD_LIST,   {0, 0} },
+    { POWERD_GET,    {1, 2} },
+    { POWERD_SET,    {1, 3} }    ///< <plugname> [ ON | OFF | BOOT ] or <unit#> <plug#> [ ON | OFF | BOOT ]
   };
 
   const std::vector<Transition<PowerState>> powerd_transitions = {
@@ -404,7 +506,9 @@ namespace Sequencer {
     { PowerState::READY, POWERD_ISOPEN, PowerState::READY },  // TODO: verify
     { PowerState::READY, POWERD_STATUS, PowerState::READY },  // TODO: verify
     { PowerState::READY, POWERD_REOPEN, PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_LIST,   PowerState::READY }   // TODO: verify
+    { PowerState::READY, POWERD_LIST,   PowerState::READY },  // TODO: verify
+    { PowerState::READY, POWERD_GET,    PowerState::READY },  // TODO: verify
+    { PowerState::READY, POWERD_SET,    PowerState::READY }   // TODO: verify
   };
 
 
@@ -414,7 +518,8 @@ namespace Sequencer {
     IDLE,       ///< not yet opened
     READY,      ///< open and ready to accept commands
     ACQUIRING,  ///< fine acquisition in progress
-    GUIDING     ///< guiding in progress
+    GUIDING,    ///< guiding in progress
+    INVALID     ///< sentinel for unverified commands; no live client ever holds this value
   };
 
   const CommandSpecMap slicecamd_specs = {
@@ -434,7 +539,24 @@ namespace Sequencer {
     { SLICECAMD_SHUTDOWN,    {0, 0} },
     { SLICECAMD_TCSINIT,     {0, 1} },   ///< [ tcs | sim ]
     { SLICECAMD_IMFLIP,      {0, 3} },   ///< [ <name> <hflip> <vflip> ]
-    { SLICECAMD_IMROT,       {0, 2} }    ///< [ <name> <rotdir> ]
+    { SLICECAMD_IMROT,       {0, 2} },   ///< [ <name> <rotdir> ]
+    // Commands added for structural completeness; arg ranges from slicecamd_commands.h syntax.
+    // Transitions for these are all INVALID->INVALID so the sequencer cannot invoke them
+    // until from/to states are verified against slicecamd behavior.
+    { SLICECAMD_AVGFRAMES,      {0, 1} },
+    { SLICECAMD_CONFIG,         {0, 1} },
+    { SLICECAMD_ECHO,           {0, 1} },
+    { SLICECAMD_EXIT,           {0, 0} },
+    { SLICECAMD_FRAMEGRABFIX,   {0, 1} },
+    { SLICECAMD_SPEED,          {0, 2} },
+    { SLICECAMD_EMULATOR,       {0, 1} },
+    { SLICECAMD_FAN,            {0, 2} },
+    { SLICECAMD_GUISET,         {0, 2} },
+    { SLICECAMD_ISACQUIRED,     {0, 0} },
+    { SLICECAMD_TCSGET,         {0, 1} },
+    { SLICECAMD_TCSISCONNECTED, {0, 1} },
+    { SLICECAMD_TCSISOPEN,      {0, 1} },
+    { SLICECAMD_TEST,           {1, 8} }
   };
 
   const std::vector<Transition<SlicecamState>> slicecamd_transitions = {
@@ -455,7 +577,22 @@ namespace Sequencer {
     { SlicecamState::READY,     SLICECAMD_SHUTDOWN,    SlicecamState::IDLE      },  // TODO: verify
     { SlicecamState::READY,     SLICECAMD_TCSINIT,     SlicecamState::READY     },  // TODO: verify
     { SlicecamState::READY,     SLICECAMD_IMFLIP,      SlicecamState::READY     },  // TODO: verify
-    { SlicecamState::READY,     SLICECAMD_IMROT,       SlicecamState::READY     }   // TODO: verify
+    { SlicecamState::READY,     SLICECAMD_IMROT,       SlicecamState::READY     },  // TODO: verify
+    // INVALID->INVALID transitions: rejected at runtime until from/to verified.
+    { SlicecamState::INVALID,   SLICECAMD_AVGFRAMES,      SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_CONFIG,         SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_ECHO,           SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_EXIT,           SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_FRAMEGRABFIX,   SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_SPEED,          SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_EMULATOR,       SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_FAN,            SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_GUISET,         SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_ISACQUIRED,     SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_TCSGET,         SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_TCSISCONNECTED, SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_TCSISOPEN,      SlicecamState::INVALID },  // TODO: verify and assign real states
+    { SlicecamState::INVALID,   SLICECAMD_TEST,           SlicecamState::INVALID }   // TODO: verify and assign real states
   };
 
 }

@@ -603,10 +603,13 @@ namespace Power {
                         ret = JSON;
                       }
       }
+      else
 
-      // all other commands go to the powerd interface for parsing
+      // set|get plug state -- strip command and forward the
+      // args to Interface::command(), which already parses
+      // <plugname> [ON|OFF|BOOT] and <unit#> <plug#> [ON|OFF|BOOT].
       //
-      else {
+      if ( cmd==POWERD_SET || cmd==POWERD_GET ) {
                       try {
                         std::transform( buf.begin(), buf.end(), buf.begin(), ::toupper );   // make uppercase
                       }
@@ -616,6 +619,14 @@ namespace Power {
                       }
                       ret = this->interface.command( buf, retstring );                      // send the command
       }
+      else {
+
+      // unknown commands generate an error
+      //
+        logwrite( function, "ERROR unknown command '"+cmd+"'");
+        ret = ERROR;
+      }
+
 
       // If retstring not empty then append "DONE" or "ERROR" depending on value of ret,
       // and log the reply along with the command number. Write the reply back to the socket.
