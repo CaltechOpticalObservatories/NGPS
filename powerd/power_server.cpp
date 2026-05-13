@@ -611,13 +611,13 @@ namespace Power {
       //
       if ( cmd==POWERD_SET || cmd==POWERD_GET ) {
                       try {
-                        std::transform( buf.begin(), buf.end(), buf.begin(), ::toupper );   // make uppercase
+                        std::transform( args.begin(), args.end(), args.begin(), ::toupper );  // make uppercase
                       }
                       catch( ...) {
                         logwrite( function, "ERROR converting command to uppercase" );
                         ret = ERROR;
                       }
-                      ret = this->interface.command( buf, retstring );                      // send the command
+                      ret = this->interface.command( args, retstring );                       // send the command
       }
       else {
 

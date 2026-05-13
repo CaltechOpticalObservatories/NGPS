@@ -2902,11 +2902,10 @@ namespace Sequencer {
     //
     for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( is_cancelled() ) break;
-      cmd.str(""); cmd << lamp << " " << (state?"on":"off");
-      message.str(""); message << "power " << cmd.str();
-      logwrite( function, message.str() );
+      std::string setpower = POWERD_SET+" "+lamp+" "+(state?"on":"off");
+      logwrite( function, "power "+setpower);
       std::string reply;
-      if ( this->powerd.send( cmd.str(), reply ) != NO_ERROR ) {
+      if ( this->powerd.send( setpower, reply ) != NO_ERROR ) {
         this->broadcast.error( function, ""+message.str() );
         throw std::runtime_error("setting lamp "+message.str());
       }
@@ -4059,7 +4058,8 @@ namespace Sequencer {
 
     for ( const auto &plug : this->power_switch[which].plugname ) {
       std::string reply;
-      if ( this->powerd.send( plug, reply ) == NO_ERROR ) {
+      std::string cmd = POWERD_GET+" "+plug;
+      if ( this->powerd.send( cmd, reply ) == NO_ERROR ) {
         if ( reply.find(reqstatestr) != std::string::npos ) {
           is_set=true;
           break;
@@ -4079,9 +4079,8 @@ namespace Sequencer {
     //
     for ( const auto &plug : this->power_switch[which].plugname ) {
       std::string reply;
-      std::stringstream cmd;
-      cmd << plug;
-      error = this->powerd.send( cmd.str(), reply );
+      std::string cmd = POWERD_GET+" "+plug;
+      error = this->powerd.send( cmd, reply );
       if ( error != NO_ERROR || reply.find(" DONE") == std::string::npos ) {
         logwrite( function, "ERROR checking plug: "+plug );
         continue;
@@ -4100,9 +4099,9 @@ namespace Sequencer {
       std::string reqstatestr = ( reqstate==ON ? "ON" : "OFF" );
 
       if ( state != reqstate ) {
-        cmd << " " << reqstatestr;
+        cmd = POWERD_SET+" "+plug+" "+reqstatestr;
         logwrite( function, "switching plug "+plug+" "+reqstatestr );
-        error = this->powerd.send( cmd.str(), reply );
+        error = this->powerd.send( cmd, reply );
         if ( error != NO_ERROR || reply.find(" DONE") != std::string::npos ) {
           logwrite( function, "ERROR switching plug: "+plug+" "+reqstatestr );
           continue;
