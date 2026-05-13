@@ -84,6 +84,11 @@ namespace Sequencer {
       if (name == "on_error") {
         // must be in a group for on_error to mean anything
         if (!current_group) return fail(command, "'on_error' out of a group");
+        // on_error must precede any operations in the group so it cannot
+        // silently mutate the policy of an already-populated group
+        if (!current_group->operations.empty()) {
+          return fail(command, "'on_error' must appear before any operations in the group");
+        }
         if (!command.params.has("action")) return fail(command, "on_error requires action=stop|continue");
 
         const std::string val = command.params.get<std::string>("action","");
