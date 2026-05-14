@@ -3389,11 +3389,12 @@ namespace Sequencer {
           ops.flexure_init(),
           ops.focus_init(),
           ops.slit_init(),
-          ops.tcs_init() }
+          ops.tcs_init(),
+          ops.acam_init() }         // ACAM camera-open overlaps with parallel group
       },
+      // SLICECAM can't be in parallel with ACAM. separate group enforces this
       { OperationType::SERIAL, OnError::CONTINUE,
-        { ops.acam_init(),
-          ops.slicecam_init() }
+        { ops.slicecam_init() }
       }
     };
 
