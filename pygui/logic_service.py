@@ -119,7 +119,7 @@ class LogicService:
                 'MAGNITUDE', 'MAGSYSTEM', 'MAGFILTER', 'SRCMODEL', 'OTMexpt', 'OTMslitwidth', 'OTMcass', 
                 'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start', 
                 'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR', 
-                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE', 'PRIORITY'
+                'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE', 'POINTMODE', 'PRIORITY', 'NEXP'
             ]
 
             # Step 5: Loop through each row and dynamically generate the insert query
@@ -221,7 +221,7 @@ class LogicService:
             'OTMairmass_start', 'OTMairmass_end', 'OTMsky', 'OTMdead', 'OTMslewgo', 'OTMexp_start',
             'OTMexp_end', 'OTMpa', 'OTMwait', 'OTMflag', 'OTMlast', 'OTMslew', 'OTMmoon', 'OTMSNR',
             'OTMres', 'OTMseeing', 'OTMslitangle', 'NOTE', 'COMMENT', 'OWNER', 'NOTBEFORE',
-            'POINTMODE', 'PRIORITY'
+            'POINTMODE', 'PRIORITY', 'NEXP'
         ]
 
         try:

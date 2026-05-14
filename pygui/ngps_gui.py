@@ -13,7 +13,11 @@ from calib.calibration import CalibrationGUI
 from etc_popup import EtcPopup
 from control_tab import ControlTab 
 from daemon_status_bar import DaemonStatusBar, DaemonState
-from calibration_procedure import make_calibration_targets, make_calibration_csv_text
+from calibration_procedure import (
+    make_calibration_targets,
+    make_calibration_csv_text,
+    save_calibration_csv,
+)
 from datetime import datetime
 
 DAEMONS = [
@@ -368,6 +372,16 @@ class NgpsGUI(QMainWindow):
         if set_id is None:
             return
 
+        try:
+            csv_path = save_calibration_csv(rows, target_list_name)
+        except Exception as e:
+            csv_path = None
+            QMessageBox.warning(
+                self,
+                "CSV Save Warning",
+                f"The calibration list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
+            )
+
         self.current_target_list_name = target_list_name
 
         # Make calibration mode active
@@ -378,17 +392,22 @@ class NgpsGUI(QMainWindow):
 
             self.layout_service.load_target_lists()
 
+        message = (
+            f"Created calibration target list '{target_list_name}'.\n\n"
+            f"SET_ID: {set_id}\n"
+            f"Slit width: {slitwidth:g}\n"
+            f"Spatial binning / xbin: {xbin}\n"
+            f"Spectral binning / ybin: {ybin}\n"
+            f"Rows generated: {len(rows)}"
+        )
+
+        if csv_path:
+            message += f"\n\nCSV saved to:\n{csv_path}"
+
         QMessageBox.information(
             self,
             "Calibration Target List Created",
-            (
-                f"Created calibration target list '{target_list_name}'.\n\n"
-                f"SET_ID: {set_id}\n"
-                f"Slit width: {slitwidth:g}\n"
-                f"Spatial binning / xbin: {xbin}\n"
-                f"Spectral binning / ybin: {ybin}\n"
-                f"Rows generated: {len(rows)}"
-            )
+            message,
         )
 
     def open_etc_popup(self):

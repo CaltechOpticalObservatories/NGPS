@@ -1,5 +1,7 @@
 import csv
 import io
+import os
+import re
 
 
 CAL_HEADER = [
@@ -269,3 +271,27 @@ def make_calibration_csv_text(slitwidth, xbin, ybin):
     writer.writerows(rows)
 
     return output.getvalue()
+
+def save_calibration_csv(rows, target_list_name, output_dir="generated_target_lists/calibrations"):
+    """
+    Save generated calibration rows to a CSV file.
+
+    The file name is based on the target list name, for example:
+        CAL_2026-05-02_12-54-30_slit0.5_bin1x1.csv
+    """
+    if not rows:
+        raise ValueError("No calibration rows to save.")
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", target_list_name)
+    csv_path = os.path.abspath(
+        os.path.join(output_dir, f"{safe_name}.csv")
+    )
+
+    with open(csv_path, "w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=CAL_HEADER)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return csv_path
