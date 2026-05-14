@@ -272,7 +272,9 @@ namespace Sequencer {
   /***** Sequencer::Sequence::do_target_acquisition ****************************/
   /**
    * @brief      performs target acquisition
-   * @details    First acquire on ACAM, then run slicecam fineacquire
+   * @details    First acquire on ACAM, then run slicecam fineacquire if enabled.
+   *             Waits for user confirmation when fineacquire is disabled or fails.
+   * @param[in]  caller  name of calling function for logging
    * @return     NO_ERROR | ABORT
    *
    */
@@ -284,18 +286,20 @@ namespace Sequencer {
     //
     if ( this->do_acam_acquire() != NO_ERROR ) {
       this->broadcast.warning( caller, "acam acquisition failed" );
-
-      // on ACAM acquisition failure wait for user to continue or cancel
       if ( this->wait_for_user(caller) == ABORT ) return ABORT;
-
       return NO_ERROR;  // user chose to continue
     }
 
     // ---------- SLICECAM fineacquire ---------------------
     //
-    if ( this->do_slicecam_fineacquire() != NO_ERROR ) {
-      this->broadcast.warning( caller, "slicecam fine acquisition failed" );
-    }
+    bool dofine = this->should_fineacquire.load();
+    long ret = NO_ERROR;
+    if ( dofine ) ret = this->do_slicecam_fineacquire();
+    if ( ret != NO_ERROR ) this->broadcast.warning( caller, "slicecam fine acquisition failed" );
+
+    // wait for user if fineacquire was disabled or failed
+    if ( (!dofine || ret != NO_ERROR) &&
+         this->wait_for_user(caller) == ABORT ) return ABORT;
 
     return NO_ERROR;
   }
@@ -306,7 +310,7 @@ namespace Sequencer {
   /**
    * @brief      move to virtual slit position
    * @param[in]  mode  VirtualSlitMode
-   * @return     NO_ERROR | NO_ERROR
+   * @return     NO_ERROR
    *
    */
   long Sequence::do_target_virtualslit(VirtualSlitMode mode) {
@@ -314,5 +318,32 @@ namespace Sequencer {
     return this->slit_set(mode);
   }
   /***** Sequencer::Sequence::do_target_virtualslit ****************************/
+
+
+  /***** Sequencer::Sequence::do_target_offset *********************************/
+  /**
+   * @brief      send guide offsets to the TCS after successful fine acquisition
+   * @details    Offsets are only sent when fineacquire achieved a lock.
+   *             If the offset fails, the operator is given the opportunity to
+   *             continue or cancel.
+   * @param[in]  caller  name of calling function for logging
+   * @return     NO_ERROR | ABORT
+   *
+   */
+  long Sequence::do_target_offset(std::string caller) {
+
+    if (this->target.iscal) return NO_ERROR;
+
+    // offsets are only meaningful when fineacquire achieved a lock
+    if ( !this->is_fineacquire_locked.load() ) return NO_ERROR;
+
+    if ( this->target_offset() == ERROR ) {
+      this->broadcast.warning( caller, "target offset failed" );
+      if ( this->wait_for_user(caller) == ABORT ) return ABORT;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::do_target_offset *********************************/
 
 }

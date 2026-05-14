@@ -875,6 +875,7 @@ namespace Sequencer {
       long do_slicecam_fineacquire();
       long do_slicecam_stop();
       long do_target_acquisition(std::string caller);
+      long do_target_offset(std::string caller);
       long do_target_virtualslit(VirtualSlitMode mode);
 
       long acam_init();                                        ///< initializes connection to acamd

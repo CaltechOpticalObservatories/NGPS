@@ -358,7 +358,7 @@ namespace Sequencer {
               [this,caller]() { return this->do_target_acquisition(caller); } },
 
             { THR_MOVE_TO_TARGET,
-              [this]() { return this->target_offset(); } },
+              [this,caller]() { return this->do_target_offset(caller); } },
 
             { THR_SLIT_SET,
               [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
