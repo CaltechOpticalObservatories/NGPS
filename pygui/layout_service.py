@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 import re
+import subprocess
 
 class LayoutService:
     def __init__(self, parent):
@@ -375,13 +376,72 @@ class LayoutService:
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_single)
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_all)
 
+        # Fine acquire toggle
+        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Disabled")
+        self.parent.fine_acquire_toggle.setCheckable(True)
+        self.parent.fine_acquire_toggle.setToolTip("Enable or disable sequencer fine acquire")
+        self.parent.fine_acquire_toggle.setMaximumWidth(200)
+        self.parent.fine_acquire_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #D3D3D3;
+                color: black;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+            }
+        """)
+        self.parent.fine_acquire_toggle.toggled.connect(self.on_fine_acquire_toggled)
+        sequencer_mode_layout.addWidget(self.parent.fine_acquire_toggle)
+
         sequencer_mode_group.setLayout(sequencer_mode_layout)
 
         # Set maximum width and height for the sequencer mode group
         sequencer_mode_group.setMaximumWidth(300)  # Maximum width
-        sequencer_mode_group.setMaximumHeight(100)  # Maximum height
+        sequencer_mode_group.setMaximumHeight(145)  # Maximum height
 
         return sequencer_mode_group
+
+    def on_fine_acquire_toggled(self, checked):
+        """Enable/disable the sequencer fine-acquire step."""
+        action = "enable" if checked else "disable"
+        command = ["seq", "fineacquire", action]
+        button = getattr(self.parent, "fine_acquire_toggle", None)
+
+        if button is not None:
+            button.setText(f"Fine Acquire: {'Enabled' if checked else 'Disabled'}")
+
+        try:
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            if hasattr(self.parent, "message_log") and self.parent.message_log:
+                self.update_message_log(f"Ran command: {' '.join(command)}")
+                if result.stdout.strip():
+                    self.update_message_log(result.stdout.strip())
+
+        except Exception as exc:
+            # Revert the UI if the command failed.
+            if button is not None:
+                with QSignalBlocker(button):
+                    button.setChecked(not checked)
+                    button.setText(f"Fine Acquire: {'Disabled' if checked else 'Enabled'}")
+
+            QMessageBox.warning(
+                self.parent,
+                "Fine Acquire Command Failed",
+                f"Could not run: {' '.join(command)}\n\n{exc}",
+            )
+
+            if hasattr(self.parent, "message_log") and self.parent.message_log:
+                self.update_message_log(f"Fine acquire command failed: {' '.join(command)} — {exc}")
 
     def create_progress_and_image_group(self):
         progress_and_image_group = QGroupBox("Progress and Image Info")
