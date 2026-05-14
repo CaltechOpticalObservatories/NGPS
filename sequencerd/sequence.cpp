@@ -168,6 +168,28 @@ namespace Sequencer {
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
 
+  /***** Sequencer::Sequence::request_snapshot *******************************/
+  /**
+   * @brief      asks subscribed daemons to re-publish their current telemetry
+   * @details    Publishes a SNAPSHOT request listing each daemon whose topic
+   *             this sequencer subscribes to. Each named daemon responds by
+   *             re-publishing its own state, ensuring the sequencer receives
+   *             current telemetry even if the daemon published before the
+   *             sequencer subscribed.
+   *
+   */
+  void Sequence::request_snapshot() {
+    nlohmann::json jmessage;
+    jmessage[Daemon::CAMERAD]   = true;
+    jmessage[Daemon::ACAMD]     = true;
+    jmessage[Daemon::SLICECAMD] = true;
+    jmessage[Daemon::SLITD]     = true;
+    jmessage[Daemon::TCSD]      = true;
+    this->publisher->publish( jmessage, Topic::SNAPSHOT );
+  }
+  /***** Sequencer::Sequence::request_snapshot *******************************/
+
+
   /***** Sequencer::Sequence::publish_seqstate ********************************/
   /**
    * @brief      publishes sequencer state under Topic::SEQ_SEQSTATE
@@ -2026,6 +2048,10 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::move_to_target");
     std::stringstream message;
     long error=NO_ERROR;
+
+    // no telescope moves for calibration targets
+    //
+    if ( this->target.iscal ) return NO_ERROR;
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
