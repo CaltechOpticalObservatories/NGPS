@@ -233,8 +233,10 @@ namespace Sequencer {
         ret = futures[i].get();
         oss << ops[i].name();
         if (ret==ABORT) { is_abort=true; oss << " cancelled"; }
-        else
-        oss << " completed" << ( (ret==NO_ERROR) ? "" : " with error");
+        else {
+          if (ret != NO_ERROR) is_error=true;
+          oss << " completed" << ( (ret==NO_ERROR) ? "" : " with error");
+        }
       }
       catch (const std::exception &e) {
         oss << " received exception: " << e.what();
