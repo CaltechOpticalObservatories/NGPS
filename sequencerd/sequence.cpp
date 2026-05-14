@@ -3431,12 +3431,20 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
 
-    // set only STOPPING (and clear everything else, including any prior FAILED)
-    ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STOPPING, true );     // state=STOPPING (only)
+    // Enter STOPPING as a strict one-hot state. Explicit set_only is used instead
+    // of ScopedState because abort_process() below transitions seqstate
+    // independently
+    //
+    this->seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
 
-    // stop everything
+    // stop everything in progress
     //
     this->abort_process();
+
+    // abort_process snapshots abort_during_lifecycle=true (STOPPING was set) and
+    // ends with set_only({SEQ_FAILED}). Restore STOPPING so shutdown can proceed.
+    //
+    this->seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
 
     // clear stop flags
     //
@@ -3472,16 +3480,21 @@ namespace Sequencer {
       }, function );
 
     std::ostringstream message;
-    if (error==NO_ERROR) {                                      // TODO need granularity here
+    if (error==NO_ERROR) {
       message << "NOTICE: instrument is shut down";
-      seq_state.destruct_set( Sequencer::SEQ_NOTREADY );        // clean shutdown -> NOTREADY
     }
     else {
       message << "ERROR occurred during shutdown and may not have completed";
-      seq_state.destruct_set( Sequencer::SEQ_FAILED );          // bad shutdown -> FAILED
     }
 
     this->async.enqueue_and_log( function, message.str() );
+
+    // Always end in NOTREADY regardless of worker errors. SEQ_FAILED is
+    // reserved for startup failures and externally-aborted lifecycle transitions.
+    // Worker errors during shutdown are logged above but do not prevent
+    // the instrument from being considered shut down (not ready).
+    //
+    this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
 
     return error;
   }
