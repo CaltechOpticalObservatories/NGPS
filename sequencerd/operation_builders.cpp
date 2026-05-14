@@ -13,65 +13,159 @@
  *                    the member function via Sequence::current_op_params (set by
  *                    Sequence::run() immediately before op.func() is invoked).
  *
- *   2. Passthrough : per-daemon validated passthrough (e.g. "camera exptime 30000"
- *                    or "slit set 2.0 0.0"). These are built inline here (no Ops::
- *                    method) and forward the positional args (cmd.args) to the
- *                    target daemon. The first arg is the daemon subcommand; the
- *                    remainder are forwarded as-is in daemon native syntax.
- *
- * NOTE: Passthrough commands currently forward via Common::DaemonClient::send() as a
- *       PLACEHOLDER. This will be replaced by CommandClient<State>::send()
- *       later, at which point per-command state-machine validation and
- *       arg-count checks will be performed at execution time.
+ *   2. Passthrough : per-daemon translated passthrough. The sequencer DSL form
+ *                    "subsystem [do=verb] [key1=val1 ... keyN=valN]" is
+ *                    translated to a daemon-native Command{name, arglist} by
+ *                    translate_command(), which dispatches to either a
+ *                    daemon-specific builder (e.g. build_powerd_command) or
+ *                    build_generic_command(). The translated Command is then
+ *                    forwarded via CommandClient<State>::send(), which performs
+ *                    per-command arg-count and state-machine validation before
+ *                    forwarding to the daemon.
  *
  */
 
+#include <algorithm>
+#include <initializer_list>
+#include <string_view>
+#include <stdexcept>
+
 #include "sequence.h"
 #include "sequencerd_commands.h"
+#include "powerd_commands.h"
 
 namespace Sequencer {
 
-  namespace {
-
-    /***** Sequencer::daemon_passthrough *************************************/
-    /**
-     * @brief      TEMPORARY daemon passthrough helper
-     * @param[in]  function  calling function name for logging
-     * @param[in]  daemon    DaemonClient to forward to
-     * @param[in]  args      positional args from ParsedCommand (first is subcommand)
-     * @return     ERROR|NO_ERROR
-     * @details    Builds a daemon-native command string from args[0..N-1] and
-     *             forwards via Common::DaemonClient::send(). Self-identifies in
-     *             log as a placeholder so the pending replacement is unambiguous.
-     *
-     * TEMPORARY -- REMOVE ONCE CommandClient<State> IS WIRED IN (Steps 2+3).
-     *              Each Passthrough op_builder lambda will then call
-     *              CommandClient<State>::send() directly, performing per-command
-     *              state-machine validation and arg-count checks at execution
-     *              time, and this helper becomes unnecessary.
-     *
-     */
-    long daemon_passthrough( const std::string &function,
-                             Common::DaemonClient &daemon,
-                             const std::vector<std::string> &args ) {
-      if (args.empty()) {
-        logwrite(function, "ERROR no subcommand provided to "+daemon.name);
-        return ERROR;
+  /***** Sequencer::Sequence::validate_keys **********************************/
+  /**
+   * @brief      reject any params key not in the allowed whitelist
+   * @param[in]  cmd      ParsedCommand whose params are being checked
+   * @param[in]  allowed  initializer list of permitted key names
+   * @throws     std::runtime_error if any key in cmd.params is not in allowed
+   * @details    Called from daemon-specific builders after the verb and
+   *             required keys have been matched. Ensures that DSL lines like
+   *             "power do=set name=A state=ON garbage=oops" are rejected
+   *             rather than silently forwarded.
+   *
+   */
+  void Sequence::validate_keys( const ParsedCommand &cmd,
+                                std::initializer_list<std::string_view> allowed ) {
+    for (const auto &[key, val] : cmd.params) {
+      if (std::find(allowed.begin(), allowed.end(),
+                    std::string_view{key}) == allowed.end()) {
+        throw std::runtime_error(
+          "subsystem '"+cmd.subsystem+"': unexpected key '"+key+"'");
       }
-      std::string cmd_str = args[0];
-      for (size_t i=1; i<args.size(); ++i) cmd_str += " " + args[i];
-      std::string reply;
-      logwrite(function, "PLACEHOLDER passthrough (DaemonClient -> "+daemon.name+
-                         "): "+cmd_str);
-      long error = daemon.send(cmd_str, reply);
-      if (error != NO_ERROR) {
-        logwrite(function, "ERROR forwarding \""+cmd_str+"\" to "+daemon.name+": "+reply);
-      }
-      return error;
     }
-    /***** Sequencer::daemon_passthrough *************************************/
+  }
+  /***** Sequencer::Sequence::validate_keys **********************************/
 
-  }  // anonymous namespace
+
+  /***** Sequencer::Sequence::build_generic_command **************************/
+  /**
+   * @brief      default ParsedCommand -> Command translation
+   * @param[in]  cmd  ParsedCommand to translate
+   * @return     Command{ name, arglist } ready for CommandClient::send()
+   * @throws     std::runtime_error if cmd does not match one of the two
+   *             supported generic forms
+   * @details    Two cases only:
+   *               1. verb non-empty, params empty
+   *                    -> Command{ verb, {} }
+   *                    e.g. "acam do=isopen"          -> isopen
+   *               2. verb empty, params has exactly one key=val
+   *                    -> Command{ key, { val } }
+   *                    e.g. "camera exptime=30000"    -> exptime 30000
+   *             Any other shape (verb + params, multiple params, etc.) is
+   *             a translation error; add a daemon-specific builder.
+   *
+   */
+  Command Sequence::build_generic_command( const ParsedCommand &cmd ) {
+    if (!cmd.verb.empty() && cmd.params.size() == 0) {
+      return Command{ cmd.verb, {} };
+    }
+    if (cmd.verb.empty() && cmd.params.size() == 1) {
+      const auto &[key, val] = *cmd.params.begin();
+      return Command{ key, { val } };
+    }
+    throw std::runtime_error(
+      "subsystem '"+cmd.subsystem+"': cannot build command"
+      " (verb='"+cmd.verb+"', "+std::to_string(cmd.params.size())+" params)"
+      " -- add a daemon-specific translator");
+  }
+  /***** Sequencer::Sequence::build_generic_command **************************/
+
+
+  /***** Sequencer::Sequence::build_powerd_command ***************************/
+  /**
+   * @brief      powerd-specific ParsedCommand -> Command translation
+   * @param[in]  cmd  ParsedCommand to translate
+   * @return     Command{ name, arglist } in powerd native positional syntax
+   * @throws     std::runtime_error if required keys are missing or unknown
+   *             keys are present
+   * @details    Powerd accepts the following DSL forms:
+   *               power do=set name=<plug>  state=<ON|OFF|BOOT>
+   *               power do=set unit=<u> plug=<p> state=<ON|OFF|BOOT>
+   *               power do=get name=<plug>
+   *               power do=get unit=<u> plug=<p>
+   *             All other powerd subcommands (open, close, list, status,
+   *             isopen, reopen) fall through to build_generic_command().
+   *
+   */
+  Command Sequence::build_powerd_command( const ParsedCommand &cmd ) {
+    if (cmd.verb == POWERD_SET) {
+      if (cmd.params.contains("name") && cmd.params.contains("state")) {
+        validate_keys(cmd, {"name", "state"});
+        return Command{ POWERD_SET,
+                        { cmd.params.at("name"), cmd.params.at("state") } };
+      }
+      if (cmd.params.contains("unit") &&
+          cmd.params.contains("plug") &&
+          cmd.params.contains("state")) {
+        validate_keys(cmd, {"unit", "plug", "state"});
+        return Command{ POWERD_SET,
+                        { cmd.params.at("unit"),
+                          cmd.params.at("plug"),
+                          cmd.params.at("state") } };
+      }
+      throw std::runtime_error(
+        "powerd "+POWERD_SET+": requires name+state or unit+plug+state");
+    }
+    if (cmd.verb == POWERD_GET) {
+      if (cmd.params.contains("name")) {
+        validate_keys(cmd, {"name"});
+        return Command{ POWERD_GET, { cmd.params.at("name") } };
+      }
+      if (cmd.params.contains("unit") && cmd.params.contains("plug")) {
+        validate_keys(cmd, {"unit", "plug"});
+        return Command{ POWERD_GET,
+                        { cmd.params.at("unit"), cmd.params.at("plug") } };
+      }
+      throw std::runtime_error(
+        "powerd "+POWERD_GET+": requires name or unit+plug");
+    }
+    return build_generic_command(cmd);
+  }
+  /***** Sequencer::Sequence::build_powerd_command ***************************/
+
+
+  /***** Sequencer::Sequence::translate_command ******************************/
+  /**
+   * @brief      central ParsedCommand -> Command dispatcher
+   * @param[in]  cmd  ParsedCommand from the DSL parser
+   * @return     Command in daemon native syntax
+   * @throws     std::runtime_error from the selected builder
+   * @details    Dispatches to a daemon-specific builder when one exists;
+   *             otherwise falls through to build_generic_command(). Plain
+   *             if/else dispatch -- no registry, no table.
+   *
+   */
+  Command Sequence::translate_command( const ParsedCommand &cmd ) {
+    if (cmd.subsystem == SEQUENCERD_POWER) {
+      return build_powerd_command(cmd);
+    }
+    return build_generic_command(cmd);
+  }
+  /***** Sequencer::Sequence::translate_command ******************************/
 
 
   /***** Sequencer::Sequence::init_operation_builders ************************/
@@ -194,80 +288,136 @@ namespace Sequencer {
 
     // ---------- PASSTHROUGH ---------------------------------------------------
 
-    // per-daemon validated passthrough (inline, no Ops method).
+    // per-daemon translated passthrough (inline, no Ops method).
     // Command names come from SEQUENCERD_* constants in common/sequencerd_commands.h.
-    // PLACEHOLDER: forwards via Common::DaemonClient::send() until Steps 2+3
-    // replace with CommandClient<State>::send() (state-machine validated).
+    // translate_command() converts the DSL ParsedCommand into a daemon-native
+    // Command{name, arglist}, which is then forwarded via
+    // CommandClient<State>::send(). The client performs per-command arg-count
+    // validation and state-machine validation before forwarding to the daemon.
 
     op_builders[SEQUENCERD_ACAM] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_ACAM_INIT;  // passthrough uses nearest daemon THR_ identity
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_ACAM+"]");
-        return daemon_passthrough(function, this->acamd, args);
+        try {
+          return this->acamd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_CALIB] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_CALIB_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_CALIB+"]");
-        return daemon_passthrough(function, this->calibd, args);
+        try {
+          return this->calibd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_CAMERA] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_CAMERA_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_CAMERA+"]");
-        return daemon_passthrough(function, this->camerad, args);
+        try {
+          return this->camerad_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_FLEXURE] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_FLEXURE_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_FLEXURE+"]");
-        return daemon_passthrough(function, this->flexured, args);
+        try {
+          return this->flexured_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_FOCUS] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_FOCUS_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_FOCUS+"]");
-        return daemon_passthrough(function, this->focusd, args);
+        try {
+          return this->focusd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_POWER] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_POWER_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_POWER+"]");
-        return daemon_passthrough(function, this->powerd, args);
+        try {
+          return this->powerd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_SLICECAM] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_SLICECAM_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_SLICECAM+"]");
-        return daemon_passthrough(function, this->slicecamd, args);
+        try {
+          return this->slicecamd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_SLIT] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_SLIT_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_SLIT+"]");
-        return daemon_passthrough(function, this->slitd, args);
+        try {
+          return this->slitd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 
     op_builders[SEQUENCERD_TCS] = [this](Operation &op, const ParsedCommand &cmd) {
       op.thr  = THR_TCS_INIT;
-      op.func = [this, args=cmd.args]() {
+      op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_TCS+"]");
-        return daemon_passthrough(function, this->tcsd, args);
+        try {
+          return this->tcsd_cmd.send(translate_command(cmd_copy));
+        }
+        catch (const std::runtime_error &e) {
+          logwrite(function, "ERROR "+std::string(e.what()));
+          return ERROR;
+        }
       };
     };
 

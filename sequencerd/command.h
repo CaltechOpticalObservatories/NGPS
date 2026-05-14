@@ -73,7 +73,13 @@ namespace Sequencer {
       const CommandSpecMap &specs;
       State state;
       const std::vector<Transition<State>> &transitions;
+      const std::unordered_map<State, std::string> &state_names;
 
+      /**
+       * @brief      rejects cmd if its name is unknown or its arg count is out of range
+       * @param[in]  cmd  command to check
+       * @throws     std::runtime_error on unknown command name or arg count out of range
+       */
       void validate_args( const Command &cmd ) const {
         auto it = specs.find( cmd.name );
         if (it == specs.end()) throw std::runtime_error("unknown command: "+cmd.name);
@@ -83,15 +89,40 @@ namespace Sequencer {
         }
       }
 
+      /**
+       * @brief      rejects cmd if it is not permitted from the current state
+       * @param[in]  cmd  command to check
+       * @throws     std::runtime_error
+       */
       void validate_order( const Command &cmd ) const {
         for (const auto &transition : transitions) {
-          if (transition.from == state && transition.command == cmd.name) {
-            return;
+          if (transition.from == state && transition.command == cmd.name) return;
+        }
+        // not valid from current state; collect all valid from-states for the error message
+        auto name_of = [&](State s) -> std::string {
+          auto it = state_names.find(s);
+          return (it != state_names.end()) ? it->second : "?";
+        };
+        std::string valid;
+        for (const auto &transition : transitions) {
+          if (transition.command == cmd.name) {
+            if (!valid.empty()) valid += ", ";
+            valid += name_of(transition.from);
           }
         }
-        throw std::runtime_error("invalid command order: "+cmd.name);
+        if (valid.empty()) valid = "(none registered)";
+        throw std::runtime_error(
+          "invalid command order: '"+cmd.name+"' not valid in state "
+          +name_of(state)+"; valid from: {"+valid+"}");
       }
 
+      /**
+       * @brief      advances internal state after a successful send
+       * @param[in]  cmd  command that was just forwarded to the daemon
+       * @details    Searches the transition table for a matching (from==state,
+       *             command==cmd.name) entry and sets state to transition.to.
+       *             No-ops silently when no matching transition exists.
+       */
       void advance_state( const Command &cmd ) {
         for (const auto &transition : transitions) {
           if (transition.from == state && transition.command == cmd.name) {
@@ -102,14 +133,24 @@ namespace Sequencer {
       }
 
     public:
+      /**
+       * @brief      constructs a CommandClient bound to a daemon connection
+       * @param[in]  client         DaemonClient used to forward wire commands
+       * @param[in]  specs          per-command arg-count constraints
+       * @param[in]  initial_state  starting state of the state machine
+       * @param[in]  transitions    valid (from, command, to) state transitions
+       * @param[in]  state_names    human-readable names for each State value, used in errors
+       */
       CommandClient( Common::DaemonClient &client,
                      const CommandSpecMap &specs,
                      State initial_state,
-                     const std::vector<Transition<State>> &transitions )
+                     const std::vector<Transition<State>> &transitions,
+                     const std::unordered_map<State, std::string> &state_names )
         : client(client),
           specs(specs),
           state(initial_state),
-          transitions(transitions) { }
+          transitions(transitions),
+          state_names(state_names) { }
 
       /**
        * @brief      primary interface to sending commands
@@ -128,6 +169,7 @@ namespace Sequencer {
         return ret;
       }
 
+      /** @brief  returns the current state-machine state */
       State get_state() const { return state; }
   };
 }

@@ -35,10 +35,8 @@
 #include "sequencerd_commands.h"
 #include "message_keys.h"
 #include "thread_pool.h"
-/*** Work-In-Progress
- * #include "command.h"
- * #include "command_rules.h"
- */
+#include "command.h"
+#include "command_rules.h"
 
 #include "tcs_constants.h"
 #include "acam_interface_shared.h"
@@ -52,6 +50,17 @@
 namespace Sequencer {
 
   constexpr size_t NTHREADS = 10;  ///< number of simultaneous operation threads
+
+  /**
+   * @brief DSL reserved keys
+   * @details DSL_KEY_DO is globally reserved at parse level. It is extracted
+   *          to ParsedCommand::verb and never stored in params. No daemon
+   *          parameter may use this name.
+   *          DSL_KEY_ACTION is semantic-level only — it stays in params and
+   *          is consumed by build_sequence() in the on_error context.
+   */
+  inline constexpr std::string_view DSL_KEY_DO     { "do"     };
+  inline constexpr std::string_view DSL_KEY_ACTION { "action" };
 
   /**
    * @enum  ErrorCodes
@@ -342,6 +351,31 @@ namespace Sequencer {
           return map.find(key) != map.end();
         }
 
+        /** @brief alias for has() — provided for STL-style readability */
+        bool contains(const std::string &key) const {
+          return has(key);
+        }
+
+        /** @brief throwing accessor — caller must guarantee key presence */
+        const std::string &at(const std::string &key) const {
+          return map.at(key);
+        }
+
+        /** @brief number of stored key=value pairs */
+        size_t size() const {
+          return map.size();
+        }
+
+        /** @brief iteration — ordering unspecified (unordered_map).
+         *         Use only for single-entry access or explicit key checks. */
+        auto begin() const { return map.begin(); }
+        auto end()   const { return map.end();   }
+
+        /** @brief insert or overwrite a key=value pair */
+        void set(const std::string &key, const std::string &val) {
+          map[key] = val;
+        }
+
         template <typename T>
         T get(const std::string &key, const T &default_val) const {
           auto it = map.find(key);
@@ -391,13 +425,34 @@ namespace Sequencer {
       };
 
       /** @brief  associates a sequencer command with its parameters
+       *  @details A DSL line of the form
+       *             command [key1=val1 key2=val2 ... keyN=valN]
+       *           parses to:
+       *             subsystem = command       (first token)
+       *             verb      = value of the reserved do= key, or "" if absent
+       *             params    = the remaining key=value pairs (do= removed)
+       *           Block keywords (parallel:, serial:, end, on_error) are
+       *           intercepted by build_sequence() before op_builder dispatch,
+       *           so subsystem here always names a real subsystem after that
+       *           filter has run.
        */
       struct ParsedCommand {
-        std::string name;
-        OperationParams params;           ///< key=value pairs (for Internal Operations)
-        std::vector<std::string> args;    ///< positional args (for Passthrough Operations)
+        std::string subsystem;
+        std::string verb;
+        OperationParams params;
         int linenum{0};
       };
+
+      /** @brief   DSL -> daemon Command translation helpers
+       *  @details Implemented in operation_builders.cpp. Static because they
+       *           do not depend on Sequence state; declared as members so
+       *           they have access to the private ParsedCommand type.
+       */
+      static void validate_keys( const ParsedCommand &cmd,
+                                 std::initializer_list<std::string_view> allowed );
+      static Command build_generic_command( const ParsedCommand &cmd );
+      static Command build_powerd_command( const ParsedCommand &cmd );
+      static Command translate_command( const ParsedCommand &cmd );
 
       /** @brief   key=value params of the currently executing operation
        *  @details set by run() just before op.func() is invoked and consumed
@@ -537,6 +592,10 @@ namespace Sequencer {
       inline void set_cancel_flag() {
         this->cancel_flag.store(true, std::memory_order_release);
         this->cv.notify_all();
+        // Wake threads blocked on subsystem CVs so they can observe the cancel_flag.
+        { std::lock_guard<std::mutex> lock(this->camerad_mtx);     this->camerad_cv.notify_all();     }
+        { std::lock_guard<std::mutex> lock(this->acam_mtx);        this->acam_cv.notify_all();        }
+        { std::lock_guard<std::mutex> lock(this->fineacquire_mtx); this->fineacquire_cv.notify_all(); }
       }
 
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
@@ -615,12 +674,47 @@ namespace Sequencer {
       Common::DaemonClient slitd { "slitd" };
       Common::DaemonClient tcsd { "tcsd" };
 
-/**** Work-In-Progress
-      CommandClient<CameraState> camerad_cmd { camerad,
-                                               camerad_specs,
-                                               CameraState::IDLE,
-                                               camerad_transitions};
-*****/
+      // CommandClient<State> wrappers add per-daemon arg-count checks and
+      // state-machine validation in front of the DaemonClient TCP send.
+      // Initial state is IDLE for every daemon -- they transition to READY
+      // after the first successful "open" (or equivalent) command.
+      //
+      CommandClient<AcamState>     acamd_cmd     { acamd,     acamd_specs,
+                                                   AcamState::IDLE,
+                                                   acamd_transitions,
+                                                   acamd_state_names };
+      CommandClient<CalibState>    calibd_cmd    { calibd,    calibd_specs,
+                                                   CalibState::IDLE,
+                                                   calibd_transitions,
+                                                   calibd_state_names };
+      CommandClient<CameraState>   camerad_cmd   { camerad,   camerad_specs,
+                                                   CameraState::IDLE,
+                                                   camerad_transitions,
+                                                   camerad_state_names };
+      CommandClient<FlexureState>  flexured_cmd  { flexured,  flexured_specs,
+                                                   FlexureState::IDLE,
+                                                   flexured_transitions,
+                                                   flexured_state_names };
+      CommandClient<FocusState>    focusd_cmd    { focusd,    focusd_specs,
+                                                   FocusState::IDLE,
+                                                   focusd_transitions,
+                                                   focusd_state_names };
+      CommandClient<PowerdState>   powerd_cmd    { powerd,    powerd_specs,
+                                                   PowerdState::IDLE,
+                                                   powerd_transitions,
+                                                   powerd_state_names };
+      CommandClient<SlicecamState> slicecamd_cmd { slicecamd, slicecamd_specs,
+                                                   SlicecamState::IDLE,
+                                                   slicecamd_transitions,
+                                                   slicecamd_state_names };
+      CommandClient<SlitState>     slitd_cmd     { slitd,     slitd_specs,
+                                                   SlitState::IDLE,
+                                                   slitd_transitions,
+                                                   slitd_state_names };
+      CommandClient<TcsState>      tcsd_cmd      { tcsd,      tcsd_specs,
+                                                   TcsState::IDLE,
+                                                   tcsd_transitions,
+                                                   tcsd_state_names };
 
       std::map<std::string, class PowerSwitch> power_switch;  ///< STL map of PowerSwitch objects maps all plugnames to each subsystem 
 
@@ -663,6 +757,7 @@ namespace Sequencer {
       void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
+      void request_snapshot();
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();

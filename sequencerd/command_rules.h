@@ -11,6 +11,7 @@
 
 #pragma once
 #include "command.h"
+#include <unordered_map>
 #include <vector>
 
 namespace Sequencer {
@@ -24,6 +25,15 @@ namespace Sequencer {
     READING,    ///< readout in progress
     PAUSED,     ///< exposure paused
     INVALID     ///< sentinel for unverified commands; no live client ever holds this value
+  };
+
+  const std::unordered_map<CameraState, std::string> camerad_state_names = {
+    { CameraState::IDLE,     "IDLE"     },
+    { CameraState::READY,    "READY"    },
+    { CameraState::EXPOSING, "EXPOSING" },
+    { CameraState::READING,  "READING"  },
+    { CameraState::PAUSED,   "PAUSED"   },
+    { CameraState::INVALID,  "INVALID"  },
   };
 
   const CommandSpecMap camerad_specs = {
@@ -134,6 +144,14 @@ namespace Sequencer {
     INVALID     ///< sentinel for unverified commands; no live client ever holds this value
   };
 
+  const std::unordered_map<AcamState, std::string> acamd_state_names = {
+    { AcamState::IDLE,      "IDLE"      },
+    { AcamState::READY,     "READY"     },
+    { AcamState::ACQUIRING, "ACQUIRING" },
+    { AcamState::GUIDING,   "GUIDING"   },
+    { AcamState::INVALID,   "INVALID"   },
+  };
+
   const CommandSpecMap acamd_specs = {
     { ACAMD_OPEN,        {0, 2} },   ///< [ motion ] [ camera [<args>] ]
     { ACAMD_CLOSE,       {0, 0} },
@@ -242,6 +260,13 @@ namespace Sequencer {
     INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
+  const std::unordered_map<CalibState, std::string> calibd_state_names = {
+    { CalibState::IDLE,    "IDLE"    },
+    { CalibState::READY,   "READY"   },
+    { CalibState::MOVING,  "MOVING"  },
+    { CalibState::INVALID, "INVALID" },
+  };
+
   const CommandSpecMap calibd_specs = {
     { CALIBD_OPEN,    {0, 1} },   ///< [ motion | lampmod ]
     { CALIBD_CLOSE,   {0, 1} },   ///< [ motion | lampmod ]
@@ -280,6 +305,14 @@ namespace Sequencer {
     MOVING,  ///< slit motion in progress
     HOMED,   ///< slit has been homed
     INVALID  ///< sentinel for unverified commands; no live client ever holds this value
+  };
+
+  const std::unordered_map<SlitState, std::string> slitd_state_names = {
+    { SlitState::IDLE,    "IDLE"    },
+    { SlitState::READY,   "READY"   },
+    { SlitState::MOVING,  "MOVING"  },
+    { SlitState::HOMED,   "HOMED"   },
+    { SlitState::INVALID, "INVALID" },
   };
 
   const CommandSpecMap slitd_specs = {
@@ -325,6 +358,15 @@ namespace Sequencer {
     TRACKING,    ///< telescope tracking on target
     OFFSETTING,  ///< telescope offset in progress
     INVALID      ///< sentinel for unverified commands; no live client ever holds this value
+  };
+
+  const std::unordered_map<TcsState, std::string> tcsd_state_names = {
+    { TcsState::IDLE,       "IDLE"       },
+    { TcsState::READY,      "READY"      },
+    { TcsState::SLEWING,    "SLEWING"    },
+    { TcsState::TRACKING,   "TRACKING"   },
+    { TcsState::OFFSETTING, "OFFSETTING" },
+    { TcsState::INVALID,    "INVALID"    },
   };
 
   const CommandSpecMap tcsd_specs = {
@@ -413,6 +455,13 @@ namespace Sequencer {
     INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
+  const std::unordered_map<FocusState, std::string> focusd_state_names = {
+    { FocusState::IDLE,    "IDLE"    },
+    { FocusState::READY,   "READY"   },
+    { FocusState::MOVING,  "MOVING"  },
+    { FocusState::INVALID, "INVALID" },
+  };
+
   const CommandSpecMap focusd_specs = {
     { FOCUSD_OPEN,       {0, 0} },
     { FOCUSD_CLOSE,      {0, 0} },
@@ -453,6 +502,13 @@ namespace Sequencer {
     INVALID  ///< sentinel for unverified commands; no live client ever holds this value
   };
 
+  const std::unordered_map<FlexureState, std::string> flexured_state_names = {
+    { FlexureState::IDLE,    "IDLE"    },
+    { FlexureState::READY,   "READY"   },
+    { FlexureState::MOVING,  "MOVING"  },
+    { FlexureState::INVALID, "INVALID" },
+  };
+
   const CommandSpecMap flexured_specs = {
     { FLEXURED_OPEN,        {0, 0} },
     { FLEXURED_CLOSE,       {0, 0} },
@@ -483,10 +539,16 @@ namespace Sequencer {
 
   // ---------- POWERD ---------------------------------------------------------
 
-  enum class PowerState {
+  enum class PowerdState {
     IDLE,    ///< not yet opened
     READY,   ///< open and ready to accept commands
     INVALID  ///< sentinel for unverified commands; no live client ever holds this value
+  };
+
+  const std::unordered_map<PowerdState, std::string> powerd_state_names = {
+    { PowerdState::IDLE,    "IDLE"    },
+    { PowerdState::READY,   "READY"   },
+    { PowerdState::INVALID, "INVALID" },
   };
 
   const CommandSpecMap powerd_specs = {
@@ -500,15 +562,15 @@ namespace Sequencer {
     { POWERD_SET,    {1, 3} }    ///< <plugname> [ ON | OFF | BOOT ] or <unit#> <plug#> [ ON | OFF | BOOT ]
   };
 
-  const std::vector<Transition<PowerState>> powerd_transitions = {
-    { PowerState::IDLE,  POWERD_OPEN,   PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_CLOSE,  PowerState::IDLE  },  // TODO: verify
-    { PowerState::READY, POWERD_ISOPEN, PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_STATUS, PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_REOPEN, PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_LIST,   PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_GET,    PowerState::READY },  // TODO: verify
-    { PowerState::READY, POWERD_SET,    PowerState::READY }   // TODO: verify
+  const std::vector<Transition<PowerdState>> powerd_transitions = {
+    { PowerdState::IDLE,  POWERD_OPEN,   PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_CLOSE,  PowerdState::IDLE  },  // TODO: verify
+    { PowerdState::READY, POWERD_ISOPEN, PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_STATUS, PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_REOPEN, PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_LIST,   PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_GET,    PowerdState::READY },  // TODO: verify
+    { PowerdState::READY, POWERD_SET,    PowerdState::READY }   // TODO: verify
   };
 
 
@@ -520,6 +582,14 @@ namespace Sequencer {
     ACQUIRING,  ///< fine acquisition in progress
     GUIDING,    ///< guiding in progress
     INVALID     ///< sentinel for unverified commands; no live client ever holds this value
+  };
+
+  const std::unordered_map<SlicecamState, std::string> slicecamd_state_names = {
+    { SlicecamState::IDLE,      "IDLE"      },
+    { SlicecamState::READY,     "READY"     },
+    { SlicecamState::ACQUIRING, "ACQUIRING" },
+    { SlicecamState::GUIDING,   "GUIDING"   },
+    { SlicecamState::INVALID,   "INVALID"   },
   };
 
   const CommandSpecMap slicecamd_specs = {

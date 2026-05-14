@@ -477,38 +477,68 @@ namespace Sequencer {
   /***** Sequencer::Sequence::parse_command **********************************/
   /**
    * @brief      parses a single command line
-   * @details    This parses a command and any parameters as key=val pairs
-   *             from the supplied string and returns a ParsedCommand struct.
-   * @param[in]  args  string containing command and any optional arguments
-   * @return     nullptr | ParsedCommand
+   * @details    The DSL grammar accepted by this parser is strictly:
+   *               command [key1=val1 key2=val2 ... keyN=valN]
+   *             The first token is the subsystem (command). All remaining
+   *             tokens must be key=value pairs — bare tokens, empty keys,
+   *             empty values, duplicate keys, and duplicate do= are all
+   *             hard parse errors and cause the line to be rejected.
+   *             The reserved key DSL_KEY_DO ("do") is extracted to
+   *             ParsedCommand::verb and not stored in params; all other
+   *             pairs are stored in params.
+   * @param[in]  args  string containing one command line (consumed by reference)
+   * @return     std::nullopt on empty line or parse error; ParsedCommand otherwise
    *
    */
   std::optional<Sequence::ParsedCommand> Sequence::parse_command(std::string &args) {
+    const std::string function("Sequencer::Sequence::parse_command");
 
     std::istringstream iss(args);
     std::string word;
 
-    // first word is the command
+    // first word is the subsystem (the command); empty line returns nullopt
     if (!(iss >> word)) return std::nullopt;
 
     ParsedCommand command;
-    command.name = word;
+    command.subsystem = word;
 
-    // Additional words are either key=val params (INTERNAL) or positional
-    // args (PASSTHROUGH). Both collections are populated; each op_builder
-    // chooses which to consume.
     while (iss >> word) {
-      // key=value parameters
       auto eq = word.find('=');
-      if (eq != std::string::npos) {
-        std::string key = word.substr(0, eq);
-        std::string val = word.substr(eq+1);
-        command.params.map[key] = val;
+
+      if (eq == std::string::npos) {
+        logwrite(function, "ERROR bare token '"+word+"' is invalid"
+                           " (key=value required) in line: "+args);
+        return std::nullopt;
       }
-      // positional arguments
-      else {
-        command.args.push_back(word);
+
+      std::string key = word.substr(0, eq);
+      std::string val = word.substr(eq+1);
+
+      if (key.empty()) {
+        logwrite(function, "ERROR empty key in token '"+word+"' in line: "+args);
+        return std::nullopt;
       }
+      if (val.empty()) {
+        logwrite(function, "ERROR empty value for key '"+key+"' in line: "+args);
+        return std::nullopt;
+      }
+
+      if (key == std::string(DSL_KEY_DO)) {
+        if (!command.verb.empty()) {
+          logwrite(function, "ERROR duplicate "+std::string(DSL_KEY_DO)
+                             +"= key in line: "+args);
+          return std::nullopt;
+        }
+        command.verb = val;
+        continue;
+      }
+
+      if (command.params.contains(key)) {
+        logwrite(function, "ERROR duplicate key '"+key+"' in line: "+args);
+        return std::nullopt;
+      }
+
+      command.params.set(key, val);
     }
 
     return command;
@@ -745,7 +775,13 @@ namespace Sequencer {
       logwrite(function, "ERROR parsing '"+args+"'");
       return ERROR;
     }
-    auto commands = { *parsed };
+    // Wrap the single command in an implicit serial group so build_sequence()
+    // accepts it without requiring an explicit serial:/end block in the input.
+    ParsedCommand group_open;
+    group_open.subsystem = "serial:";
+    ParsedCommand group_close;
+    group_close.subsystem = "end";
+    std::vector<ParsedCommand> commands = { group_open, *parsed, group_close };
 
     std::vector<OperationGroup> sequence;
 
@@ -915,6 +951,28 @@ namespace Sequencer {
     this->publish_daemonstate();
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
+
+
+  /***** Sequencer::Sequence::request_snapshot ********************************/
+  /**
+   * @brief      asks other daemons to publish their current status
+   * @details    Publishes a Topic::SNAPSHOT message containing the names of all
+   *             daemons this sequencer subscribes to. Each named daemon will
+   *             respond by re-publishing its own snapshot, ensuring the sequencer
+   *             receives current state (e.g. camera readiness) even if it
+   *             started after those daemons published their initial status.
+   *
+   */
+  void Sequence::request_snapshot() {
+    nlohmann::json jmessage;
+    jmessage[Daemon::CAMERAD]   = true;
+    jmessage[Daemon::ACAMD]     = true;
+    jmessage[Daemon::SLICECAMD] = true;
+    jmessage[Daemon::SLITD]     = true;
+    jmessage[Daemon::TCSD]      = true;
+    this->publisher->publish( jmessage, Topic::SNAPSHOT );
+  }
+  /***** Sequencer::Sequence::request_snapshot ********************************/
 
 
   /***** Sequencer::Sequence::publish_seqstate ********************************/
@@ -2574,6 +2632,10 @@ namespace Sequencer {
     std::stringstream message;
     long error=NO_ERROR;
 
+    // no telescope moves for calibration targets
+    //
+    if ( this->target.iscal ) return NO_ERROR;
+
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
     ScopedState wait_moveto( wait_state_manager, Sequencer::SEQ_WAIT_MOVETO );
@@ -2955,25 +3017,23 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
 
-    // Determine post-abort seqstate based on current seqstate, before we
-    // enter SEQ_ABORTING. Aborting during RUNNING or PAUSED returns to READY;
-    // aborting during STARTING or STOPPING is unsafe and transitions to FAILED.
-    // Otherwise, leave seqstate unchanged (abort bit only; no destruct bit).
-    const bool abort_during_run   = seq_state_manager.are_any_set( Sequencer::SEQ_RUNNING,
-                                                                   Sequencer::SEQ_PAUSED );
-    const bool abort_during_lifecycle = seq_state_manager.are_any_set( Sequencer::SEQ_STARTING,
-                                                                       Sequencer::SEQ_STOPPING );
+    // Decide post-abort seqstate before entering SEQ_ABORTING. These snapshots
+    // must be taken before any seqstate mutation below, because set_only()
+    // clears all other lifecycle bits.
+    //
+    const bool abort_during_run = this->seq_state_manager.are_any_set( Sequencer::SEQ_RUNNING,
+                                                                       Sequencer::SEQ_PAUSED );
+    const bool abort_during_lifecycle = this->seq_state_manager.are_any_set( Sequencer::SEQ_STARTING,
+                                                                             Sequencer::SEQ_STOPPING );
 
-    // Scoped SEQ_ABORTING bit: set on entry, cleared on exit (RAII).
-    ScopedState seq_state( this->seq_state_manager, Sequencer::SEQ_ABORTING );
-    if ( abort_during_run ) {
-      seq_state.destruct_set( Sequencer::SEQ_READY );
-    }
-    else if ( abort_during_lifecycle ) {
-      seq_state.destruct_set( Sequencer::SEQ_FAILED );
-    }
+    // Enter SEQ_ABORTING as a strict one-hot state.
+    //
+    this->seq_state_manager.set_only( {Sequencer::SEQ_ABORTING} );
 
-    clear_cancel_flag();
+    // Clear any prior cancel state so stop_exposure and acquisition-stop calls
+    // below run to completion rather than bailing early on a stale flag.
+    //
+    this->cancel_flag.store(false);
 
     // stop any exposure that may be in progress
     //
@@ -2985,15 +3045,62 @@ namespace Sequencer {
       logwrite( function, "ERROR stop_exposure exception: "+std::string(e.what()) );
     }
 
+    // aborts incomplete acquisitions in progress
+    //
+    if (this->wait_state_manager.is_set(Sequencer::SEQ_WAIT_FINEACQUIRE) &&
+        this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping fine acquisition");
+    }
+    if (this->wait_state_manager.is_set(Sequencer::SEQ_WAIT_ACAM_ACQUIRE) &&
+        this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping guiding");
+    }
+
     // set the cancel flag to stop any cancel-able tasks
     //
-    set_cancel_flag();
+    this->cancel_flag.store(true);
+    this->cv.notify_all();
+    // Wake threads blocked on subsystem CVs so they can check cancel_flag.
+    { std::lock_guard<std::mutex> lock(this->acam_mtx);        this->acam_cv.notify_all();        }
+    { std::lock_guard<std::mutex> lock(this->fineacquire_mtx); this->fineacquire_cv.notify_all(); }
+    { std::lock_guard<std::mutex> lock(this->camerad_mtx);     this->camerad_cv.notify_all();     }
 
     // drop into do-one to prevent auto increment to next target
     //
     this->do_once.store(true);
 
     this->broadcast.notice( function, "cancel signal sent" );
+
+    // Wait for sequence_start to fully exit before switching to SEQ_READY.
+    // Without this, we could have SEQ_READY set while THR_SEQUENCE_START is
+    // still set. Workers just received cancel_flag + CV notifications above,
+    // so this loop exits after at most a few iterations.
+    //
+    if ( abort_during_run ) {
+      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
+              std::chrono::steady_clock::now() < drain_timeout ) {
+        std::this_thread::sleep_for( std::chrono::milliseconds(20) );
+      }
+      if ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+        logwrite( function, "WARNING: sequence_start did not exit within drain timeout" );
+      }
+    }
+
+    // Exit SEQ_ABORTING to a strict one-hot terminal state chosen from the
+    // snapshot taken at entry. If neither condition applies (e.g. abort
+    // invoked while READY/NOTREADY/FAILED) we leave the state at NOTREADY
+    // so callers never see SEQ_ABORTING linger and no prior bit is retained.
+    //
+    if ( abort_during_run ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
+    }
+    else if ( abort_during_lifecycle ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+    }
+    else {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
+    }
   }
 
   /***** Sequencer::Sequence::stop_exposure *********************************/

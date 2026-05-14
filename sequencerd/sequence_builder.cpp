@@ -44,7 +44,7 @@ namespace Sequencer {
     //
     for (const auto &command : commands) {
 
-      const std::string &name = command.name;
+      const std::string &name = command.subsystem;
 
       // ---------- SPECIAL COMMAND { parallel: | serial: } ------------------
 
