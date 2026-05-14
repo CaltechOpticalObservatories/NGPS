@@ -636,6 +636,11 @@ namespace AstroCam {
           can_expose(true),                         // am I ready for the next exposure?
           modeselected(false),
           useframes(true) {
+        topic_handlers = {
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+        };
+
         this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
         this->fitsinfo.resize( NUM_EXPBUF );        // pre-allocate Camera Information object pointers for each exposure buffer
         this->writes_pending.resize( NUM_EXPBUF );  // pre-allocate writes_pending vector for each exposure buffer
@@ -687,6 +692,7 @@ namespace AstroCam {
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
       void publish_snapshot(std::string* retstring=nullptr);
+      void handletopic_snapshot(const nlohmann::json &jmessage_in);
 
 // vector of pointers to Camera Information containers, one for each exposure number
 //

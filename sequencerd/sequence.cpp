@@ -1486,12 +1486,12 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
+    ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
+
     this->wait_for_canexpose(function);
 
     logwrite( function, "setting camera parameters");
-
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
 
