@@ -3431,20 +3431,20 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
 
-    // Enter STOPPING as a strict one-hot state. Explicit set_only is used instead
-    // of ScopedState because abort_process() below transitions seqstate
-    // independently
+    // Enter STOPPING as a strict one-hot state. Explicit set_only is used
+    // instead of ScopedState because final state is set explicitly before return.
     //
     this->seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
 
-    // stop everything in progress
+    // Wake any threads waiting on subsystem CVs so they can exit cleanly.
+    // Inline here rather than calling abort_process(), which transitions
+    // seqstate through ABORTING and FAILED — confusing during a normal shutdown.
     //
-    this->abort_process();
-
-    // abort_process snapshots abort_during_lifecycle=true (STOPPING was set) and
-    // ends with set_only({SEQ_FAILED}). Restore STOPPING so shutdown can proceed.
-    //
-    this->seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
+    this->cancel_flag.store(true);
+    this->cv.notify_all();
+    { std::lock_guard<std::mutex> lock(this->acam_mtx);        this->acam_cv.notify_all();        }
+    { std::lock_guard<std::mutex> lock(this->fineacquire_mtx); this->fineacquire_cv.notify_all(); }
+    { std::lock_guard<std::mutex> lock(this->camerad_mtx);     this->camerad_cv.notify_all();     }
 
     // clear stop flags
     //
