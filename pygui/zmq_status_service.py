@@ -276,7 +276,8 @@ class ZmqStatusService(QObject):
         Otherwise show the broader sequencer lifecycle state.
         """
         status = self._last_seq_wait_status or self._last_seq_lifecycle_status
-        self.system_status_signal.emit(status)
+        if status is not None:
+            self.system_status_signal.emit(status)
 
     def _status_from_seq_seqstate(self, data: Dict[str, Any]) -> str:
         """

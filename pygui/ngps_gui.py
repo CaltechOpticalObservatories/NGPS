@@ -193,6 +193,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("tcsd")
         self.zmq_status_service.subscribe_to_topic("acamd")
         self.zmq_status_service.subscribe_to_topic("seq_waitstate")
+        self.zmq_status_service.subscribe_to_topic("seq_seqstate")
 
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
