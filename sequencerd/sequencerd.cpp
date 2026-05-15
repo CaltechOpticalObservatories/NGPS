@@ -224,16 +224,10 @@ int main(int argc, char **argv) {
                std::ref(socklist[thrid]) ).detach(); // spawn a thread to handle requests on this socket
 *****/
 
-  // Instantiate a multicast UDP object and spawn a thread to send asynchronous messages
-  //
-  Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
-  std::thread( std::ref(Sequencer::Server::async_main),
-               std::ref(sequencerd),
-               msg ).detach();
-
   // Create my own asynchronous listener thread.
   // This thread allows the sequencer to listen for asynchronous messages.
   //
+  Network::UdpSocket msg(sequencerd.messageport, sequencerd.messagegroup);
   std::thread( std::ref( Sequencer::Sequence::dothread_sequencer_async_listener ), 
                std::ref( sequencerd.sequence),
                msg

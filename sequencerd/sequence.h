@@ -659,8 +659,6 @@ namespace Sequencer {
 
       std::string daemon_control;     ///< daemon control script
 
-      Common::Queue async;            ///< asynchronous message queue
-
       // Here are all the daemon client objects that the Sequencer connects to.
       //
       Common::DaemonClient acamd { "acamd" };
