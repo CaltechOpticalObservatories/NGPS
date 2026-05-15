@@ -205,99 +205,115 @@ namespace Sequencer {
   };
 
   /**
-   * @enum     ThreadStatusBits
-   * @brief    assigns each thread a bit in a threadstate word
-   * @details  bit is set while thread is running
+   * @enum     OperationStatusBits
+   * @brief    assigns each operation a bit in an operation-state word
+   * @details  bit is set while the operation is running
    */
-  enum ThreadStatusBits : size_t {
-    THR_SEQUENCER_ASYNC_LISTENER=0,
-    THR_TRIGGER_EXPOSURE,
-    THR_EXPOSURE,
-    THR_REPEAT_EXPOSURE,
-    THR_STOP_EXPOSURE,
-    THR_ABORT_PROCESS,
-    THR_SEQUENCE_START,
-    THR_RUN_SCRIPT,
-    THR_MONITOR_READY_STATE,
-    THR_CALIB_SET,
-    THR_CAMERA_SET,
-    THR_SLIT_SET,
-    THR_MOVE_TO_TARGET,
-    THR_NOTIFY_TCS,
-    THR_FOCUS_SET,
-    THR_FLEXURE_SET,
-    THR_CALIBRATOR_SET,
-    THR_ACAM_INIT,
-    THR_ANDOR_INIT,
-    THR_SLICECAM_INIT,
-    THR_CALIB_INIT,
-    THR_TCS_INIT,
-    THR_SLIT_INIT,
-    THR_CAMERA_INIT,
-    THR_FLEXURE_INIT,
-    THR_FOCUS_INIT,
-    THR_POWER_INIT,
-    THR_ACAM_SHUTDOWN,
-    THR_ANDOR_SHUTDOWN,
-    THR_SLICECAM_SHUTDOWN,
-    THR_CALIB_SHUTDOWN,
-    THR_CAMERA_SHUTDOWN,
-    THR_FLEXURE_SHUTDOWN,
-    THR_FOCUS_SHUTDOWN,
-    THR_SLIT_SHUTDOWN,
-    THR_TCS_SHUTDOWN,
-    THR_POWER_SHUTDOWN,
-    THR_MODIFY_EXPTIME,
-    THR_ACQUISITION,
-    THR_GUIDING,
-    THR_STARTUP,
-    THR_SHUTDOWN,
-    NUM_THREAD_STATES
+  enum OperationStatusBits : size_t {
+    OP_SEQUENCER_ASYNC_LISTENER=0,
+    OP_TRIGGER_EXPOSURE,
+    OP_EXPOSURE,
+    OP_REPEAT_EXPOSURE,
+    OP_STOP_EXPOSURE,
+    OP_ABORT_PROCESS,
+    OP_SEQUENCE_START,
+    OP_RUN_SCRIPT,
+    OP_MONITOR_READY_STATE,
+    OP_CALIB_SETUP,
+    OP_CAMERA_SETUP,
+    OP_SLIT_SETUP,
+    OP_MOVE_TO_TARGET,
+    OP_NOTIFY_TCS,
+    OP_FOCUS_SETUP,
+    OP_FLEXURE_SETUP,
+    OP_ACAM_INIT,
+    OP_ANDOR_INIT,
+    OP_SLICECAM_INIT,
+    OP_CALIB_INIT,
+    OP_TCS_INIT,
+    OP_SLIT_INIT,
+    OP_CAMERA_INIT,
+    OP_FLEXURE_INIT,
+    OP_FOCUS_INIT,
+    OP_POWER_INIT,
+    OP_ACAM_SHUTDOWN,
+    OP_ANDOR_SHUTDOWN,
+    OP_SLICECAM_SHUTDOWN,
+    OP_CALIB_SHUTDOWN,
+    OP_CAMERA_SHUTDOWN,
+    OP_FLEXURE_SHUTDOWN,
+    OP_FOCUS_SHUTDOWN,
+    OP_SLIT_SHUTDOWN,
+    OP_TCS_SHUTDOWN,
+    OP_POWER_SHUTDOWN,
+    OP_MODIFY_EXPTIME,
+    OP_ACQUISITION,
+    OP_GUIDING,
+    OP_STARTUP,
+    OP_SHUTDOWN,
+    OP_ACAM_CMD,
+    OP_CALIB_CMD,
+    OP_CAMERA_CMD,
+    OP_FLEXURE_CMD,
+    OP_FOCUS_CMD,
+    OP_POWER_CMD,
+    OP_SLICECAM_CMD,
+    OP_SLIT_CMD,
+    OP_TCS_CMD,
+    NUM_OP_STATES
   };
 
-  const std::map<size_t, std::string> thread_names = {
-    {THR_SEQUENCER_ASYNC_LISTENER, "async_listener"},
-    {THR_TRIGGER_EXPOSURE,         "trigger_exposure"},
-    {THR_EXPOSURE,                 "exposure"},
-    {THR_REPEAT_EXPOSURE,          "repeat_exposure"},
-    {THR_STOP_EXPOSURE,            "stop_exposure"},
-    {THR_ABORT_PROCESS,            "abort_process"},
-    {THR_SEQUENCE_START,           "sequence_start"},
-    {THR_RUN_SCRIPT,               "run_script"},
-    {THR_MONITOR_READY_STATE,      "monitor_ready_state"},
-    {THR_CALIB_SET,                "calib_set"},
-    {THR_CAMERA_SET,               "camera_set"},
-    {THR_SLIT_SET,                 "slit_set"},
-    {THR_MOVE_TO_TARGET,           "move_to_target"},
-    {THR_NOTIFY_TCS,               "notify_tcs"},
-    {THR_FOCUS_SET,                "focus_set"},
-    {THR_FLEXURE_SET,              "flexure_set"},
-    {THR_CALIBRATOR_SET,           "calibrator_set"},
-    {THR_ACAM_INIT,                "acam_init"},
-    {THR_ANDOR_INIT,               "andor_init"},
-    {THR_SLICECAM_INIT,            "slicecam_init"},
-    {THR_CALIB_INIT,               "calib_init"},
-    {THR_TCS_INIT,                 "tcs_init"},
-    {THR_SLIT_INIT,                "slit_init"},
-    {THR_CAMERA_INIT,              "camera_init"},
-    {THR_FLEXURE_INIT,             "flexure_init"},
-    {THR_FOCUS_INIT,               "focus_init"},
-    {THR_POWER_INIT,               "power_init"},
-    {THR_ACAM_SHUTDOWN,            "acam_shutdown"},
-    {THR_ANDOR_SHUTDOWN,           "andor_shutdown"},
-    {THR_SLICECAM_SHUTDOWN,        "slicecam_shutdown"},
-    {THR_CALIB_SHUTDOWN,           "calib_shutdown"},
-    {THR_CAMERA_SHUTDOWN,          "camera_shutdown"},
-    {THR_FLEXURE_SHUTDOWN,         "flexure_shutdown"},
-    {THR_FOCUS_SHUTDOWN,           "focus_shutdown"},
-    {THR_SLIT_SHUTDOWN,            "slit_shutdown"},
-    {THR_TCS_SHUTDOWN,             "tcs_shutdown"},
-    {THR_POWER_SHUTDOWN,           "power_shutdown"},
-    {THR_MODIFY_EXPTIME,           "modify_exptime"},
-    {THR_ACQUISITION,              "acquisition"},
-    {THR_GUIDING,                  "guiding"},
-    {THR_STARTUP,                  "startup"},
-    {THR_SHUTDOWN,                 "shutdown"}
+  const std::map<size_t, std::string> op_names = {
+    {OP_SEQUENCER_ASYNC_LISTENER, "async_listener"},
+    {OP_TRIGGER_EXPOSURE,         "trigger_exposure"},
+    {OP_EXPOSURE,                 "exposure"},
+    {OP_REPEAT_EXPOSURE,          "repeat_exposure"},
+    {OP_STOP_EXPOSURE,            "stop_exposure"},
+    {OP_ABORT_PROCESS,            "abort_process"},
+    {OP_SEQUENCE_START,           "sequence_start"},
+    {OP_RUN_SCRIPT,               "run_script"},
+    {OP_MONITOR_READY_STATE,      "monitor_ready_state"},
+    {OP_CALIB_SETUP,              "calib_setup"},
+    {OP_CAMERA_SETUP,             "camera_setup"},
+    {OP_SLIT_SETUP,               "slit_setup"},
+    {OP_MOVE_TO_TARGET,           "move_to_target"},
+    {OP_NOTIFY_TCS,               "notify_tcs"},
+    {OP_FOCUS_SETUP,              "focus_setup"},
+    {OP_FLEXURE_SETUP,            "flexure_setup"},
+    {OP_ACAM_INIT,                "acam_init"},
+    {OP_ANDOR_INIT,               "andor_init"},
+    {OP_SLICECAM_INIT,            "slicecam_init"},
+    {OP_CALIB_INIT,               "calib_init"},
+    {OP_TCS_INIT,                 "tcs_init"},
+    {OP_SLIT_INIT,                "slit_init"},
+    {OP_CAMERA_INIT,              "camera_init"},
+    {OP_FLEXURE_INIT,             "flexure_init"},
+    {OP_FOCUS_INIT,               "focus_init"},
+    {OP_POWER_INIT,               "power_init"},
+    {OP_ACAM_SHUTDOWN,            "acam_shutdown"},
+    {OP_ANDOR_SHUTDOWN,           "andor_shutdown"},
+    {OP_SLICECAM_SHUTDOWN,        "slicecam_shutdown"},
+    {OP_CALIB_SHUTDOWN,           "calib_shutdown"},
+    {OP_CAMERA_SHUTDOWN,          "camera_shutdown"},
+    {OP_FLEXURE_SHUTDOWN,         "flexure_shutdown"},
+    {OP_FOCUS_SHUTDOWN,           "focus_shutdown"},
+    {OP_SLIT_SHUTDOWN,            "slit_shutdown"},
+    {OP_TCS_SHUTDOWN,             "tcs_shutdown"},
+    {OP_POWER_SHUTDOWN,           "power_shutdown"},
+    {OP_MODIFY_EXPTIME,           "modify_exptime"},
+    {OP_ACQUISITION,              "acquisition"},
+    {OP_GUIDING,                  "guiding"},
+    {OP_STARTUP,                  "startup"},
+    {OP_SHUTDOWN,                 "shutdown"},
+    {OP_ACAM_CMD,                 "acam_cmd"},
+    {OP_CALIB_CMD,                "calib_cmd"},
+    {OP_CAMERA_CMD,               "camera_cmd"},
+    {OP_FLEXURE_CMD,              "flexure_cmd"},
+    {OP_FOCUS_CMD,                "focus_cmd"},
+    {OP_POWER_CMD,                "power_cmd"},
+    {OP_SLICECAM_CMD,             "slicecam_cmd"},
+    {OP_SLIT_CMD,                 "slit_cmd"},
+    {OP_TCS_CMD,                  "tcs_cmd"}
   };
 
   /***** Sequencer::Sequence **************************************************/
@@ -396,13 +412,13 @@ namespace Sequencer {
       /** @brief  sequencer operation contains status bit, function and params
        */
       struct Operation {
-        ThreadStatusBits thr;
+        OperationStatusBits id;
         std::function<long()> func;
         OperationParams params;
         const std::string &name() const {
           static const std::string empty;
-          auto it = thread_names.find(thr);
-          return(it==thread_names.end() ? empty : it->second);
+          auto it = op_names.find(id);
+          return(it==op_names.end() ? empty : it->second);
         }
         int max_attempts=1;
         int retry_delay=0;
@@ -457,7 +473,7 @@ namespace Sequencer {
       /** @brief   key=value params of the currently executing operation
        *  @details set by run() just before op.func() is invoked and consumed
        *           by Sequence:: member functions that accept optional overrides
-       *           (e.g. move_to_target, slit_set)
+       *           (e.g. move_to_target, slit_setup)
        */
       OperationParams current_op_params;
 
@@ -469,22 +485,22 @@ namespace Sequencer {
 
           Operation acam_init();
           Operation calib_init();
-          Operation calib_set();
+          Operation calib_setup();
           Operation camera_init();
-          Operation camera_set();
+          Operation camera_setup();
           Operation do_expose();
           Operation do_shutdown();
           Operation do_startup();
           Operation flexure_init();
-          Operation flexure_set();
+          Operation flexure_setup();
           Operation focus_init();
-          Operation focus_set();
+          Operation focus_setup();
           Operation move_to_target();
           Operation power_init();
           Operation repeat_exposure();
           Operation slicecam_init();
           Operation slit_init();
-          Operation slit_set();
+          Operation slit_setup();
           Operation target_offset();
           Operation tcs_init();
       };
@@ -543,7 +559,7 @@ namespace Sequencer {
             init_operation_builders();
             seq_state_manager.set_callback([this](const std::bitset<NUM_SEQ_STATES>& states) { broadcast_seqstate(); });
             wait_state_manager.set_callback([this](const std::bitset<NUM_WAIT_STATES>& states) { broadcast_waitstate(); });
-            thread_state_manager.set_callback([this](const std::bitset<NUM_THREAD_STATES>& states) { publish_threadstate(); });
+            op_state_manager.set_callback([this](const std::bitset<NUM_OP_STATES>& states) { publish_threadstate(); });
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
 
             topic_handlers = {
@@ -633,10 +649,10 @@ namespace Sequencer {
       std::mutex seqstate_mtx;
       std::condition_variable seqstate_cv;
 
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error_manager{ Sequencer::thread_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_OP_STATES)> op_error_manager{ Sequencer::op_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_WAIT_STATES)>   wait_state_manager{Sequencer::wait_state_names};
-      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_state_manager{ Sequencer::thread_names };
+      ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_OP_STATES)> op_state_manager{ Sequencer::op_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_DAEMONS)>       daemon_manager{ Sequencer::daemon_name };
 
       TargetInfo target;              ///< TargetInfo object contains info for a target row and how to read it
@@ -857,13 +873,13 @@ namespace Sequencer {
       long wait_for_canexpose(std::string caller); ///< wait for camera can_expose
 
       void sequence_start(std::string obsid_in="");      ///< main sequence start thread. optional obsid_in for single target obs
-      long calib_set();              ///< sets calib according to target entry params
-      long camera_set();             ///< sets camera according to target entry params
-      long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
+      long calib_setup();            ///< sets calib according to target entry params
+      long camera_setup();           ///< sets camera according to target entry params
+      long slit_setup(VirtualSlitMode mode=VSM_DATABASE);      ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
-      long focus_set();
-      long flexure_set();
+      long focus_setup();
+      long flexure_setup();
 
       /**
        * these are in sequence_acquisition.cpp

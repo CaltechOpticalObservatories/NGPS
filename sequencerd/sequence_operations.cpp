@@ -4,7 +4,7 @@
  * @author  David Hale <dhale@astro.caltech.edu>
  *
  * Each Ops factory method here returns a populated Sequence::Operation that
- * wraps a Sequence:: member function and identifies itself via its THR_ bit.
+ * wraps a Sequence:: member function and identifies itself via its OP_ bit.
  * These are the "Internal" sequencer-level operations (database-driven,
  * may coordinate multiple daemons). Per-daemon "Passthrough" operations
  * (e.g. "camera exptime 30000") are built inline by init_operation_builders()
@@ -26,7 +26,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::acam_init() {
     Sequence::Operation op;
-    op.thr = THR_ACAM_INIT;
+    op.id = OP_ACAM_INIT;
     op.func = [this]() { return seq->acam_init(); };
     op.params = { };
     op.max_attempts = 3;
@@ -50,26 +50,26 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::calib_init() {
     Sequence::Operation op;
-    op.thr = THR_CALIB_INIT;
+    op.id = OP_CALIB_INIT;
     op.func = [this]() { return seq->calib_init(); };
     return op;
   }
   /***** Sequencer::Sequence::Ops::calib_init ********************************/
 
 
-  /***** Sequencer::Sequence::Ops::calib_set *********************************/
+  /***** Sequencer::Sequence::Ops::calib_setup *********************************/
   /**
-   * @brief      defines the calib_set operation
+   * @brief      defines the calib_setup operation
    * @return     Operation
    *
    */
-  Sequence::Operation Sequence::Ops::calib_set() {
+  Sequence::Operation Sequence::Ops::calib_setup() {
     Sequence::Operation op;
-    op.thr  = THR_CALIB_SET;
-    op.func = [this]() { return seq->calib_set(); };
+    op.id  = OP_CALIB_SETUP;
+    op.func = [this]() { return seq->calib_setup(); };
     return op;
   }
-  /***** Sequencer::Sequence::Ops::calib_set *********************************/
+  /***** Sequencer::Sequence::Ops::calib_setup *********************************/
 
 
   /***** Sequencer::Sequence::Ops::camera_init *******************************/
@@ -80,26 +80,26 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::camera_init() {
     Sequence::Operation op;
-    op.thr = THR_CAMERA_INIT;
+    op.id = OP_CAMERA_INIT;
     op.func = [this]() { return seq->camera_init(); };
     return op;
   }
   /***** Sequencer::Sequence::Ops::camera_init *******************************/
 
 
-  /***** Sequencer::Sequence::Ops::camera_set ********************************/
+  /***** Sequencer::Sequence::Ops::camera_setup ********************************/
   /**
-   * @brief      defines the camera_set operation
+   * @brief      defines the camera_setup operation
    * @return     Operation
    *
    */
-  Sequence::Operation Sequence::Ops::camera_set() {
+  Sequence::Operation Sequence::Ops::camera_setup() {
     Sequence::Operation op;
-    op.thr  = THR_CAMERA_SET;
-    op.func = [this]() { return seq->camera_set(); };
+    op.id  = OP_CAMERA_SETUP;
+    op.func = [this]() { return seq->camera_setup(); };
     return op;
   }
-  /***** Sequencer::Sequence::Ops::camera_set ********************************/
+  /***** Sequencer::Sequence::Ops::camera_setup ********************************/
 
 
   /***** Sequencer::Sequence::Ops::do_expose *********************************/
@@ -110,7 +110,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::do_expose() {
     Sequence::Operation op;
-    op.thr  = THR_EXPOSURE;
+    op.id  = OP_EXPOSURE;
     op.func = [this]() {
       const std::string caller("Sequencer::Sequence::Ops::do_expose");
       return seq->do_exposure(caller);
@@ -128,7 +128,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::do_shutdown() {
     Sequence::Operation op;
-    op.thr  = THR_SHUTDOWN;
+    op.id  = OP_SHUTDOWN;
     op.func = [this]() { return seq->shutdown(); };
     return op;
   }
@@ -143,7 +143,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::do_startup() {
     Sequence::Operation op;
-    op.thr  = THR_STARTUP;
+    op.id  = OP_STARTUP;
     op.func = [this]() { return seq->startup(); };
     return op;
   }
@@ -158,26 +158,26 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::flexure_init() {
     Sequence::Operation op;
-    op.thr = THR_FLEXURE_INIT;
+    op.id = OP_FLEXURE_INIT;
     op.func = [this]() { return seq->flexure_init(); };
     return op;
   }
   /***** Sequencer::Sequence::Ops::flexure_init ******************************/
 
 
-  /***** Sequencer::Sequence::Ops::flexure_set *******************************/
+  /***** Sequencer::Sequence::Ops::flexure_setup *******************************/
   /**
-   * @brief      defines the flexure_set operation
+   * @brief      defines the flexure_setup operation
    * @return     Operation
    *
    */
-  Sequence::Operation Sequence::Ops::flexure_set() {
+  Sequence::Operation Sequence::Ops::flexure_setup() {
     Sequence::Operation op;
-    op.thr  = THR_FLEXURE_SET;
-    op.func = [this]() { return seq->flexure_set(); };
+    op.id  = OP_FLEXURE_SETUP;
+    op.func = [this]() { return seq->flexure_setup(); };
     return op;
   }
-  /***** Sequencer::Sequence::Ops::flexure_set *******************************/
+  /***** Sequencer::Sequence::Ops::flexure_setup *******************************/
 
 
   /***** Sequencer::Sequence::Ops::focus_init ********************************/
@@ -188,26 +188,26 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::focus_init() {
     Sequence::Operation op;
-    op.thr = THR_FOCUS_INIT;
+    op.id = OP_FOCUS_INIT;
     op.func = [this]() { return seq->focus_init(); };
     return op;
   }
   /***** Sequencer::Sequence::Ops::focus_init ********************************/
 
 
-  /***** Sequencer::Sequence::Ops::focus_set *********************************/
+  /***** Sequencer::Sequence::Ops::focus_setup *********************************/
   /**
-   * @brief      defines the focus_set operation
+   * @brief      defines the focus_setup operation
    * @return     Operation
    *
    */
-  Sequence::Operation Sequence::Ops::focus_set() {
+  Sequence::Operation Sequence::Ops::focus_setup() {
     Sequence::Operation op;
-    op.thr  = THR_FOCUS_SET;
-    op.func = [this]() { return seq->focus_set(); };
+    op.id  = OP_FOCUS_SETUP;
+    op.func = [this]() { return seq->focus_setup(); };
     return op;
   }
-  /***** Sequencer::Sequence::Ops::focus_set *********************************/
+  /***** Sequencer::Sequence::Ops::focus_setup *********************************/
 
 
   /***** Sequencer::Sequence::Ops::move_to_target ****************************/
@@ -224,7 +224,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::move_to_target() {
     Sequence::Operation op;
-    op.thr  = THR_MOVE_TO_TARGET;
+    op.id  = OP_MOVE_TO_TARGET;
     op.func = [this]() { return seq->move_to_target(); };
     return op;
   }
@@ -239,7 +239,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::power_init() {
     Sequence::Operation op;
-    op.thr = THR_POWER_INIT;
+    op.id = OP_POWER_INIT;
     op.func = [this]() { return seq->power_init(); };
     return op;
   }
@@ -254,7 +254,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::repeat_exposure() {
     Sequence::Operation op;
-    op.thr  = THR_REPEAT_EXPOSURE;
+    op.id  = OP_REPEAT_EXPOSURE;
     op.func = [this]() { return seq->repeat_exposure(); };
     return op;
   }
@@ -269,7 +269,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::slicecam_init() {
     Sequence::Operation op;
-    op.thr = THR_SLICECAM_INIT;
+    op.id = OP_SLICECAM_INIT;
     op.func = [this]() { return seq->slicecam_init(); };
     op.params = { };
     op.max_attempts = 3;
@@ -293,33 +293,33 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::slit_init() {
     Sequence::Operation op;
-    op.thr = THR_SLIT_INIT;
+    op.id = OP_SLIT_INIT;
     op.func = [this]() { return seq->slit_init(); };
     return op;
   }
   /***** Sequencer::Sequence::Ops::slit_init *********************************/
 
 
-  /***** Sequencer::Sequence::Ops::slit_set **********************************/
+  /***** Sequencer::Sequence::Ops::slit_setup **********************************/
   /**
-   * @brief      defines the slit_set operation
+   * @brief      defines the slit_setup operation
    * @details    Reads optional mode= param from seq->current_op_params. When
    *             absent the default VSM_DATABASE mode is used (drives slit from
    *             database target entry).
    * @return     Operation
    *
    */
-  Sequence::Operation Sequence::Ops::slit_set() {
+  Sequence::Operation Sequence::Ops::slit_setup() {
     Sequence::Operation op;
-    op.thr  = THR_SLIT_SET;
+    op.id  = OP_SLIT_SETUP;
     op.func = [this]() {
       const size_t mode = seq->current_op_params.get<size_t>("mode",
                             static_cast<size_t>(VSM_DATABASE));
-      return seq->slit_set(static_cast<VirtualSlitMode>(mode));
+      return seq->slit_setup(static_cast<VirtualSlitMode>(mode));
     };
     return op;
   }
-  /***** Sequencer::Sequence::Ops::slit_set **********************************/
+  /***** Sequencer::Sequence::Ops::slit_setup **********************************/
 
 
   /***** Sequencer::Sequence::Ops::target_offset *****************************/
@@ -330,7 +330,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::target_offset() {
     Sequence::Operation op;
-    op.thr  = THR_MOVE_TO_TARGET;  // no dedicated THR_ for target_offset; reuse move_to_target identity
+    op.id  = OP_MOVE_TO_TARGET;  // no dedicated OP_ for target_offset; reuse move_to_target identity
     op.func = [this]() { return seq->target_offset(); };
     return op;
   }
@@ -345,7 +345,7 @@ namespace Sequencer {
    */
   Sequence::Operation Sequence::Ops::tcs_init() {
     Sequence::Operation op;
-    op.thr = THR_TCS_INIT;
+    op.id = OP_TCS_INIT;
     op.func = [this]() { return seq->tcs_init(); };
     return op;
   }

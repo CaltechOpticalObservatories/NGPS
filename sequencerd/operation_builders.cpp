@@ -180,107 +180,106 @@ namespace Sequencer {
     // ---------- INTERNAL ------------------------------------------------------
 
     // sequencer-level orchestration (Ops factory methods)
-    // Command names come from the THR_ -> thread_names map in sequence.h.
-    // I probably should rename these from "thread" to something else (operation?)
+    // Command names come from the OP_* -> op_names map in sequence.h.
 
-    op_builders[thread_names.at(THR_ACAM_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_ACAM_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.acam_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_CALIB_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_CALIB_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.calib_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_CALIB_SET)] = [this](Operation &op, const ParsedCommand &cmd) {
-      op = ops.calib_set();
+    op_builders[op_names.at(OP_CALIB_SETUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+      op = ops.calib_setup();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_CAMERA_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_CAMERA_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.camera_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_CAMERA_SET)] = [this](Operation &op, const ParsedCommand &cmd) {
-      op = ops.camera_set();
+    op_builders[op_names.at(OP_CAMERA_SETUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+      op = ops.camera_setup();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_EXPOSURE)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_EXPOSURE)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.do_expose();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_FLEXURE_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_FLEXURE_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.flexure_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_FLEXURE_SET)] = [this](Operation &op, const ParsedCommand &cmd) {
-      op = ops.flexure_set();
+    op_builders[op_names.at(OP_FLEXURE_SETUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+      op = ops.flexure_setup();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_FOCUS_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_FOCUS_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.focus_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_FOCUS_SET)] = [this](Operation &op, const ParsedCommand &cmd) {
-      op = ops.focus_set();
+    op_builders[op_names.at(OP_FOCUS_SETUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+      op = ops.focus_setup();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_MOVE_TO_TARGET)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_MOVE_TO_TARGET)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.move_to_target();
       op.params = cmd.params;   // may carry optional ra= / dec= overrides
     };
 
-    op_builders[thread_names.at(THR_POWER_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_POWER_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.power_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_REPEAT_EXPOSURE)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_REPEAT_EXPOSURE)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.repeat_exposure();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_SHUTDOWN)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_SHUTDOWN)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.do_shutdown();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_SLICECAM_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_SLICECAM_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.slicecam_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_SLIT_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_SLIT_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.slit_init();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_SLIT_SET)] = [this](Operation &op, const ParsedCommand &cmd) {
-      op = ops.slit_set();
+    op_builders[op_names.at(OP_SLIT_SETUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+      op = ops.slit_setup();
       op.params = cmd.params;   // may carry optional mode= override
     };
 
-    op_builders[thread_names.at(THR_STARTUP)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_STARTUP)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.do_startup();
       op.params = cmd.params;
     };
 
-    op_builders[thread_names.at(THR_TCS_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
+    op_builders[op_names.at(OP_TCS_INIT)] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.tcs_init();
       op.params = cmd.params;
     };
 
-    // target_offset shares THR_MOVE_TO_TARGET with move_to_target, so it needs a
+    // target_offset shares OP_MOVE_TO_TARGET with move_to_target, so it needs a
     // distinct CLI/DSL name. Use its Sequence:: member-function name "target_offset"
-    // (there is no separate entry in thread_names for it).
+    // (there is no separate entry in op_names for it).
     op_builders["target_offset"] = [this](Operation &op, const ParsedCommand &cmd) {
       op = ops.target_offset();
       op.params = cmd.params;
@@ -296,7 +295,8 @@ namespace Sequencer {
     // validation and state-machine validation before forwarding to the daemon.
 
     op_builders[SEQUENCERD_ACAM] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_ACAM_INIT;  // passthrough uses nearest daemon THR_ identity
+      op.id    = OP_ACAM_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_ACAM+"]");
         try {
@@ -310,7 +310,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_CALIB] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_CALIB_INIT;
+      op.id    = OP_CALIB_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_CALIB+"]");
         try {
@@ -324,7 +325,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_CAMERA] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_CAMERA_INIT;
+      op.id    = OP_CAMERA_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_CAMERA+"]");
         try {
@@ -338,7 +340,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_FLEXURE] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_FLEXURE_INIT;
+      op.id    = OP_FLEXURE_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_FLEXURE+"]");
         try {
@@ -352,7 +355,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_FOCUS] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_FOCUS_INIT;
+      op.id    = OP_FOCUS_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_FOCUS+"]");
         try {
@@ -366,7 +370,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_POWER] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_POWER_INIT;
+      op.id    = OP_POWER_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_POWER+"]");
         try {
@@ -380,7 +385,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_SLICECAM] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_SLICECAM_INIT;
+      op.id    = OP_SLICECAM_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_SLICECAM+"]");
         try {
@@ -394,7 +400,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_SLIT] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_SLIT_INIT;
+      op.id    = OP_SLIT_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_SLIT+"]");
         try {
@@ -408,7 +415,8 @@ namespace Sequencer {
     };
 
     op_builders[SEQUENCERD_TCS] = [this](Operation &op, const ParsedCommand &cmd) {
-      op.thr  = THR_TCS_INIT;
+      op.id    = OP_TCS_CMD;
+      op.params = cmd.params;
       op.func = [this, cmd_copy=cmd]() {
         const std::string function("Sequencer::Sequence::op_builders["+SEQUENCERD_TCS+"]");
         try {

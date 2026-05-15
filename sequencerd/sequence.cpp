@@ -20,85 +20,93 @@ namespace Sequencer {
 
   namespace {
     // ------------------------------------------------------------------------
-    // Maps each Operation::thr to the DaemonBit it depends on. Operations
+    // Maps each Operation::id to the DaemonBit it depends on. Operations
     // that manage daemon state themselves (startup, shutdown, power_init,
     // power_shutdown) are intentionally absent from this map.
     // Used exclusively by validate_sequence().
     // ------------------------------------------------------------------------
-    const std::unordered_map<ThreadStatusBits, DaemonBit> thr_to_daemon = {
-      { THR_EXPOSURE,         DAEMON_CAMERA   },
-      { THR_CAMERA_SET,       DAEMON_CAMERA   },
-      { THR_CAMERA_INIT,      DAEMON_CAMERA   },
-      { THR_CAMERA_SHUTDOWN,  DAEMON_CAMERA   },
-      { THR_SLIT_SET,         DAEMON_SLIT     },
-      { THR_SLIT_INIT,        DAEMON_SLIT     },
-      { THR_SLIT_SHUTDOWN,    DAEMON_SLIT     },
-      { THR_MOVE_TO_TARGET,   DAEMON_TCS      },
-      { THR_TCS_INIT,         DAEMON_TCS      },
-      { THR_TCS_SHUTDOWN,     DAEMON_TCS      },
-      { THR_FLEXURE_SET,      DAEMON_FLEXURE  },
-      { THR_FLEXURE_INIT,     DAEMON_FLEXURE  },
-      { THR_FLEXURE_SHUTDOWN, DAEMON_FLEXURE  },
-      { THR_FOCUS_SET,        DAEMON_FOCUS    },
-      { THR_FOCUS_INIT,       DAEMON_FOCUS    },
-      { THR_FOCUS_SHUTDOWN,   DAEMON_FOCUS    },
-      { THR_CALIB_SET,        DAEMON_CALIB    },
-      { THR_CALIBRATOR_SET,   DAEMON_CALIB    },
-      { THR_CALIB_INIT,       DAEMON_CALIB    },
-      { THR_CALIB_SHUTDOWN,   DAEMON_CALIB    },
-      { THR_ACAM_INIT,        DAEMON_ACAM     },
-      { THR_ACAM_SHUTDOWN,    DAEMON_ACAM     },
-      { THR_SLICECAM_INIT,    DAEMON_SLICECAM },
-      { THR_SLICECAM_SHUTDOWN,DAEMON_SLICECAM }
+    const std::unordered_map<OperationStatusBits, DaemonBit> opid_to_daemon = {
+      { OP_EXPOSURE,          DAEMON_CAMERA   },
+      { OP_CAMERA_SETUP,      DAEMON_CAMERA   },
+      { OP_CAMERA_INIT,       DAEMON_CAMERA   },
+      { OP_CAMERA_SHUTDOWN,   DAEMON_CAMERA   },
+      { OP_SLIT_SETUP,        DAEMON_SLIT     },
+      { OP_SLIT_INIT,         DAEMON_SLIT     },
+      { OP_SLIT_SHUTDOWN,     DAEMON_SLIT     },
+      { OP_MOVE_TO_TARGET,    DAEMON_TCS      },
+      { OP_TCS_INIT,          DAEMON_TCS      },
+      { OP_TCS_SHUTDOWN,      DAEMON_TCS      },
+      { OP_FLEXURE_SETUP,     DAEMON_FLEXURE  },
+      { OP_FLEXURE_INIT,      DAEMON_FLEXURE  },
+      { OP_FLEXURE_SHUTDOWN,  DAEMON_FLEXURE  },
+      { OP_FOCUS_SETUP,       DAEMON_FOCUS    },
+      { OP_FOCUS_INIT,        DAEMON_FOCUS    },
+      { OP_FOCUS_SHUTDOWN,    DAEMON_FOCUS    },
+      { OP_CALIB_SETUP,       DAEMON_CALIB    },
+      { OP_CALIB_INIT,        DAEMON_CALIB    },
+      { OP_CALIB_SHUTDOWN,    DAEMON_CALIB    },
+      { OP_ACAM_INIT,         DAEMON_ACAM     },
+      { OP_ACAM_SHUTDOWN,     DAEMON_ACAM     },
+      { OP_SLICECAM_INIT,     DAEMON_SLICECAM },
+      { OP_SLICECAM_SHUTDOWN, DAEMON_SLICECAM },
+      { OP_ACAM_CMD,          DAEMON_ACAM     },
+      { OP_CALIB_CMD,         DAEMON_CALIB    },
+      { OP_CAMERA_CMD,        DAEMON_CAMERA   },
+      { OP_FLEXURE_CMD,       DAEMON_FLEXURE  },
+      { OP_FOCUS_CMD,         DAEMON_FOCUS    },
+      { OP_POWER_CMD,         DAEMON_POWER    },
+      { OP_SLICECAM_CMD,      DAEMON_SLICECAM },
+      { OP_SLIT_CMD,          DAEMON_SLIT     },
+      { OP_TCS_CMD,           DAEMON_TCS      }
     };
 
     // ------------------------------------------------------------------------
-    // Returns true if the two Operation::thr values are unsafe to run in the
+    // Returns true if the two Operation::id values are unsafe to run in the
     // same PARALLEL group. Serial ordering of any such pair is fine.
     // ------------------------------------------------------------------------
-    inline bool is_parallel_unsafe_pair(ThreadStatusBits a, ThreadStatusBits b) {
+    inline bool is_parallel_unsafe_pair(OperationStatusBits a, OperationStatusBits b) {
       // normalize ordering so each pair is checked once
       if (a > b) std::swap(a, b);
 
       // global sequence ops conflict with anything big
-      if (a == THR_STARTUP && b == THR_SHUTDOWN)     return true;
-      if (a == THR_STARTUP && b == THR_EXPOSURE)     return true;
+      if (a == OP_STARTUP && b == OP_SHUTDOWN)     return true;
+      if (a == OP_STARTUP && b == OP_EXPOSURE)     return true;
 
       // startup runs all inits internally; parallelling any init with startup is a double-init
-      auto is_init = [](ThreadStatusBits t) {
-        return t == THR_ACAM_INIT     || t == THR_CALIB_INIT  ||
-               t == THR_CAMERA_INIT   || t == THR_FLEXURE_INIT||
-               t == THR_FOCUS_INIT    || t == THR_POWER_INIT  ||
-               t == THR_SLICECAM_INIT || t == THR_SLIT_INIT   ||
-               t == THR_TCS_INIT;
+      auto is_init = [](OperationStatusBits t) {
+        return t == OP_ACAM_INIT     || t == OP_CALIB_INIT  ||
+               t == OP_CAMERA_INIT   || t == OP_FLEXURE_INIT||
+               t == OP_FOCUS_INIT    || t == OP_POWER_INIT  ||
+               t == OP_SLICECAM_INIT || t == OP_SLIT_INIT   ||
+               t == OP_TCS_INIT;
       };
-      auto is_shutdown = [](ThreadStatusBits t) {
-        return t == THR_ACAM_SHUTDOWN     || t == THR_CALIB_SHUTDOWN  ||
-               t == THR_CAMERA_SHUTDOWN   || t == THR_FLEXURE_SHUTDOWN||
-               t == THR_FOCUS_SHUTDOWN    || t == THR_POWER_SHUTDOWN  ||
-               t == THR_SLICECAM_SHUTDOWN || t == THR_SLIT_SHUTDOWN   ||
-               t == THR_TCS_SHUTDOWN;
+      auto is_shutdown = [](OperationStatusBits t) {
+        return t == OP_ACAM_SHUTDOWN     || t == OP_CALIB_SHUTDOWN  ||
+               t == OP_CAMERA_SHUTDOWN   || t == OP_FLEXURE_SHUTDOWN||
+               t == OP_FOCUS_SHUTDOWN    || t == OP_POWER_SHUTDOWN  ||
+               t == OP_SLICECAM_SHUTDOWN || t == OP_SLIT_SHUTDOWN   ||
+               t == OP_TCS_SHUTDOWN;
       };
 
-      if (a == THR_STARTUP  && is_init(b))     return true;
-      if (a == THR_SHUTDOWN && is_init(b))     return true;
+      if (a == OP_STARTUP  && is_init(b))     return true;
+      if (a == OP_SHUTDOWN && is_init(b))     return true;
 
       // power_init vs power_shutdown
-      if (a == THR_POWER_INIT && b == THR_POWER_SHUTDOWN) return true;
+      if (a == OP_POWER_INIT && b == OP_POWER_SHUTDOWN) return true;
 
       // matching init/shutdown pair for the same subsystem
       if (is_init(a) && is_shutdown(b)) {
-        auto subsystem_of = [](ThreadStatusBits t) -> int {
+        auto subsystem_of = [](OperationStatusBits t) -> int {
           switch (t) {
-            case THR_ACAM_INIT:      case THR_ACAM_SHUTDOWN:      return 1;
-            case THR_CALIB_INIT:     case THR_CALIB_SHUTDOWN:     return 2;
-            case THR_CAMERA_INIT:    case THR_CAMERA_SHUTDOWN:    return 3;
-            case THR_FLEXURE_INIT:   case THR_FLEXURE_SHUTDOWN:   return 4;
-            case THR_FOCUS_INIT:     case THR_FOCUS_SHUTDOWN:     return 5;
-            case THR_POWER_INIT:     case THR_POWER_SHUTDOWN:     return 6;
-            case THR_SLICECAM_INIT:  case THR_SLICECAM_SHUTDOWN:  return 7;
-            case THR_SLIT_INIT:      case THR_SLIT_SHUTDOWN:      return 8;
-            case THR_TCS_INIT:       case THR_TCS_SHUTDOWN:       return 9;
+            case OP_ACAM_INIT:      case OP_ACAM_SHUTDOWN:      return 1;
+            case OP_CALIB_INIT:     case OP_CALIB_SHUTDOWN:     return 2;
+            case OP_CAMERA_INIT:    case OP_CAMERA_SHUTDOWN:    return 3;
+            case OP_FLEXURE_INIT:   case OP_FLEXURE_SHUTDOWN:   return 4;
+            case OP_FOCUS_INIT:     case OP_FOCUS_SHUTDOWN:     return 5;
+            case OP_POWER_INIT:     case OP_POWER_SHUTDOWN:     return 6;
+            case OP_SLICECAM_INIT:  case OP_SLICECAM_SHUTDOWN:  return 7;
+            case OP_SLIT_INIT:      case OP_SLIT_SHUTDOWN:      return 8;
+            case OP_TCS_INIT:       case OP_TCS_SHUTDOWN:       return 9;
             default: return 0;
           }
         };
@@ -332,7 +340,7 @@ namespace Sequencer {
     if (this->target.pointmode == Acam::POINTMODE_ACAM) {
       this->dotype("ONE");
       sequence.push_back( { OperationType::PARALLEL, OnError::STOP,
-                          { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
+                          { { OP_MOVE_TO_TARGET, [this]{ return move_to_target(); } } } } );
     }
     else {
       this->target.pointmode = Acam::POINTMODE_SLIT;
@@ -340,13 +348,13 @@ namespace Sequencer {
       // these are the default operations prior to exposure,
       // they can be done in parallel
       sequence.push_back( { OperationType::PARALLEL, OnError::STOP,
-          { { THR_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
-            { THR_CAMERA_SET,     [this]{ return camera_set(); } },
-            { THR_FOCUS_SET,      [this]{ return focus_set(); } },
-            { THR_FLEXURE_SET,    [this]{ return flexure_set(); } },
-            { THR_CALIB_SET,      [this]{ return calib_set(); } },
-            { THR_SLIT_SET,       [this]{ return slit_set(this->target.iscal ? VSM_DATABASE
-                                                                                               : VSM_ACQUIRE); } }
+          { { OP_MOVE_TO_TARGET, [this]{ return move_to_target(); } },
+            { OP_CAMERA_SETUP,   [this]{ return camera_setup(); } },
+            { OP_FOCUS_SETUP,    [this]{ return focus_setup(); } },
+            { OP_FLEXURE_SETUP,  [this]{ return flexure_setup(); } },
+            { OP_CALIB_SETUP,    [this]{ return calib_setup(); } },
+            { OP_SLIT_SETUP,     [this]{ return slit_setup(this->target.iscal ? VSM_DATABASE
+                                                                              : VSM_ACQUIRE); } }
           } } );
     }
 
@@ -354,16 +362,16 @@ namespace Sequencer {
 
     if (this->target.pointmode != Acam::POINTMODE_ACAM) {
       sequence.push_back( { OperationType::SERIAL, OnError::STOP,
-          { { THR_ACQUISITION,
+          { { OP_ACQUISITION,
               [this,caller]() { return this->do_target_acquisition(caller); } },
 
-            { THR_MOVE_TO_TARGET,
+            { OP_MOVE_TO_TARGET,
               [this,caller]() { return this->do_target_offset(caller); } },
 
-            { THR_SLIT_SET,
+            { OP_SLIT_SETUP,
               [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
 
-            { THR_EXPOSURE,
+            { OP_EXPOSURE,
               [this,caller]() { return this->do_exposure(caller); } }
           }
           } );
@@ -602,30 +610,30 @@ namespace Sequencer {
     }
 
     // ---------- RULE -------------------------------------------------------
-    // Collect presence flags + counts by Operation::thr identifier.
+    // Collect presence flags + counts by Operation::id identifier.
     // Used by subsequent rules.
 
-    bool has_expose     = false;
-    bool has_camera_set = false;
-    bool has_slit_set   = false;
-    int  expose_count   = 0;
+    bool has_expose       = false;
+    bool has_camera_setup = false;
+    bool has_slit_setup   = false;
+    int  expose_count     = 0;
 
     for (const auto &group : sequence) {
       for (const auto &op : group.operations) {
-        switch (op.thr) {
-          case THR_EXPOSURE:    has_expose     = true; ++expose_count; break;
-          case THR_CAMERA_SET:  has_camera_set = true;                 break;
-          case THR_SLIT_SET:    has_slit_set   = true;                 break;
+        switch (op.id) {
+          case OP_EXPOSURE:     has_expose       = true; ++expose_count; break;
+          case OP_CAMERA_SETUP: has_camera_setup = true;                 break;
+          case OP_SLIT_SETUP:   has_slit_setup   = true;                 break;
           default: break;
         }
       }
     }
 
     // ---------- RULE -------------------------------------------------------
-    // If expose is present, camera_set must also be present.
+    // If expose is present, camera_setup must also be present.
 
-    if ( has_expose && !has_camera_set ) {
-      this->broadcast.error( function, "sequence contains 'expose' without 'camera_set'" );
+    if ( has_expose && !has_camera_setup ) {
+      this->broadcast.error( function, "sequence contains 'expose' without 'camera_setup'" );
       error = ERROR;
     }
 
@@ -643,8 +651,8 @@ namespace Sequencer {
     std::bitset<NUM_DAEMONS> required;
     for (const auto &group : sequence) {
       for (const auto &op : group.operations) {
-        auto it = thr_to_daemon.find(op.thr);
-        if ( it != thr_to_daemon.end() ) required.set(it->second);
+        auto it = opid_to_daemon.find(op.id);
+        if ( it != opid_to_daemon.end() ) required.set(it->second);
       }
     }
 
@@ -691,12 +699,12 @@ namespace Sequencer {
       if ( group.type != OperationType::PARALLEL ) continue;
       for (std::size_t i = 0; i < group.operations.size(); ++i) {
         for (std::size_t j = i+1; j < group.operations.size(); ++j) {
-          if ( is_parallel_unsafe_pair(group.operations[i].thr,
-                                       group.operations[j].thr) ) {
+          if ( is_parallel_unsafe_pair(group.operations[i].id,
+                                       group.operations[j].id) ) {
             std::ostringstream oss;
             oss << "parallel group contains unsafe pair: '"
-                << thread_names.at(group.operations[i].thr) << "' and '"
-                << thread_names.at(group.operations[j].thr) << "'";
+                << op_names.at(group.operations[i].id) << "' and '"
+                << op_names.at(group.operations[j].id) << "'";
             this->broadcast.error(function, oss.str());
             error = ERROR;
           }
@@ -706,18 +714,18 @@ namespace Sequencer {
 
     // science-mode cross-group check: reject parallel-unsafe pairs anywhere
     if ( !this->engineering_mode.load() ) {
-      std::vector<ThreadStatusBits> all_thrs;
-      all_thrs.reserve(NUM_THREAD_STATES);
+      std::vector<OperationStatusBits> all_ops;
+      all_ops.reserve(NUM_OP_STATES);
       for (const auto &group : sequence) {
-        for (const auto &op : group.operations) all_thrs.push_back(op.thr);
+        for (const auto &op : group.operations) all_ops.push_back(op.id);
       }
-      for (std::size_t i = 0; i < all_thrs.size(); ++i) {
-        for (std::size_t j = i+1; j < all_thrs.size(); ++j) {
-          if ( is_parallel_unsafe_pair(all_thrs[i], all_thrs[j]) ) {
+      for (std::size_t i = 0; i < all_ops.size(); ++i) {
+        for (std::size_t j = i+1; j < all_ops.size(); ++j) {
+          if ( is_parallel_unsafe_pair(all_ops[i], all_ops[j]) ) {
             std::ostringstream oss;
             oss << "sequence contains unsafe pair in science mode: '"
-                << thread_names.at(all_thrs[i]) << "' and '"
-                << thread_names.at(all_thrs[j])
+                << op_names.at(all_ops[i]) << "' and '"
+                << op_names.at(all_ops[j])
                 << "' (use 'engineering true' to allow in SERIAL groups)";
             this->broadcast.error(function, oss.str());
             error = ERROR;
@@ -1083,8 +1091,8 @@ namespace Sequencer {
 
     // iterate through map of thread state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
-    std::string active_states( this->thread_state_manager.get_set_states() );
-    for ( const auto &[bit,state] : Sequencer::thread_names ) {
+    std::string active_states( this->op_state_manager.get_set_states() );
+    for ( const auto &[bit,state] : Sequencer::op_names ) {
       jmessage_out[state] = ( active_states.find(state)!=std::string::npos ? true : false);
     }
 
@@ -1191,7 +1199,7 @@ namespace Sequencer {
   void Sequence::dothread_sequencer_async_listener( Sequencer::Sequence &seq, Network::UdpSocket udp ) {
     const std::string function("Sequencer::Sequence::dothread_sequencer_async_listener");
 
-    ScopedState thr_state( seq.thread_state_manager, Sequencer::THR_SEQUENCER_ASYNC_LISTENER );
+    ScopedState thr_state( seq.op_state_manager, Sequencer::OP_SEQUENCER_ASYNC_LISTENER );
 
     int retval = udp.Listener();
 
@@ -1306,7 +1314,7 @@ namespace Sequencer {
 
     // The Sequencer can only be started once
     //
-    if ( thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+    if ( op_state_manager.is_set( Sequencer::OP_SEQUENCE_START ) ) {
       this->broadcast.error( function, "sequencer already running" );
       return;
     }
@@ -1320,7 +1328,7 @@ namespace Sequencer {
 
     // ---------- SEQUENCER IS RUNNING ---------------------
     //
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_SEQUENCE_START );  // this thread is running
+    ScopedState thr_state( op_state_manager, Sequencer::OP_SEQUENCE_START );  // this thread is running
     ScopedState seq_state( seq_state_manager, Sequencer::SEQ_RUNNING, true );      // state = RUNNING (only)
     seq_state.destruct_set( Sequencer::SEQ_READY );                                // set state=READY on exit
 
@@ -1330,7 +1338,7 @@ namespace Sequencer {
 
     // clear the thread error state
     //
-    this->thread_error_manager.clear_all();
+    this->op_error_manager.clear_all();
 
     // clear stop flags
     //
@@ -1376,14 +1384,14 @@ namespace Sequencer {
             message.str(""); message << "cannot move to target " << this->target.name
                                      << " because TCS is not connected";
             this->broadcast.error( function, message.str() );
-            this->thread_error_manager.set( THR_SEQUENCE_START );           // report error
+            this->op_error_manager.set( OP_SEQUENCE_START );           // report error
             break;
           }
         }
 
         error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
         if (error!=NO_ERROR) {
-          this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
+          this->op_error_manager.set( OP_SEQUENCE_START );             // report any error
           break;
         }
       }
@@ -1403,7 +1411,7 @@ namespace Sequencer {
       error = run_default_sequence(function);
 
       if (error != NO_ERROR) {
-        this->thread_error_manager.set(THR_SEQUENCE_START);
+        this->op_error_manager.set(OP_SEQUENCE_START);
         break;
       }
 
@@ -1416,11 +1424,11 @@ namespace Sequencer {
       //
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
       if (error==NO_ERROR) error = this->target.insert_completed();          // insert into the completed table
-      if (error!=NO_ERROR) this->thread_error_manager.set( THR_SEQUENCE_START );     // report any error
+      if (error!=NO_ERROR) this->op_error_manager.set( OP_SEQUENCE_START );  // report any error
 
       // abort sequence on error
       //
-      if ( this->thread_error_manager.are_any_set() ) break;
+      if ( this->op_error_manager.are_any_set() ) break;
 
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
@@ -1432,14 +1440,14 @@ namespace Sequencer {
 
     } // end while true
 
-    if ( this->thread_error_manager.are_any_set() ) {
+    if ( this->op_error_manager.are_any_set() ) {
       logwrite(function, "ERROR stopping sequencer due to error in: "+
-                         this->thread_error_manager.get_set_states());
+                         this->op_error_manager.get_set_states());
       // If this target was flagged as active, then change it to unassigned on error.
       if ( this->target.get_next( Sequencer::TARGET_ACTIVE, targetstatus ) == TargetInfo::TARGET_FOUND ) {
         this->target.update_state( Sequencer::TARGET_UNASSIGNED );
       }
-      this->thread_error_manager.clear_all();     // clear the thread error state
+      this->op_error_manager.clear_all();     // clear the thread error state
       this->do_once.store(true);
     }
 
@@ -1449,7 +1457,7 @@ namespace Sequencer {
   /***** Sequencer::Sequence::sequence_start **********************************/
 
 
-  /***** Sequencer::Sequence::camera_set **************************************/
+  /***** Sequencer::Sequence::camera_setup **************************************/
   /**
    * @brief      sets the camera according to the parameters in the target entry
    * @return     NO_ERROR
@@ -1458,20 +1466,20 @@ namespace Sequencer {
    * At the moment, this is only exposure time.
    *
    */
-  long Sequence::camera_set() {
-    const std::string function("Sequencer::Sequence::camera_set");
+  long Sequence::camera_setup() {
+    const std::string function("Sequencer::Sequence::camera_setup");
     std::string reply;
     std::stringstream camcmd;
     long error=NO_ERROR;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_CAMERA_SETUP );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->wait_for_canexpose(function);
 
     logwrite( function, "setting camera parameters");
 
-    this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
+    this->op_error_manager.set( OP_CAMERA_SETUP );  // assume the worse, clear on success
 
     // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
     // indexed by name. Calibration targets use target.name for the index, or
@@ -1528,14 +1536,14 @@ namespace Sequencer {
       throw std::runtime_error( "camera returned "+reply );
     }
 
-    this->thread_error_manager.clear( THR_CAMERA_SET );  // success
+    this->op_error_manager.clear( OP_CAMERA_SETUP );  // success
 
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::camera_set **************************************/
+  /***** Sequencer::Sequence::camera_setup **************************************/
 
 
-  /***** Sequencer::Sequence::slit_set ****************************************/
+  /***** Sequencer::Sequence::slit_setup ****************************************/
   /**
    * @brief      sets the slit width and offset
    * @details    Slit width is always set according to the value in the target
@@ -1545,12 +1553,12 @@ namespace Sequencer {
    * @throws     std::runtime_error
    *
    */
-  long Sequence::slit_set(VirtualSlitMode mode) {
-    const std::string function("Sequencer::Sequence::slit_set");
+  long Sequence::slit_setup(VirtualSlitMode mode) {
+    const std::string function("Sequencer::Sequence::slit_setup");
     std::string reply, modestr;
     std::stringstream slitcmd, message;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_SLIT_SET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_SLIT_SETUP );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
 
     // send the SET command to slitd
@@ -1584,13 +1592,13 @@ namespace Sequencer {
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
       logwrite( function, "ERROR setting slit" );
-      this->thread_error_manager.set( THR_SLIT_SET );
+      this->op_error_manager.set( OP_SLIT_SETUP );
       throw std::runtime_error("slit returned: "+reply);
     }
 
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::slit_set ****************************************/
+  /***** Sequencer::Sequence::slit_setup ****************************************/
 
 
   /***** Sequencer::Sequence::power_init **************************************/
@@ -1603,7 +1611,7 @@ namespace Sequencer {
   long Sequence::power_init() {
     const std::string function("Sequencer::Sequence::power_init");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_POWER_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_POWER_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_POWER );
 
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
@@ -1630,7 +1638,7 @@ namespace Sequencer {
   long Sequence::power_shutdown() {
     const std::string function("Sequencer::Sequence::power_shutdown");
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_POWER_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_POWER_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_POWER );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_POWER );
 
@@ -1653,12 +1661,12 @@ namespace Sequencer {
   long Sequence::slit_init() {
     const std::string function("Sequencer::Sequence::slit_init");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_SLIT_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_SLIT_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
 
     this->daemon_manager.clear( Sequencer::DAEMON_SLIT );  // slitd not ready
 
-    this->thread_error_manager.set( THR_SLIT_INIT );       // assume the worst, clear on success
+    this->op_error_manager.set( OP_SLIT_INIT );       // assume the worst, clear on success
 
     if ( this->set_power_switch(ON, POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
       logwrite( function, "ERROR powering slit hardware" );
@@ -1701,7 +1709,7 @@ namespace Sequencer {
       }
     }
 
-    this->thread_error_manager.clear( THR_SLIT_INIT );   // success
+    this->op_error_manager.clear( OP_SLIT_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_SLIT );  // slitd ready
 
     return NO_ERROR;
@@ -1722,11 +1730,11 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SLIT_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_SLIT_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLIT );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLIT );
 
-    this->thread_error_manager.set( THR_SLIT_SHUTDOWN );    // assume the worst, clear on success
+    this->op_error_manager.set( OP_SLIT_SHUTDOWN );    // assume the worst, clear on success
 
     // already off?
     //
@@ -1769,7 +1777,7 @@ namespace Sequencer {
     logwrite( function, "disconnecting from slitd" );
     this->slitd.disconnect();
 
-    this->thread_error_manager.clear( THR_SLIT_SHUTDOWN );  // success
+    this->op_error_manager.clear( OP_SLIT_SHUTDOWN );  // success
 
     return NO_ERROR;
   }
@@ -1789,10 +1797,10 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_SLICECAM );  // slicecamd not ready
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_SLICECAM_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_SLICECAM_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
 
-    this->thread_error_manager.set( THR_SLICECAM_INIT );       // assume the worst, clear on success
+    this->op_error_manager.set( OP_SLICECAM_INIT );       // assume the worst, clear on success
 
     // make sure hardware is powered on
     //
@@ -1809,7 +1817,7 @@ namespace Sequencer {
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_SLICECAM );    // slicecamd ready
-    this->thread_error_manager.clear( THR_SLICECAM_INIT );     // success
+    this->op_error_manager.clear( OP_SLICECAM_INIT );     // success
 
     return NO_ERROR;
   }
@@ -1829,10 +1837,10 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_ACAM );  // acamd not ready
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_ACAM_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_ACAM_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
 
-    this->thread_error_manager.set( THR_ACAM_INIT );       // assume the worst, clear on success
+    this->op_error_manager.set( OP_ACAM_INIT );       // assume the worst, clear on success
 
     // make sure hardware is powered on
     //
@@ -1869,7 +1877,7 @@ namespace Sequencer {
       }
     }
 
-    this->thread_error_manager.clear( THR_ACAM_INIT );   // success
+    this->op_error_manager.clear( OP_ACAM_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_ACAM );  // acamd ready
 
     return NO_ERROR;
@@ -1890,11 +1898,11 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SLICECAM_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_SLICECAM_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_SLICECAM );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_SLICECAM );
 
-    this->thread_error_manager.set( THR_SLICECAM_SHUTDOWN );    // assume the worst, clear on success
+    this->op_error_manager.set( OP_SLICECAM_SHUTDOWN );    // assume the worst, clear on success
 
     // already off?
     //
@@ -1934,7 +1942,7 @@ namespace Sequencer {
       throw std::runtime_error("could not power off slicecam hardware");
     }
 
-    this->thread_error_manager.clear( THR_SLICECAM_SHUTDOWN );  // success
+    this->op_error_manager.clear( OP_SLICECAM_SHUTDOWN );  // success
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::slicecam_shutdown *******************************/
@@ -1953,11 +1961,11 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ACAM_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_ACAM_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_ACAM );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_ACAM );
 
-    this->thread_error_manager.set( THR_ACAM_SHUTDOWN );    // assume the worst, clear on success
+    this->op_error_manager.set( OP_ACAM_SHUTDOWN );    // assume the worst, clear on success
 
     // ensure a connection to the daemon
     //
@@ -2005,7 +2013,7 @@ namespace Sequencer {
       throw std::runtime_error("could not switch off acam");
     }
 
-    this->thread_error_manager.clear( THR_ACAM_SHUTDOWN );  // success
+    this->op_error_manager.clear( OP_ACAM_SHUTDOWN );  // success
 
     return NO_ERROR;
   }
@@ -2024,10 +2032,10 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIB_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_CALIB_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
-    this->thread_error_manager.set( THR_CALIB_INIT );  // assume the worst, clear on success
+    this->op_error_manager.set( OP_CALIB_INIT );  // assume the worst, clear on success
 
     // make sure calib hardware is powered
     if ( this->set_power_switch(ON, POWER_CALIB, std::chrono::seconds(5)) != NO_ERROR ) {
@@ -2079,7 +2087,7 @@ namespace Sequencer {
     // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
 
-    this->thread_error_manager.clear( THR_CALIB_INIT );
+    this->op_error_manager.clear( OP_CALIB_INIT );
 
     return NO_ERROR;
   }
@@ -2097,11 +2105,11 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::calib_shutdown");
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CALIB_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_CALIB_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CALIB );
 
-    this->thread_error_manager.set( THR_CALIB_SHUTDOWN );    // assume the worst, clear on success
+    this->op_error_manager.set( OP_CALIB_SHUTDOWN );    // assume the worst, clear on success
 
     // is calib hardware powered?
     //
@@ -2163,11 +2171,11 @@ namespace Sequencer {
     // set this thread's error status
     //
     if (error!=NO_ERROR) {
-      this->thread_error_manager.set( THR_CALIB_SHUTDOWN );
+      this->op_error_manager.set( OP_CALIB_SHUTDOWN );
       throw std::runtime_error("shutting down calib control");
     }
 
-    this->thread_error_manager.clear( THR_CALIB_SHUTDOWN );  // success
+    this->op_error_manager.clear( OP_CALIB_SHUTDOWN );  // success
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::calib_shutdown **********************************/
@@ -2184,14 +2192,14 @@ namespace Sequencer {
    *
    */
   long Sequence::tcs_init() {
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_TCS_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_TCS_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
 
     this->daemon_manager.clear( Sequencer::DAEMON_TCS );  // tcsd not ready
 
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
       logwrite( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
-      this->thread_error_manager.set( THR_TCS_INIT );
+      this->op_error_manager.set( OP_TCS_INIT );
       throw std::runtime_error("could not initialize TCS");
     }
 
@@ -2219,7 +2227,7 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::tcs_shutdown");
     std::stringstream message;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_TCS_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_TCS_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_TCS );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_TCS );
 
@@ -2260,7 +2268,7 @@ namespace Sequencer {
   long Sequence::flexure_init() {
     const std::string function("Sequencer::Sequence::flexure_init");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_FLEXURE_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
 
     this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );  // flexured not ready
@@ -2269,13 +2277,13 @@ namespace Sequencer {
     //
     if ( this->set_power_switch(ON, POWER_FLEXURE, std::chrono::seconds(21)) != NO_ERROR ) {
       logwrite( function, "ERROR powering flexure control" );
-      this->thread_error_manager.set( THR_FLEXURE_INIT );
+      this->op_error_manager.set( OP_FLEXURE_INIT );
       throw std::runtime_error("could not power flexure control");
     }
 
     if ( this->open_hardware(this->flexured) != NO_ERROR ) {
       logwrite( function, "ERROR initializing flexure control" );
-      this->thread_error_manager.set( THR_FLEXURE_INIT );
+      this->op_error_manager.set( OP_FLEXURE_INIT );
       throw std::runtime_error("could not initialize flexure control");
     }
 
@@ -2301,7 +2309,7 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_FLEXURE_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_FLEXURE_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_FLEXURE );
 
@@ -2360,12 +2368,12 @@ namespace Sequencer {
   long Sequence::focus_init() {
     const std::string function("Sequencer::Sequence::focus_init");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_FOCUS_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_FOCUS_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FOCUS );
 
     this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );  // focusd not ready
 
-    this->thread_error_manager.set( THR_FOCUS_INIT );       // assume failure, clear on success
+    this->op_error_manager.set( OP_FOCUS_INIT );       // assume failure, clear on success
 
     if ( this->set_power_switch(ON, POWER_FOCUS, std::chrono::seconds(5)) != NO_ERROR ) {
       logwrite( function, "ERROR powering focus control" );
@@ -2410,7 +2418,7 @@ namespace Sequencer {
       }
     }
 
-    this->thread_error_manager.clear( THR_FOCUS_INIT );     // success
+    this->op_error_manager.clear( OP_FOCUS_INIT );     // success
     this->daemon_manager.set( Sequencer::DAEMON_FOCUS );    // focusd is ready
 
     return NO_ERROR;
@@ -2430,7 +2438,7 @@ namespace Sequencer {
     std::string reply;
     long error=NO_ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_FOCUS_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_FOCUS_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_FOCUS );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_FOCUS );
 
@@ -2489,11 +2497,11 @@ namespace Sequencer {
   long Sequence::camera_init() {
     const std::string function("Sequencer::Sequence::camera_init");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_INIT );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_CAMERA_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
     this->daemon_manager.clear( Sequencer::DAEMON_CAMERA );  // camerad not ready
-    this->thread_error_manager.set( THR_CAMERA_INIT );       // assume failure, clear on success
+    this->op_error_manager.set( OP_CAMERA_INIT );       // assume failure, clear on success
 
     // make sure hardware is powered on
     //
@@ -2525,7 +2533,7 @@ namespace Sequencer {
     this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply );
     this->is_science_frame_transfer = ( reply.find("yes") != std::string::npos );
 
-    this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
+    this->op_error_manager.clear( OP_CAMERA_INIT );   // success
     this->daemon_manager.set( Sequencer::DAEMON_CAMERA );  // camerad ready
 
     return NO_ERROR;
@@ -2543,11 +2551,11 @@ namespace Sequencer {
   long Sequence::camera_shutdown() {
     const std::string function("Sequencer::Sequence::camera_shutdown");
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_CAMERA_SHUTDOWN );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_CAMERA_SHUTDOWN );
     ScopedState wait_state( this->wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
     ScopedState daemon_state( this->daemon_manager, Sequencer::DAEMON_CAMERA );
 
-    this->thread_error_manager.set( THR_CAMERA_SHUTDOWN );    // assume failure, clear on success
+    this->op_error_manager.set( OP_CAMERA_SHUTDOWN );    // assume failure, clear on success
 
     // Are any cameras on?
     //
@@ -2589,7 +2597,7 @@ namespace Sequencer {
       throw std::runtime_error("switching off camera");
     }
 
-    this->thread_error_manager.clear( THR_CAMERA_SHUTDOWN );  // success
+    this->op_error_manager.clear( OP_CAMERA_SHUTDOWN );  // success
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::camera_shutdown *********************************/
@@ -2614,7 +2622,7 @@ namespace Sequencer {
     //
     if ( this->target.iscal ) return NO_ERROR;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
     ScopedState wait_moveto( wait_state_manager, Sequencer::SEQ_WAIT_MOVETO );
 
@@ -2686,7 +2694,7 @@ namespace Sequencer {
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
       logwrite( function, "ERROR "+message.str() );
-      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
+      this->op_error_manager.set( OP_MOVE_TO_TARGET );
       throw std::runtime_error(message.str());
     }
 
@@ -2737,7 +2745,7 @@ namespace Sequencer {
       if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
         message.str(""); message << "sending COORDS command. TCS reply: " << coords_reply;
         logwrite( function, "ERROR "+message.str() );
-        this->thread_error_manager.set( THR_MOVE_TO_TARGET );
+        this->op_error_manager.set( OP_MOVE_TO_TARGET );
         throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
     }
@@ -2800,7 +2808,7 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::dothread_notify_tcs");
     std::stringstream message;
 
-    ScopedState thr_state( seq.thread_state_manager, Sequencer::THR_NOTIFY_TCS );
+    ScopedState thr_state( seq.op_state_manager, Sequencer::OP_NOTIFY_TCS );
 
     // If this target is the same as the last then this section gets skipped;
     // no need to repoint the telescope and wait for a slew if it's already
@@ -2837,7 +2845,7 @@ namespace Sequencer {
         if ( std::isnan( radec_to_decimal( seq.target.ra_hms,  ra_hms  ) ) ||
              std::isnan( radec_to_decimal( seq.target.dec_dms, dec_dms ) ) ) {
           seq.broadcast.error( function, "can't handle NaN value for RA, DEC" );
-          seq.thread_error_manager.set( THR_NOTIFY_TCS );
+          seq.op_error_manager.set( OP_NOTIFY_TCS );
           return;
         }
 
@@ -2861,59 +2869,59 @@ namespace Sequencer {
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
 
 
-  /***** Sequencer::Sequence::focus_set ***************************************/
+  /***** Sequencer::Sequence::focus_setup ***************************************/
   /**
    * @brief      set the focus
    * @return     NO_ERROR
    * @todo       focus not yet implemented
    *
    */
-  long Sequence::focus_set() {
-    const std::string function("Sequencer::Sequence::focus_set");
+  long Sequence::focus_setup() {
+    const std::string function("Sequencer::Sequence::focus_setup");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_FOCUS_SET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_FOCUS_SETUP );
 
     logwrite( function, "focus not yet implemented." );
 
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::focus_set ***************************************/
+  /***** Sequencer::Sequence::focus_setup ***************************************/
 
 
-  /***** Sequencer::Sequence::flexure_set *************************************/
+  /***** Sequencer::Sequence::flexure_setup *************************************/
   /**
    * @brief      set the flexure
    * @return     NO_ERROR
    * @todo       flexure not yet implemented
    *
    */
-  long Sequence::flexure_set() {
-    const std::string function("Sequencer::Sequence::flexure_set");
+  long Sequence::flexure_setup() {
+    const std::string function("Sequencer::Sequence::flexure_setup");
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_FLEXURE_SETUP );
 
     logwrite( function, "flexure not yet implemented." );
 
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::flexure_set *************************************/
+  /***** Sequencer::Sequence::flexure_setup *************************************/
 
 
-  /***** Sequencer::Sequence::calib_set ***************************************/
+  /***** Sequencer::Sequence::calib_setup ***************************************/
   /**
    * @brief      set the calibrator
    * @return     NO_ERROR
    * @throws     std::runtime_error
    *
    */
-  long Sequence::calib_set() {
-    const std::string function("Sequencer::Sequence::calib_set");
+  long Sequence::calib_setup() {
+    const std::string function("Sequencer::Sequence::calib_setup");
     std::stringstream message;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIBRATOR_SET );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_CALIB_SETUP );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
-    this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
+    this->op_error_manager.set( OP_CALIB_SETUP );    // assume the worse, clear on success
 
     const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
 
@@ -2979,10 +2987,10 @@ namespace Sequencer {
       this->broadcast.notice( function, "abort may have left calib system partially set" );
     }
 
-    this->thread_error_manager.clear( THR_CALIBRATOR_SET );  // success
+    this->op_error_manager.clear( OP_CALIB_SETUP );  // success
     return NO_ERROR;
   }
-  /***** Sequencer::Sequence::calib_set ***************************************/
+  /***** Sequencer::Sequence::calib_setup ***************************************/
 
 
   /***** Sequencer::Sequence::abort_process *********************************/
@@ -2993,7 +3001,7 @@ namespace Sequencer {
   void Sequence::abort_process() {
     const std::string function("Sequencer::Sequence::abort_process");
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_ABORT_PROCESS );
 
     // Decide post-abort seqstate before entering SEQ_ABORTING. These snapshots
     // must be taken before any seqstate mutation below, because set_only()
@@ -3050,17 +3058,17 @@ namespace Sequencer {
     this->broadcast.notice( function, "cancel signal sent" );
 
     // Wait for sequence_start to fully exit before switching to SEQ_READY.
-    // Without this, we could have SEQ_READY set while THR_SEQUENCE_START is
+    // Without this, we could have SEQ_READY set while OP_SEQUENCE_START is
     // still set. Workers just received cancel_flag + CV notifications above,
     // so this loop exits after at most a few iterations.
     //
     if ( abort_during_run ) {
       const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-      while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
+      while ( this->op_state_manager.is_set( Sequencer::OP_SEQUENCE_START ) &&
               std::chrono::steady_clock::now() < drain_timeout ) {
         std::this_thread::sleep_for( std::chrono::milliseconds(20) );
       }
-      if ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+      if ( this->op_state_manager.is_set( Sequencer::OP_SEQUENCE_START ) ) {
         logwrite( function, "WARNING: sequence_start did not exit within drain timeout" );
       }
     }
@@ -3090,7 +3098,7 @@ namespace Sequencer {
   void Sequence::stop_exposure() {
     const std::string function("Sequencer::Sequence::stop_exposure");
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_STOP_EXPOSURE );
 
     // This function is only used while exposing
     //
@@ -3146,7 +3154,7 @@ namespace Sequencer {
       return ERROR;
     }
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_REPEAT_EXPOSURE );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_REPEAT_EXPOSURE );
     ScopedState seq_state( seq_state_manager, Sequencer::SEQ_RUNNING, true );      // set state=RUNNING (only)
     seq_state.destruct_set( Sequencer::SEQ_READY );                                // set state=READY on exit
 
@@ -3163,9 +3171,9 @@ namespace Sequencer {
 
     std::vector<OperationGroup> sequence = {
       { OperationType::SERIAL, OnError::STOP, {
-        { THR_SLIT_SET,
+        { OP_SLIT_SETUP,
           [this]() { return this->do_target_virtualslit(Sequencer::VSM_EXPOSE); } },
-        { THR_EXPOSURE,
+        { OP_EXPOSURE,
           [this,function]() { return this->do_exposure(function); } } }
       }
     };
@@ -3199,7 +3207,7 @@ namespace Sequencer {
 
     this->wait_for_canexpose(function);
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_TRIGGER_EXPOSURE );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_TRIGGER_EXPOSURE );
 
     // Check tcs_preauth_time and set notify_tcs_next_target --
     // When the preauth_time is non-zero, set this flag to true in order
@@ -3222,7 +3230,7 @@ namespace Sequencer {
 //  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
     if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR ) {
       logwrite( function, "ERROR sending camera "+message.str() );
-      this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
+      this->op_error_manager.set( OP_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );      // clear EXPOSE bit
       this->arm_readout_flag = false;                                    // disarm async_listener from looking for readout
@@ -3278,7 +3286,7 @@ namespace Sequencer {
     long error = NO_ERROR;
     double updated_exptime=0;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_MODIFY_EXPTIME );
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_MODIFY_EXPTIME );
 
     // This function is only used while exposing
     //
@@ -3333,12 +3341,12 @@ namespace Sequencer {
       return ERROR;
     }
 
-    ScopedState thread_state( thread_state_manager, Sequencer::THR_STARTUP );   // this thread is running
+    ScopedState thread_state( op_state_manager, Sequencer::OP_STARTUP );   // this thread is running
 
     // set only STARTING (and clear everything else)
     ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STARTING, true );  // state=STARTING (only)
 
-    this->thread_error_manager.clear_all();                                     // clear the thread error state
+    this->op_error_manager.clear_all();                                     // clear the thread error state
 
     // clear stop flags
     //
@@ -3400,7 +3408,7 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::shutdown");
     long error=ERROR;
 
-    ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
+    ScopedState thr_state( this->op_state_manager, Sequencer::OP_SHUTDOWN );  // this thread is running
 
     // Enter STOPPING as a strict one-hot state. Explicit set_only is used
     // instead of ScopedState because final state is set explicitly before return.
@@ -3425,12 +3433,12 @@ namespace Sequencer {
 
     // clear the thread error state
     //
-    this->thread_error_manager.clear_all();
+    this->op_error_manager.clear_all();
 
     // Everything (except TCS) needs the power control to be running 
     // so make sure power control is initialized before continuing.
     //
-    error = run( { THR_POWER_INIT, [this]{ return power_init(); }, { } }, function );
+    error = run( { OP_POWER_INIT, [this]{ return power_init(); }, { } }, function );
 
     if ( error != NO_ERROR ) {
       this->broadcast.error( function, "from power control. Will try to continue (but don't hold your breath)" );
@@ -3440,14 +3448,14 @@ namespace Sequencer {
     // pair their ThreadStatusBit with the function to call
     //
     error = run_parallel( {
-      { THR_ACAM_SHUTDOWN,     [this]{ return acam_shutdown(); },     { } },
-      { THR_CALIB_SHUTDOWN,    [this]{ return calib_shutdown(); },    { } },
-      { THR_CAMERA_SHUTDOWN,   [this]{ return camera_shutdown(); },   { } },
-      { THR_FLEXURE_SHUTDOWN,  [this]{ return flexure_shutdown(); },  { } },
-      { THR_FOCUS_SHUTDOWN,    [this]{ return focus_shutdown(); },    { } },
-      { THR_SLIT_SHUTDOWN,     [this]{ return slit_shutdown(); },     { } },
-      { THR_SLICECAM_SHUTDOWN, [this]{ return slicecam_shutdown(); }, { } },
-      { THR_TCS_SHUTDOWN,      [this]{ return tcs_shutdown(); },      { } }
+      { OP_ACAM_SHUTDOWN,     [this]{ return acam_shutdown(); },     { } },
+      { OP_CALIB_SHUTDOWN,    [this]{ return calib_shutdown(); },    { } },
+      { OP_CAMERA_SHUTDOWN,   [this]{ return camera_shutdown(); },   { } },
+      { OP_FLEXURE_SHUTDOWN,  [this]{ return flexure_shutdown(); },  { } },
+      { OP_FOCUS_SHUTDOWN,    [this]{ return focus_shutdown(); },    { } },
+      { OP_SLIT_SHUTDOWN,     [this]{ return slit_shutdown(); },     { } },
+      { OP_SLICECAM_SHUTDOWN, [this]{ return slicecam_shutdown(); }, { } },
+      { OP_TCS_SHUTDOWN,      [this]{ return tcs_shutdown(); },      { } }
       }, function );
 
     if (error==NO_ERROR) {
@@ -4432,8 +4440,6 @@ namespace Sequencer {
       retstring.append( "   addrow ? | <number> <name> <RA> <DEC> <slitangle> <slitwidth> <exptime>\n" );
       retstring.append( "   async [ ? | <message> ]\n" );
       retstring.append( "   acquire [ ? ]\n" );
-      retstring.append( "   calibset [ ? ]\n" );
-      retstring.append( "   cameraset [ ? ]\n" );
       retstring.append( "   cancel [ ? ]\n" );
       retstring.append( "   clearlasttarget\n" );
       retstring.append( "   completed [ ? ]\n" );
@@ -4513,52 +4519,6 @@ namespace Sequencer {
     else
 
     // ----------------------------------------------------
-    // calibset -- sets the calibrator according to the parameters in the target entry
-    // ----------------------------------------------------
-    //
-    if ( testname == "calibset" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test calibset\n";
-        retstring.append( "  Set only the calib according to the parameters in the target row.\n" );
-        return HELP;
-      }
-      // launch thread and wait for it to return
-      auto calibset = std::async(std::launch::async, &Sequence::calib_set, this);
-      try {
-        error = calibset.get();
-      }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR calib_set exception: "+std::string(e.what()) );
-        return ERROR;
-      }
-      return error;
-    }
-    else
-
-    // ----------------------------------------------------
-    // cameraset -- sets the camera according to the parameters in the target entry
-    // ----------------------------------------------------
-    //
-    if ( testname == "cameraset" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test cameraset\n";
-        retstring.append( "  Set only the camera according to the parameters in the target row.\n" );
-        return HELP;
-      }
-      // launch thread and wait for it to return
-      auto cameraset = std::async(std::launch::async, &Sequence::camera_set, this);
-      try {
-        error = cameraset.get();
-      }
-      catch (const std::exception& e) {
-        logwrite( function, "ERROR camera_set exception: "+std::string(e.what()) );
-        return ERROR;
-      }
-      return error;
-    }
-    else
-
-    // ----------------------------------------------------
     // expose -- trigger exposure
     // ----------------------------------------------------
     //
@@ -4588,7 +4548,7 @@ namespace Sequencer {
       this->broadcast.notice( function, message.str() );
       logwrite( function, message.str() );
 
-      message.str(""); message << "THREADS: " << this->thread_state_manager.get_set_states();
+      message.str(""); message << "THREADS: " << this->op_state_manager.get_set_states();
       logwrite( function, message.str() );
 
       message.str(""); message << "DAEMONS NOT READY: " << this->daemon_manager.get_cleared_states();
@@ -5135,49 +5095,6 @@ namespace Sequencer {
       }
 
 //    if (error==NO_ERROR) std::thread( dothread_runscript, std::ref(*this) ).detach();
-    }
-    else
-
-    // ---------------------------------------------------------
-    // slitset -- spawn slit_set with the selected mode
-    // ---------------------------------------------------------
-    //
-    if ( testname == "slitset" ) {
-
-      if ( tokens.size() > 1 && ( tokens[1] == "?" || tokens[1] == "help" || tokens[1] == "-h" ) ) {
-        retstring = "test slitset <mode>\n";
-        retstring.append( "  Spawn slit_set for <mode> = { expose, acquire, database }\n" );
-        return HELP;
-      }
-
-      if ( tokens.size() < 2 ) {
-        logwrite( function, "ERROR expected slitset <mode>" );
-        retstring="invalid_argument";
-        return ERROR;
-      }
-
-      Sequencer::VirtualSlitMode mode;
-
-      if ( tokens[1]=="expose" )   { mode = Sequencer::VSM_EXPOSE; }
-      else
-      if ( tokens[1]=="acquire" )  { mode = Sequencer::VSM_ACQUIRE; }
-      else
-      if ( tokens[1]=="database" ) { mode = Sequencer::VSM_DATABASE; }
-      else {
-        logwrite( function, "ERROR invalid mode "+tokens[1]+": expected { expose acquire database }" );
-        retstring="invalid_argument";
-        return ERROR;
-      }
-
-      auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, mode);
-      try {
-        error = slitset.get();
-      }
-      catch (const std::exception& e) {
-        retstring="slit_set_exception";
-        logwrite( function, "ERROR slit set exception: "+std::string(e.what()) );
-        return ERROR;
-      }
     }
     else
 

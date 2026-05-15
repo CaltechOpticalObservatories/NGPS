@@ -19,7 +19,7 @@ namespace Sequencer {
     const std::string function("Sequencer::Sequence::do_acam_acquire");
     std::string reply;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
+    ScopedState thr_state( op_state_manager, Sequencer::OP_ACQUISITION );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACAM_ACQUIRE );
 
     // form and send the ACQUIRE command to ACAM
@@ -315,7 +315,7 @@ namespace Sequencer {
    */
   long Sequence::do_target_virtualslit(VirtualSlitMode mode) {
     if (this->target.iscal) return NO_ERROR;
-    return this->slit_set(mode);
+    return this->slit_setup(mode);
   }
   /***** Sequencer::Sequence::do_target_virtualslit ****************************/
 
