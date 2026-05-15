@@ -1441,14 +1441,22 @@ namespace Sequencer {
     } // end while true
 
     if ( this->op_error_manager.are_any_set() ) {
-      logwrite(function, "ERROR stopping sequencer due to error in: "+
-                         this->op_error_manager.get_set_states());
+      this->broadcast.error( function, "sequence completed with errors in: "+
+                                       this->op_error_manager.get_set_states() );
       // If this target was flagged as active, then change it to unassigned on error.
       if ( this->target.get_next( Sequencer::TARGET_ACTIVE, targetstatus ) == TargetInfo::TARGET_FOUND ) {
         this->target.update_state( Sequencer::TARGET_UNASSIGNED );
       }
       this->op_error_manager.clear_all();     // clear the thread error state
       this->do_once.store(true);
+    }
+
+    // Override default exit state (SEQ_READY) if any subsystem daemon is down.
+    // broadcast_daemonstate() suppresses NOTREADY transitions during SEQ_RUNNING,
+    // so we must check daemon_manager here on the way out.
+    //
+    if ( !this->daemon_manager.are_all_set() ) {
+      seq_state.destruct_set( Sequencer::SEQ_NOTREADY );
     }
 
     logwrite( function, "target list processing has stopped" );
