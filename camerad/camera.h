@@ -514,18 +514,28 @@ namespace Camera {
        * @brief   Information class constructor
        */
       Information()
-        : datatype(USHORT_IMG),              ///< fixed for NGPS
+        : port(0),
+          activebufs(0),
+          bitpix(16),
+          datatype(USHORT_IMG),              ///< fixed for NGPS
           type_set(true),                    ///< fixed for NGPS
+          frame_type(FRAME_IMAGE),
+          detector_pixels{0,0},
+          section_size(0),
+          image_memory(0),
+          readout_type(-1),
           axes{1,1,1},
           cubedepth(1),
           fitscubed(1),
           binspat(1),
           binspec(1),
           binning{1,1},
+          axis_pixels{0,0},
           region_of_interest{1,1,1,1},
           image_center{1,1},
           abortexposure(false),
           ismex(true),                       ///< fixed for NGPS
+          extension(0),
           shutterenable(true),               // default enabled shutter
           shutteractivate(""),
           arcsim(false),                     // the ARC device is not simulated
@@ -534,6 +544,7 @@ namespace Camera {
           exposure_time(-1),                 // default is exposure time undefined
           exposure_unit(""),                 // default is exposure unit undefined
           exposure_factor(-1),               // default undefined
+          exposure_progress(0.0),
           num_pre_exposures(0),              // default no pre-exposures
           dispersion(NAN),
           minwavel(NAN)
