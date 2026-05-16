@@ -878,6 +878,21 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       /***** Interface::writes_pending_list ***********************************/
 
 
+      /***** Interface::any_writes_pending ************************************/
+      /**
+       * @brief   Is any device still writing frames for any exposure buffer?
+       * @return  true if any writes are pending, false otherwise
+       */
+      inline bool any_writes_pending() {
+        std::lock_guard<std::mutex> lock( this->write_lock );
+        for ( const auto &pending : this->writes_pending ) {
+          if ( !pending.empty() ) return true;
+        }
+        return false;
+      }
+      /***** Interface::any_writes_pending ************************************/
+
+
       /***** Interface::write_pending *****************************************/
       /**
        * @brief      Set or clear the write pending state for a given exposure
