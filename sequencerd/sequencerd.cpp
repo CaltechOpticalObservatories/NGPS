@@ -141,6 +141,7 @@ int main(int argc, char **argv) {
 
   std::this_thread::sleep_for( std::chrono::milliseconds(200) );
   sequencerd.sequence.publish_snapshot();
+  sequencerd.sequence.request_snapshot();
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
