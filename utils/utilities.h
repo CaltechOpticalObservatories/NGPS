@@ -487,7 +487,7 @@ class PreciseTimer {
           // how long was loop on hold, in microseconds
           clock_gettime(CLOCK_MONOTONIC, &hold_stop);
           hold_time = (hold_stop.tv_sec-hold_start.tv_sec)*1000000 +
-                      (hold_stop.tv_nsec-hold_stop.tv_nsec)/1000;
+                      (hold_stop.tv_nsec-hold_start.tv_nsec)/1000;
           on_hold.store(false, std::memory_order_release);
         }
       }
@@ -528,6 +528,10 @@ class PreciseTimer {
                      remaining_time.load(std::memory_order_acquire)/1000 );
       delaytime  = delay_time.load(std::memory_order_acquire)/1000;
     }
+
+    /***** PreciseTimer::is_held **********************************************/
+    /** @brief  Returns true if the timer is currently on hold                */
+    bool is_held() const { return on_hold.load(std::memory_order_acquire); }
 
     /***** PreciseTimer::hold *************************************************/
     /** @brief  Hold/pause the delay timer at the next short-sleep boundary   */
