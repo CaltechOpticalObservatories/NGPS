@@ -18,37 +18,53 @@ extern Camera::Server server;
 
 namespace AstroCam {
 
-  /**** AstroCam::Interface::publish_snapshot *********************************/
+  /**** AstroCam::Interface::publish_status ***********************************/
   /**
-   * @brief      publish a snapshot of my telemetry
-   * @param[out] retstring  optional pointer to buffer for return string
+   * @brief      publish status on change
+   * @param[in]  force  if true, publish even if status unchanged
    *
    */
-  void Interface::publish_snapshot(std::string *retstring) {
-    const std::string function("AstroCam::Interface::publish_snapshot");
-    nlohmann::json jmessage_out;
+  void Interface::publish_status(bool force) {
+    std::lock_guard<std::mutex> lock(this->publish_mutex);
 
-    // build JSON message with my telemetry
-    jmessage_out[Key::SOURCE] = Topic::CAMERAD;
-    jmessage_out[Key::Camerad::READY] = this->can_expose.load();
+    // unless forced, publish only if there was a change
+    if (!force && this->status==this->last_published_status) return;
+
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE]               = Topic::CAMERAD;
+    jmessage_out[Key::Camerad::READY]       = this->status.can_expose.load();
+    jmessage_out[Key::Camerad::INREADOUT]   = this->status.in_readout;
+    jmessage_out[Key::Camerad::EXPOSING]    = this->status.is_exposing;
+    jmessage_out[Key::Camerad::PAUSED]      = this->status.is_paused;
+    jmessage_out[Key::Camerad::SHUTTEROPEN] = this->status.is_shutteropen;
     jmessage_out[Key::Camerad::SHUTTERTIME] = this->camera.shutter.get_duration();
 
     // publish JSON message
     try {
       this->publisher->publish(jmessage_out);
+      this->last_published_status = this->status;
     }
     catch (const std::exception &e) {
-      logwrite(function, "ERROR: "+std::string(e.what()));
+      logwrite("AstroCam::Interface::publish_status", "ERROR: "+std::string(e.what()));
       return;
     }
-
-    // if a retstring buffer was supplied then return the JSON message
-    if (retstring) {
-      *retstring=jmessage_out.dump();
-      retstring->append(JEOF);
-    }
   }
-  /**** AstroCam::Interface::publish_snapshot *********************************/
+  /**** AstroCam::Interface::publish_status ***********************************/
+
+
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      what to do when the topic is Topic::SNAPSHOT
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_status();
+  }
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
 
 
   /***** AstroCam::Interface::handletopic_snapshot ****************************/
@@ -269,9 +285,18 @@ namespace AstroCam {
     interface.state_monitor_condition.notify_all();
     logwrite(function, "running");
 
+    auto update_and_publish = [&interface]() {
+      interface.status.in_readout     = interface.in_readout();
+      interface.status.is_exposing    = interface.exposure_pending() && !interface.in_readout();
+      interface.status.is_shutteropen = interface.camera.shutter.isopen();
+      interface.status.is_paused      = interface.camera.shutter_timer.is_held();
+      interface.publish_status();
+    };
+
     while ( true ) {
       std::unique_lock<std::mutex> state_lock(interface.state_lock);
       interface.state_monitor_condition.wait(state_lock);
+      update_and_publish();
 
       while ( interface.is_camera_idle() ) {
         selectdev.clear();
@@ -285,10 +310,11 @@ namespace AstroCam {
         }
         if ( selectdev.size() > 0 ) {
           long ret = interface.do_native( selectdev, std::string("IDL") );
-          logwrite( function, (ret==NO_ERROR ? "NOTICE: " : "ERROR")+message.str() );
+          logwrite( function, (ret==NO_ERROR ? "" : "ERROR ")+message.str() );
         }
         // Wait for the conditions to change before checking again
         interface.state_monitor_condition.wait( state_lock );
+        update_and_publish();
       }
     }
 
@@ -901,8 +927,16 @@ namespace AstroCam {
       message << "ERROR: cannot change binning while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( const auto &dev : pending ) message << this->controller.at(dev).channel << " ";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
       retstring="exposure_in_progress";
+      return ERROR;
+    }
+
+    // Don't make any changes while frames are still being written.
+    //
+    if ( this->any_writes_pending() ) {
+      logwrite( function, "ERROR: cannot change binning while frame write is in progress" );
+      retstring="write_in_progress";
       return ERROR;
     }
 
@@ -1197,7 +1231,7 @@ namespace AstroCam {
       catch ( const std::exception &e ) { // arc::gen3::CArcPCI::open and reset may throw exceptions
         message.str(""); message << "ERROR opening " << this->controller.at(dev).devname
                                  << " channel " << this->controller.at(dev).channel << ": " << e.what();
-        this->camera.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         this->do_disconnect_controller(dev);
         retstring="exception";
         error = ERROR;
@@ -1261,7 +1295,7 @@ namespace AstroCam {
       error = ERROR;
     }
 
-    this->publish_snapshot();
+    this->publish_status();
 
     return( error );
   }
@@ -1541,7 +1575,7 @@ namespace AstroCam {
       if (numapplied > lastapplied) {
         std::ostringstream oss;
         oss << "CAMERAD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
-        this->camera.async.enqueue_and_log(function, oss.str());
+        logwrite(function, oss.str());
       }
     }
 
@@ -1915,8 +1949,6 @@ namespace AstroCam {
    * When the shutter closes, this function will notify all threads
    * that are waiting on the camera.shutter condition variable.
    *
-   * @TODO make the shutter timer able to be stopped/paused/resumed!
-   *
    */
   void Interface::dothread_shutter( int expbuf, Interface &interface ) {
     const std::string function("AstroCam::Interface::dothread_shutter");
@@ -1927,7 +1959,7 @@ namespace AstroCam {
     double airmass0, airmass1, airmass;
 
     if ( !interface.in_readout() ) {
-      logwrite( function, "NOTICE: sending command to stop clocks!" );
+      logwrite( function, "sending command to stop clocks!" );
       interface.do_native( "SPC" );
     }
 
@@ -1944,12 +1976,13 @@ namespace AstroCam {
     //
     if ( interface.camera.ext_shutter ) {
       interface.do_native( "OSH" );
-      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter opened at "+timestring );
+      interface.broadcast.notice( function, "external shutter opened at "+timestring );
     }
 
     // open the Bonn shutter if enabled
     //
     interface.camera.shutter.set_open();
+    interface.state_monitor_condition.notify_all();
 
     // Log shutter open time
     //
@@ -1958,7 +1991,7 @@ namespace AstroCam {
     mjd0 = mjd_from( timenow );              // modified Julian date of start
 
     if ( interface.camera.shutter.is_enabled ) {
-      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+      interface.broadcast.notice( function, "shutter opened at "+timestring );
     }
 
     // spawn a thread to report exposure progress
@@ -1972,6 +2005,7 @@ namespace AstroCam {
     // close the Bonn shutter
     //
     interface.camera.shutter.set_close();
+    interface.state_monitor_condition.notify_all();
 
     // Log shutter close time
     //
@@ -1981,14 +2015,14 @@ namespace AstroCam {
     mjd = (mjd1+mjd0)/2.;                    // average mjd
 
     if ( interface.camera.shutter.is_enabled ) {
-      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+      interface.broadcast.notice( function, "shutter closed at "+timestring );
     }
 
     // Send external close shutter command, if configured.
     //
     if ( interface.camera.ext_shutter ) {
       interface.do_native( "CSH" );
-      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter closed at "+timestring );
+      interface.broadcast.notice( function, "external shutter closed at "+timestring );
     }
 
     // get the airmass again
@@ -2151,7 +2185,7 @@ namespace AstroCam {
         while ( con.in_readout ) {                      // wait for any previous readout to complete
           if ( get_clock_time() > clock_timeout ) {     // check for a timeout
             con.error = ERROR;
-            cam.async.enqueue_and_log( "CAMERAD", function, "ERROR: timeout waiting for previous readout, FT not started" );
+            logwrite( function, "ERROR: timeout waiting for previous readout, FT not started" );
             cam.set_abortstate( true );
             return;
           }
@@ -2564,10 +2598,9 @@ namespace AstroCam {
     // Log this message once only
     //
     if ( interface.exposure_pending() ) {
-      interface.can_expose.store(false);
-      interface.publish_snapshot();
-      interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
-      interface.camera.async.enqueue( "CAMERAD:READY:false" );
+      interface.status.can_expose.store(false);
+      interface.publish_status();
+      logwrite( function, "exposure pending" );
     }
 
     // Block on exposure_condition until exposure_pending() returns false,
@@ -2592,15 +2625,14 @@ namespace AstroCam {
     //
     interface.nexp.fetch_sub(1);
     if ( interface.nexp.load() > 0 ) {
-      message.str(""); message << "NOTICE:starting next exposure, " << interface.nexp << " remaining";
-      interface.camera.async.enqueue_and_log( function, message.str() );
+      message.str(""); message << "starting next exposure. " << interface.nexp << " remaining";
+      interface.broadcast.notice( function, message.str() );
       interface.do_expose(interface.nexp);
     }
     else {
-      interface.can_expose.store(true);
-      interface.publish_snapshot();
-      interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
-      interface.camera.async.enqueue( "CAMERAD:READY:true" );
+      interface.status.can_expose.store(true);
+      interface.publish_status();
+      logwrite( function, "ready for next exposure" );
     }
 
     return;
@@ -2649,7 +2681,7 @@ namespace AstroCam {
       message.str(""); message << "ERROR: cannot start new exposure while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( const auto &dev : pending ) message << this->controller.at(dev).channel << " ";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
       return(ERROR);
     }
 
@@ -2658,15 +2690,14 @@ namespace AstroCam {
     // be handled during readout.
     //
     if ( this->camera.ext_shutter && !this->is_camera_idle() ) {
-      this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: overlapping exposure cannot be started when using ARC shutter" );
+      logwrite( function, "ERROR: overlapping exposure cannot be started when using ARC shutter" );
       return( ERROR );
     }
 
     // check for valid exposure_time
     //
     if ( this->camera.exposure_time < 0 ) {
-      message.str(""); message << "ERROR: exposure time is undefined";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, "ERROR exposure time is undefined" );
       return( ERROR );
     }
 
@@ -2695,8 +2726,7 @@ namespace AstroCam {
     //
     for ( const auto &dev : this->active_devnums ) {
       if ( this->controller[ dev ].info.readout_name.empty() ) {
-        message.str(""); message << "ERROR: readout undefined";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR readout undefined" );
         return( ERROR );
       }
     }
@@ -2719,7 +2749,7 @@ namespace AstroCam {
     this->camera.set_fitstime( get_timestamp() );
 
     if ( ( error = this->camera.get_fitsname( this->fitsinfo[this_expbuf]->fits_name ) ) != NO_ERROR ) {
-      this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+      logwrite( function, "ERROR assembling fitsname" );
       return( error );
     }
 
@@ -2779,7 +2809,7 @@ namespace AstroCam {
     }
     else {
       logwrite( function, "shutter not opened" );
-      message.str(""); message << "NOTICE: incremented exposure buffer to " << server.get_expbuf();
+      message.str(""); message << "incremented exposure buffer to " << server.get_expbuf();
       logwrite( function, message.str() );
 
       // Save shutter-timed keywords to keyword database now, because dothread_shutter won't run
@@ -2823,7 +2853,7 @@ namespace AstroCam {
         // Allocate workspace memory for deinterlacing (each dev has its own workbuf)
         //
         if ( ( error = this->controller.at(dev).alloc_workbuf( ) ) != NO_ERROR ) {
-          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: allocating memory for deinterlacing" );
+          logwrite( function, "ERROR allocating memory for deinterlacing" );
           return( error );
         }
 
@@ -2841,7 +2871,7 @@ namespace AstroCam {
           devstr = "";
         }
         if ( ( error = this->camera.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) {
-          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+          logwrite( function, "ERROR: assembling fitsname" );
           return( error );
         }
 ***/
@@ -2859,12 +2889,11 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (const auto &check : this->active_devnums) message << check << " ";
         message << "}";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(...) {
-        message.str(""); message << "ERROR: unknown exception creating fitsname for controller";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR unknown exception creating fitsname for controller" );
         return(ERROR);
       }
     }
@@ -2990,17 +3019,16 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (const auto &check : this->active_devnums) message << check << " ";
         message << "}";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR creating read thread: " << e.what();
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(...) {
-        message.str(""); message << "ERROR: unknown exception creating read thread for controller";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR unknown exception creating read thread for controller" );
         return(ERROR);
       }
     }
@@ -3764,6 +3792,14 @@ for ( const auto &dev : selectdev ) {
       return( ERROR );
     }
 
+    // Don't remap the DMA buffer while frames are still being written from it.
+    //
+    if ( this->any_writes_pending() ) {
+      logwrite( function, "ERROR: cannot remap DMA buffer while frame write is in progress" );
+      retstring="write_in_progress";
+      return ERROR;
+    }
+
     int dev;
     std::string chan;
 
@@ -4469,7 +4505,7 @@ logwrite(function, message.str());
           if (!con.second.active) continue;  // skip inactive controllers
           if ( con.second.in_readout || con.second.in_frametransfer ) message << con.second.channel << " ";
         }
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
 
@@ -4658,11 +4694,12 @@ logwrite(function, message.str());
       this->camera.shutter.set_close();                    // close shutter
       timespec timenow = Time::getTimeNow();               // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
-      this->camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+      this->broadcast.notice( function, "shutter closed at "+timestring );
     }
 
     logwrite( function, "exposure paused" );
 
+    this->state_monitor_condition.notify_all();
     return NO_ERROR;
   }
   /***** AstroCam::Interface::pause_exposure **********************************/
@@ -4693,11 +4730,12 @@ logwrite(function, message.str());
     if ( this->camera.shutter.is_enabled ) {
       timespec timenow = Time::getTimeNow();               // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
-      this->camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+      this->broadcast.notice( function, "shutter opened at "+timestring );
     }
 
     logwrite( function, "exposure resumed" );
 
+    this->state_monitor_condition.notify_all();
     return NO_ERROR;
   }
   /***** AstroCam::Interface::resume_exposure *********************************/
@@ -5077,6 +5115,21 @@ logwrite(function, message.str());
     //
     if (pcontroller->has_boi()) { skipspat = 0; }
 
+    // Capture the unbinned, unskipped detector dimensions before trimming
+    // so that detrows/detcols remain the full requested size across
+    // repeated bin commands. These are preserved even when the per-call
+    // geometry is shortened by the skip-modulo adjustment below.
+    //
+    int detrows_new, detcols_new;
+    pcontroller->logical_to_physical(spat, spec, detrows_new, detcols_new);
+
+    // Capture the original requested overscan in physical (row/col) form
+    // before any modulo-binning trim below, so that osrows0/oscols0 retain
+    // the true requested overscan across repeated bin commands.
+    //
+    int osrows0_new, oscols0_new;
+    pcontroller->logical_to_physical(osspat, osspec, osrows0_new, oscols0_new);
+
     // Remove those skipped pixels from the image size
     spat -= skipspat;
     spec -= skipspec;
@@ -5100,10 +5153,10 @@ logwrite(function, message.str());
     // unchanged by binning, so that when reverting to binning=1 from some
     // binnnig factor, this is the default image size to revert to.
     //
-    pcontroller->detrows = rows;
-    pcontroller->detcols = cols;
-    pcontroller->osrows0 = osrows;
-    pcontroller->oscols0 = oscols;
+    pcontroller->detrows = detrows_new;
+    pcontroller->detcols = detcols_new;
+    pcontroller->osrows0 = osrows0_new;
+    pcontroller->oscols0 = oscols0_new;
     pcontroller->skipcols = skipcols;
     pcontroller->skiprows = skiprows;
 
@@ -5148,7 +5201,7 @@ logwrite(function, message.str());
     //
     if ( pcontroller->info.set_axes() != NO_ERROR ) {
       message << "ERROR setting axes for chan " << pcontroller->channel;
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
       return ERROR;
     }
 
@@ -5437,14 +5490,14 @@ logwrite(function, message.str());
       server.state_monitor_condition.notify_all();
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller.at(devnum).channel << " exposure_pending=false";
-      server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
 #endif
     }
     server.controller.at(devnum).in_readout = false;
     server.state_monitor_condition.notify_all();
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller.at(devnum).channel << " in_readout=false";
-    server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+    logwrite( function, message.str() );
 #endif
 
     server.controller.at(devnum).frameinfo[fpbcount].tid    = fpbcount;  // create this index in the .frameinfo[] map
@@ -5586,7 +5639,7 @@ logwrite(function, message.str());
     while ( interface.writes_pending[ expbuf ].size() > 0 ) {
       std::unique_lock<std::mutex> write_lock( interface.write_lock );
 
-      message.str(""); message << "NOTICE:exposure buffer " << expbuf << " waiting for frames from ";
+      message.str(""); message << "exposure buffer " << expbuf << " waiting for frames from ";
       std::vector<int> pending = interface.writes_pending[ expbuf ];
       for ( const auto &dev : pending ) message << interface.controller.at(dev).channel << " ";
       logwrite( function, message.str() );
@@ -5600,7 +5653,7 @@ logwrite(function, message.str());
       interface.write_condition.wait( write_lock, [&] { return !(interface.writes_pending[ expbuf ].size()>0); } );
     }
 
-    message.str(""); message << "NOTICE:all frames "
+    message.str(""); message << "all frames "
                              << ( interface.camera.get_abortstate() ? "aborted" : "written" )
                              << " for exposure buffer " << expbuf;
     logwrite( function, message.str() );
@@ -5852,7 +5905,7 @@ logwrite(function, message.str());
                               int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
     if (!pcontroller) return;
     pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->osrows0, pcontroller->oscols0, osspat, osspec );
     pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
                                       binspat, binspec );
   }
@@ -6017,7 +6070,7 @@ logwrite(function, message.str());
 
     int nthreads = cores_available();
     nthreads=2;  ///< TODO @todo need to optimize this for number of cores
-    server.camera.async.enqueue_and_log( "CAMERAD", function, "NOTICE: override nthreads=2 !!!" );
+    logwrite( function, "override nthreads=2 !!!" );
 
 #ifdef LOGLEVEL_DEBUG
     message << "[DEBUG] devnum=" << this->devnum << " nthreads=" << nthreads << " imbuf=" << std::hex << imbuf << " workbuf=" << std::hex << this->workbuf
@@ -6160,7 +6213,6 @@ logwrite(function, message.str());
       retstring = CAMERAD_TEST;
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
-      retstring.append( "   async [ ? | <message> ]\n" );
       retstring.append( "   bw [ ? ]\n" );
       retstring.append( "   fitsname [ ? ]\n" );
       retstring.append( "   frametransfer ? | R | I | U | G \n" );
@@ -6211,45 +6263,14 @@ logwrite(function, message.str());
       if ( this->active_devnums.size() > 1 ) {
         for (const auto &dev : this->active_devnums) {
           this->camera.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
-          this->camera.async.enqueue( msg );                         // queue the fitsname
-          logwrite( function, msg );                                 // log ths fitsname
+          this->broadcast.notice( function, msg );                   // broadcast/log ths fitsname
         }
       }
       else {
         this->camera.get_fitsname( msg );                            // get the fitsname (by reference)
-        this->camera.async.enqueue( msg );                           // queue the fitsname
-        logwrite( function, msg );                                   // log ths fitsname
+        this->broadcast.notice( function, msg );                     // broadcast/log ths fitsname
       }
     } // end if (testname == fitsname)
-    else
-
-    // ----------------------------------------------------
-    // async [message]
-    // ----------------------------------------------------
-    // queue an asynchronous message
-    // The [message] param is optional. If not provided then "test" is queued.
-    //
-    if (testname == "async") {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
-        retstring = CAMERAD_TEST;
-        retstring.append( " async [ <message > ]\n" );
-        retstring.append( "  Queue an async broadcast message. If no <message> provided,\n" );
-        retstring.append( "  then \"test\" will be queued. Use double-quotes to send\n" );
-        retstring.append( "  compound message strings.\n" );
-        return HELP;
-      }
-      if (tokens.size() > 1) {
-        if (tokens.size() > 2) {
-          logwrite(function, "NOTICE: received multiple strings -- only the first will be queued");
-        }
-        logwrite( function, tokens[1] );
-        this->camera.async.enqueue( tokens[1] );
-      }
-      else {                                // if no string passed then queue a simple test message
-        logwrite(function, "test");
-        this->camera.async.enqueue("test");
-      }
-    } // end if (testname == async)
     else
 
     // ----------------------------------------------------
@@ -6526,7 +6547,7 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "can_expose=" << ( this->can_expose.load() ? "true" : "false" );
+      message.str(""); message << "can_expose=" << ( this->status.can_expose.load() ? "true" : "false" );
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -6750,7 +6771,7 @@ logwrite(function, message.str());
     // ----------------------------------------------------
     // am I ready for an exposure?
     if (testname=="canexpose") {
-      retstring=(this->can_expose?"yes":"no");
+      retstring=(this->status.can_expose?"yes":"no");
       logwrite(function, retstring);
       return NO_ERROR;
     }
