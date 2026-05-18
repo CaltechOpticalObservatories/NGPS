@@ -633,7 +633,6 @@ namespace AstroCam {
           should_subscriber_thread_run(false),
           framethreadcount(0),
           state_monitor_thread_running(false),
-          can_expose(true),                         // am I ready for the next exposure?
           modeselected(false),
           useframes(true) {
         topic_handlers = {
@@ -691,8 +690,11 @@ namespace AstroCam {
       }
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
-      void publish_snapshot(std::string* retstring=nullptr);
+      void publish_status(bool force=false);
+      void request_snapshot();
       void handletopic_snapshot(const nlohmann::json &jmessage_in);
+
+      Common::Broadcaster broadcast { this->publisher, Daemon::CAMERAD };
 
 // vector of pointers to Camera Information containers, one for each exposure number
 //
@@ -787,11 +789,46 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       static void state_monitor_thread( Interface &interface );
 
 
+      struct Status {
+        bool in_readout{false};
+        std::atomic<bool> can_expose{true};
+        bool is_exposing{false};
+        bool is_paused{false};
+        bool is_shutteropen{false};
+        Status() = default;
+        Status(const Status& o)
+          : in_readout(o.in_readout),
+            can_expose(o.can_expose.load()),
+            is_exposing(o.is_exposing),
+            is_paused(o.is_paused),
+            is_shutteropen(o.is_shutteropen) {}
+        Status& operator=(const Status& o) {
+          if (this != &o) {
+            in_readout     = o.in_readout;
+            can_expose.store(o.can_expose.load());
+            is_exposing    = o.is_exposing;
+            is_paused      = o.is_paused;
+            is_shutteropen = o.is_shutteropen;
+          }
+          return *this;
+        }
+        bool operator==(const Status& other) const {
+          return in_readout        == other.in_readout
+              && can_expose.load() == other.can_expose.load()
+              && is_exposing       == other.is_exposing
+              && is_paused         == other.is_paused
+              && is_shutteropen    == other.is_shutteropen;
+        }
+      };
+
+      Status status;
+      Status last_published_status;
+      std::mutex publish_mutex;             ///< serializes concurrent callers of publish_status()
+
       /*
        * exposure pending stuff
        *
        */
-      std::atomic<bool> can_expose;
       std::condition_variable exposure_condition;
       std::mutex exposure_lock;
       static void dothread_monitor_exposure_pending( Interface &interface );
