@@ -19,8 +19,10 @@ NGPS achieves these gains through:
 :hidden:
 :maxdepth: 2
 
-science/index
-instrument/index
-users-manual/index
-cpp-api/library_root
+Science <science/index>
+Technical Specifications <technical-specifications>
+Users Manual <users-manual/index>
+C++ API <cpp-api/index>
+Software Issue Reporting <https://caltech-coo.atlassian.net/jira/software/c/form/493c1a90-1b07-49b4-afb8-464794ab6f28?atlOrigin=eyJpIjoiOTU4YmJlYmVjYjE1NGQ0NzhhNjUyY2ZmYWJkZWI2ZTIiLCJwIjoiaiJ9>
+Software Feature Request <https://caltech-coo.atlassian.net/jira/software/c/form/debed032-3401-4ef1-9d8a-c217aa62bdcb?atlOrigin=eyJpIjoiNmY5NjZmNGYwYWY3NDEyYWI0OTcxYmQ5ODAxZTk2YTkiLCJwIjoiaiJ9>
 ```
