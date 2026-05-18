@@ -67,6 +67,21 @@ namespace AstroCam {
   /***** AstroCam::Interface::handletopic_snapshot ****************************/
 
 
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      what to do when the topic is Topic::SNAPSHOT
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_snapshot();
+  }
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+
+
   long NewAstroCam::new_expose( std::string nseq_in ) {
     logwrite( "NewAstroCam::new_expose", nseq_in );
     return( NO_ERROR );

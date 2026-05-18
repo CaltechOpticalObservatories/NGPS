@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
 import re
+import subprocess
 
 class LayoutService:
     def __init__(self, parent):
@@ -193,15 +194,31 @@ class LayoutService:
 
         # Create a mapping for status colors
         status_map = {
-            "stopped": QColor(169, 169, 169),  # Grey
-            "idle": QColor(255, 255, 0),       # Yellow
-            "paused": QColor(255, 165, 0),     # Orange
-            "exposing": QColor(0, 255, 0),     # Green
-            "readout": QColor(0, 255, 0),      # Green
-            "acquire": QColor(255, 255, 0),    # Yellow           
-            "focus": QColor(255, 255, 0),      # Yellow     
-            "calib": QColor(255, 255, 0),      # Yellow     
-            "user": QColor(255, 255, 0),      # Yellow     
+            "stopped": QColor(169, 169, 169),
+            "not_ready": QColor(255, 0, 0),
+            "idle": QColor(255, 255, 0),
+            "paused": QColor(255, 165, 0),
+            "exposing": QColor(0, 255, 0),
+            "readout": QColor(0, 255, 0),
+
+            "moveto": QColor(255, 255, 0),
+            "acam_acquire": QColor(255, 255, 0),
+            "slicecam_fineacquire": QColor(255, 255, 0),
+
+            "focus": QColor(255, 255, 0),
+            "calib": QColor(255, 255, 0),
+            "camera": QColor(255, 255, 0),
+            "flexure": QColor(255, 255, 0),
+            "power": QColor(255, 255, 0),
+            "slit": QColor(255, 255, 0),
+            "tcs": QColor(255, 255, 0),
+            "tcsop": QColor(255, 255, 0),
+            "user": QColor(255, 255, 0),
+
+            # transitional / backward compatibility
+            "acam": QColor(255, 255, 0),
+            "slicecam": QColor(255, 255, 0),
+            "acquire": QColor(255, 255, 0),
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable
@@ -223,7 +240,7 @@ class LayoutService:
             status_color_rect.setStyleSheet(f"background-color: {color.name()};")
 
             # Label showing the status
-            status_label = QLabel(status.capitalize())
+            status_label = QLabel(status.replace("_", " ").title())
             status_label.setMargin(0)  # Remove extra margin around the label
 
             # Layout for each status (color + label)
@@ -359,13 +376,72 @@ class LayoutService:
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_single)
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_all)
 
+        # Fine acquire toggle
+        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Disabled")
+        self.parent.fine_acquire_toggle.setCheckable(True)
+        self.parent.fine_acquire_toggle.setToolTip("Enable or disable sequencer fine acquire")
+        self.parent.fine_acquire_toggle.setMaximumWidth(200)
+        self.parent.fine_acquire_toggle.setStyleSheet("""
+            QPushButton {
+                background-color: #D3D3D3;
+                color: black;
+                font-weight: bold;
+                border-radius: 6px;
+                padding: 6px;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+            }
+        """)
+        self.parent.fine_acquire_toggle.toggled.connect(self.on_fine_acquire_toggled)
+        sequencer_mode_layout.addWidget(self.parent.fine_acquire_toggle)
+
         sequencer_mode_group.setLayout(sequencer_mode_layout)
 
         # Set maximum width and height for the sequencer mode group
         sequencer_mode_group.setMaximumWidth(300)  # Maximum width
-        sequencer_mode_group.setMaximumHeight(100)  # Maximum height
+        sequencer_mode_group.setMaximumHeight(145)  # Maximum height
 
         return sequencer_mode_group
+
+    def on_fine_acquire_toggled(self, checked):
+        """Enable/disable the sequencer fine-acquire step."""
+        action = "enable" if checked else "disable"
+        command = ["seq", "fineacquire", action]
+        button = getattr(self.parent, "fine_acquire_toggle", None)
+
+        if button is not None:
+            button.setText(f"Fine Acquire: {'Enabled' if checked else 'Disabled'}")
+
+        try:
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            if hasattr(self.parent, "message_log") and self.parent.message_log:
+                self.update_message_log(f"Ran command: {' '.join(command)}")
+                if result.stdout.strip():
+                    self.update_message_log(result.stdout.strip())
+
+        except Exception as exc:
+            # Revert the UI if the command failed.
+            if button is not None:
+                with QSignalBlocker(button):
+                    button.setChecked(not checked)
+                    button.setText(f"Fine Acquire: {'Disabled' if checked else 'Enabled'}")
+
+            QMessageBox.warning(
+                self.parent,
+                "Fine Acquire Command Failed",
+                f"Could not run: {' '.join(command)}\n\n{exc}",
+            )
+
+            if hasattr(self.parent, "message_log") and self.parent.message_log:
+                self.update_message_log(f"Fine acquire command failed: {' '.join(command)} — {exc}")
 
     def create_progress_and_image_group(self):
         progress_and_image_group = QGroupBox("Progress and Image Info")
