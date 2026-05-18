@@ -211,11 +211,11 @@ namespace Common {
           return ERROR;
         }
 
-        // Initialize the message subscriber. All daemons minimally subscribe to "_snapshot"
+        // Initialize the message subscriber. All daemons minimally subscribe to Topic::SNAPSHOT
         // which causes them to publish their current status.
         //
         iface.subscriber_topics.clear();
-        iface.subscriber_topics.push_back("_snapshot");
+        iface.subscriber_topics.push_back(Topic::SNAPSHOT);
 
         for ( const auto &topic : topics ) {
           iface.subscriber_topics.push_back(topic);
