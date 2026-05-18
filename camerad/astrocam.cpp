@@ -62,7 +62,7 @@ namespace AstroCam {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
-    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_status();
+    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_status(true);
   }
   /***** AstroCam::Interface::handletopic_snapshot ****************************/
 
