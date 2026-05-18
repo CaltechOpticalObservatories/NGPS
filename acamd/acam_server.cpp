@@ -58,6 +58,8 @@ namespace Acam {
    *
    */
   void Server::exit_cleanly(void) {
+    std::string dontcare;
+    Server::instance->interface.acquire( "stop", dontcare );
     Server::instance->interface.close();
     Server::instance->interface.stop_subscriber_thread();
     logwrite( "Acam::Server::exit_cleanly", "exiting" );

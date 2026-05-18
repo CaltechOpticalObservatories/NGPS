@@ -1586,6 +1586,9 @@ namespace Slicecam {
     } while ( this->should_framegrab_run.load(std::memory_order_acquire) );
     }
 
+    this->is_fineacquire_running.store( false, std::memory_order_release );
+    this->is_fineacquire_locked.store(  false, std::memory_order_release );
+    this->publish_status();
     this->cv.notify_all();  // send notification that the loop has stopped
 
     if ( error != NO_ERROR ) {
