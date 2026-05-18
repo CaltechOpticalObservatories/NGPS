@@ -71,6 +71,10 @@ namespace Key {
     inline const std::string IMNAME        = "imname";
     inline const std::string FRAMECOUNT    = "framecount";
     inline const std::string FRAMETRANSFER = "frametransfer";
+    inline const std::string INREADOUT     = "inreadout";
+    inline const std::string EXPOSING      = "exposing";
+    inline const std::string PAUSED        = "paused";
+    inline const std::string SHUTTEROPEN   = "shutteropen";
   }
 
   namespace Acamd {
