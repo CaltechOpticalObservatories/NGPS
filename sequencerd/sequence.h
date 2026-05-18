@@ -491,6 +491,7 @@ namespace Sequencer {
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
+      void request_snapshot();
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();

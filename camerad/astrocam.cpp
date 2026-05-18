@@ -906,6 +906,15 @@ namespace AstroCam {
       return ERROR;
     }
 
+    // Don't make any changes while frames are still being written.
+    //
+    if ( this->any_writes_pending() ) {
+      this->camera.async.enqueue_and_log( "CAMERAD", function,
+        "ERROR: cannot change binning while frame write is in progress" );
+      retstring="write_in_progress";
+      return ERROR;
+    }
+
     // Tokenize args to get the axis and possible binning factor. There
     // must be either 2 tokens (<axis> <bin> to set) or 1 token (<axis> to get).
     //
@@ -3762,6 +3771,14 @@ for ( const auto &dev : selectdev ) {
       logwrite(function, "ERROR: no connected devices");
       retstring="not_connected";
       return( ERROR );
+    }
+
+    // Don't remap the DMA buffer while frames are still being written from it.
+    //
+    if ( this->any_writes_pending() ) {
+      logwrite( function, "ERROR: cannot remap DMA buffer while frame write is in progress" );
+      retstring="write_in_progress";
+      return ERROR;
     }
 
     int dev;
