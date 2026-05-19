@@ -43,11 +43,12 @@ do
     sleep 1
   done
 
-  echo $fitsname | awk '{print "Completed " $1}'
+  echo "Completed $fitsname"
 done
 
 echo "done!"
 
+# Ring system bell a few times
 for (( i=1 ; i<=5 ; i++ ));
 do
     printf '\e[?5h'
