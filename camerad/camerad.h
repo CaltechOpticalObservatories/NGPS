@@ -87,6 +87,7 @@ namespace Camera {
       int blocking_socket;
 
       std::atomic<int> cmd_num;
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
 
       std::vector<int> jclient_ports;
 

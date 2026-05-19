@@ -3743,7 +3743,7 @@ namespace Sequencer {
         cmd << " " << reqstatestr;
         logwrite( function, "switching plug "+plug+" "+reqstatestr );
         error = this->powerd.send( cmd.str(), reply );
-        if ( error != NO_ERROR || reply.find(" DONE") == std::string::npos ) {
+        if ( error != NO_ERROR || reply.find("DONE") == std::string::npos ) {
           logwrite( function, "ERROR switching plug: "+plug+" "+reqstatestr );
           continue;
         }
@@ -4039,6 +4039,7 @@ namespace Sequencer {
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
       retstring.append( "   notify [ ? ]\n" );
+      retstring.append( "   ping <daemon>\n" );
       retstring.append( "   pause [ ? ]\n" );
       retstring.append( "   pending [ ? ]\n" );
       retstring.append( "   targetinfo [ ? ]\n" );
@@ -4910,6 +4911,63 @@ namespace Sequencer {
         std::thread( &Sequencer::Sequence::dothread_test_fpoffset, this ).detach();
         message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
         logwrite( function, message.str() );
+      }
+    }
+    else
+
+    // ---------------------------------------------------------
+    // ping -- exercise inter-daemon communication round-trip
+    // ---------------------------------------------------------
+    //
+    if ( testname == "ping" ) {
+      if ( tokens.size() < 2 ) {
+        retstring = "usage: test ping <daemon>";
+        logwrite( function, "ERROR no daemon name provided" );
+        return ERROR;
+      }
+
+      const std::map<std::string, Common::DaemonClient*> daemon_map = {
+        { "acamd",     &this->acamd     },
+        { "calibd",    &this->calibd    },
+        { "camerad",   &this->camerad   },
+        { "flexured",  &this->flexured  },
+        { "focusd",    &this->focusd    },
+        { "powerd",    &this->powerd    },
+        { "slicecamd", &this->slicecamd },
+        { "slitd",     &this->slitd     },
+        { "tcsd",      &this->tcsd      }
+      };
+
+      auto daemon_it = daemon_map.find( tokens[1] );
+      if ( daemon_it == daemon_map.end() ) {
+        retstring = "unknown daemon: " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      Common::DaemonClient *daemon_ptr = daemon_it->second;
+
+      if ( this->connect_to_daemon( *daemon_ptr ) == ERROR ) {
+        retstring = "could not connect to " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      message.str(""); message << "sending \"isopen\" to " << tokens[1];
+      logwrite( function, message.str() );
+
+      std::string reply;
+      long send_error = daemon_ptr->send( "isopen", reply );
+
+      message.str(""); message << "reply from " << tokens[1] << ": \"" << reply << "\"";
+      logwrite( function, message.str() );
+
+      retstring = reply;
+
+      if ( send_error != NO_ERROR ) {
+        message.str(""); message << "ERROR sending \"isopen\" to " << tokens[1];
+        logwrite( function, message.str() );
+        return ERROR;
       }
     }
     else {

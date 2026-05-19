@@ -92,6 +92,7 @@ namespace Acam {
       std::string asyncgroup;            ///< asynchronous multicast group
 
       std::atomic<int> cmd_num;          ///< keep a running tally of number of commands received by acamd
+      Common::CorrIdCache corr_cache;    ///< dedup cache for tagged inter-daemon commands
       std::atomic<int> threads_active;   ///< number of blocking threads that exist
 
       Config config;                     ///< create a Config object for reading the configuration file

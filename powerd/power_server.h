@@ -81,6 +81,7 @@ namespace Power {
       int blocking_socket;
 
       std::atomic<int> cmd_num;
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
 
       bool open_on_start;                   ///< should daemon automatically open connection on startup?
 
