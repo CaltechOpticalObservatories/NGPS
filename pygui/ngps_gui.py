@@ -369,7 +369,7 @@ class NgpsGUI(QMainWindow):
 
         if calibration_type == "Dome Flats":
             target_rows_fn = make_dome_flat_targets
-            target_list_prefix = "DOME"
+            target_list_prefix = "CAL_DOME"
             list_kind_label = "dome-flat"
         else:
             target_rows_fn = make_calibration_targets
