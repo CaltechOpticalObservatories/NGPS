@@ -304,6 +304,15 @@ class NgpsGUI(QMainWindow):
         return False  # If not READY or an error occurs, return False
 
     def open_calibration_gui(self):
+        """Method to open the Calibration GUI"""
+        if self.calibration_gui is None or not self.calibration_gui.isVisible():
+            self.calibration_gui = CalibrationGUI()
+            self.calibration_gui.show()
+        else:
+            self.calibration_gui.raise_()  # Brings the window to the front if already open
+            self.calibration_gui.activateWindow()
+
+    def run_calibration(self):
         """
         Generate a calibration target list from slit width and binning.
         """

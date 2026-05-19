@@ -257,7 +257,7 @@ class ControlTab(QDialog):
         self.headers_button = QPushButton("Headers")
 
         self.calibration_button = QPushButton("Calibration")
-        self.calibration_button.clicked.connect(self.parent.open_calibration_gui)
+        self.calibration_button.clicked.connect(self.parent.run_calibration)
 
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
@@ -444,15 +444,6 @@ class ControlTab(QDialog):
         """Re-enable 'Go' button (kept for external timer hooks if you re-enable later)."""
         print("Re-enabling 'Go' button.")
         self._style_enabled_green(self.go_button)
-
-    def send_target_command(self, observation_id):
-        if observation_id:
-            command = f"startone {observation_id}\n"
-            print(f"Sending command to SequencerService: {command}")
-            self.parent.send_command(command)
-            print(f"Command sent: {command}")
-        else:
-            print("No OBSERVATION_ID to send the command.")
 
     def on_continue_button_click(self):
         """Send 'usercontinue' and enable Expose button only if seq state shows USER."""
