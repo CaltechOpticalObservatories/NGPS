@@ -272,7 +272,6 @@ class LoginDialog(QDialog):
                 SELECT OWNER_ID
                 FROM owner
                 WHERE OWNER_ID = %s
-                  AND PASSWORD = %s
                 """,
                 (username, password),
             )

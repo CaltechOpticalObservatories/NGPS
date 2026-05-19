@@ -376,9 +376,10 @@ class LayoutService:
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_single)
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_all)
 
-        # Fine acquire toggle
-        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Disabled")
+       # Fine acquire toggle
+        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Enabled")
         self.parent.fine_acquire_toggle.setCheckable(True)
+        self.parent.fine_acquire_toggle.setChecked(True)
         self.parent.fine_acquire_toggle.setToolTip("Enable or disable sequencer fine acquire")
         self.parent.fine_acquire_toggle.setMaximumWidth(200)
         self.parent.fine_acquire_toggle.setStyleSheet("""

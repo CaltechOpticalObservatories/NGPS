@@ -21,17 +21,17 @@ from calibration_procedure import (
 from datetime import datetime
 
 DAEMONS = [
-    "acamd",
-    "calibd",
-    "camerad",
-    "flexured",
-    "focusd",
-    "powerd",
-    "sequencerd",
-    "slicecamd",
-    "slitd",
-    "tcsd",
-    "thermald",
+    "ACAM",
+    "CALIB",
+    "CAMERA",
+    "FLEXURE",
+    "FOCUS",
+    "POWER",
+    "SEQUENCER",
+    "SLICECAM",
+    "SLIT",
+    "TCS",
+    "THERMAL",
 ]
 
 PER_DAEMON_COMMANDS = {

@@ -365,22 +365,57 @@ class ControlTab(QDialog):
 
     def on_go_button_click(self):
         """Send target start command; disable Go and show waiting popup."""
-        if self.parent.current_observation_id is not None:
-            self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
-            observation_id = self.parent.current_observation_id
-            print(f"Sending command: seq startone {observation_id}")
-            self.parent.layout_service.update_slit_info_fields()
-            self.send_target_command(observation_id)
-            QSound.play("sound/go_button_clicked.wav")
-            self._style_disabled_gray(self.go_button)
-            self.logic_service.set_active_target(observation_id)
-            self.show_waiting_popup()
-        else:
+        calibration_mode = self._is_calibration_mode()
+        observation_id = self.parent.current_observation_id
+
+        # Science mode requires a selected observation.
+        # Calibration mode uses "seq do all" and does not require one OBSERVATION_ID.
+        if not calibration_mode and observation_id is None:
             print("No observation ID available.")
+            return
+
+        self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
+        self.parent.layout_service.update_slit_info_fields()
+
+        if calibration_mode:
+            print("Sending command: seq do all")
+            self.send_target_command(calibration_mode=True)
+        else:
+            print(f"Sending command: seq startone {observation_id}")
+            self.send_target_command(observation_id)
+            self.logic_service.set_active_target(observation_id)
+
+        QSound.play("sound/go_button_clicked.wav")
+        self._style_disabled_gray(self.go_button)
+        self.show_waiting_popup()
+
+
+    def _is_calibration_mode(self):
+        """Return True when the target list mode toggle is set to Calibration."""
+        layout_service = getattr(self.parent, "layout_service", None)
+        mode_toggle = getattr(layout_service, "target_list_mode_toggle", None)
+        return bool(mode_toggle and mode_toggle.isChecked())
+
+
+    def send_target_command(self, observation_id=None, calibration_mode=False):
+        if calibration_mode:
+            # The command socket receives sequencer subcommands, so this is the
+            # equivalent of running `seq do all` from the shell.
+            command = "do all\n"
+        elif observation_id:
+            command = f"startone {observation_id}\n"
+        else:
+            print("No OBSERVATION_ID to send the command.")
+            return
+
+        print(f"Sending command to SequencerService: {command}")
+        self.parent.send_command(command)
+        print(f"Command sent: {command}")
 
     def enable_continue_and_offset_button(self):
         self._style_enabled_green(self.continue_button)
         self._style_enabled_green(self.offset_to_target_button)
+
 
     def show_waiting_popup(self):
         """Show a popup message with a 'Close' button (auto-closes after 5s)."""
