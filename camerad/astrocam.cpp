@@ -1941,7 +1941,7 @@ namespace AstroCam {
     std::string timestring;
     timespec timenow;
     double mjd0, mjd1, mjd;
-    double airmass0=NAN, airmass1=NAN, airmass=NAN;
+    double airmass0, airmass1, airmass;
 
     if ( !interface.in_readout() ) {
       logwrite( function, "sending command to stop clocks!" );
@@ -2618,6 +2618,14 @@ namespace AstroCam {
       interface.status.can_expose.store(true);
       interface.publish_status();
       logwrite( function, "ready for next exposure" );
+      // Republish periodically so a subscriber that missed the single-fire
+      // transition (e.g. ZMQ reconnect gap) recovers without manual intervention.
+      std::thread( [&interface]() {
+        for ( int i = 0; i < 5 && interface.status.can_expose.load(); ++i ) {
+          std::this_thread::sleep_for( std::chrono::seconds(2) );
+          if ( interface.status.can_expose.load() ) interface.publish_status(true);
+        }
+      }).detach();
     }
 
     return;

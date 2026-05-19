@@ -98,10 +98,10 @@ namespace Sequencer {
     // when it re-acquires fineacquire_mtx inside fineacquire_cv.wait().
     std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
     if ( has_running ) {
-      this->is_fineacquire_running.store( running, std::memory_order_relaxed );
+      this->is_fineacquire_running.store( running );
     }
     if ( has_locked ) {
-      this->is_fineacquire_locked.store( locked, std::memory_order_relaxed );
+      this->is_fineacquire_locked.store( locked );
     }
     this->fineacquire_cv.notify_all();
   }
@@ -154,11 +154,11 @@ namespace Sequencer {
     // Store under the mutex so the writes are visible to any waiter's predicate
     // when it re-acquires acam_mtx inside acam_cv.wait().
     std::lock_guard<std::mutex> lock(this->acam_mtx);
-    this->is_acam_guiding.store( acquired, std::memory_order_relaxed );
+    this->is_acam_guiding.store( acquired );
     if ( has_mode ) {
-      this->is_acam_acquiring.store( acquiring, std::memory_order_relaxed );
+      this->is_acam_acquiring.store( acquiring );
     }
-    this->acam_pubtime.store( pubtime, std::memory_order_relaxed );
+    this->acam_pubtime.store( pubtime );
     this->acam_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
@@ -834,9 +834,13 @@ namespace Sequencer {
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        this->camerad_cv.wait( lock, [this]() {
-          return this->can_expose.load() || this->cancel_flag.load();
-        } );
+        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(15),
+                                            [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
+          logwrite( function, "timeout waiting for readout — requesting snapshot" );
+          lock.unlock();
+          this->request_snapshot();
+          lock.lock();
+        }
       }
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
@@ -905,9 +909,13 @@ namespace Sequencer {
 
       this->broadcast.notice( function, "waiting for camera to be ready to expose");
 
-      this->camerad_cv.wait( lock, [this]() {
-        return( this->can_expose.load() || this->cancel_flag.load() );
-      } );
+      while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                          [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
+        logwrite( function, "timeout waiting for camera ready — requesting snapshot" );
+        lock.unlock();
+        this->request_snapshot();
+        lock.lock();
+      }
 
       if (this->cancel_flag.load()) {
         logwrite(function, "sequence cancelled");
@@ -935,7 +943,7 @@ namespace Sequencer {
     // send two commands, one for each
     if (!activechans.str().empty()) {
       std::string cmd = CAMERAD_ACTIVATE + activechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+      if (this->camerad.send(cmd, reply, 12000)!=NO_ERROR) {
         logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
         throw std::runtime_error("camera returned "+reply);
       }
@@ -1964,9 +1972,16 @@ namespace Sequencer {
       }
     }
 
-    // Ask if all devices use frame transfer
+    // Ask if all devices use frame transfer. The reply is expected to be a
+    // "yes"/"no" token followed by " DONE". An empty or non-confirming reply
+    // would silently leave is_science_frame_transfer in the wrong state, which
+    // controls whether the readout wait is entered.
     //
-    this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply );
+    if ( this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR querying frame transfer state: no confirmation (reply=\""+reply+"\")" );
+      throw std::runtime_error("querying camera frame transfer state");
+    }
     this->is_science_frame_transfer = ( reply.find("yes") != std::string::npos );
 
     this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
@@ -2015,10 +2030,15 @@ namespace Sequencer {
       throw std::runtime_error("no connection to camera");
     }
 
-    // send all of the epilogue commands
+    // send all of the epilogue commands. Log but do not abort on failure:
+    // shutdown must continue regardless so power-off can complete.
     //
     for ( const auto &cmd : this->camera_epilogue ) {
-      this->camerad.command( cmd );
+      std::string reply;
+      if ( this->camerad.command( cmd, reply ) != NO_ERROR
+           || reply.find("DONE") == std::string::npos ) {
+        logwrite( function, "ERROR sending epilogue command \""+cmd+"\" (reply=\""+reply+"\")" );
+      }
     }
 
     // disconnect me from camerad, irrespective of any previous error
@@ -2687,12 +2707,15 @@ namespace Sequencer {
 
     logwrite( function, "[DEBUG] sending expose command" );
 
-    // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
+    // Send the EXPOSE command to camera daemon and wait for the reply.
+    // Also verify the reply contains "DONE": command_timeout returns NO_ERROR
+    // whenever the reply does not contain "ERROR", including when the reply is
+    // empty because the socket was lost and no response was ever received.
     message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
-//  if ( this->camerad.async( message.str() ) != NO_ERROR ) {
-//  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
-    if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR ) {
-      this->broadcast.error( function, "sending camera "+message.str() );
+    if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      message.str(""); message << "sending camera expose: no confirmation (reply=\"" << reply << "\")";
+      this->broadcast.error( function, message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );      // clear EXPOSE bit
@@ -3728,7 +3751,7 @@ namespace Sequencer {
         cmd << " " << reqstatestr;
         logwrite( function, "switching plug "+plug+" "+reqstatestr );
         error = this->powerd.send( cmd.str(), reply );
-        if ( error != NO_ERROR || reply.find(" DONE") != std::string::npos ) {
+        if ( error != NO_ERROR || reply.find("DONE") == std::string::npos ) {
           logwrite( function, "ERROR switching plug: "+plug+" "+reqstatestr );
           continue;
         }
@@ -4024,6 +4047,7 @@ namespace Sequencer {
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
       retstring.append( "   notify [ ? ]\n" );
+      retstring.append( "   ping <daemon>\n" );
       retstring.append( "   pause [ ? ]\n" );
       retstring.append( "   pending [ ? ]\n" );
       retstring.append( "   targetinfo [ ? ]\n" );
@@ -4895,6 +4919,63 @@ namespace Sequencer {
         std::thread( &Sequencer::Sequence::dothread_test_fpoffset, this ).detach();
         message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
         logwrite( function, message.str() );
+      }
+    }
+    else
+
+    // ---------------------------------------------------------
+    // ping -- exercise inter-daemon communication round-trip
+    // ---------------------------------------------------------
+    //
+    if ( testname == "ping" ) {
+      if ( tokens.size() < 2 ) {
+        retstring = "usage: test ping <daemon>";
+        logwrite( function, "ERROR no daemon name provided" );
+        return ERROR;
+      }
+
+      const std::map<std::string, Common::DaemonClient*> daemon_map = {
+        { "acamd",     &this->acamd     },
+        { "calibd",    &this->calibd    },
+        { "camerad",   &this->camerad   },
+        { "flexured",  &this->flexured  },
+        { "focusd",    &this->focusd    },
+        { "powerd",    &this->powerd    },
+        { "slicecamd", &this->slicecamd },
+        { "slitd",     &this->slitd     },
+        { "tcsd",      &this->tcsd      }
+      };
+
+      auto daemon_it = daemon_map.find( tokens[1] );
+      if ( daemon_it == daemon_map.end() ) {
+        retstring = "unknown daemon: " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      Common::DaemonClient *daemon_ptr = daemon_it->second;
+
+      if ( this->connect_to_daemon( *daemon_ptr ) == ERROR ) {
+        retstring = "could not connect to " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      message.str(""); message << "sending \"isopen\" to " << tokens[1];
+      logwrite( function, message.str() );
+
+      std::string reply;
+      long send_error = daemon_ptr->send( "isopen", reply );
+
+      message.str(""); message << "reply from " << tokens[1] << ": \"" << reply << "\"";
+      logwrite( function, message.str() );
+
+      retstring = reply;
+
+      if ( send_error != NO_ERROR ) {
+        message.str(""); message << "ERROR sending \"isopen\" to " << tokens[1];
+        logwrite( function, message.str() );
+        return ERROR;
       }
     }
     else {
