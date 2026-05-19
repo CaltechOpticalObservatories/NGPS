@@ -22,9 +22,11 @@ if [ "$slit_offset_method" = true ]; then
   slit set $slitw 3
 fi
 
+# Loop over n exposures
 for (( i=1 ; i<=$n ; i++ ));
 do
-  echo starting $i of $n
+  echo ""
+  echo Starting $i of $n
   fitsname=`camera fitsname` # next filename
   fitsname="${fitsname%% *}"  # remove "DONE"
   camera expose
