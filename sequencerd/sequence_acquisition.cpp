@@ -45,8 +45,9 @@ namespace Sequencer {
     //
     const int64_t freshness_boundary_us = get_time_us() - ACAM_FRESHNESS_GUARD_US;
 
-    if ( this->acamd.command( cmd.str(), reply ) != NO_ERROR ) {
-      logwrite( function, "ERROR sending acquire command to acamd" );
+    if ( this->acamd.command( cmd.str(), reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR sending acquire command to acamd: no confirmation (reply=\""+reply+"\")" );
       return ERROR;
     }
 
@@ -110,13 +111,9 @@ namespace Sequencer {
 
     // send ACQUIRE STOP command to ACAM
     std::string reply;
-    if ( this->acamd.command( ACAMD_ACQUIRE+" stop", reply ) != NO_ERROR ) {
-      logwrite( function, "ERROR stopping guiding" );
-      return ERROR;
-    }
-
-    if ( reply.find("ERROR") != std::string::npos ) {
-      logwrite( function, "ERROR acam: "+reply );
+    if ( this->acamd.command( ACAMD_ACQUIRE+" stop", reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR stopping guiding: no confirmation (reply=\""+reply+"\")" );
       return ERROR;
     }
 
@@ -162,13 +159,9 @@ namespace Sequencer {
     ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_FINEACQUIRE);
 
     std::string reply;
-    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start", reply ) != NO_ERROR) {
-      logwrite( function, "ERROR starting slicecam fine acquisition" );
-      return ERROR;
-    }
-
-    if ( reply.find("ERROR") != std::string::npos ) {
-      logwrite( function, "ERROR slicecam fine acquisition mode: "+reply );
+    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start", reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR starting slicecam fine acquisition: no confirmation (reply=\""+reply+"\")" );
       return ERROR;
     }
 
@@ -230,13 +223,9 @@ namespace Sequencer {
 
     // send STOP command to SLICECAM
     std::string reply;
-    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" stop", reply ) != NO_ERROR) {
-      logwrite( function, "ERROR stopping fine acquisition" );
-      return ERROR;
-    }
-
-    if ( reply.find("ERROR") != std::string::npos ) {
-      logwrite( function, "ERROR slicecam fine acquisition mode: "+reply );
+    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" stop", reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR stopping fine acquisition: no confirmation (reply=\""+reply+"\")" );
       return ERROR;
     }
 

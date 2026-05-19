@@ -789,12 +789,19 @@ namespace Common {
     reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
     reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
 
-    // If the reply contains "ERROR" then return ERROR, otherwise NO_ERROR.
+    // Classify the reply:
+    //   "ERROR" in reply  → command failed
+    //   empty reply        → socket was lost before any response arrived; treat
+    //                        as failure so callers are never silently misled
+    //   anything else      → success (covers "DONE", JSON payloads, query
+    //                        results such as "yes"/"no", state strings, etc.)
     //
-    if ( reply.find( std::string( "ERROR" ) ) != std::string::npos ) {
-      return( ERROR );
-    }
-    else return( NO_ERROR );
+    // Note: CLI help output ("HELP" mode) is never produced on inter-daemon
+    // command channels, so there is no need to special-case it here.
+    //
+    if ( reply.find( "ERROR" ) != std::string::npos ) return ERROR;
+    if ( reply.empty() )                               return ERROR;
+    return NO_ERROR;
   }
   /***** Common::DaemonClient::send ***************************************************/
 
