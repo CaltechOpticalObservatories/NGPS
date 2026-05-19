@@ -12,7 +12,7 @@ from status_service import StatusService
 from calib.calibration import CalibrationGUI
 from etc_popup import EtcPopup
 from control_tab import ControlTab 
-from daemon_status_bar import DaemonStatusBar, DaemonState
+from daemon_status_bar import DaemonStatusBar, DaemonState, DAEMON_SUBSYSTEMS
 from calibration_procedure import (
     make_calibration_targets,
     make_calibration_csv_text,
@@ -20,19 +20,9 @@ from calibration_procedure import (
 )
 from datetime import datetime
 
-DAEMONS = [
-    "ACAM",
-    "CALIB",
-    "CAMERA",
-    "FLEXURE",
-    "FOCUS",
-    "POWER",
-    "SEQUENCER",
-    "SLICECAM",
-    "SLIT",
-    "TCS",
-    "THERMAL",
-]
+# Display-label/daemon-key/wait-key mapping lives in daemon_status_bar.py.
+# Keep this alias for local fallback polling code.
+DAEMONS = DAEMON_SUBSYSTEMS
 
 PER_DAEMON_COMMANDS = {
     # Defaults are ["Ping", "Restart", "Open Logs"] if not specified:
@@ -60,6 +50,8 @@ class NgpsGUI(QMainWindow):
         self.current_target_list_name = None
         self.zmq_status_service = None
         self.zmq_debug_messages = False
+        self._daemon_telemetry_seen = False
+        self._daemon_blink_phase = False
         
         # Login status flag
         self.logged_in = False
@@ -107,7 +99,7 @@ class NgpsGUI(QMainWindow):
         )
         self.setStatusBar(self._statusbar)
 
-        self.daemon_row = DaemonStatusBar(DAEMONS, per_daemon_commands=PER_DAEMON_COMMANDS, parent=self)
+        self.daemon_row = DaemonStatusBar(DAEMON_SUBSYSTEMS, per_daemon_commands=PER_DAEMON_COMMANDS, parent=self)
         self.daemon_row.commandRequested.connect(self.on_daemon_command)
         self.daemon_row.detailsRequested.connect(self.on_daemon_details)
 
@@ -118,20 +110,17 @@ class NgpsGUI(QMainWindow):
         self._statusbar.addWidget(self.daemon_row, 1)
 
         self.daemon_row.bulk_update({
-            "acamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "calibd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "camerad": (DaemonState.UNKNOWN, "Awaiting first UDP packet..."),
-            "flexured": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "focusd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "powerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "sequencerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "slicecamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "slitd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "tcsd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "thermald": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            subsystem["daemon"]: (DaemonState.UNKNOWN, "Awaiting sequencer telemetry...")
+            for subsystem in DAEMON_SUBSYSTEMS
         })
 
-        # Start polling local processes to update daemon states
+        # Connect seqgui-style daemon status telemetry after the bar exists.
+        self._connect_daemon_status_signals()
+
+        # One shared blink timer for wait-state-active daemon chips.
+        self._init_daemon_blink_timer()
+
+        # Start process polling only as a fallback until sequencer telemetry arrives.
         self._init_daemon_polling()
 
     def init_ui(self):
@@ -199,6 +188,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("acamd")
         self.zmq_status_service.subscribe_to_topic("seq_waitstate")
         self.zmq_status_service.subscribe_to_topic("seq_seqstate")
+        self.zmq_status_service.subscribe_to_topic("seq_daemonstate")
 
         # Connect the message_received signal from ZMQStatusService to the update_message_log slot
         self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
@@ -533,6 +523,39 @@ class NgpsGUI(QMainWindow):
             print(f"Exception during target list deletion: {e}")
             QMessageBox.critical(self, "Error", f"An error occurred while deleting the target list:\n{str(e)}")
             
+    def _connect_daemon_status_signals(self):
+        """Connect seqgui-style ZMQ telemetry to the bottom daemon chip bar."""
+        if self.zmq_status_service is None or not hasattr(self, "daemon_row"):
+            return
+
+        self.zmq_status_service.daemonstate_signal.connect(self._on_daemonstate_update)
+        self.zmq_status_service.waitstate_signal.connect(self._on_waitstate_update)
+        self.zmq_status_service.sequencerd_alive_signal.connect(self.daemon_row.set_sequencerd_online)
+
+    @pyqtSlot(dict)
+    def _on_daemonstate_update(self, state: dict):
+        """Apply seq_daemonstate: daemon key -> initialized/ready bool."""
+        self._daemon_telemetry_seen = True
+        self.daemon_row.set_daemon_ready_state(state)
+
+    @pyqtSlot(dict)
+    def _on_waitstate_update(self, state: dict):
+        """Apply seq_waitstate: wait key -> busy/waiting bool."""
+        self._daemon_telemetry_seen = True
+        self.daemon_row.set_wait_state(state)
+
+    def _init_daemon_blink_timer(self):
+        """Drive busy blinking for any wait-state-active daemon chips."""
+        self._daemon_blink_timer = QTimer(self)
+        self._daemon_blink_timer.setInterval(500)
+        self._daemon_blink_timer.timeout.connect(self._daemon_blink_tick)
+        self._daemon_blink_timer.start()
+
+    def _daemon_blink_tick(self):
+        self._daemon_blink_phase = not self._daemon_blink_phase
+        if hasattr(self, "daemon_row"):
+            self.daemon_row.blink_tick(self._daemon_blink_phase)
+
     def on_daemon_details(self, name: str):
         # DaemonChip already shows a QMessageBox with details.
         # Keep this slot for a future richer dialog (logs, metrics, traces).
@@ -583,15 +606,21 @@ class NgpsGUI(QMainWindow):
           - 'ok'      => green pill
           - 'unknown' => grey pill
         """
+        # Once sequencer telemetry has arrived, ZMQ becomes the source of truth.
+        # Do not let process polling fight seq_daemonstate/seq_waitstate.
+        if getattr(self, "_daemon_telemetry_seen", False):
+            return
+
         updates = {}
 
-        for name in DAEMONS:
+        for subsystem in DAEMONS:
+            name = subsystem["daemon"] if isinstance(subsystem, dict) else str(subsystem)
             if self._daemon_process_running(name):
-                updates[name] = ("ok", f"{name} process is running.")
+                updates[name] = (DaemonState.OK, f"{name} process is running. Awaiting seq_daemonstate.")
             else:
-                updates[name] = ("unknown", f"{name} not found in process list.")
+                updates[name] = (DaemonState.UNKNOWN, f"{name} not found in process list. Awaiting seq_daemonstate.")
 
-        # bulk_update expects {name: (state, tooltip)} just like the seed above
+        # bulk_update accepts daemon keys, e.g. acamd/camerad/tcsd.
         self.daemon_row.bulk_update(updates)
 
     def _init_daemon_polling(self):

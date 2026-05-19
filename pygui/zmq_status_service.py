@@ -21,15 +21,22 @@ class ZmqStatusService(QObject):
     
     system_status_signal = pyqtSignal(str)
 
+    # seqgui-style daemon status signals
+    daemonstate_signal = pyqtSignal(dict)     # seq_daemonstate: daemon-key -> bool
+    waitstate_signal = pyqtSignal(dict)       # seq_waitstate: wait-key -> bool
+    sequencerd_alive_signal = pyqtSignal()    # emitted when seq_seqstate arrives
+
     def __init__(
         self,
         parent,
         broker_publish_endpoint="tcp://127.0.0.1:5556",
+        broker_snapshot_endpoint="tcp://127.0.0.1:5555",
         emit_debug_messages=False,
     ):
         super().__init__()
         self.parent = parent  # Reference to the parent window or main UI
         self.broker_publish_endpoint = broker_publish_endpoint
+        self.broker_snapshot_endpoint = broker_snapshot_endpoint
 
         # Debug/raw-message UI output flag
         # False = do not flood the GUI message box
@@ -38,6 +45,7 @@ class ZmqStatusService(QObject):
 
         self.context = zmq.Context()
         self.socket = None
+        self.pub_socket = None
         self.is_connected = False
         self.subscribed_topics = set()  # Set of subscribed topics
         self._last_seq_lifecycle_status = "stopped"
@@ -87,6 +95,12 @@ class ZmqStatusService(QObject):
             # Create the SUB socket type to receive messages
             self.socket = self.context.socket(zmq.SUB)
             self.socket.connect(self.broker_publish_endpoint)  # Connect to the broker (publisher's address and port)
+
+            # Optional PUB socket used only to request a status snapshot, matching seqgui.
+            # If nobody is listening on this endpoint, send_multipart simply has no effect.
+            self.pub_socket = self.context.socket(zmq.PUB)
+            self.pub_socket.connect(self.broker_snapshot_endpoint)
+
             self.is_connected = True
             self.logger.info(f"Connected to broker at {self.broker_publish_endpoint}")
         except Exception as e:
@@ -131,6 +145,37 @@ class ZmqStatusService(QObject):
         self.logger.info("Subscribed to all topics.")
 
 
+    @staticmethod
+    def _bool_payload(data):
+        """Return only boolean fields from a decoded JSON status payload."""
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): bool(v) for k, v in data.items() if isinstance(v, bool)}
+
+    def _request_snapshot(self):
+        """Ask daemons/sequencer to re-publish current telemetry, like seqgui."""
+        if self.pub_socket is None:
+            return
+
+        payload = json.dumps({
+            "sequencerd": True,
+            "acamd": True,
+            "calibd": True,
+            "camerad": True,
+            "flexured": True,
+            "focusd": True,
+            "powerd": True,
+            "slicecamd": True,
+            "slitd": True,
+            "tcsd": True,
+            "thermald": True,
+        })
+
+        try:
+            self.pub_socket.send_multipart([b"_snapshot", payload.encode("utf-8")])
+        except zmq.ZMQError as e:
+            self.logger.warning(f"Snapshot request failed: {e}")
+
     def listen(self):
         """Listen for incoming messages from the broker."""
         if not self.is_connected:
@@ -139,6 +184,10 @@ class ZmqStatusService(QObject):
 
         try:
             self.logger.info("Starting to listen for messages from the broker...")
+
+            # Give subscriptions a moment to register, then request current state.
+            QThread.msleep(200)
+            self._request_snapshot()
 
             while True:
                 message = self.socket.recv_multipart()
@@ -160,12 +209,20 @@ class ZmqStatusService(QObject):
                         self._emit_debug_message(f"Topic: {topic}, Payload: {payload}")
 
                     elif topic == "seq_seqstate":
+                        # Any seq_seqstate message proves sequencerd is alive.
+                        self.sequencerd_alive_signal.emit()
                         self._last_seq_lifecycle_status = self._status_from_seq_seqstate(data)
                         self._emit_resolved_system_status()
 
                     elif topic == "seq_waitstate":
+                        # seqgui-style busy/blink source.
+                        self.waitstate_signal.emit(self._bool_payload(data))
                         self._last_seq_wait_status = self._status_from_seq_waitstate(data)
                         self._emit_resolved_system_status()
+
+                    elif topic == "seq_daemonstate":
+                        # seqgui-style ready/not-ready source.
+                        self.daemonstate_signal.emit(self._bool_payload(data))
 
                     if topic == "slitd":
                         slit_width = data.get("SLITW", None)
@@ -198,8 +255,14 @@ class ZmqStatusService(QObject):
         """ Disconnect from the broker and close the socket. """
         if self.socket:
             self.socket.close()
-            self.is_connected = False
-            self.logger.info("Disconnected from broker.")
+            self.socket = None
+
+        if self.pub_socket:
+            self.pub_socket.close()
+            self.pub_socket = None
+
+        self.is_connected = False
+        self.logger.info("Disconnected from broker.")
 
     def update_lamp_states(self, data):
         """ Emit signal with the lamp states """

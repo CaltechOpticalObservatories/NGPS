@@ -262,12 +262,12 @@ class ControlTab(QDialog):
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
 
-        binning_layout.addWidget(self.binning_button)
+        binning_layout.addWidget(self.calibration_button)
         binning_layout.addWidget(self.etc_button)
 
         display_layout.addWidget(self.headers_button)
-        display_layout.addWidget(self.calibration_button)
-
+        display_layout.addWidget(self.binning_button)
+        
         lamps_layout.addWidget(self.reset_button)
 
         self.startup_shutdown_button = QPushButton("Startup")
