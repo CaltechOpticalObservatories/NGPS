@@ -378,8 +378,13 @@ class ControlTab(QDialog):
         self.parent.layout_service.update_slit_info_fields()
 
         if calibration_mode:
-            print("Sending command: seq do all")
-            self.send_target_command(calibration_mode=True)
+            set_id = self.logic_service.fetch_set_id()
+            if set_id is None:
+                print("No target SET_ID available for calibration sequence.")
+                return
+
+            print(f"Sending command: seq do all {set_id}")
+            self.send_target_command(calibration_mode=True, set_id=set_id)
         else:
             print(f"Sending command: seq startone {observation_id}")
             self.send_target_command(observation_id)
@@ -397,13 +402,21 @@ class ControlTab(QDialog):
         return bool(mode_toggle and mode_toggle.isChecked())
 
 
-    def send_target_command(self, observation_id=None, calibration_mode=False):
+    def send_target_command(self, observation_id=None, calibration_mode=False, set_id=None):
         if calibration_mode:
-            # The command socket receives sequencer subcommands, so this is the
-            # equivalent of running `seq do all` from the shell.
-            command = "do all\n"
+            if set_id is None:
+                set_id = self.logic_service.fetch_set_id()
+
+            if set_id is None:
+                print("No target SET_ID available for calibration command.")
+                return
+
+            # Equivalent of running: seq do all {SET_ID}
+            command = f"do all {set_id}\n"
+
         elif observation_id:
             command = f"startone {observation_id}\n"
+
         else:
             print("No OBSERVATION_ID to send the command.")
             return

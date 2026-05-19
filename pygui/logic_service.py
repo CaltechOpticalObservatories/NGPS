@@ -615,6 +615,7 @@ class LogicService:
 
             self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in set_data}
             self.set_name = [row["SET_NAME"] for row in set_data]
+            self.parent.user_set_data = self.set_data
 
             self.all_targets = []
             for row in set_data:

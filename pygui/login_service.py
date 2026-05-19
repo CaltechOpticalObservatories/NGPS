@@ -231,7 +231,7 @@ class LoginDialog(QDialog):
         username = self.username_field.text().strip()
         password = self.password_field.text()
 
-        if self.validate_user_credentials(username, password):
+        if self.validate_user_credentials(username):
             print(f"Login successful for user: {username}")
 
             self.owner = username
@@ -257,9 +257,9 @@ class LoginDialog(QDialog):
         if self.main_window is not None:
             self.main_window.on_create_account()
 
-    def validate_user_credentials(self, username, password):
+    def validate_user_credentials(self, username):
         """Validate user credentials against the MySQL database."""
-        if not username or not password:
+        if not username:
             return False
 
         try:
@@ -273,7 +273,7 @@ class LoginDialog(QDialog):
                 FROM owner
                 WHERE OWNER_ID = %s
                 """,
-                (username, password),
+                (username, ),
             )
 
             user = cursor.fetchone()
