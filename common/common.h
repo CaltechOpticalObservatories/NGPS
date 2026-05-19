@@ -70,6 +70,7 @@ namespace Common {
     private:
       zmqpp::context &_context;
       zmqpp::socket _socket;
+      mutable std::mutex _publish_mtx;
       Mode _mode;                        ///< publisher or subscriber?
       std::string _topic;                ///< publisher topic
       std::vector<std::string> _topics;  ///< list of subscriber topics
@@ -183,6 +184,7 @@ namespace Common {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
         }
+        std::lock_guard<std::mutex> lock( _publish_mtx );
         zmqpp::message message_zmq;
         // Publish to either class default _topic or topic specified as
         // optional arg.
