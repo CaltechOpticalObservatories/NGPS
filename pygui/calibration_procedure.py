@@ -272,6 +272,90 @@ def make_calibration_csv_text(slitwidth, xbin, ybin):
 
     return output.getvalue()
 
+def make_dome_flat_targets(slitwidth, xbin, ybin):
+    """
+    Generate NGPS dome-flat calibration target rows.
+
+    This is the Python equivalent of the make_domes bash recipe:
+        make_domes <slitw> <bin_spat> <bin_spec>
+
+    The exposure-time constants follow the same convention used by
+    make_calibration_targets() above. In other words, the bash values
+    90000 and 400000 are represented here as 90 and 400.
+
+    Current mapping preserves the bash output:
+        BINSPAT  <- xbin
+        BINSPECT <- ybin
+    """
+    slitwidth = float(slitwidth)
+    xbin = int(xbin)
+    ybin = int(ybin)
+
+    if slitwidth <= 0:
+        raise ValueError("slitwidth must be greater than 0.")
+
+    if xbin <= 0 or ybin <= 0:
+        raise ValueError("binning values must be greater than 0.")
+
+    # Nominal exposure times, seconds.
+    # Bash make_domes equivalent values:
+    #   T_dome_nom    = 90000
+    #   T_dome_nom_ug = 400000
+    t_dome_nom = 90
+    t_dome_nom_ug = 400
+
+    # Nominal counts from make_domes.
+    n_dome = 7
+    n_dome_ug = 7
+
+    cont_multiplier = (1.0 / (xbin * ybin)) * (0.5 / slitwidth)
+
+    t_dome = int(t_dome_nom * cont_multiplier)
+    t_dome_ug = int(t_dome_nom_ug * cont_multiplier)
+
+    rows = []
+
+    if n_dome > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOME",
+                "ugri dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome,
+                n_dome,
+            )
+        )
+
+    if n_dome_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOME_UG",
+                "ug dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_ug,
+                n_dome_ug,
+            )
+        )
+
+    return rows
+
+
+def make_dome_flat_csv_text(slitwidth, xbin, ybin):
+    """Return the generated dome-flat procedure as CSV text."""
+    rows = make_dome_flat_targets(slitwidth, xbin, ybin)
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CAL_HEADER)
+    writer.writeheader()
+    writer.writerows(rows)
+
+    return output.getvalue()
+
+
 def save_calibration_csv(rows, target_list_name, output_dir="generated_target_lists/calibrations"):
     """
     Save generated calibration rows to a CSV file.

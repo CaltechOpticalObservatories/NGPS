@@ -411,8 +411,7 @@ class ControlTab(QDialog):
                 print("No target SET_ID available for calibration command.")
                 return
 
-            # Equivalent of running: seq do all {SET_ID}
-            command = f"do all {set_id}\n"
+            command = f"targetset {set_id}\nstart\n"
 
         elif observation_id:
             command = f"startone {observation_id}\n"

@@ -16,6 +16,7 @@ from daemon_status_bar import DaemonStatusBar, DaemonState, DAEMON_SUBSYSTEMS
 from calibration_procedure import (
     make_calibration_targets,
     make_calibration_csv_text,
+    make_dome_flat_targets,
     save_calibration_csv,
 )
 from datetime import datetime
@@ -305,7 +306,27 @@ class NgpsGUI(QMainWindow):
     def run_calibration(self):
         """
         Generate a calibration target list from slit width and binning.
+
+        The user can choose either the standard calibration recipe or
+        the dome-flat recipe. Both are uploaded as calibration target lists.
         """
+
+        calibration_options = [
+            "Standard Calibration",
+            "Dome Flats",
+        ]
+
+        calibration_type, ok = QInputDialog.getItem(
+            self,
+            "Calibration Setup",
+            "Calibration type:",
+            calibration_options,
+            0,
+            False,
+        )
+
+        if not ok or not calibration_type:
+            return
 
         slitwidth, ok = QInputDialog.getDouble(
             self,
@@ -346,8 +367,17 @@ class NgpsGUI(QMainWindow):
         if not ok:
             return
 
+        if calibration_type == "Dome Flats":
+            target_rows_fn = make_dome_flat_targets
+            target_list_prefix = "DOME"
+            list_kind_label = "dome-flat"
+        else:
+            target_rows_fn = make_calibration_targets
+            target_list_prefix = "CAL"
+            list_kind_label = "calibration"
+
         try:
-            rows = make_calibration_targets(
+            rows = target_rows_fn(
                 slitwidth=slitwidth,
                 xbin=xbin,
                 ybin=ybin,
@@ -365,12 +395,12 @@ class NgpsGUI(QMainWindow):
             QMessageBox.warning(
                 self,
                 "No Calibration Rows",
-                "No calibration rows were generated."
+                f"No {list_kind_label} rows were generated."
             )
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        target_list_name = f"CAL_{timestamp}_slit{slitwidth:g}_bin{xbin}x{ybin}"
+        target_list_name = f"{target_list_prefix}_{timestamp}_slit{slitwidth:g}_bin{xbin}x{ybin}"
 
         set_id = self.logic_service.upload_generated_targets_to_mysql(
             rows,
@@ -387,7 +417,7 @@ class NgpsGUI(QMainWindow):
             QMessageBox.warning(
                 self,
                 "CSV Save Warning",
-                f"The calibration list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
+                f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
             )
 
         self.current_target_list_name = target_list_name
@@ -401,8 +431,9 @@ class NgpsGUI(QMainWindow):
             self.layout_service.load_target_lists()
 
         message = (
-            f"Created calibration target list '{target_list_name}'.\n\n"
+            f"Created {list_kind_label} target list '{target_list_name}'.\n\n"
             f"SET_ID: {set_id}\n"
+            f"Type: {calibration_type}\n"
             f"Slit width: {slitwidth:g}\n"
             f"Spatial binning / xbin: {xbin}\n"
             f"Spectral binning / ybin: {ybin}\n"
