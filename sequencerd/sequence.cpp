@@ -51,13 +51,11 @@ namespace Sequencer {
     // when I write to the completed table I will write the actual EXPTIME
     this->target.column_from_json<double>( "EXPTIME", Key::Camerad::SHUTTERTIME, jmessage );
 
-    // updates my internal state whether the camera allows an exposure
+    std::lock_guard<std::mutex> lock(camerad_mtx);
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
-      this->can_expose.store(isready, std::memory_order_relaxed);
+      this->can_expose.store(isready);
     }
-
-    std::lock_guard<std::mutex> lock(camerad_mtx);
     this->camerad_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
@@ -86,21 +84,26 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
-    bool changed = false;
-    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING ) ) {
-      this->is_fineacquire_running.store(
-        jmessage[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>(), std::memory_order_relaxed );
-      changed = true;
+    const bool has_running = jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING );
+    const bool has_locked  = jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED );
+    if ( !has_running && !has_locked ) return;
+
+    // Parse JSON values before taking the lock (parsing may throw).
+    const bool running = has_running
+        ? jmessage[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>() : false;
+    const bool locked = has_locked
+        ? jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>() : false;
+
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires fineacquire_mtx inside fineacquire_cv.wait().
+    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+    if ( has_running ) {
+      this->is_fineacquire_running.store( running, std::memory_order_relaxed );
     }
-    if ( jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED ) ) {
-      this->is_fineacquire_locked.store(
-        jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>(), std::memory_order_relaxed );
-      changed = true;
+    if ( has_locked ) {
+      this->is_fineacquire_locked.store( locked, std::memory_order_relaxed );
     }
-    if ( changed ) {
-      std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
-      this->fineacquire_cv.notify_all();
-    }
+    this->fineacquire_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_slicecamd **************************/
 
@@ -133,21 +136,29 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
-    bool acquired;
+    // Parse JSON values before taking the lock (parsing may throw).
+    // extract_telemetry_value leaves its out-param unchanged on missing key
+    // or type mismatch, so default-initialize before the call.
+    bool acquired = false;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
-    this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
 
     // track whether acamd is actively trying to acquire (mode == "acquiring")
-    if ( jmessage.contains( Key::Acamd::ACQUIRE_MODE ) ) {
-      const std::string mode = jmessage[Key::Acamd::ACQUIRE_MODE].get<std::string>();
-      this->is_acam_acquiring.store( mode == "acquiring", std::memory_order_relaxed );
-    }
+    const bool has_mode = jmessage.contains( Key::Acamd::ACQUIRE_MODE );
+    const bool acquiring = has_mode
+        ? jmessage[Key::Acamd::ACQUIRE_MODE].get<std::string>() == "acquiring"
+        : false;
 
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
-    this->acam_pubtime.store( pubtime, std::memory_order_relaxed );
 
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires acam_mtx inside acam_cv.wait().
     std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->is_acam_guiding.store( acquired, std::memory_order_relaxed );
+    if ( has_mode ) {
+      this->is_acam_acquiring.store( acquiring, std::memory_order_relaxed );
+    }
+    this->acam_pubtime.store( pubtime, std::memory_order_relaxed );
     this->acam_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
