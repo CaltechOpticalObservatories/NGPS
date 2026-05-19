@@ -935,7 +935,7 @@ namespace Sequencer {
     // send two commands, one for each
     if (!activechans.str().empty()) {
       std::string cmd = CAMERAD_ACTIVATE + activechans.str();
-      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+      if (this->camerad.send(cmd, reply, 12000)!=NO_ERROR) {
         logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
         throw std::runtime_error("camera returned "+reply);
       }

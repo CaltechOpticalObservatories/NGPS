@@ -789,12 +789,14 @@ namespace Common {
                                  << " on fd " << this->socket.getfd() << " for " << this->name;
         logwrite( function, message.str() );
         this->timedout=true;
+        break;                                     // daemon is busy, not gone — do not resend
       }
       else
       if ( pollret < 0 && errno ) {                // this is probably a real error
         message.str(""); message << "ERROR polling socket " << this->socket.gethost() << "/" << this->socket.getport()
                                  << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite( function, message.str() );
+        break;                                     // real socket error — do not resend
       }
       else
       if ( pollret < 0 && !errno ) {               // this is probably a stale fd
@@ -803,7 +805,7 @@ namespace Common {
         logwrite( function, message.str() );
       }
 
-      // if still here then reconnect, sleep 1s, try again
+      // stale fd only: reconnect and try again
       //
       lock.unlock();
       error = this->connect();
