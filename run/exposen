@@ -7,6 +7,8 @@ if [[ -z $1 ]]; then
   exit
 fi
 
+datadir=$(readlink -f "/data/latest")  # replace symlink with real path
+
 slit_offset_method=false
 if [[ $# -gt 1 ]]; then
   slit_offset_method=true
@@ -23,10 +25,25 @@ fi
 for (( i=1 ; i<=$n ; i++ ));
 do
   echo starting $i of $n
+  fitsname=`camera fitsname` # next filename
+  fitsname="${fitsname%% *}"  # remove "DONE"
   camera expose
-  imnum=$(camera imnum)
-  listen -w "CAMERAD:READY:true"
-  echo $imnum | awk '{print "completed imnum " $1}'
+  echo Starting exposure...
+  
+  # Wait until the file exists
+  while [[ ! -f "$fitsname" ]]; do
+    sleep 1
+  done
+  echo Exposing $fitsname
+
+  # Keep checking to see when file is closed
+  busy=1
+  while [[ $busy -ne 0 ]]; do
+    busy=`sudo -u dataowner -g datawriters /usr/bin/lsof -w -c camerad | grep "$fitsname" | wc -l`
+    sleep 1
+  done
+
+  echo $fitsname | awk '{print "Completed " $1}'
 done
 
 echo "done!"
