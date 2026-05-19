@@ -2875,6 +2875,7 @@ namespace Sequencer {
     long __error=NO_ERROR;  // keep track of the error just for this scope
     int attempt=1;
     while (attempt <= maxattempts) {
+      if ( this->cancel_flag.load() ) { __error=ERROR; break; }
       try {
         // launch slicecam_init async task and wait for result
         std::async(std::launch::async, &Sequence::slicecam_init, this).get();
@@ -2904,6 +2905,8 @@ namespace Sequencer {
         else {
           this->broadcast.error( function, "exceeded max attempts starting slicecam" );
           __error=ERROR;
+          this->slicecamd.disconnect();
+          break;
         }
       }
       catch (const std::exception &e) {
@@ -2928,6 +2931,7 @@ namespace Sequencer {
     long __error=NO_ERROR;  // keep track of the error just for this scope
     int attempt=1;
     while (attempt <= maxattempts) {
+      if ( this->cancel_flag.load() ) { __error=ERROR; break; }
       try {
         // launch acam_init async task and wait for result
         std::async(std::launch::async, &Sequence::acam_init, this).get();
@@ -2957,6 +2961,7 @@ namespace Sequencer {
           else {
             this->broadcast.error( function, "exceeded max attempts starting acam" );
             __error=ERROR;
+            this->acamd.disconnect();
           }
         }
 	break;

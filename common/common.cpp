@@ -890,6 +890,12 @@ namespace Common {
                                  << " (expected ID " << cid << "): \"" << reply << "\"";
         logwrite( function, message.str() );
         reply.clear();
+        // drain any further queued replies so stale data does not persist into the next send() call
+        while ( this->socket.Poll(0) > 0 ) {
+          std::string discard;
+          ( term_with_string_actual ? socket.Read( discard, term_str_read_actual )
+                                   : socket.Read( discard, term_read ) );
+        }
       }
     }
 
