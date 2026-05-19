@@ -465,16 +465,6 @@ namespace Sequencer {
                                                 {Sequencer::SEQ_WAIT_EXPOSE} );     // clear EXPOSE
         }
 
-        // ---------------------------------------------
-        // clear READOUT flag on the end-of-frame signal
-        // ---------------------------------------------
-        //
-        if ( statstr.compare( 0, 10, "FRAMECOUNT" ) == 0 ) {                        // async message tag FRAMECOUNT
-          if ( seq.wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
-            seq.wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
-          }
-        }
-
         // ---------------------
         // process TEST messages
         // ---------------------
@@ -825,15 +815,19 @@ namespace Sequencer {
                                << " id " << this->target.obsid << " order " << this->target.obsorder;
       logwrite( function, message.str() );
 
-      // If not using frame transfer then wait for readout, too
+      // Wait for all N exposures to complete across all active channels.
+      // camerad publishes can_expose=true (READY key) only after the last channel
+      // of the last exposure finishes — the correct completion signal for both
+      // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
-        while ( !this->cancel_flag.load() && wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( !wait_state_manager.is_set(SEQ_WAIT_READOUT) || this->cancel_flag.load() ); } );
-        }
+        std::unique_lock<std::mutex> lock(this->camerad_mtx);
+        this->camerad_cv.wait( lock, [this]() {
+          return this->can_expose.load() || this->cancel_flag.load();
+        } );
       }
+      this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
       // Now that we're done waiting, check for errors or abort
       //
