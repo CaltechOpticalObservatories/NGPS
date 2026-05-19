@@ -1956,7 +1956,7 @@ namespace AstroCam {
     std::string timestring;
     timespec timenow;
     double mjd0, mjd1, mjd;
-    double airmass0, airmass1, airmass;
+    double airmass0=NAN, airmass1=NAN, airmass=NAN;
 
     if ( !interface.in_readout() ) {
       logwrite( function, "sending command to stop clocks!" );
