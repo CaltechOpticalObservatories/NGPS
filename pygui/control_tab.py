@@ -1,3 +1,4 @@
+import csv
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFrame, QMessageBox, QDialog
@@ -572,6 +573,31 @@ class ControlTab(QDialog):
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
+
+    def _read_theta0(self, geocal_path="/home/developer/Software/Python/acam_skyinfo/geocal.cfg"):
+        """Read Theta0 from geocal.cfg."""
+        try:
+            with open(geocal_path, "r", newline="") as file:
+                reader = csv.DictReader(file)
+                row = next(reader, None)
+
+            if row is None or "Theta0" not in row:
+                print(f"Theta0 not found in {geocal_path}")
+                return None
+
+            return float(row["Theta0"])
+
+        except Exception as e:
+            print(f"Could not read Theta0 from {geocal_path}: {e}")
+            return None
+
+
+    def _parse_angle_float(self, value):
+        """Parse a slit angle value into float."""
+        try:
+            return float(str(value).replace("SET", "").strip())
+        except Exception:
+            return None
 
     def on_slit_angle_changed(self):
         slit_angle = self.slit_angle_box.text()
