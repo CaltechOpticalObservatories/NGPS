@@ -47,8 +47,8 @@ def _cal_row(name, comment, bin_spat, bin_spec, slitwidth, exptime, nexp):
     row["COMMENT"] = comment
     row["BINSPAT"] = _fmt(bin_spat)
     row["BINSPECT"] = _fmt(bin_spec)
-    row["SLITWIDTH"] = f"SET {_fmt(slitwidth)}"
-    row["EXPTIME"] = f"SET {_fmt(exptime)}"
+    row["SLITWIDTH"] = _fmt(slitwidth)
+    row["EXPTIME"] = _fmt(exptime)
     row["NEXP"] = _fmt(nexp)
 
     return row

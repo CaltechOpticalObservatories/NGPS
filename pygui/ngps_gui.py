@@ -312,7 +312,7 @@ class NgpsGUI(QMainWindow):
         """
 
         calibration_options = [
-            "Standard Calibration",
+            "Internal",
             "Dome Flats",
         ]
 
