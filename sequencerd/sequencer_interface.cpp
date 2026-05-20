@@ -1000,9 +1000,9 @@ namespace Sequencer {
         info.domelamp[i] = on_off(tokens.at(11+i));
       }
 
-      // tokens 13-19
+      // tokens 13-19 -- modulator numbers are {1:6}
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i] = on_off(tokens.at(13+i));
+        info.lampmod[i+1] = on_off(tokens.at(13+i));
       }
     }
     catch (const std::exception &e) {
