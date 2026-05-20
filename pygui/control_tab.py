@@ -565,13 +565,13 @@ class ControlTab(QDialog):
         exposure_time = self.exposure_time_box.text()
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
 
     def on_slit_width_changed(self):
         slit_width = self.slit_width_box.text()
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
 
     def on_slit_angle_changed(self):
         slit_angle = self.slit_angle_box.text()
@@ -582,7 +582,7 @@ class ControlTab(QDialog):
 
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)
 
     def num_of_exposures_changed(self):
         num_of_exposures = self.num_of_exposures_box.text()
