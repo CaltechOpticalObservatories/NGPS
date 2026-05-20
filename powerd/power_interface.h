@@ -184,7 +184,18 @@ namespace Power {
       zmqpp::context context;
       bool   class_initialized;
       size_t numdev;                                       ///< number of NPS devices, or "units"
-      std::map<std::string, int> telemetry_map;            ///< map of plug status 0|1 indexed by plug nam
+
+      /**
+       * @struct Status
+       * @brief  published power state: plug power (0=off,1=on,-1=err) indexed by plug name
+       */
+      struct Status {
+        std::map<std::string,int> plugstate;
+        bool operator==(const Status &o) const { return plugstate == o.plugstate; }
+        bool operator!=(const Status &o) const { return !(*this == o); }
+      };
+      Status status;                                       ///< current power state
+      Status last_published_status;                        ///< last published power state
 
     public:
       Interface()
@@ -195,7 +206,7 @@ namespace Power {
           should_subscriber_thread_run(false)
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
         };
       }
@@ -249,9 +260,8 @@ namespace Power {
       bool isopen();                                       ///< is the NPS socket connection open?
       long command( std::string cmd, std::string &retstring ); ///< parse and form a command to send to the NPS unit
       void list( std::string args, std::string &retstring );   ///< list plug devices
-      long status( std::string args, std::string &retstring ); ///< status of all plug devices
-      void publish_snapshot();                           ///< make serialized JSON telemetry message
-      void publish_snapshot( std::string &retstring );   ///< make serialized JSON telemetry message
+      long get_status( std::string args, std::string &retstring ); ///< status of all plug devices
+      void publish_status( bool force=false );           ///< publish power state on change (or force)
 
   };
   /***** Power::Interface *****************************************************/

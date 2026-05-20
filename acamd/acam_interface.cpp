@@ -1639,11 +1639,11 @@ namespace Acam {
    *
    */
   void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
-    this->database.add_from_json<int>( jmessage, "OBS_ID" );
-    this->database.add_from_json<std::string>( jmessage, "NAME" );
-    this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
-    this->database.add_from_json<std::string>( jmessage, "RA" );
-    this->database.add_from_json<std::string>( jmessage, "DECL" );
+    this->database.add_from_json<int>(         jmessage, Key::TargetInfo::OBS_ID );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::NAME );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::POINTMODE );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::RA );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::DECL );
   }
   /***** Acam::Interface::handletopic_targetinfo ******************************/
 

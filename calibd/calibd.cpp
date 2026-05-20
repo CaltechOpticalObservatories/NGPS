@@ -126,8 +126,8 @@ int main(int argc, char **argv) {
   }
   std::this_thread::sleep_for( std::chrono::milliseconds(500) );
 
-  // publish snapshot of my telemetry so the world knows I'm online
-  calibd.interface.publish_snapshot();
+  // read current state and force-publish so the world knows I'm online
+  calibd.interface.publish_status( true );
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

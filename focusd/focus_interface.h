@@ -17,6 +17,7 @@
 #include <map>
 #include <condition_variable>
 #include <atomic>
+#include <cmath>
 
 #define FOCUS_MOVE_TIMEOUT      5000      ///< timeout in msec for moves
 #define FOCUS_HOME_TIMEOUT      5000      ///< timeout in msec for home
@@ -46,6 +47,30 @@ namespace Focus {
       zmqpp::context context;
       size_t numdev;
       bool class_initialized;
+
+      /**
+       * @struct Status
+       * @brief  published focus state: focus position (mm) by channel; NaN if unavailable
+       */
+      struct Status {
+        std::map<std::string,double> positions;
+        bool operator==(const Status &o) const {
+          if ( positions.size() != o.positions.size() ) return false;
+          for ( const auto &[k,v] : positions ) {
+            auto it = o.positions.find(k);
+            if ( it == o.positions.end() ) return false;
+            if ( std::isnan(v) && std::isnan(it->second) ) continue;  // NaN==NaN treated equal
+            if ( v != it->second ) return false;
+          }
+          return true;
+        }
+        bool operator!=(const Status &o) const { return !(*this == o); }
+      };
+      Status status;                                   ///< current focus state
+      Status last_published_status;                    ///< last published focus state
+
+      void get_status();                               ///< refresh status from hardware
+
     public:
       Interface()
         : context(),
@@ -56,7 +81,7 @@ namespace Focus {
           should_subscriber_thread_run(false)
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
         };
       }
@@ -107,7 +132,7 @@ namespace Focus {
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( const std::string &name, std::string cmd, std::string &retstring );  ///< writes command?, reads reply
-      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
+      void publish_status( bool force=false );                ///< publish focus state on change (or force)
 
       long test( std::string args, std::string &retstring );
 

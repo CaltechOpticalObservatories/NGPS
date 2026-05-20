@@ -537,25 +537,13 @@ namespace Focus {
   /***** Focus::Interface::send_command ***************************************/
 
 
-  /***** Focus::Interface::make_telemetry_message *****************************/
+  /***** Focus::Interface::get_status *****************************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      read current focus positions into status
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="Focus::Interface::make_telemetry_message";
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="focusinfo";
-
-    // get focus position for each motor
-    //
+  void Interface::get_status() {
+    this->status.positions.clear();
     auto _motormap = this->motorinterface.get_motormap();
     for ( const auto &mot : _motormap ) {
       auto name = mot.second.name;
@@ -564,29 +552,50 @@ namespace Focus {
       float position = NAN;
       std::string posname;
       this->motorinterface.get_pos( name, axis, addr, position, posname );
+      this->status.positions[ "FOCUS"+mot.first ] = position;
+    }
+  }
+  /***** Focus::Interface::get_status *****************************************/
 
-      std::string key = "FOCUS" + mot.first;
 
-      // assign the position or NaN to a key in the JSON jmessage
-      //
-      if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
+  /***** Focus::Interface::publish_status ***********************************/
+  /**
+   * @brief      publish focus state, but only if it changed (or forced)
+   * @param[in]  force  optional (default=false) publish irrespective of change
+   *
+   */
+  void Interface::publish_status( bool force ) {
+
+    // refresh current state from hardware
+    //
+    this->get_status();
+
+    // unless forced, only publish if the state changed
+    //
+    if ( !force && this->status == this->last_published_status ) return;
+
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::FOCUSD;
+    for ( const auto &[key,pos] : this->status.positions ) {
+      if ( !std::isnan(pos) ) jmessage[key] = pos; else jmessage[key] = "NAN";
     }
 
-    retstring = jmessage.dump();  // serialize the json message into retstring
+    this->last_published_status = this->status;
 
-    this->publisher->publish(retstring);
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
+    try {
+      this->publisher->publish( jmessage );
+    }
+    catch( const std::exception &e ) {
+      logwrite( "Focus::Interface::publish_status",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
   }
-  /***** Focus::Interface::make_telemetry_message *****************************/
+  /***** Focus::Interface::publish_status ***********************************/
 
 
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Focus::DAEMON_NAME ) ) {
-      std::string dontcare;
-      this->make_telemetry_message(dontcare);
+    if ( jmessage.contains( Topic::FOCUSD ) ) {
+      this->publish_status();
     }
     else
     if ( jmessage.contains( "test" ) ) {
