@@ -67,6 +67,68 @@ namespace AstroCam {
   /***** AstroCam::Interface::handletopic_snapshot ****************************/
 
 
+  // Each subscriber handler caches the latest full JSON snapshot from its
+  // provider, keyed by topic. The JSON->FITS-keyword conversion is deferred
+  // to exposure lock-in (see do_expose / add_cached_telem).
+  //
+  void Interface::handletopic_calib( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::CALIBD] = jmessage;
+  }
+  void Interface::handletopic_flexure( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::FLEXURED] = jmessage;
+  }
+  void Interface::handletopic_focus( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::FOCUSD] = jmessage;
+  }
+  void Interface::handletopic_power( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::POWERD] = jmessage;
+  }
+  void Interface::handletopic_slit( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::SLITD] = jmessage;
+  }
+  void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::TARGETINFO] = jmessage;
+  }
+  void Interface::handletopic_tcs( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::TCSD] = jmessage;
+  }
+  void Interface::handletopic_thermal( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::THERMALD] = jmessage;
+  }
+
+
+  /***** AstroCam::Interface::get_live_airmass ********************************/
+  /**
+   * @brief      return the latest airmass from cached tcsd pub-sub telemetry
+   * @details    AIRMASS is averaged over the exposure in dothread_shutter and
+   *             written to systemkeys, so it is intentionally not part of the
+   *             FITS telemkeys. Returns NAN when no valid (on-sky) value is
+   *             available.
+   * @return     airmass as double, or NAN if unavailable
+   *
+   */
+  double Interface::get_live_airmass() {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    auto it = this->live_telemetry.find( Topic::TCSD );
+    if ( it != this->live_telemetry.end() ) {
+      const auto &jmsg = it->second;
+      if ( jmsg.contains( Key::Tcsd::AIRMASS ) && jmsg.at( Key::Tcsd::AIRMASS ).is_number() ) {
+        return jmsg.at( Key::Tcsd::AIRMASS ).get<double>();
+      }
+    }
+    return NAN;
+  }
+  /***** AstroCam::Interface::get_live_airmass ********************************/
+
+
   long NewAstroCam::new_expose( std::string nseq_in ) {
     logwrite( "NewAstroCam::new_expose", nseq_in );
     return( NO_ERROR );
@@ -1948,9 +2010,9 @@ namespace AstroCam {
       interface.do_native( "SPC" );
     }
 
-    // get the airmass now
+    // get the latest airmass collected from tcsd telemetry now
     //
-    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass0 );
+    airmass0 = interface.get_live_airmass();
 
     // If configured, send a command to the ARC controller to open
     // the shutter. This is not connected to the shutter but can be
@@ -2010,9 +2072,9 @@ namespace AstroCam {
       interface.broadcast.notice( function, "external shutter closed at "+timestring );
     }
 
-    // get the airmass again
+    // get the latest airmass again
     //
-    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass1 );
+    airmass1 = interface.get_live_airmass();
 
     // average airmass
     //
@@ -2633,6 +2695,34 @@ namespace AstroCam {
   /***** AstroCam::Interface::dothread_monitor_exposure_pending ***************/
 
 
+  /***** AstroCam::add_cached_telem ******************************************/
+  /**
+   * @brief      add one provider's cached JSON telemetry into a FITS Header
+   * @details    Primary tables route to the primary header; Extension tables
+   *             carry a channel and route to the extension (elmo) map. This is
+   *             the same keyinfo routing the subscriber handlers used to do,
+   *             now applied once at lock-in from the cached JSON snapshot.
+   * @param[in,out] telem  Header to populate
+   * @param[in]  jmsg      cached JSON snapshot for one provider
+   * @param[in]  keys      keyinfo table (Primary[] or Extension[])
+   *
+   */
+  template <typename KeyT, size_t N>
+  static void add_cached_telem( Common::Header &telem,
+                                const nlohmann::json &jmsg,
+                                const KeyT (&keys)[N] ) {
+    for ( const auto &k : keys ) {
+      if constexpr ( std::is_same_v<KeyT, FitsHeaderKeys::Extension> ) {
+        telem.add_json_key( jmsg, k.jkey, k.keyword, k.comment, k.type, EXT, k.chan );
+      }
+      else {
+        telem.add_json_key( jmsg, k.jkey, k.jkey, k.comment, k.type, PRI );
+      }
+    }
+  }
+  /***** AstroCam::add_cached_telem ******************************************/
+
+
   /***** AstroCam::Interface::do_expose ***************************************/
   /**
    * @brief      initiate an exposure
@@ -2705,9 +2795,32 @@ namespace AstroCam {
     logwrite( function, message.str() );
 #endif
 
-    // Collect telemetry, which will be stored in camera_info.telemkeys
+    // telemetry is locked-in here --
+    // build the FITS telemetry header from the latest JSON snapshots cached by
+    // the subscriber handlers. Built fresh so a provider that has gone silent
+    // does not leave stale keys behind.
     //
-    this->collect_telemetry();
+    {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+
+    Common::Header telem;
+
+    auto add = [&]( const std::string &topic, const auto &keytable ) {
+      auto it = this->live_telemetry.find( topic );
+      if ( it != this->live_telemetry.end() ) add_cached_telem( telem, it->second, keytable );
+    };
+
+    add( Topic::CALIBD,     FitsHeaderKeys::CalibInfoKeys   );  // primary
+    add( Topic::POWERD,     FitsHeaderKeys::PowerInfoKeys   );  // primary
+    add( Topic::SLITD,      FitsHeaderKeys::SlitInfoKeys    );  // primary
+    add( Topic::TARGETINFO, FitsHeaderKeys::TargetInfoKeys  );  // primary
+    add( Topic::TCSD,       FitsHeaderKeys::TcsInfoKeys     );  // primary
+    add( Topic::FLEXURED,   FitsHeaderKeys::FlexureInfoKeys );  // extension
+    add( Topic::FOCUSD,     FitsHeaderKeys::FocusInfoKeys   );  // extension
+    add( Topic::THERMALD,   FitsHeaderKeys::ThermalInfoKeys );  // extension
+
+    this->camera_info.telemkeys = telem;
+    }
 
     // Make a copy of this->camera_info for this particular exposure buffer number.
     // This expinfo will be used for this particular exposure.
@@ -2810,11 +2923,9 @@ namespace AstroCam {
       timespec timenow       = Time::getTimeNow();         // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
       double mjd             = mjd_from( timenow );        // modified Julian date of start
-      double airmass=NAN;
-
-      // get the airmass from tcsd telemetry now
+      // get the latest airmass collected from tcsd telemetry now
       //
-      this->collect_telemetry_key( "tcsd", "AIRMASS", airmass );
+      double airmass = this->get_live_airmass();
 
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
@@ -3096,27 +3207,6 @@ namespace AstroCam {
   /***** AstroCam::Interface::collect_telemetry *******************************/
   /**
    * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
-   * @details    This overloaded version accepts a name, for the case where
-   *             telemetry is needed from one provider only (e.g. TCS)
-   * @param[in]  name       name of provider from TELEM_PROVIDER config key
-   * @param[out] retstring  serialized string of json telemetry message
-   *
-   */
-  void Interface::collect_telemetry(const std::string name, std::string &retstring) {
-    Common::DaemonClient jclient("", "\n", JEOF );
-    auto it = this->telemetry_providers.find(name);
-    if ( it != this->telemetry_providers.end() ) {
-      jclient.set_name(it->first);
-      jclient.set_port(it->second);
-      jclient.connect();
-      jclient.command(TELEMREQUEST, retstring);
-      jclient.disconnect();
-    }
-    return;
-  }
-  /***** AstroCam::Interface::collect_telemetry *******************************/
-  /**
-   * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
    *
    */
   void Interface::collect_telemetry() {
@@ -3172,35 +3262,6 @@ namespace AstroCam {
       return ERROR;
     }
 
-    /**
-     * @struct  PrimaryInfo
-     * @brief   holds info for extracting primary header keys from json message
-     * @details The value in jmessage with key jkey will be added to the primary
-     *          FITS header, using comment and optional keyword. If keyword is
-     *          not specified then the header keyword uses jkey.
-     */
-    struct PrimaryInfo {
-      std::string jkey;     // key to extract from jmessage
-      std::string keyword;  // optional FITS keyword (uses jkey if not specified)
-      std::string comment;  // FITS key comment
-      std::string type="";  // optional keyword datatype
-    };
-
-    /**
-     * @struct  ExtensionInfo
-     * @brief   holds info for extracting extension header keys from json message
-     * @details The value in jmessage with key jkey will be added to the FITS
-     *          header specified by channel chan, using comment and optional keyword.
-     *          If keyword is not specified then the header keyword uses jkey.
-     */
-    struct ExtensionInfo {
-      std::string chan;     // chan name identifies which extension
-      std::string jkey;     // key to extract from jmessage
-      std::string keyword;  // optional FITS keyword (uses jkey if not specified)
-      std::string comment;  // FITS key comment
-      std::string type="";  // optional keyword datatype
-    };
-
     auto &telemkeys = this->camera_info.telemkeys;
 
     // use to select whether to write to extension or primary
@@ -3238,17 +3299,7 @@ namespace AstroCam {
       // telemetry from calibd goes in the primary header
       //
       if ( messagetype == "calibinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"MODFEAR",  "", "FeAr lamp modulator pow dut per"},
-          {"MODTHAR",  "", "ThAr lamp modulator pow dut per"},
-          {"MODBLCON", "", "Blue continuum modulator pow dut per"},
-          {"MODBLBYP", "", "Blue bypass modulator pow dut per"},
-          {"MODRDCON", "", "Red continuum modulator pow dut per"},
-          {"MODRDBYP", "", "Red bypass modulator pow dut per"},
-          {"CALCOVER", "", "calib cover state"},
-          {"CALDOOR",  "", "calib door state"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::CalibInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
@@ -3257,21 +3308,7 @@ namespace AstroCam {
       // telemetry from flexured goes in the extension header corresponding to the channel
       //
       if ( messagetype == "flexureinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "FLXSPE_I", "FLXSPE", "I flexure spectral axis 2 (X) in um"},
-          {"I", "FLXSPA_I", "FLXSPA", "I flexure spatial axis 3 (Y) in um"},
-          {"I", "FLXPIS_I", "FLXPIS", "I flexure piston axis 1 (Z) in um"},
-          {"R", "FLXSPE_R", "FLXSPE", "R flexure spectral axis 2 (X) in um"},
-          {"R", "FLXSPA_R", "FLXSPA", "R flexure spatial axis 3 (Y) in um"},
-          {"R", "FLXPIS_R", "FLXPIS", "R flexure piston axis 1 (Z) in um"},
-          {"G", "FLXSPE_G", "FLXSPE", "G flexure spectral axis 2 (X) in um"},
-          {"G", "FLXSPA_G", "FLXSPA", "G flexure spatial axis 3 (Y) in um"},
-          {"G", "FLXPIS_G", "FLXPIS", "G flexure piston axis 1 (Z) in um"},
-          {"U", "FLXSPE_U", "FLXSPE", "U flexure spectral axis 2 (X) in um"},
-          {"U", "FLXSPA_U", "FLXSPA", "U flexure spatial axis 3 (Y) in um"},
-          {"U", "FLXPIS_U", "FLXPIS", "U flexure piston axis 1 (Z) in um"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::FlexureInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }
@@ -3280,13 +3317,7 @@ namespace AstroCam {
       // telemetry from focusd goes in the extension header corresponding to the channel
       //
       if ( messagetype == "focusinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "FOCUSI", "FOCUS", "science camera I focus position in mm" },
-          {"R", "FOCUSR", "FOCUS", "science camera R focus position in mm" },
-          {"G", "FOCUSG", "FOCUS", "science camera G focus position in mm" },
-          {"U", "FOCUSU", "FOCUS", "science camera U focus position in mm" }
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::FocusInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }
@@ -3295,15 +3326,7 @@ namespace AstroCam {
       // telemetry from powerd goes in the primary header
       //
       if ( messagetype == "powerinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"LAMPTHAR", "", "is ThAr lamp on"},
-          {"LAMPFEAR", "", "is FeAr lamp on"},
-          {"LAMPBLUC", "", "is blue Xe continuum lamp on"},
-          {"LAMPREDC", "", "is red continuum lamp on"},
-          {"LAMPXE",   "", "is Xe lamp on"},
-          {"LAMPINCA", "", "is Incandescent lamp on"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::PowerInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
@@ -3312,14 +3335,7 @@ namespace AstroCam {
       // telemetry from calibd goes in the primary header
       //
       if ( messagetype == "slitinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"SLITW",    "", "slit width in arcsec"},
-          {"SLITO",    "", "slit offset in arcsec"},
-          {"SLITPOSA", "", "slit actuator A position in mm"},
-          {"SLITPOSA", "", "slit actuator A position in mm"},
-          {"SLITPOSB", "", "slit actuator B position in mm"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::SlitInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
@@ -3328,19 +3344,7 @@ namespace AstroCam {
       // targetinfo telemetry comes from sequencerd and goes in the primary header
       //
       if ( messagetype == "targetinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"OBS_ID",   "", "Observation ID", "INT"},
-          {"NAME",     "", "target name", "STRING"},
-//        {"BINSPECT", "", "binning in spectral direction"},
-//        {"BINSPAT",  "", "binning in spatial direction"},
-          {"SLITA",    "", "slit angle in deg", "FLOAT"},
-          {"POINTMDE", "", "pointing mode", "STRING"},
-          {"RA",       "", "requested Right Ascension in J2000", "STRING"},
-          {"DECL",     "", "requested Declination in J2000", "STRING"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          message.str(""); message << "[DEBUG] targetinfo key " << keyinfo.jkey << "=" << jmessage[keyinfo.jkey];
-          logwrite(function,message.str());
+        for ( const auto &keyinfo : FitsHeaderKeys::TargetInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
@@ -3350,20 +3354,7 @@ namespace AstroCam {
       // AIRMASS is intentionally left out since it is handled differently
       //
       if ( messagetype == "tcsinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"CASANGLE",   "", "TCS reported Cassegrain angle in deg", "FLOAT"},
-          {"HA",         "", "hour angle"},
-          {"RAOFFSET",   "", "offset Right Ascension"},
-          {"DECLOFFS",   "", "offset Declination"},
-          {"TELRA",      "", "TCS reported Right Ascension"},
-          {"TELDEC",     "", "TCS reported Declination"},
-          {"AZ",         "", "TCS reported azimuth"},
-          {"ZENANGLE",   "", "TCS reported Zenith angle", "FLOAT"},
-          {"DOMEAZ",     "", "TCS reported dome azimuth", "FLOAT"},
-          {"DOMESHUT",   "", "dome shutters"},
-          {"TELFOCUS",   "", "TCS reported telescope focus position in mm", "FLOAT"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::TcsInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
         }
       }
@@ -3372,22 +3363,7 @@ namespace AstroCam {
       // telemetry from thermald
       //
       if ( messagetype == "thermalinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin", "FLOAT"},
-          {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin", "FLOAT"},
-          {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin", "FLOAT"},
-          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin", "FLOAT"},
-
-          {"I", "TCOLL_I", "COLTEMP", "I collimator temp in deg C", "FLOAT"},
-          {"R", "TCOLL_R", "COLTEMP", "R collimator temp in deg C", "FLOAT"},
-          {"G", "TCOLL_G", "COLTEMP", "G collimator temp in deg C", "FLOAT"},
-
-          {"I", "TFOCUS_I", "FOCTEMP", "I focus temp in deg C", "FLOAT"},
-          {"R", "TFOCUS_R", "FOCTEMP", "R focus temp in deg C", "FLOAT"},
-          {"G", "TFOCUS_G", "FOCTEMP", "G focus temp in deg C", "FLOAT"},
-          {"U", "TFOCUS_U", "FOCTEMP", "U focus temp in deg C", "FLOAT"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
+        for ( const auto &keyinfo : FitsHeaderKeys::ThermalInfoKeys ) {
           telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
         }
       }

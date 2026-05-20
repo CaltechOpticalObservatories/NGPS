@@ -184,8 +184,8 @@ int main(int argc, char **argv) {
                              Topic::FLEXURED,
                              Topic::FOCUSD,
                              Topic::POWERD,
-                             Topic::TARGETINFO,
                              Topic::SLITD,
+                             Topic::TARGETINFO,
                              Topic::TCSD,
                              Topic::THERMALD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
