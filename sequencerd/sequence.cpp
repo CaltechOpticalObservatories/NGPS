@@ -692,7 +692,7 @@ namespace Sequencer {
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
-                                                 this->target.iscal ? Sequencer::VSM_DATABASE : Sequencer::VSM_ACQUIRE) }
+                                                 this->target.iscal ? Sequencer::VSM_EXPOSE : Sequencer::VSM_ACQUIRE) }
                          };
       }
 
