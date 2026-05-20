@@ -86,6 +86,17 @@ void runbroker() {
   void* xsub_socket = zmq_socket(context, ZMQ_XSUB);
   void* xpub_socket = zmq_socket(context, ZMQ_XPUB);
 
+  // unlimited queues: prevent silent drops when any daemon is slow to drain.
+  // LINGER=0: broker exits cleanly without blocking on pending messages.
+  //
+  int zero = 0;
+  zmq_setsockopt( xsub_socket, ZMQ_SNDHWM,  &zero, sizeof(zero) );
+  zmq_setsockopt( xsub_socket, ZMQ_RCVHWM,  &zero, sizeof(zero) );
+  zmq_setsockopt( xsub_socket, ZMQ_LINGER,  &zero, sizeof(zero) );
+  zmq_setsockopt( xpub_socket, ZMQ_SNDHWM,  &zero, sizeof(zero) );
+  zmq_setsockopt( xpub_socket, ZMQ_RCVHWM,  &zero, sizeof(zero) );
+  zmq_setsockopt( xpub_socket, ZMQ_LINGER,  &zero, sizeof(zero) );
+
   // bind the sockets
   //
   zmq_bind(xsub_socket, "tcp://127.0.0.1:5555");

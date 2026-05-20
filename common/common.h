@@ -70,7 +70,7 @@ namespace Common {
     private:
       zmqpp::context &_context;
       zmqpp::socket _socket;
-      mutable std::mutex _publish_mtx;
+      zmqpp::poller _poller;             ///< persistent poller — avoids per-call reconstruction
       Mode _mode;                        ///< publisher or subscriber?
       std::string _topic;                ///< publisher topic
       std::vector<std::string> _topics;  ///< list of subscriber topics
@@ -82,17 +82,23 @@ namespace Common {
       PubSub( zmqpp::context &context, Mode mode )
         : _context(context),
           _socket(context, (mode==Mode::PUB ? zmqpp::socket_type::publish : zmqpp::socket_type::subscribe)),
-          _mode(mode) { }
+          _mode(mode)
+      {
+        _socket.set( zmqpp::socket_option::linger,               0 );
+        _socket.set( zmqpp::socket_option::send_high_water_mark,    0 );
+        _socket.set( zmqpp::socket_option::receive_high_water_mark, 0 );
+        _poller.add( _socket, zmqpp::poller::poll_in );
+      }
 
       ~PubSub() { _socket.close(); }
 
       /**
-       * @brief       publishers bind to a socket endpoint (not for brokers)
+       * @brief      poll for a waiting message
+       * @param[in]  timeout_ms  poll timeout in milliseconds (default 100, 0 = non-blocking)
+       * @return     true if at least one message is ready to receive
        */
-      bool has_message() {
-        zmqpp::poller poller;
-        poller.add(_socket, zmqpp::poller::poll_in);
-        return ( poller.poll(100) > 0 );
+      bool has_message( int timeout_ms = 100 ) {
+        return ( _poller.poll(timeout_ms) > 0 );
       }
 
       /**
@@ -184,7 +190,6 @@ namespace Common {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
         }
-        std::lock_guard<std::mutex> lock( _publish_mtx );
         zmqpp::message message_zmq;
         // Publish to either class default _topic or topic specified as
         // optional arg.
@@ -246,6 +251,7 @@ namespace Common {
                              +" with default topic " +iface.publisher_topic );
           iface.publisher = std::make_unique<Common::PubSub>( context, Common::PubSub::Mode::PUB );
           iface.publisher->connect_to_broker( iface.publisher_address, iface.publisher_topic );
+          std::this_thread::sleep_for( std::chrono::milliseconds(100) );  // publisher slow-joiner settle
         }
         catch ( const zmqpp::zmq_internal_exception &e ) {
           logwrite( function, "ERROR initializing message handler: "+std::string(e.what()) );
@@ -296,13 +302,17 @@ namespace Common {
 
         BoolState thread_running( iface.is_subscriber_thread_running );
 
-        // listen for published messages and handle them
+        // listen for published messages and handle them.
+        // drain all pending messages per poll wake-up to avoid per-message 100ms stalls
+        // when several daemons publish simultaneously (e.g. after request_snapshot()).
         //
         while ( iface.should_subscriber_thread_run ) {
           try {
             if ( iface.subscriber->has_message() ) {
-              auto [topic,payload] = iface.subscriber->receive();
-              process_incoming_message(iface, topic, payload);
+              do {
+                auto [topic,payload] = iface.subscriber->receive();
+                process_incoming_message(iface, topic, payload);
+              } while ( iface.subscriber->has_message(0) );
             }
           }
           catch ( const std::exception &e ) {
