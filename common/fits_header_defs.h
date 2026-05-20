@@ -83,12 +83,12 @@ namespace FitsHeaderKeys {
   };
 
   const Primary TargetInfoKeys[] = {
-    { "OBS_ID",   "", "Observation ID", "INT" },
-    { "NAME",     "", "target name", "STRING" },
-    { "SLITA",    "", "slit angle in deg", "FLOAT" },
-    { "POINTMDE", "", "pointing mode", "STRING" },
-    { "RA",       "", "requested Right Ascension in J2000", "STRING" },
-    { "DECL",     "", "requested Declination in J2000", "STRING" }
+    { Key::TargetInfo::OBS_ID.c_str(),    "", "Observation ID", "INT" },
+    { Key::TargetInfo::NAME.c_str(),      "", "target name", "STRING" },
+    { Key::TargetInfo::SLITA.c_str(),     "", "slit angle in deg", "FLOAT" },
+    { Key::TargetInfo::POINTMODE.c_str(), "POINTMDE", "pointing mode", "STRING" },
+    { Key::TargetInfo::RA.c_str(),        "", "requested Right Ascension in J2000", "STRING" },
+    { Key::TargetInfo::DECL.c_str(),      "", "requested Declination in J2000", "STRING" }
   };
 
   const Primary TcsInfoKeys[] = {

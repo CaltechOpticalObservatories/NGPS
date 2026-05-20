@@ -175,6 +175,7 @@ namespace Sequencer {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_targetinfo( true );
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
@@ -365,6 +366,7 @@ namespace Sequencer {
     // publish the structured seqstate topic
     //
     this->publish_seqstate();
+    this->publish_targetinfo();   // targetinfo content is gated on seq_state (READY/RUNNING)
     this->cv.notify_all();
 
     // emit a NOTICE on Topic::BROADCAST only when the lifecycle state has
@@ -652,6 +654,8 @@ namespace Sequencer {
           this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
           break;
         }
+
+        this->publish_targetinfo();   // publish the now-active target
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -3683,44 +3687,49 @@ namespace Sequencer {
   /***** Sequencer::Sequence::target_offset ***********************************/
 
 
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publish target info on Topic::TARGETINFO, on change (or force)
+   * @details    Builds a JSON message of the current target and publishes it
+   *             only when it differs from the last published message, unless
+   *             force is set. The message is empty unless seq state is
+   *             READY or RUNNING.
+   * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
-  void Sequence::make_telemetry_message( std::string &retstring ) {
-    // assemble the telemetry I want to report into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
+  void Sequence::publish_targetinfo( bool force ) {
     nlohmann::json jmessage;
-    jmessage["messagetype"] = "targetinfo";
+    jmessage[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
-    // fill telemetry message only when READY or RUNNING
+    // fill telemetry only when READY or RUNNING; otherwise an empty (no-target) message
     //
     if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
-      // Store unconfigured values as NAN.
-      // NAN values are not logged to the database.
+      // unconfigured values are stored as NAN
       //
-      jmessage["OBS_ID"] = this->target.obsid < 0 ? NAN : this->target.obsid;           //  OBSERVATION_ID
-      jmessage["NAME"] = this->target.name;                                             //  NAME
-      jmessage["SLITA"] = this->target.slitangle;                                       // *OTMslitangle
-      jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.binspect;   // *BINSPECT
-      jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.binspat;      // *BINSPAT
-      jmessage["POINTMODE"] = this->target.pointmode;                                   // *POINTMODE
-      jmessage["RA"] = this->target.ra_hms;                                             // *RA
-      jmessage["DECL"] = this->target.dec_dms;                                          // *DECL
+      jmessage[Key::TargetInfo::OBS_ID]    = this->target.obsid < 0 ? NAN : this->target.obsid;
+      jmessage[Key::TargetInfo::NAME]      = this->target.name;
+      jmessage[Key::TargetInfo::SLITA]     = this->target.slitangle;
+      jmessage[Key::TargetInfo::BINSPECT]  = this->target.binspect < 1 ? NAN : this->target.binspect;
+      jmessage[Key::TargetInfo::BINSPAT]   = this->target.binspat < 1 ? NAN : this->target.binspat;
+      jmessage[Key::TargetInfo::POINTMODE] = this->target.pointmode;
+      jmessage[Key::TargetInfo::RA]        = this->target.ra_hms;
+      jmessage[Key::TargetInfo::DECL]      = this->target.dec_dms;
     }
 
-    retstring = jmessage.dump();  // serialize the json message into a string
+    // unless forced, only publish if the target info changed
+    //
+    if ( !force && jmessage == this->last_published_targetinfo ) return;
+    this->last_published_targetinfo = jmessage;
 
-    retstring.append(JEOF);       // append JSON message terminator
-
-    return;
+    try {
+      this->publisher->publish( jmessage, Topic::TARGETINFO );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Sequencer::Sequence::publish_targetinfo",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
   }
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
 
 
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/

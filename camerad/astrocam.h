@@ -1178,7 +1178,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       Controller* get_active_controller(const int dev);
       void exposure_progress();
       void make_image_keywords( int dev );
-      long handle_json_message( std::string message_in );
       long parse_spec_info( std::string args );
       long parse_det_geometry( std::string args );
       long parse_controller_config( std::string args );
@@ -1239,7 +1238,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long expose(std::string nexp_in);
       long do_expose(int nexp_in);
       void make_telemetry_message( std::string &retstring );
-      void collect_telemetry();
       double get_live_airmass();                             ///< latest airmass from cached tcsd telemetry, or NAN
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);

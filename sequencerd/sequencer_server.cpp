@@ -1594,23 +1594,6 @@ namespace Sequencer {
                       if ( ret != NO_ERROR ) logwrite(function, "ERROR: unable to load config file");
                       else ret = this->configure_sequencer();
       }
-      else
-
-      // send my telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->sequence.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-
       // Unknown commands generate an error
       //
       else {

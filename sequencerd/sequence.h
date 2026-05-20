@@ -527,6 +527,7 @@ namespace Sequencer {
       Common::Broadcaster broadcast { this->publisher, Sequencer::DAEMON_NAME };  ///< logs and publishes a narrative message on Topic::BROADCAST
 
       std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
+      nlohmann::json last_published_targetinfo; ///< last published targetinfo (for change detection)
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -564,7 +565,7 @@ namespace Sequencer {
       long get_tcs_cass( double &cass );
       long target_offset();
 
-      void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
+      void publish_targetinfo( bool force=false );                  ///< publish target info on change (or force)
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );

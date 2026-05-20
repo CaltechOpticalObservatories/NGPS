@@ -63,6 +63,17 @@ namespace Key {
     inline const std::string SHOULD_FINEACQUIRE = "should_fineacquire";
   }
 
+  namespace TargetInfo {
+    inline const std::string OBS_ID    = "OBS_ID";
+    inline const std::string NAME      = "NAME";
+    inline const std::string SLITA     = "SLITA";
+    inline const std::string BINSPECT  = "BINSPECT";
+    inline const std::string BINSPAT   = "BINSPAT";
+    inline const std::string POINTMODE = "POINTMODE";
+    inline const std::string RA        = "RA";
+    inline const std::string DECL      = "DECL";
+  }
+
   namespace Camerad {
     inline const std::string READY         = "ready";
     inline const std::string SHUTTERTIME   = "shuttime_sec";
