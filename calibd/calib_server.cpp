@@ -629,22 +629,6 @@ namespace Calib {
       if ( cmd == CALIBD_LAMPMOD ) {
                       ret = this->interface.modulator.control( args, retstring );
       }
-      else
-
-      // telemetry request
-      //
-      if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.publish_snapshot( retstring );
-                        ret = JSON;
-                      }
-      }
 
       // unknown commands generate an error
       //
@@ -692,7 +676,7 @@ namespace Calib {
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 
-      if ( ret==NO_ERROR ) this->interface.publish_snapshot();
+      if ( ret==NO_ERROR ) this->interface.publish_status();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.
