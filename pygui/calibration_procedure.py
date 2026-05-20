@@ -24,6 +24,8 @@ CAL_HEADER = [
     "MAGFILTER",
     "EXPTIME",
     "NEXP",
+    "OTMslitwidth",
+    "OTMexpt",
 ]
 
 
@@ -34,22 +36,29 @@ def _fmt(value):
     return str(value)
 
 
-def _cal_row(name, comment, bin_spat, bin_spec, slitwidth, exptime, nexp):
-    """
-    Build one calibration target row using the same field layout as make_cals.
+def _to_float(value, field_name):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be numeric, got {value!r}")
 
-    Bash equivalent:
-        print_line $name "$comment" $xbin $ybin $slitwidth $exptime $N_exp
-    """
+
+def _cal_row(name, comment, bin_spat, bin_spec, slitwidth, exptime, nexp):
     row = {key: "" for key in CAL_HEADER}
 
     row["NAME"] = name
     row["COMMENT"] = comment
     row["BINSPAT"] = _fmt(bin_spat)
     row["BINSPECT"] = _fmt(bin_spec)
+
+    # CSV/display-style fields
     row["SLITWIDTH"] = _fmt(slitwidth)
     row["EXPTIME"] = _fmt(exptime)
     row["NEXP"] = _fmt(nexp)
+
+    # MySQL DOUBLE fields
+    row["OTMslitwidth"] = _to_float(slitwidth, "OTMslitwidth")
+    row["OTMexpt"] = _to_float(exptime, "OTMexpt")
 
     return row
 
