@@ -2187,7 +2187,12 @@ namespace Sequencer {
     }
 
     // Send casangle using tcsd wrapper for RINGGO command
-    // do not wait for reply
+    // do not wait for reply — intentional: Cassegrain rotation can take tens of
+    // seconds and the sequence continues while the operator guides on-target.
+    //
+    // WATCH: tcsd still sends a CID-tagged reply that accumulates in the socket
+    // receive buffer unread.  DaemonClient::send() drains stale data before each
+    // new write, which prevents that orphaned reply from poisoning the next send.
     //
     {
     std::stringstream ringgo_cmd;

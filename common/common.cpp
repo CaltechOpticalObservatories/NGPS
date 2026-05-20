@@ -758,6 +758,23 @@ namespace Common {
       command += this->term_write;
     }
 
+    // Drain any stale reply that was buffered from a prior send whose reply was
+    // never read (e.g. a DONTWAIT send, or a send that timed out before the reply
+    // arrived and reconnected without draining).  Without this, the stale CID-tagged
+    // reply would be read as the response to the current command and cause a
+    // mismatch, propagating through every subsequent send until the socket is cycled.
+    // Safe: client_access mutex is held, so no concurrent sender touches this socket;
+    // and in the command/reply protocol daemons never push unsolicited TCP data.
+    //
+    {
+    std::string discard;
+    while ( this->socket.Poll(0) > 0 ) {
+      if ( this->socket.Read( discard, this->term_read ) <= 0 ) break;
+      message.str(""); message << "drained stale buffered reply from " << this->name << ": \"" << discard << "\"";
+      logwrite( function, message.str() );
+    }
+    }
+
     int trys=0;
     int retry_limit=3;
     int pollret=0;
