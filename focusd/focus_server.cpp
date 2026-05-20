@@ -616,22 +616,6 @@ namespace Focus {
       }
       else
 
-      // send telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-      else
-
       // test routines
       //
       if ( cmd == FOCUSD_TEST ) {
@@ -683,6 +667,8 @@ namespace Focus {
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
+
+      if ( ret==NO_ERROR ) this->interface.publish_status();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.
