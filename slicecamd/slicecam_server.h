@@ -94,6 +94,7 @@ namespace Slicecam {
       std::string asyncgroup;            ///< asynchronous multicast group
 
       std::atomic<int> cmd_num;          ///< keep a running tally of number of commands received by slicecamd
+      Common::CorrIdCache corr_cache;    ///< dedup cache for tagged inter-daemon commands
 
       Config config;                     ///< create a Config object for reading the configuration file
 

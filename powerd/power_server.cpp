@@ -465,6 +465,31 @@ namespace Power {
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
 
+      // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+      // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+      // can be rejected by the client. CLI users send no prefix and corr_id is
+      // left empty; the server then echoes no prefix on reply.
+      //
+      std::string corr_id;
+      {
+        std::string payload;
+        Common::extract_correlation_id( buf, corr_id, payload );
+        buf = std::move( payload );
+      }
+
+      // Replay a cached reply if this command's ID matches a recent one.
+      // This makes DaemonClient retries idempotent: the underlying handler
+      // is invoked at most once per correlation ID within the cache TTL.
+      //
+      if ( !corr_id.empty() ) {
+        std::string cached_reply;
+        if ( this->corr_cache.lookup( corr_id, cached_reply ) ) {
+          std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+          if ( sock.Write( out ) < 0 ) connection_open=false;
+          continue;
+        }
+      }
+
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
       try {
@@ -635,6 +660,21 @@ namespace Power {
           retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
+        }
+
+        // Cache the bare reply (without prefix) so retries with the same
+        // correlation ID can be replayed without re-running the handler.
+        //
+        if ( !corr_id.empty() ) {
+          this->corr_cache.insert( corr_id, retstring );
+        }
+
+        // Echo the correlation ID back to inter-daemon clients so they can
+        // verify the reply belongs to the command they just sent. CLI users
+        // sent no prefix, so corr_id is empty and nothing is prepended.
+        //
+        if ( !corr_id.empty() ) {
+          retstring = CID_PREFIX + corr_id + " " + retstring;
         }
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;

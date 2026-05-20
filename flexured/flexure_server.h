@@ -73,6 +73,7 @@ namespace Flexure {
 
       std::atomic<int> cmd_num;
       std::atomic<int> threads_active;      ///< number of blocking threads that exist
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
 
       NumberPool id_pool;                   ///< creates a number pool used for socket ids
 

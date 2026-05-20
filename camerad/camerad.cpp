@@ -432,6 +432,31 @@ void doit(Network::TcpSocket &sock) {
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
 
+    // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+    // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+    // can be rejected by the client. CLI users send no prefix and corr_id is
+    // left empty; the server then echoes no prefix on reply.
+    //
+    std::string corr_id;
+    {
+      std::string payload;
+      Common::extract_correlation_id( sbuf, corr_id, payload );
+      sbuf = std::move( payload );
+    }
+
+    // Replay a cached reply if this command's ID matches a recent one.
+    // This makes DaemonClient retries idempotent: the underlying handler
+    // is invoked at most once per correlation ID within the cache TTL.
+    //
+    if ( !corr_id.empty() ) {
+      std::string cached_reply;
+      if ( server.corr_cache.lookup( corr_id, cached_reply ) ) {
+        std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+        if ( sock.Write( out ) < 0 ) connection_open=false;
+        continue;
+      }
+    }
+
     if ( sbuf.empty() ) sbuf="help";                 // no command automatically displays help
 
     try {
@@ -827,6 +852,21 @@ void doit(Network::TcpSocket &sock) {
         retstring.append( "\n" );
         message.str(""); message << "command (" << server.cmd_num << ") reply: " << retstring;
         logwrite( function, message.str() );
+      }
+
+      // Cache the bare reply (without prefix) so retries with the same
+      // correlation ID can be replayed without re-running the handler.
+      //
+      if ( !corr_id.empty() ) {
+        server.corr_cache.insert( corr_id, retstring );
+      }
+
+      // Echo the correlation ID back to inter-daemon clients so they can
+      // verify the reply belongs to the command they just sent. CLI users
+      // sent no prefix, so corr_id is empty and nothing is prepended.
+      //
+      if ( !corr_id.empty() ) {
+        retstring = CID_PREFIX + corr_id + " " + retstring;
       }
 
       if ( sock.Write( retstring ) < 0 ) connection_open=false;

@@ -7,6 +7,9 @@
 
 #include "common.h"
 
+#include <iomanip>
+#include <random>
+
 namespace Common {
 
   /***** Common::Broadcaster::emit ********************************************/
@@ -67,6 +70,50 @@ namespace Common {
     return;
   }
   /***** Common::collect_telemetry ********************************************/
+
+
+  /***** Common::extract_correlation_id ***************************************/
+  /**
+   * @brief      detect and strip a correlation ID prefix from an inter-daemon message
+   * @details    Recognizes the wire format "#cid:HHHHHHHH <payload>" where the ID
+   *             is exactly CID_HEX_LEN hex digits followed by a single space.
+   *             Tolerates upper- and lower-case hex on input. The function makes
+   *             no assumption about what follows the prefix and never modifies it.
+   *             If no valid prefix is present, payload_out is set to a copy of
+   *             input and id_out is left unchanged so callers may detect the
+   *             "no ID" case via the boolean return.
+   * @param[in]  input        full message as received from the wire
+   * @param[out] id_out       extracted ID on success; unchanged otherwise
+   * @param[out] payload_out  message with the prefix stripped on success; copy of input otherwise
+   * @return     true if a well-formed correlation ID prefix was found, false otherwise
+   *
+   */
+  bool extract_correlation_id( const std::string &input,
+                               std::string       &id_out,
+                               std::string       &payload_out ) {
+    if ( input.size() < CID_HEADER_LEN ) {
+      payload_out = input;
+      return false;
+    }
+    if ( input.compare( 0, CID_PREFIX.size(), CID_PREFIX ) != 0 ) {
+      payload_out = input;
+      return false;
+    }
+    for ( size_t i = CID_PREFIX.size(); i < CID_PREFIX.size() + CID_HEX_LEN; ++i ) {
+      if ( !std::isxdigit( static_cast<unsigned char>( input[i] ) ) ) {
+        payload_out = input;
+        return false;
+      }
+    }
+    if ( input[ CID_PREFIX.size() + CID_HEX_LEN ] != ' ' ) {
+      payload_out = input;
+      return false;
+    }
+    id_out      = input.substr( CID_PREFIX.size(), CID_HEX_LEN );
+    payload_out = input.substr( CID_HEADER_LEN );
+    return true;
+  }
+  /***** Common::extract_correlation_id ***************************************/
 
 
   /***** Common::Queue::enqueue ***********************************************/
@@ -604,6 +651,30 @@ namespace Common {
   /***** Common::DaemonClient::async **************************************************/
 
 
+  namespace {
+    /***** generate_cid *******************************************************/
+    /**
+     * @brief      generate an 8-char lowercase-hex correlation ID
+     * @details    Uses a thread-local Mersenne Twister seeded once per thread
+     *             from std::random_device. Collisions are not security-sensitive
+     *             here; we only need IDs to differ between adjacent in-flight
+     *             commands so a stale reply can be detected. With 32 bits of
+     *             state per ID and at most one in-flight command per client,
+     *             accidental collisions are vanishingly rare.
+     * @return     8-character hex string (no prefix, no separator)
+     *
+     */
+    std::string generate_cid() {
+      thread_local std::mt19937 rng{ std::random_device{}() };
+      std::uniform_int_distribution<uint32_t> dist;
+      std::ostringstream oss;
+      oss << std::hex << std::setw( static_cast<int>( CID_HEX_LEN ) ) << std::setfill( '0' ) << dist( rng );
+      return oss.str();
+    }
+    /***** generate_cid *******************************************************/
+  }
+
+
   /***** Common::DaemonClient::send ***************************************************/
   /**
    * @brief      send a command, read the reply
@@ -657,6 +728,16 @@ namespace Common {
       return ERROR;
     }
 
+    // Generate a correlation ID for this command and prepend it as a wire-level
+    // prefix. The prefix sits ahead of any user payload and any line terminator
+    // so daemons can detect, strip, and echo it without disturbing dispatch.
+    // Receiving a reply that does not carry this exact ID indicates the reply
+    // is stale (e.g. arrived on a reconnected socket from before the drop) and
+    // must not be matched to this command.
+    //
+    const std::string cid = generate_cid();
+    command = CID_PREFIX + cid + " " + command;
+
     // Determine whether to use the override values or not
     // for this call only.
     //
@@ -708,12 +789,14 @@ namespace Common {
                                  << " on fd " << this->socket.getfd() << " for " << this->name;
         logwrite( function, message.str() );
         this->timedout=true;
+        break;                                     // daemon is busy, not gone — do not resend
       }
       else
       if ( pollret < 0 && errno ) {                // this is probably a real error
         message.str(""); message << "ERROR polling socket " << this->socket.gethost() << "/" << this->socket.getport()
                                  << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite( function, message.str() );
+        break;                                     // real socket error — do not resend
       }
       else
       if ( pollret < 0 && !errno ) {               // this is probably a stale fd
@@ -722,7 +805,7 @@ namespace Common {
         logwrite( function, message.str() );
       }
 
-      // if still here then reconnect, sleep 1s, try again
+      // stale fd only: reconnect and try again
       //
       lock.unlock();
       error = this->connect();
@@ -789,14 +872,114 @@ namespace Common {
     reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
     reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
 
-    // If the reply contains "ERROR" then return ERROR, otherwise NO_ERROR.
+    // Verify the correlation ID echoed back by the daemon matches the one we
+    // sent. Any non-empty reply that does not carry the expected prefix is
+    // stale - typically a delayed reply from a previous command that landed
+    // on the socket after a reconnect, or an out-of-order frame. Treat such
+    // a reply as a failure so callers never act on data they cannot attribute.
+    // Empty replies are left alone here and are handled by the empty-reply
+    // branch of the classification below.
     //
-    if ( reply.find( std::string( "ERROR" ) ) != std::string::npos ) {
-      return( ERROR );
+    if ( !reply.empty() ) {
+      const std::string expected_prefix = CID_PREFIX + cid + " ";
+      if ( reply.compare( 0, expected_prefix.size(), expected_prefix ) == 0 ) {
+        reply.erase( 0, expected_prefix.size() );
+      }
+      else {
+        message.str(""); message << "ERROR stale or unrecognized reply from " << this->name
+                                 << " (expected ID " << cid << "): \"" << reply << "\"";
+        logwrite( function, message.str() );
+        reply.clear();
+        // drain any further queued replies so stale data does not persist into the next send() call
+        while ( this->socket.Poll(0) > 0 ) {
+          std::string discard;
+          ( term_with_string_actual ? socket.Read( discard, term_str_read_actual )
+                                   : socket.Read( discard, term_read ) );
+        }
+      }
     }
-    else return( NO_ERROR );
+
+    // Classify the reply:
+    //   "ERROR" in reply  → command failed
+    //   empty reply        → socket was lost before any response arrived; treat
+    //                        as failure so callers are never silently misled
+    //   anything else      → success (covers "DONE", JSON payloads, query
+    //                        results such as "yes"/"no", state strings, etc.)
+    //
+    // Note: CLI help output ("HELP" mode) is never produced on inter-daemon
+    // command channels, so there is no need to special-case it here.
+    //
+    if ( reply.find( "ERROR" ) != std::string::npos ) return ERROR;
+    if ( reply.empty() )                               return ERROR;
+    return NO_ERROR;
   }
   /***** Common::DaemonClient::send ***************************************************/
+
+
+  /***** Common::CorrIdCache::lookup ******************************************/
+  /**
+   * @brief      look up a previously-cached reply by correlation ID
+   * @details    Returns true if the ID is present and not yet expired, in which
+   *             case the cached reply is copied to reply_out. If the ID is
+   *             present but expired, the entry is purged and false is returned.
+   * @param[in]  id         correlation ID to look up
+   * @param[out] reply_out  reply string written on hit; unchanged on miss
+   * @return     true on cache hit, false on miss or expired
+   *
+   */
+  bool CorrIdCache::lookup( const std::string &id, std::string &reply_out ) {
+    std::lock_guard<std::mutex> lock( mtx );
+    auto it = cache.find( id );
+    if ( it == cache.end() ) return false;
+    if ( std::chrono::steady_clock::now() >= it->second.expires ) {
+      cache.erase( it );
+      return false;
+    }
+    reply_out = it->second.reply;
+    return true;
+  }
+  /***** Common::CorrIdCache::lookup ******************************************/
+
+
+  /***** Common::CorrIdCache::insert ******************************************/
+  /**
+   * @brief      store a reply under a correlation ID with TTL
+   * @details    Opportunistically prunes expired entries on each call. If the
+   *             cache is still at MAX_ENTRIES capacity after pruning, the
+   *             entry expiring soonest is evicted to make room. An existing
+   *             entry under the same ID is overwritten (which is the desired
+   *             behavior when a slow handler completes and the client has
+   *             already retried).
+   * @param[in]  id     correlation ID to store under
+   * @param[in]  reply  bare reply string to cache (must NOT include CID prefix)
+   *
+   */
+  void CorrIdCache::insert( const std::string &id, const std::string &reply ) {
+    std::lock_guard<std::mutex> lock( mtx );
+    const auto now = std::chrono::steady_clock::now();
+
+    // prune expired entries to bound memory growth
+    //
+    for ( auto it = cache.begin(); it != cache.end(); ) {
+      if ( now >= it->second.expires ) it = cache.erase( it );
+      else                             ++it;
+    }
+
+    // if still at capacity, evict the entry that expires soonest
+    //
+    if ( cache.size() >= MAX_ENTRIES ) {
+      auto oldest = cache.begin();
+      for ( auto it = cache.begin(); it != cache.end(); ++it ) {
+        if ( it->second.expires < oldest->second.expires ) oldest = it;
+      }
+      cache.erase( oldest );
+    }
+
+    Entry &entry = cache[id];
+    entry.reply   = reply;
+    entry.expires = now + std::chrono::seconds( TTL_SECONDS );
+  }
+  /***** Common::CorrIdCache::insert ******************************************/
 
 
   /***** Common::DaemonClient::dothread_command ***************************************/

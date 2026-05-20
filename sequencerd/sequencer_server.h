@@ -114,6 +114,7 @@ namespace Sequencer {
       int blocking_socket;
 
       std::atomic<int> cmd_num;             ///< keep a running tally of number of commands received by sequencerd
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
       std::atomic<int> threads_active;   ///< number of blocking threads that exist
 
       NumberPool id_pool;                   ///< creates a number pool
