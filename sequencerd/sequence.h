@@ -579,6 +579,7 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      long set_imgtype();            ///< set IMGTYPE
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure

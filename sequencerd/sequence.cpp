@@ -2705,7 +2705,9 @@ namespace Sequencer {
 
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
-    logwrite( function, "[DEBUG] sending expose command" );
+    this->set_imgtype();
+
+    logwrite( function, "sending expose command" );
 
     // Send the EXPOSE command to camera daemon and wait for the reply.
     // Also verify the reply contains "DONE": command_timeout returns NO_ERROR
@@ -2784,6 +2786,33 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::modify_exptime **********************************/
+
+
+  /***** Sequencer::Sequence::set_imgtype *************************************/
+  /**
+   * @brief      set IMGTYPE FITS keyword in camerad before each exposure
+   * @details    Looks up the imgtype field from the CalibrationTarget config for
+   *             the current target and sends it to camerad as a key command.
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Sequence::set_imgtype() {
+    const std::string function("Sequencer::Sequence::set_imgtype");
+    std::string reply;
+
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const std::string imgtype = this->caltarget.get_info(calname).imgtype;
+
+    const std::string cmd = CAMERAD_KEY + " IMGTYPE=" + imgtype
+                                        + (this->target.iscal ? "//Calibration" : "");
+    if ( this->camerad.send( cmd, reply ) != NO_ERROR ) {
+      logwrite( function, "ERROR sending '"+cmd+"': "+reply );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::set_imgtype *************************************/
 
 
   /***** Sequencer::Sequence::startup *****************************************/
