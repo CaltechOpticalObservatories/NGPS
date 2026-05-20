@@ -218,9 +218,23 @@ namespace Slit {
       return ERROR;
     }
 
-    // All the work is done by the PI motor interface class
+    // The work is done by the PI motor interface class, which blocks until
+    // homing is complete.
     //
-    return this->motorinterface.home( arg, retstring );
+    long error = this->motorinterface.home( arg, retstring );
+
+    // Homing changes the home state and the actuator positions. Refresh the
+    // home state (as open() does) and read back the positions with get(),
+    // which refreshes width/offset/posA/posB and publishes the new status.
+    //
+    if ( error == NO_ERROR ) {
+      std::string homestate;
+      this->is_home( "", homestate );
+      status.ishome = ( homestate=="true" ? true : false );
+      error = this->get( retstring );
+    }
+
+    return error;
   }
   /***** Slit::Interface::home ************************************************/
 
