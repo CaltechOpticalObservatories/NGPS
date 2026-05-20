@@ -628,6 +628,12 @@ namespace Sequencer {
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                      // target found, get the threads going
 
+        if (this->target.nexp==0) {                                         // skip target if nexp==0
+          message.str(""); message << "skipping target " << this->target.name;
+          logwrite(function, message.str());
+          continue;
+        }
+
         // If the TCS is not ready and the target contains TCS coordinates,
         // then we cannot proceed.
         //

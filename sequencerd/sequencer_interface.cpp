@@ -735,9 +735,10 @@ namespace Sequencer {
       }
     }
 
-    // number of exposures must be >= 1
+    // number of exposures must be >= 0
+    // class constructed with 1 but an intentional 0 means skip this target
     //
-    if (this->nexp <= 0) this->nexp=1;
+    if (this->nexp < 0) this->nexp=1;
 
     return NO_ERROR;
   }
