@@ -207,9 +207,9 @@ namespace Sequencer {
                                        "OFFSET_RA",
                                        "OFFSET_DEC",
                                        "NEXP",
-                                       "EXPTIME",    /* was "OTMexpt", */
-                                       "SLITWIDTH",  /* was "OTMslitwidth", */
-                                       "SLITANGLE",  /* was "OTMslitangle", */
+                                       "OTMexpt",
+                                       "OTMslitwidth",
+                                       "OTMslitangle",
                                        "SLITOFFSET",
                                        "BINSPECT",
                                        "BINSPAT",

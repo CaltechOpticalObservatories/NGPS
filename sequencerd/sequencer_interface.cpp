@@ -360,13 +360,13 @@ namespace Sequencer {
                  { "DECL", mysqlx::Value( dec_dms_in ) },                  // DECL
                  { "EPOCH", mysqlx::Value( "J2000" ) },                    // EPOCH
                  { "EXPTIME", mysqlx::Value( exptime_in ) },               // EXPTIME
-                 { "EXPTIME", mysqlx::Value( exptime_in ) },               // was: OTMexpt
+                 { "OTMexpt", mysqlx::Value( exptime_in ) },               // OTMexpt
                  { "TARGET_NUMBER", mysqlx::Value( 1 ) },                  // TARGET_NUMBER
                  { "SEQUENCE_NUMBER", mysqlx::Value( 1 ) },                // SEQUENCE_NUMBER
                  { "CASANGLE", mysqlx::Value( 0. ) },                      // CASANGLE
                  { "OTMcass", mysqlx::Value( 0. ) },                       // OTMcass
-                 { "SLITANGLE", mysqlx::Value( slita_in ) },               // was: OTMslitangle
-                 { "SLITWIDTH", mysqlx::Value( slitw_in ) },               // was: OTMslitwidth
+                 { "OTMslitangle", mysqlx::Value( slita_in ) },            // OTMslitangle
+                 { "OTMslitwidth", mysqlx::Value( slitw_in ) },            // OTMslitwidth
                  { "SLITWIDTH", mysqlx::Value( slitw_in ) },               // SLITWIDTH
                  { "SLITOFFSET", mysqlx::Value( 1 ) },                     // SLITOFFSET
                  { "BINSPECT", mysqlx::Value( 1 ) },                       // BINSPECT
@@ -638,8 +638,8 @@ namespace Sequencer {
       this->offset_dec     = extract_column_from_row<double>( "OFFSET_DEC", row );
 
       this->casangle       = extract_column_from_row<double>( "OTMcass", row );
-      this->slitangle      = extract_column_from_row<double>( "SLITANGLE", row );   // was: OTMslitangle
-      this->slitwidth_req  = extract_column_from_row<double>( "SLITWIDTH", row );   // was: OTMslitwidth
+      this->slitangle      = extract_column_from_row<double>( "OTMslitangle", row );
+      this->slitwidth_req  = extract_column_from_row<double>( "OTMslitwidth", row );
       this->slitoffset_req = extract_column_from_row<double>( "SLITOFFSET", row );
 
       // The database stores a field "EXPTIME_REQ" which contains the command to the OTM,
@@ -648,7 +648,7 @@ namespace Sequencer {
       // going to request of the cameras. After the exposure the sequencer will ask the
       // camera for the actual exposure time, which I call exptime_act.
       //
-      this->exptime_req    = extract_column_from_row<double>( "EXPTIME", row );     // was: OTMexpt
+      this->exptime_req    = extract_column_from_row<double>( "OTMexpt", row );
 
       this->nexp           = extract_column_from_row<int>( "NEXP", row );
 
