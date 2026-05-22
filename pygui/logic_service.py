@@ -139,7 +139,7 @@ class LogicService:
                         # Numeric columns (defaults to 0)
                         if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER']:
                             value = 0
-                        elif column in ['BINSPECT']:
+                        elif column in ['BINSPECT', 'NEXP']:
                             value = 1
                         elif column in ['BINSPAT']:
                             value = 2
@@ -261,7 +261,7 @@ class LogicService:
                     if value is None or value == "":
                         if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER']:
                             value = 0
-                        elif column == 'BINSPECT':
+                        elif column == ['BINSPECT', 'NEXP']:
                             value = 1
                         elif column == 'BINSPAT':
                             value = 2

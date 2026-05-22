@@ -102,7 +102,7 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     # Nominal counts.
     n_thar = 3
     n_fear = 3
-    n_cont = 3
+    n_cont = 0
     n_etalon = 0
     n_dome = 0
     n_dome_ug = 0
@@ -314,7 +314,7 @@ def make_dome_flat_targets(slitwidth, xbin, ybin):
     t_dome_nom_ug = 400
 
     # Nominal counts from make_domes.
-    n_dome = 7
+    n_dome = 5
     n_dome_ug = 7
 
     cont_multiplier = (1.0 / (xbin * ybin)) * (0.5 / slitwidth)
