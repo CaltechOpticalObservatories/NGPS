@@ -169,14 +169,11 @@ ACQUIRE_TCS_MAX_OFFSET=60     # the maximum allowable offset sent to the TCS, in
 SKYSIM_IMAGE_SIZE=1024
 
 # -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
+# SUBSCRIBE_TO=( <name> <endpoint> )
 #
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
+# This is a list of pub/sub sources to subscribe to, where <name> is the daemon
+# name and <endpoint> is its ZeroMQ publish endpoint.
 # Provide one per line.
-#
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
 #
 SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
 SUBSCRIBE_TO=(sequencerd "tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@")

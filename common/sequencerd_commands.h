@@ -59,7 +59,6 @@ const std::vector<std::string> SEQUENCERD_SYNTAX = {
                                                      SEQUENCERD_PAUSE,
                                                      SEQUENCERD_REPEAT,
                                                      SEQUENCERD_RESUME,
-                                                     TELEMREQUEST+" [?]",
                                                      SEQUENCERD_USERCONTINUE,
                                                      SEQUENCERD_SHUTDOWN,
                                                      SEQUENCERD_START,

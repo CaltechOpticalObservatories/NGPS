@@ -35,7 +35,6 @@ const long ABORT = 6;
 const long EXIT = 999;
 
 const std::string JEOF = "EOF\n";              ///< used to terminate JSON messages
-const std::string TELEMREQUEST = "sendtelem";  ///< common daemon command used to request telemetry
 const std::string SNAPSHOT = "snapshot";       ///< common daemon command forces publish of telemetry
 
 const std::string CID_PREFIX = "#cid:";        ///< correlation ID marker for inter-daemon commands
@@ -434,9 +433,6 @@ namespace Common {
                  const std::string &message );
   };
   /**************** Common::Broadcaster ***************************************/
-
-
-  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
 
 
   /***** Common::extract_correlation_id ***************************************/

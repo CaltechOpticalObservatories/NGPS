@@ -21,7 +21,6 @@ const std::vector<std::string> POWERD_SYNTAX = {
                                                  POWERD_OPEN,
                                                  POWERD_REOPEN+" [?]",
                                                  POWERD_STATUS+" [?]",
-                                                 TELEMREQUEST+" [?]",
                                                  "",
                                                  "<unit#> <plug#> [ ON | OFF | BOOT ]",
                                                  "<plugname> [ ON | OFF | BOOT ]"

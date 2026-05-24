@@ -18,6 +18,8 @@ namespace Thermal {
   void Server::exit_cleanly(void) {
     std::string function = "Thermal::Server::exit_cleanly";
 
+    this->interface.stop_subscriber_thread();
+
     logwrite( function, "closing Lakeshores" );
     this->interface.close_lakeshores();
     this->interface.close_campbell();
@@ -108,28 +110,25 @@ namespace Thermal {
         applied++;
       }
 
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing telemetry
+      // SUB_ENDPOINT -- the broker endpoint I subscribe to (for snapshot requests)
       //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
-          }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( "THERMALD", function, message.str() );
+      // NOTE: these two keys must be present in the thermald config file for
+      //       publishing to work. Without PUB_ENDPOINT, init_pubsub() fails and
+      //       no telemetry is published on Topic::THERMALD.
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic   = DAEMON_NAME;   // default publish topic is my name
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        message.str(""); message << DAEMON_NAME << ":config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
         applied++;
       }
 
@@ -610,22 +609,41 @@ namespace Thermal {
         while ( server.telem_sleeptimer.running() ) {
           // Gather the data, each source stores in its own map
           //
-          server.interface.get_external_telemetry();  // collect telemetry from other daemons
           server.interface.lakeshore_readall();       // read all Lakeshores
           server.interface.campbell.read_data();      // read Campbell CR1000
 
-          // erase the telemdata map,
-          // timestamp it now, then merge each source into that
+          // snapshot externaldata under its own lock, then copy (not move) so
+          // the values received asynchronously via pub/sub persist between the
+          // updates that populate them. (merge() would move the nodes out,
+          // emptying externaldata.)
           //
+          std::map<std::string, mysqlx::Value> extcopy;
+          {
+          std::lock_guard<std::mutex> extlock( server.interface.externaldata_mtx );
+          extcopy = server.interface.externaldata;
+          }
+
+          // erase the telemdata map, timestamp it now, then merge each source
+          // into that. Done under lock to exclude readers (publish_status() and
+          // show_telemdata()) from the concurrent map mutation.
+          // extcopy is a throwaway local, so it is safe to merge (move) from.
+          //
+          {
+          std::lock_guard<std::mutex> lock( server.interface.telemdata_mtx );
           server.interface.telemdata.clear();
           server.interface.telemdata["datetime"] = get_datetime();
-          server.interface.telemdata.merge( server.interface.externaldata );
+          server.interface.telemdata.merge( extcopy );
           server.interface.telemdata.merge( server.interface.campbell.datamap );
           server.interface.telemdata.merge( server.interface.lakeshoredata );
+          }
 
           // insert the telemdata map to the database
           //
           database.insert( server.interface.telemdata );
+
+          // publish the latest readings to subscribers on Topic::THERMALD
+          //
+          server.interface.publish_status();
 
           server.telem_sleeptimer.sleepFor( std::chrono::seconds( duration ) );
           timeout( 0, "sec" );
@@ -1046,22 +1064,6 @@ namespace Thermal {
       else
       if ( cmd == THERMALD_SHOWTELEM ) {
                       ret = this->interface.show_telemdata( args, retstring );
-      }
-      else
-
-      // send telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
       }
 
       // unknown commands generate an error

@@ -1167,8 +1167,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       std::map< std::string, readout_info_t > readout_source;  //!< STL map of readout sources indexed by readout name
 
-      std::map<std::string, int> telemetry_providers;  //!< a map of port[daemon_name] for telemetry providers
-
       // Functions
       //
       void get_logical(Controller* pcontroller,
@@ -1237,7 +1235,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       long expose(std::string nexp_in);
       long do_expose(int nexp_in);
-      void make_telemetry_message( std::string &retstring );
       double get_live_airmass();                             ///< latest airmass from cached tcsd telemetry, or NAN
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);

@@ -102,14 +102,11 @@ CAMP_CHAN="22 TFLEXCON_UR"
 CAMP_CHAN="23 TACAM"
 
 # -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
+# SUBSCRIBE_TO=( <name> <endpoint> )
 #
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
+# This is a list of pub/sub sources to subscribe to, where <name> is the daemon
+# name and <endpoint> is its ZeroMQ publish endpoint.
 # Provide one per line.
-#
-TELEM_PROVIDER=(acamd     @ACAMD_NB_PORT@)
-TELEM_PROVIDER=(slicecamd @SLICECAMD_NB_PORT@)
 #
 SUBSCRIBE_TO=(acamd     "tcp://127.0.0.1:@ACAMD_PUB_PORT@")
 SUBSCRIBE_TO=(slicecamd "tcp://127.0.0.1:@SLICECAMD_PUB_PORT@")

@@ -29,7 +29,6 @@ const std::vector<std::string> FOCUSD_SYNTAX = {
                                                  FOCUSD_NATIVE+" ? | <chan> <cmd>",
                                                  FOCUSD_OPEN,
                                                  FOCUSD_SET+" ? | <chan> { <pos> | nominal }",
-                                                 TELEMREQUEST+" [ ? ]",
                                                  FOCUSD_TEST+" <testname> ...",
                                                  "   motormap",
                                                  "   posmap",

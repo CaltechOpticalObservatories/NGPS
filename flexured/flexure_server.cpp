@@ -17,6 +17,9 @@ namespace Flexure {
    */
   void Server::exit_cleanly(void) {
     std::string function = "Flexure::Server::exit_cleanly";
+
+    this->interface.stop_subscriber_thread();
+
     logwrite( function, "exiting" );
 
     exit(EXIT_SUCCESS);
@@ -116,6 +119,28 @@ namespace Flexure {
         applied++;
       }
 
+      // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing telemetry
+      // SUB_ENDPOINT -- the broker endpoint I subscribe to (for snapshot requests)
+      //
+      // NOTE: these two keys must be present in the flexured config file for
+      //       publishing to work. Without PUB_ENDPOINT, init_pubsub() fails and
+      //       no telemetry is published on Topic::FLEXURED.
+      //
+      if ( config.param[entry] == "PUB_ENDPOINT" ) {
+        this->interface.publisher_address = config.arg[entry];
+        this->interface.publisher_topic   = DAEMON_NAME;   // default publish topic is my name
+        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "SUB_ENDPOINT" ) {
+        this->interface.subscriber_address = config.arg[entry];
+        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
+        this->interface.async.enqueue_and_log( function, message.str() );
+        applied++;
+      }
+
       // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
       //                     Each CONTROLLER is stored in an STL map indexed by motorname
       //
@@ -159,31 +184,6 @@ namespace Flexure {
           error = ERROR;
           break;
         }
-      }
-
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
-      //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
-          }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -543,22 +543,6 @@ namespace Flexure {
       }
       else
 
-      // send telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-      else
-
       // test routines
       //
       if ( cmd == FLEXURED_TEST ) {
@@ -610,6 +594,8 @@ namespace Flexure {
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
+
+      if ( ret==NO_ERROR ) this->interface.publish_status();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.

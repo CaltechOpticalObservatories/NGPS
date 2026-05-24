@@ -123,6 +123,24 @@ int main(int argc, char **argv) {
     thermald.exit_cleanly();
   }
 
+  // initialize the pub/sub handler, subscribing to the camera daemons whose
+  // andor CCD temperatures I fold into my telemetry
+  //
+  if ( thermald.interface.init_pubsub( { Topic::ACAMD,
+                                         Topic::SLICECAMD } ) == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    thermald.exit_cleanly();
+  }
+
+  // unconditionally publish current telemetry so the world knows I'm online,
+  // then request a snapshot so I collect the current status of those I
+  // subscribe to (in case they came online before I subscribed)
+  //
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  thermald.interface.publish_status();
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  thermald.interface.request_snapshot();
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.

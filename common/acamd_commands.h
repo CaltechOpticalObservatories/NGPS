@@ -100,7 +100,6 @@ const std::vector<std::string> ACAMD_SYNTAX = {
                                                 ACAMD_OFFSETGOAL+" [ ? | <dRA> <dDEC> ]",
                                                 ACAMD_OFFSETPERIOD+" [ ? | <sec> ]",
                                                 ACAMD_PUTONSLIT+" [ ? | <crossra> <crossdec> ]",
-                                                TELEMREQUEST+" [ ? ]",
                                                 ACAMD_SHUTDOWN+" [ ? ]",
                                                 ACAMD_TEST+" ? | <testname> ..."
                                               };

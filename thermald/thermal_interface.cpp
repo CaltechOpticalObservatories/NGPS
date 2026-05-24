@@ -12,180 +12,114 @@
 
 namespace Thermal {
 
-  /***** Thermal::Interface::make_telemetry_message ***************************/
+
+
+  /***** Thermal::Interface::publish_status **********************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket so that
-   *             outside clients can ask for my telemetry.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publish a thermalinfo snapshot on Topic::THERMALD
+   * @details    Publishes the current merged telemdata (Lakeshore + Campbell +
+   *             external) as float values, blocking NaNs. Called periodically
+   *             from the telemetry loop and on snapshot request.
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-
-    // read the data only if the maps are empty
-    //
-    if ( this->lakeshoredata.empty() )    this->lakeshore_readall();
-    if ( this->campbell.datamap.empty() ) this->campbell.read_data();
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
+  void Interface::publish_status() {
     nlohmann::json jmessage;
-    jmessage["messagetype"] = "thermalinfo";
+    jmessage[Key::SOURCE] = Topic::THERMALD;
 
-    // Loop through the two datamaps, campbell.datamap and lakeshoredata
+    // copy the latest readings under lock, then build the message from the copy
     //
+    std::map<std::string, mysqlx::Value> showdata;
+    {
+    std::lock_guard<std::mutex> lock( this->telemdata_mtx );
+    showdata = this->telemdata;
+    }
+
+    for ( const auto &[key,val] : showdata ) {
+      if ( val.getType() == mysqlx::Value::FLOAT ) jmessage[key] = val.get<float>();
+    }
+
     try {
-
-      // Make a copy of telemdata which contains all the latest readings
-      //
-      auto showdata = this->telemdata;
-
-      // If that is empty, or the arg is "force" then read all sensors now
-      //
-      if ( showdata.empty() ) {
-        this->get_external_telemetry();
-        this->lakeshore_readall();
-        this->campbell.read_data();
-        showdata.merge( this->externaldata );
-        showdata.merge( this->campbell.datamap );
-        showdata.merge( this->lakeshoredata );
-      }
-
-      // Now loop through that map and if the value is a float then
-      // add it to the jmessage (this blocks NANs).
-      //
-      for ( const auto &[key,val] : showdata ) {
-        if ( val.getType() == mysqlx::Value::FLOAT ) {
-          jmessage[key] = val.get<float>();
-        }
-      }
-
-      retstring = jmessage.dump();  // serialize the json message into retstring
-
-      retstring.append(JEOF);       // append the JSON message terminator
+      this->publisher->publish( jmessage, Topic::THERMALD );
     }
     catch( const std::exception &e ) {
-      logwrite( "Thermal::Interface::make_telemetry_message",
-                "ERROR assembling telemetry message: "+std::string(e.what()) );
+      logwrite( "Thermal::Interface::publish_status",
+                "ERROR publishing message: "+std::string(e.what()) );
     }
-
-    return;
   }
-  /***** Thermal::Interface::make_telemetry_message ***************************/
+  /***** Thermal::Interface::publish_status **********************************/
 
 
-  /***** Thermal::Interface::get_external_telemetry ***************************/
+  /***** Thermal::Interface::handletopic_snapshot ****************************/
   /**
-   * @brief      collect telemetry from another daemon
-   * @details    This is used for any telemetry that I need to collect from
-   *             another daemon. Send the command "sendtelem" to the daemon, which
-   *             will respond with a JSON message. The daemon(s) to contact
-   *             are configured with the TELEM_PROVIDER key in the config file.
+   * @brief      respond to a snapshot request by publishing my status
+   * @param[in]  jmessage  subscribed-received JSON message
    *
    */
-  void Interface::get_external_telemetry() {
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Topic::THERMALD ) ) {
+      this->publish_status();
+    }
+    else
+    if ( jmessage.contains( "test" ) ) {
+      logwrite( "Thermal::Interface::handletopic_snapshot", jmessage.dump() );
+    }
+  }
+  /***** Thermal::Interface::handletopic_snapshot ****************************/
 
-    // protects externaldata from simultaneous access
-    //
+
+  /***** Thermal::Interface::handletopic_acamd ******************************/
+  /**
+   * @brief      stash the acam CCD temperature into externaldata
+   * @param[in]  jmessage  subscribed-received JSON message on Topic::ACAMD
+   *
+   */
+  void Interface::handletopic_acamd( const nlohmann::json &jmessage ) {
     std::lock_guard<std::mutex> lock( this->externaldata_mtx );
-
-    // clear the external telemetry map
-    // any external telemetry collected here gets put into this
-    // map by handle_json_message()
-    //
-    this->externaldata.clear();
-
-    // Loop through each configured telemetry provider. This requests
-    // their telemetry which is returned as a serialized json string
-    // held in retstring.
-    //
-    // handle_json_message() will parse the serialized json string.
-    //
-    std::string retstring;
-/***
-    for ( const auto &provider : this->telemetry_providers ) {
-      Common::collect_telemetry( provider, retstring );
-      if ( !retstring.empty() ) handle_json_message(retstring);
-    }
-***/
-
-    return;
+    this->process_key<float>( jmessage, Key::Acamd::TANDOR );
   }
-  /***** Thermal::Interface::get_external_telemetry ***************************/
+  /***** Thermal::Interface::handletopic_acamd ******************************/
 
 
-  /***** Thermal::Interface::handle_json_message ******************************/
+  /***** Thermal::Interface::handletopic_slicecamd **************************/
   /**
-   * @brief      parses incoming telemetry messages
-   * @details    The Interface::get_external_telemetry() will receive telemetry
-   *             from another daemon in a JSON message. Pass that message
-   *             to this function to parse it. The process_key<T>() function
-   *             verifies the key before storing it in the externaldata map.
-   * @param[in]  message_in  incoming JSON message
-   * @return     ERROR | NO_ERROR
+   * @brief      stash the slicecam CCD temperatures into externaldata
+   * @param[in]  jmessage  subscribed-received JSON message on Topic::SLICECAMD
    *
    */
-  long Interface::handle_json_message( std::string message_in ) {
-    const std::string function="Thermal::Interface::handle_json_message";
-    std::stringstream message;
-
-    try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-      std::string messagetype;
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") ) {
-          messagetype = jmessage["messagetype"];
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with no messagetype" );
-          return ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        return ERROR;
-      }
-
-      // no errors, so disseminate the message contents based on the message type
-      //
-      if ( messagetype == "acaminfo" ) {
-        this->process_key<float>( jmessage, Key::Acamd::TANDOR );
-      }
-      else
-      if ( messagetype == "slicecaminfo" ) {
-        this->process_key<float>( jmessage, "TANDOR_SCAM_L" );
-        this->process_key<float>( jmessage, "TANDOR_SCAM_R" );
-      }
-      else
-      if ( messagetype == "test" ) {
-        message.str(""); message << "received JSON test message: \"" << jmessage["test"].get<std::string>() << "\"";
-        logwrite( function, message.str() );
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
+  void Interface::handletopic_slicecamd( const nlohmann::json &jmessage ) {
+    std::lock_guard<std::mutex> lock( this->externaldata_mtx );
+    this->process_key<float>( jmessage, "TANDOR_SCAM_L" );
+    this->process_key<float>( jmessage, "TANDOR_SCAM_R" );
   }
-  /***** Thermal::Interface::handle_json_message ******************************/
+  /***** Thermal::Interface::handletopic_slicecamd **************************/
+
+
+  /***** Thermal::Interface::request_snapshot *******************************/
+  /**
+   * @brief      ask subscribed daemons to re-publish their current status
+   * @details    Publishes a SNAPSHOT request naming each daemon whose topic
+   *             this daemon subscribes to. Each named daemon responds by
+   *             publishing its own status, ensuring current telemetry is
+   *             received even if the daemon published before I subscribed.
+   *
+   */
+  void Interface::request_snapshot() {
+    nlohmann::json jmessage;
+    jmessage[Topic::ACAMD]     = true;
+    jmessage[Topic::SLICECAMD] = true;
+    try {
+      this->publisher->publish( jmessage, Topic::SNAPSHOT );
+    }
+    catch( const std::exception &e ) {
+      logwrite( "Thermal::Interface::request_snapshot",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Thermal::Interface::request_snapshot *******************************/
+
+
+
+
 
 
   /***** Thermal::Interface::open_campbell ***********************************/
@@ -482,7 +416,6 @@ namespace Thermal {
     // If that is empty, or the arg is "force" then read all sensors now
     //
     if ( args=="force" || showdata.empty() ) {
-      this->get_external_telemetry();
       this->lakeshore_readall();
       this->campbell.read_data();
       showdata.merge( this->externaldata );

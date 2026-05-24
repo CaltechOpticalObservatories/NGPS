@@ -1446,7 +1446,7 @@ namespace Acam {
                                          "not_connected" );
 
     try {
-      this->publisher->publish( jmessage_out, Topic::SNAPSHOT );
+      this->publisher->publish( jmessage_out, Topic::ACAMD );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::publish_snapshot",
@@ -1505,6 +1505,32 @@ namespace Acam {
     }
   }
   /***** Acam::Interface::publish_status **************************************/
+
+
+  /***** Acam::Interface::publish_temperature ********************************/
+  /**
+   * @brief      publish only the andor CCD temperature on Topic::ACAMD
+   * @details    Published on a fixed interval (see acamd.cpp), not on change,
+   *             since the CCD temperature varies continuously.
+   *
+   */
+  void Interface::publish_temperature() {
+    int ccdtemp=99;
+    this->camera.andor.get_temperature( ccdtemp );                     // temp is int
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE]        = Topic::ACAMD;
+    jmessage[Key::Acamd::TANDOR] = ( this->isopen("camera") ?
+                                     static_cast<float>(ccdtemp) :      // database wants float
+                                     NAN );
+    try {
+      this->publisher->publish( jmessage, Topic::ACAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_temperature",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Acam::Interface::publish_temperature ********************************/
 
 
   /***** Acam::Interface::request_snapshot ************************************/

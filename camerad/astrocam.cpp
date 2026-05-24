@@ -3178,32 +3178,6 @@ namespace AstroCam {
   /***** AstroCam::Interface::do_expose ***************************************/
 
 
-  /***** AstroCam::Interface::make_telemetry_message **************************/
-  /**
-   * @brief      assembles my telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
-   *
-   */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    // assemble the telemetry I want to report into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"] = "camerainfo";
-
-    jmessage["SHUTTIME_SEC"] = this->camera.shutter.get_duration();  // shutter open time in sec
-
-    retstring = jmessage.dump();  // serialize the json message into a string
-
-    retstring.append(JEOF);       // append JSON message terminator
-
-    return;
-  }
-  /***** AstroCam::Interface::make_telemetry_message **************************/
-
-
 
 
 

@@ -639,6 +639,39 @@ namespace Slicecam {
   /***** Slicecam::Interface::publish_snapshot ********************************/
 
 
+  /***** Slicecam::Interface::publish_temperature *****************************/
+  /**
+   * @brief      publish only the andor CCD temperatures on Topic::SLICECAMD
+   * @details    Published on a fixed interval (see slicecamd.cpp), not on
+   *             change, since the CCD temperature varies continuously.
+   *
+   */
+  void Interface::publish_temperature() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::SLICECAMD;
+
+    for ( const auto &[name, cam] : this->camera.andor ) {
+      std::string key="TANDOR_SCAM_"+name;
+      if ( cam->is_open() ) {
+        int ccdtemp=99;
+        cam->get_temperature(ccdtemp);
+        jmessage[key] = static_cast<float>(ccdtemp);   // the database wants a float
+      }
+      else {
+        jmessage[key] = NAN;
+      }
+    }
+    try {
+      this->publisher->publish( jmessage, Topic::SLICECAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::publish_temperature",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Slicecam::Interface::publish_temperature *****************************/
+
+
   /***** Slicecam::Interface::request_snapshot ********************************/
   /**
    * @brief      sends request for snapshot

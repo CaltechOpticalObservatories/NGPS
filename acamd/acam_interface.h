@@ -540,8 +540,6 @@ namespace Acam {
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
-
       struct {
         std::string tcsname;
         bool is_tcs_open;
@@ -664,9 +662,9 @@ namespace Acam {
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
       void publish_status(bool force=false);
+      void publish_temperature();                ///< publish only the andor temperature on Topic::ACAMD (periodic)
       void request_snapshot();
       bool wait_for_snapshots();
-      long handle_json_message( std::string message_in );
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components

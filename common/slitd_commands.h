@@ -27,8 +27,7 @@ const std::vector<std::string> SLITD_SYNTAX = {
                                                  SLITD_NATIVE+" ? | <name> <cmd> [ <axis> <arg> ]",
                                                  SLITD_OFFSET+" ? | <offset>",
                                                  SLITD_OPEN+" [ ? ]",
-                                                 SLITD_SET+" ? | <width> [ <offset> ]",
-                                                 TELEMREQUEST+" [?]"
+                                                 SLITD_SET+" ? | <width> [ <offset> ]"
                                                };
 
 #endif

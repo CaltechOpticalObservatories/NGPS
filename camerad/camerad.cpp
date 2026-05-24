@@ -518,21 +518,6 @@ void doit(Network::TcpSocket &sock) {
                     sock.Write( " " );
                     ret = NO_ERROR;
                     }
-    // send telemetry as json message
-    //
-    if ( cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      server.make_telemetry_message( retstring );
-                      ret = JSON;
-                    }
-    }
-    else
     if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
                     }
