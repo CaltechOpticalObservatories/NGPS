@@ -466,10 +466,6 @@ namespace Flexure {
     if ( jmessage.contains( Topic::FLEXURED ) ) {
       this->publish_status();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Flexure::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
   /***** Flexure::Interface::handletopic_snapshot ****************************/
 

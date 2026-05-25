@@ -777,10 +777,6 @@ namespace Calib {
     if ( jmessage.contains( Topic::CALIBD ) ) {
       this->publish_status();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Calib::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
 
 

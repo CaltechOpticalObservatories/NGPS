@@ -59,10 +59,6 @@ namespace Thermal {
     if ( jmessage.contains( Topic::THERMALD ) ) {
       this->publish_status();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Thermal::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
   /***** Thermal::Interface::handletopic_snapshot ****************************/
 

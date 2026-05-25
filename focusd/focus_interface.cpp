@@ -597,10 +597,6 @@ namespace Focus {
     if ( jmessage.contains( Topic::FOCUSD ) ) {
       this->publish_status();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Focusd::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
 
   /***** Focus::Interface::test ***********************************************/

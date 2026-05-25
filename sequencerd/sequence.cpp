@@ -33,10 +33,6 @@ namespace Sequencer {
     if ( jmessage_in.contains( Sequencer::DAEMON_NAME ) ) {
       this->publish_snapshot();
     }
-    else
-    if ( jmessage_in.contains( "test" ) ) {
-      logwrite( "Sequencer::Sequence::handletopic_snapshot", jmessage_in.dump() );
-    }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
 

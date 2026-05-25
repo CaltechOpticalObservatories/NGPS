@@ -18,10 +18,6 @@ namespace TCS {
     if ( jmessage.contains( TCS::DAEMON_NAME ) ) {
       this->publish_snapshot();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "TCS::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
 
 
