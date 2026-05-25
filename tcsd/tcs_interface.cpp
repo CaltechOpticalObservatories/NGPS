@@ -68,10 +68,13 @@ namespace TCS {
     }
 
     // broadcast motion status if it changed
+    {
+    std::lock_guard<std::mutex> lock(this->publish_mutex);  // guard check-then-act on last_published_motion
     if (!motion.empty() &&
         motion != this->last_published_motion) {
       this->broadcast.notice("TCS::Interface::publish_snapshot", "telescope "+motion);
       this->last_published_motion = motion;
+    }
     }
 
     // for backwards compatibility

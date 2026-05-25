@@ -565,6 +565,8 @@ namespace Focus {
    *
    */
   void Interface::publish_status( bool force ) {
+    // Serialize publish-on-change; held across get_status() hardware I/O for now @TODO revisit
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
 
     // refresh current state from hardware
     //

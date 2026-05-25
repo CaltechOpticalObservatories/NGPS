@@ -25,7 +25,7 @@ namespace AstroCam {
    *
    */
   void Interface::publish_status(bool force) {
-    std::lock_guard<std::mutex> lock(this->publish_mutex);
+    std::lock_guard<std::mutex> lock(this->publish_mutex);  // REQUIRED: serializes publish-on-change + non-thread-safe socket
 
     // unless forced, publish only if there was a change
     if (!force && this->status==this->last_published_status) return;

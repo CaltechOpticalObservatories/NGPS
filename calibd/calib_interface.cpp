@@ -743,6 +743,11 @@ namespace Calib {
    *
    */
   void Interface::publish_status( bool force ) {
+    // Serialize the publish-on-change critical section against concurrent callers
+    // (doit threads + subscriber thread). NOTE: held across get_status() hardware I/O
+    // for now — a contained per-daemon stall, not socket corruption. @TODO revisit:
+    // refactor get_status() to build a local and swap under a short lock.
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
 
     // refresh current state from hardware
     //

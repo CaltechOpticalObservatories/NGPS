@@ -156,6 +156,7 @@ namespace Calib {
       };
       Status status;                                   ///< current calib state
       Status last_published_status;                    ///< last published calib state
+      std::mutex publish_mutex;                        ///< serializes publish-on-change; held over get_status() for now — @TODO revist
 
       void get_status();                               ///< refresh status from hardware
 

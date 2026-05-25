@@ -613,6 +613,7 @@ namespace Power {
    *
    */
   void Interface::publish_status( bool force ) {
+    std::lock_guard<std::mutex> lock( this->publish_mutex );  // serialize publish-on-change
 
     // unless forced, only publish if the power state changed
     //

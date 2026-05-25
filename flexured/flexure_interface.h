@@ -67,6 +67,7 @@ namespace Flexure {
       };
       Status status;                                   ///< current flexure state
       Status last_published_status;                    ///< last published flexure state
+      std::mutex publish_mutex;                        ///< serializes publish-on-change; held over get_status() — @TODO revisit
 
     public:
 

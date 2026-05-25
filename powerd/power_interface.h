@@ -196,6 +196,7 @@ namespace Power {
       };
       Status status;                                       ///< current power state
       Status last_published_status;                        ///< last published power state
+      std::mutex publish_mutex;                            ///< serializes publish-on-change
 
     public:
       Interface()

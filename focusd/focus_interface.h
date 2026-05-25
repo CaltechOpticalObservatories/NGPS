@@ -68,6 +68,7 @@ namespace Focus {
       };
       Status status;                                   ///< current focus state
       Status last_published_status;                    ///< last published focus state
+      std::mutex publish_mutex;                        ///< serializes publish-on-change; @TODO revisit
 
       void get_status();                               ///< refresh status from hardware
 

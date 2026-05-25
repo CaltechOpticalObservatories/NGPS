@@ -3714,6 +3714,7 @@ namespace Sequencer {
 
     // unless forced, only publish if the target info changed
     //
+    std::lock_guard<std::mutex> lock( this->publish_targetinfo_mtx );  // guard check-then-act
     if ( !force && jmessage == this->last_published_targetinfo ) return;
     this->last_published_targetinfo = jmessage;
 

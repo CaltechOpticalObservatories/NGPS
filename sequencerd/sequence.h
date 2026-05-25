@@ -528,6 +528,7 @@ namespace Sequencer {
 
       std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
       nlohmann::json last_published_targetinfo; ///< last published targetinfo (for change detection)
+      std::mutex publish_targetinfo_mtx;        ///< guards last_published_targetinfo check-then-act
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
