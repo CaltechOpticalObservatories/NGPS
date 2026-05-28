@@ -63,15 +63,40 @@ namespace Thermal {
   /***** Thermal::Interface::handletopic_snapshot ****************************/
 
 
+  /***** Thermal::Interface::process_external_data **************************/
+  /**
+   * @brief      apply DB-bound JSON keys from a pub/sub message to externaldata
+   * @details    Iterates the binding table in common/db_column_defs.h; for each
+   *             entry whose jkey is present and non-null in the message, stores
+   *             the value into externaldata under the bound column name.
+   * @param[in]  jmessage  json message received via pub/sub
+   */
+  void Interface::process_external_data( const nlohmann::json &jmessage ) {
+    std::lock_guard<std::mutex> lock( this->externaldata_mtx );
+    for ( const auto &entry : DbColumnDefs::Columns ) {
+      if ( !jmessage.contains(entry.jkey) ) continue;
+      if ( jmessage[entry.jkey].is_null() ) continue;
+      try {
+        this->externaldata[entry.column] = jmessage[entry.jkey].get<float>();
+      }
+      catch ( const nlohmann::json::type_error &e ) {
+        logwrite( "Thermal::Interface::process_external_data",
+                  "ERROR key \""+std::string(entry.jkey)
+                    +"\" not expected type: "+e.what() );
+      }
+    }
+  }
+  /***** Thermal::Interface::process_external_data **************************/
+
+
   /***** Thermal::Interface::handletopic_acamd ******************************/
   /**
    * @brief      stash the acam CCD temperature into externaldata
-   * @param[in]  jmessage  subscribed-received JSON message on Topic::ACAMD
+   * @param[in]  jmessage  subscribed-received JSON message on Topic::ACAMD_TEMP
    *
    */
   void Interface::handletopic_acamd( const nlohmann::json &jmessage ) {
-    std::lock_guard<std::mutex> lock( this->externaldata_mtx );
-    this->process_key<float>( jmessage, Key::Acamd::TANDOR );
+    this->process_external_data( jmessage );
   }
   /***** Thermal::Interface::handletopic_acamd ******************************/
 
@@ -83,9 +108,7 @@ namespace Thermal {
    *
    */
   void Interface::handletopic_slicecamd( const nlohmann::json &jmessage ) {
-    std::lock_guard<std::mutex> lock( this->externaldata_mtx );
-    this->process_key<float>( jmessage, "TANDOR_SCAM_L" );
-    this->process_key<float>( jmessage, "TANDOR_SCAM_R" );
+    this->process_external_data( jmessage );
   }
   /***** Thermal::Interface::handletopic_slicecamd **************************/
 

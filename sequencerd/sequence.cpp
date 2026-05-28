@@ -3056,7 +3056,7 @@ namespace Sequencer {
    */
   long Sequence::shutdown() {
     const std::string function("Sequencer::Sequence::shutdown");
-    long error=ERROR;
+    long error=NO_ERROR;
 
     // Reject if a conflicting lifecycle transition is already in progress.
     // All other states (READY, NOTREADY, FAILED, RUNNING, PAUSED) are valid
@@ -3111,6 +3111,7 @@ namespace Sequencer {
 
     // container of shutdown threads to launch,
     // pair their ThreadStatusBit with the function to call
+    // (TCS is shut down after these complete; see below)
     //
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads = {
       { THR_ACAM_SHUTDOWN,     std::bind(&Sequence::acam_shutdown, this)     },
@@ -3118,9 +3119,8 @@ namespace Sequencer {
       { THR_CAMERA_SHUTDOWN,   std::bind(&Sequence::camera_shutdown, this)   },
       { THR_FLEXURE_SHUTDOWN,  std::bind(&Sequence::flexure_shutdown, this)  },
       { THR_FOCUS_SHUTDOWN,    std::bind(&Sequence::focus_shutdown, this)    },
-      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slit_shutdown, this)     },
-      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slicecam_shutdown, this) },
-      { THR_TCS_SHUTDOWN,      std::bind(&Sequence::tcs_shutdown, this)      }
+      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slicecam_shutdown, this) },
+      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slit_shutdown, this)     }
     };
 
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
@@ -3149,11 +3149,28 @@ namespace Sequencer {
       }
     }
 
+    // TCS is shut down last so that any lingering guider pt_offsets from
+    // acamd during the slow cover-close above hit an open connection.
+    //
+    try {
+      if ( this->tcs_shutdown() != NO_ERROR ) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" failed" );
+        error = ERROR;
+      }
+      else {
+        this->broadcast.notice( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" shutdown complete" );
+      }
+    }
+    catch (const std::exception& e) {
+      this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" exception: "+std::string(e.what()) );
+      error=ERROR;
+    }
+
     if (error==NO_ERROR) {
       this->broadcast.notice(function, "instrument is shut down");
     }
     else {
-      this->broadcast.error(function, "shut down may not be complete");
+      this->broadcast.warning(function, "shut down may not be complete");
     }
 
     // Always end in NOTREADY regardless of worker errors. SEQ_FAILED is

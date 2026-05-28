@@ -624,7 +624,8 @@ namespace Slicecam {
     jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
 
     for ( const auto &[name, cam] : this->camera.andor ) {
-      std::string key="TANDOR_SCAM_"+name;
+      const std::string &key = (name == "L") ? Key::Slicecamd::TANDOR_L
+                                             : Key::Slicecamd::TANDOR_R;
       jmessage_out[key] = static_cast<float>(cam->camera_info.ccdtemp);  // the database wants a float
     }
     try {
@@ -651,7 +652,8 @@ namespace Slicecam {
     jmessage[Key::SOURCE] = Topic::SLICECAMD;
 
     for ( const auto &[name, cam] : this->camera.andor ) {
-      std::string key="TANDOR_SCAM_"+name;
+      const std::string &key = (name == "L") ? Key::Slicecamd::TANDOR_L
+                                             : Key::Slicecamd::TANDOR_R;
       if ( cam->is_open() ) {
         int ccdtemp=99;
         cam->get_temperature(ccdtemp);

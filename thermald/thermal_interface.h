@@ -9,6 +9,7 @@
 #pragma once
 
 #include "message_keys.h"
+#include "db_column_defs.h"
 #include "network.h"
 #include "logentry.h"
 #include "common.h"
@@ -173,40 +174,13 @@ namespace Thermal {
       std::map<std::string, mysqlx::Value> externaldata;   ///< map of telemetry received from other daemons
 
       /**
-       * @brief      save a key=value pair to the externaldata map
-       * @details    The template allows the compiler to automatically deduce
-       *             the type of the value and store it in the externaldata
-       *             map. The mysqlx::Value element supports multiple types and
-       *             requires correct type assignment.
-       * @param[in]  key    jmessage key
-       * @param[in]  value  any type of value
+       * @brief      apply DB-bound JSON keys from a pub/sub message to externaldata
+       * @details    Iterates DbColumnDefs::ExternalDataColumns; for each entry whose
+       *             jkey appears in the message with a non-null value, stores the
+       *             value into externaldata under the bound column name.
+       * @param[in]  jmessage  json message received via pub/sub
        */
-      template <typename T>
-      void save_to_externaldata( const std::string &key, const T &value ) {
-        this->externaldata[key] = value;
-      }
-
-      /**
-       * @brief      verifies key before saving to externaldata map
-       * @param[in]  jmessage  json message
-       * @param[in]  key       key to save
-       */
-      template <typename T>
-      void process_key( const nlohmann::json &jmessage, const std::string &key ) {
-        if ( jmessage.contains(key) ) {
-          if ( !jmessage[key].is_null() ) {
-            try {
-              this->save_to_externaldata( key, jmessage[key].get<T>() );
-            }
-            catch ( const nlohmann::json::type_error &e ) {
-              logwrite( "Thermal::Interface::process_key", "ERROR key \""+key+"\" not expected type: "+e.what() );
-            }
-          }
-          else {
-            logwrite( "Thermal::Interface::process_key", "ERROR bad key \""+key+"\"" );
-          }
-        }
-      }
+      void process_external_data( const nlohmann::json &jmessage );
 
       /**
        * @typedef thermal_t

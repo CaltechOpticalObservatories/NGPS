@@ -1486,19 +1486,28 @@ namespace Acam {
 
   /***** Acam::Interface::publish_temperature ********************************/
   /**
-   * @brief      publish only the andor CCD temperature on Topic::ACAMD
+   * @brief      publish only the andor CCD temperature on Topic::ACAMD_TEMP
    * @details    Published on a fixed interval (see acamd.cpp), not on change,
-   *             since the CCD temperature varies continuously.
+   *             since the CCD temperature varies continuously. When the camera
+   *             is not open the thread stays alive but publishes NaN instead
+   *             of attempting a hardware read; this lets the thread resume
+   *             publishing real values when the camera comes back online
+   *             without the get_temperature() error-log spam each cycle.
    *
    */
   void Interface::publish_temperature() {
-    int ccdtemp=99;
-    this->camera.andor.get_temperature( ccdtemp );                     // temp is int
     nlohmann::json jmessage;
-    jmessage[Key::SOURCE]        = Topic::ACAMD;
-    jmessage[Key::Acamd::TANDOR] = ( this->isopen("camera") ?
-                                     static_cast<float>(ccdtemp) :      // database wants float
-                                     NAN );
+    jmessage[Key::SOURCE] = Topic::ACAMD;
+
+    if ( this->isopen("camera") ) {
+      int ccdtemp=99;
+      this->camera.andor.get_temperature( ccdtemp );
+      jmessage[Key::Acamd::TANDOR] = static_cast<float>(ccdtemp);   // database wants float
+    }
+    else {
+      jmessage[Key::Acamd::TANDOR] = NAN;
+    }
+
     try {
       this->publisher->publish( jmessage, Topic::ACAMD_TEMP );
     }
@@ -4081,17 +4090,17 @@ logwrite( function, message.str() );
     //
     BoolState shutting_down( this->is_shutting_down );
 
-    // close the cover (if motion is in use)
-    //
-    if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
-
-    // diable target acquisition
+    // Stop target acquisition and the framegrab thread FIRST so the guider
+    // stops sending pt_offsets to TCS during the slow cover-close that
+    // follows. TCS is shut down at the orchestration layer after acamd
+    // finishes (see Sequencer::Sequence::shutdown phase split).
     //
     error |= this->acquire( "stop", dontcare);
-
-    // stop the framegrab thread
-    //
     error |= this->framegrab( "stop", dontcare );
+
+    // close the cover (if motion is in use) - this is the slow step
+    //
+    if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
 
     // request stop the focus monitor
     //
@@ -4101,6 +4110,12 @@ logwrite( function, message.str() );
     // close socket connections to hardware
     //
     error |= this->close( "all", dontcare );
+
+    // publish post-shutdown state so subscribers see is_acquired=false /
+    // acquire_mode="stopped" before publishing stops; forced to bypass
+    // publish_status's change-detect early-return.
+    //
+    this->publish_status(true);
 
     if ( error == NO_ERROR ) logwrite( function, "acam interfaces shut down" );
     else logwrite( function, "ERROR shutting down acam interfaces" );

@@ -171,7 +171,10 @@ class TargetControlApp(App):
             self.status_label_bottom.color = [1, 0, 0, 1]  # Red text on black background
 
         # Send the shell command and check the response
-        process = subprocess.Popen("/home/developer/Software/run/tcs getmotion", shell=True, stdout=subprocess.PIPE)
+        # Use "poll" prefix to suppress tcsd's per-command logging — see
+        # memory note project-targetcontrol-revisit for the longer-term plan
+        # (ZMQ daemon-state awareness instead of subprocess polling).
+        process = subprocess.Popen("/home/developer/Software/run/tcs poll getmotion", shell=True, stdout=subprocess.PIPE)
         output, _ = process.communicate()
         output = output.decode().strip()
 

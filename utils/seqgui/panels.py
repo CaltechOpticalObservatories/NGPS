@@ -377,6 +377,16 @@ class CameraPanel(QWidget):
             if not self.readout_active:
                 self._set_idle(self.lbl_readout)
 
+    def set_camerad_online(self, online):
+        """ Clear indicators when camerad goes offline (defense-in-depth).
+            Without this, the last-published exposing/readout state would
+            stick on the UI after camerad stopped publishing. """
+        if not online:
+            self.exposing_active = False
+            self.readout_active = False
+            self._set_idle(self.lbl_exposing)
+            self._set_idle(self.lbl_readout)
+
     def blink_tick(self, phase):
         """ Drive blink phase for any active camera indicators. """
         if self.exposing_active:
@@ -484,6 +494,23 @@ class AcquisitionPanel(QWidget):
             self.running_state = bool(data[KEY_FINEACQUIRE_RUNNING])
             if not self.running_state:
                 self.lbl_running.set_not_ready()
+
+    def set_acamd_online(self, online):
+        """ Clear ACAM indicators when acamd goes offline (defense-in-depth). """
+        if not online:
+            self.acquiring_active = False
+            self.acam_mode_badge.set_not_ready()
+            self.acam_guiding_badge.set_not_ready()
+            self.acam_acquired_badge.set_not_ready()
+            self.seeing.setText("seeing: --")
+
+    def set_slicecamd_online(self, online):
+        """ Clear SLICECAM indicators when slicecamd goes offline. """
+        if not online:
+            self.locked_state = False
+            self.running_state = False
+            self.lbl_locked.set_not_ready()
+            self.lbl_running.set_not_ready()
 
     def blink_tick(self, phase):
         """ Drive blink phase for any active acquisition badges. """
