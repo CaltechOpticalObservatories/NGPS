@@ -489,7 +489,7 @@ namespace Slicecam {
     snapshot_status[Topic::ACAMD]=true;
     }
     // set is_acam_guiding flag
-    bool acquired;
+    bool acquired = false;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
 

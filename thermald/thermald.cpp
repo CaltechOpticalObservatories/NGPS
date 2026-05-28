@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
   // initialize the pub/sub handler, subscribing to the camera daemons whose
   // andor CCD temperatures I fold into my telemetry
   //
-  if ( thermald.interface.init_pubsub( { Topic::ACAMD,
+  if ( thermald.interface.init_pubsub( { Topic::ACAMD_TEMP,
                                          Topic::SLICECAMD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     thermald.exit_cleanly();

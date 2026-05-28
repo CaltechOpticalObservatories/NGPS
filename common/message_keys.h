@@ -36,6 +36,7 @@ namespace Topic {
   inline const std::string SLITD      = "slitd";
   inline const std::string CAMERAD    = "camerad";
   inline const std::string ACAMD      = "acamd";
+  inline const std::string ACAMD_TEMP = "acamd_temp";
   inline const std::string CALIBD     = "calibd";
   inline const std::string FLEXURED   = "flexured";
   inline const std::string FOCUSD     = "focusd";

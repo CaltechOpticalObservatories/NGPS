@@ -1427,32 +1427,9 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-    // force-publish status
+    // emit state on Topic::ACAMD and temperature on Topic::ACAMD_TEMP
     this->publish_status(true);
-
-    nlohmann::json jmessage_out;
-    jmessage_out[Key::SOURCE] = Topic::ACAMD;
-
-    int ccdtemp=99;
-    this->camera.andor.get_temperature( ccdtemp );                      // temp is int
-    jmessage_out[Key::Acamd::TANDOR] = ( this->isopen("camera") ?
-                                         static_cast<float>(ccdtemp) :  // but the database wants floats
-                                         NAN );
-    jmessage_out[Key::Acamd::FILTER] = ( this->isopen("motion" ) ?
-                                         this->motion.get_current_filtername() :
-                                         "not_connected" );
-    jmessage_out[Key::Acamd::COVER]  = ( this->isopen("motion" ) ?
-                                         this->motion.get_current_coverpos() :
-                                         "not_connected" );
-
-    try {
-      this->publisher->publish( jmessage_out, Topic::ACAMD );
-    }
-    catch ( const std::exception &e ) {
-      logwrite( "Acam::Interface::publish_snapshot",
-                "ERROR publishing message: "+std::string(e.what()) );
-      return;
-    }
+    this->publish_temperature();
   }
   /***** Acam::Interface::publish_snapshot ************************************/
 
@@ -1523,7 +1500,7 @@ namespace Acam {
                                      static_cast<float>(ccdtemp) :      // database wants float
                                      NAN );
     try {
-      this->publisher->publish( jmessage, Topic::ACAMD );
+      this->publisher->publish( jmessage, Topic::ACAMD_TEMP );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::publish_temperature",

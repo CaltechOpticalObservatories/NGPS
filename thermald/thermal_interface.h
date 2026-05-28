@@ -122,7 +122,7 @@ namespace Thermal {
         topic_handlers = {
           { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-          { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+          { Topic::ACAMD_TEMP, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
           { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) }
