@@ -1281,6 +1281,15 @@ namespace TCS {
       return HELP;
     }
 
+    // Skip the hardware send when not connected, so callers that poll
+    // continuously (sequencerd, targetcontrol GUI) don't flood the log
+    // with ERROR on every call after a shutdown.
+    //
+    if ( ! this->tcs_info.isopen ) {
+      retstring = "not_connected";
+      return NO_ERROR;
+    }
+
     // Send the command
     //
     if ( this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE ) != NO_ERROR ) {

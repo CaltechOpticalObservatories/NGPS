@@ -399,13 +399,16 @@ namespace Flexure {
 
     auto _motormap = this->motorinterface.get_motormap();
     for ( const auto &mot : _motormap ) {
+      bool connected = this->motorinterface.is_connected( mot.second.name );
       for ( const auto &axis : mot.second.axes ) {
         auto chan = mot.second.name;
         auto addr = mot.second.addr;
         float position = NAN;
         std::string posname;
         std::string key;
-        this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
+        if ( connected ) {
+          this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
+        }
         switch ( axis.second.axisnum ) {
           case 1 : key = "FLXPIS_" + chan; break;
           case 2 : key = "FLXSPE_" + chan; break;

@@ -551,7 +551,9 @@ namespace Focus {
       auto addr = mot.second.addr;
       float position = NAN;
       std::string posname;
-      this->motorinterface.get_pos( name, axis, addr, position, posname );
+      if ( this->motorinterface.is_connected( name ) ) {
+        this->motorinterface.get_pos( name, axis, addr, position, posname );
+      }
       this->status.positions[ "FOCUS"+mot.first ] = position;
     }
   }
