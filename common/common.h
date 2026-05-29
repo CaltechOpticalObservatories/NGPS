@@ -1267,7 +1267,8 @@ namespace Common {
    */
   class DaemonClient {
     private:
-      std::mutex client_access;
+      std::recursive_mutex client_access;  // recursive: command() takes it across connect+send+close
+
       char term_write;            ///< send adds this char on Writes
       char term_read;             ///< send looks for this char on Reads (if reply requested)
       std::string term_str_write; ///< optional terminating string for writes

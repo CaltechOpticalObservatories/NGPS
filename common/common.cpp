@@ -684,13 +684,21 @@ namespace Common {
     std::stringstream message;
     long ret;
 
-    std::unique_lock<std::mutex> lock( this->client_access );
+    std::unique_lock<std::recursive_mutex> lock( this->client_access );
 
+    // Auto-reconnect if the connection has dropped (peer hung up, idle
+    // timeout, etc.). The recursive mutex allows nested locking when
+    // this calls connect() under the same lock. Both command() callers
+    // and direct .send() callers benefit from this single-location fix.
+    //
     if ( ! this->socket.isconnected() ) {
-      message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
-                               << " because daemon is not connected";
-      logwrite( function, message.str() );
-      return ERROR;
+      if ( this->connect() != NO_ERROR ) {
+        message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to "
+                                 << this->name << ": reconnect failed";
+        logwrite( function, message.str() );
+        std::this_thread::sleep_for( std::chrono::milliseconds(100) );  // rate-limit retry storms
+        return ERROR;
+      }
     }
 
     if ( this->socket.getfd() < 1 ) {
@@ -1120,21 +1128,10 @@ namespace Common {
     // all other commands go straight on through, as-is
     //
     else {
-      // but only if the connection is open of course
+      // send() handles auto-reconnect-if-needed and uses client_access
+      // internally for serialization.
       //
-      if ( !this->socket.isconnected() ) {
-        message.str(""); message << "ERROR: connection not open to " << this->name;
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-      else {
-#ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
-//                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
-//      logwrite( function, message.str() );
-#endif
-        error = this->send( args, retstring );
-      }
+      error = this->send( args, retstring );
     }
 
 #ifdef LOGLEVEL_DEBUG
@@ -1160,7 +1157,7 @@ namespace Common {
     std::stringstream message;
     long error = NO_ERROR;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // probably a programming error if this Common::DaemonClient object is not configured
     //
@@ -1210,7 +1207,7 @@ namespace Common {
     std::string function = "Common::DaemonClient::disconnect";
     std::stringstream message;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // close the connection
     //
