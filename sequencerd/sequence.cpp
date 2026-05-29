@@ -840,9 +840,9 @@ namespace Sequencer {
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(15),
+        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
                                             [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
-          logwrite( function, "timeout waiting for readout — requesting snapshot" );
+          logwrite( function, "waiting for readout — requesting snapshot" );
           lock.unlock();
           this->request_snapshot();
           lock.lock();

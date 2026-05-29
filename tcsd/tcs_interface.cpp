@@ -1370,8 +1370,8 @@ namespace TCS {
     }
 
 #ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] requested cass angle " << angle;
-    logwrite( function, message.str() );
+//  message.str(""); message << "[DEBUG] requested cass angle " << angle;
+//  logwrite( function, message.str() );
 #endif
 
     std::stringstream cmd;
@@ -1644,10 +1644,7 @@ namespace TCS {
 
     std::string reply;
 
-message.str(""); message << "DEBUG] sending cmd=" << cmd << " with type=" << (conn_type==TCS::FAST_RESPONSE?"fast":"slow") << " and to=" << to;
-logwrite(function,message.str());
     tcs.execute_command( cmd, reply, conn_type, to );
-logwrite(function,"[DEBUG] back from cmd="+cmd+" with reply="+reply);
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.
