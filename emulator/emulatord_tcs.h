@@ -68,7 +68,7 @@ namespace TcsEmulator {
       TcsEmulator::Interface interface;  ///< create an emulater interface
 
       static void block_main( TcsEmulator::Server &server, Network::TcpSocket sock );   ///< main function for blocking connection thread
-      static void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
+      static void doit(Network::TcpSocket &sock);                                     ///< the workhorse of each thread connetion
       void exit_cleanly();
 
       inline void initialize_python_objects() {                                ///< allows for initializing Python objects by the child process

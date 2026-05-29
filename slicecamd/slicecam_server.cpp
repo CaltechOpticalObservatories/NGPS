@@ -346,7 +346,7 @@ namespace Slicecam {
    * Valid commands are listed in slicecamd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Slicecam::Server::doit";
     long  ret;
     std::stringstream message;

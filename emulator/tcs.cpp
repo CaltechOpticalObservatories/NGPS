@@ -97,7 +97,7 @@ namespace TcsEmulator {
    * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "  (TcsEmulator::Server::doit) ";
     long  ret;
     std::stringstream message;

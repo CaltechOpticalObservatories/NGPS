@@ -872,7 +872,7 @@ namespace Thermal {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit(Network::TcpSocket sock) {
+  void Server::doit(Network::TcpSocket &sock) {
     std::string function = "Thermal::Server::doit";
     long  ret;
     std::stringstream message;

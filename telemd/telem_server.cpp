@@ -261,7 +261,7 @@ namespace Telemetry {
    * Valid commands are listed in telemd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Telemetry::Server::doit";
     long  ret;
     std::stringstream message;
