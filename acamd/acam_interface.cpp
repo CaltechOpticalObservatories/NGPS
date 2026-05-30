@@ -3356,6 +3356,7 @@ logwrite( function, message.str() );
     //
     if ( requested_mode == Acam::TARGET_NOP ) {
       this->stop_acquisition.store( true, std::memory_order_release );
+      this->is_acquired.store( false, std::memory_order_release );  // target no longer acquired when stopped
       logwrite( function, "stop requested" );
     }
 
