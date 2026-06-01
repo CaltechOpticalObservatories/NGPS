@@ -1119,6 +1119,10 @@ namespace TcsEmulator {
       }
     }
     else
+    if ( mycmd == "Z" ) {
+      retstring = "0";                 // successful completion
+    }
+    else
     if ( mycmd == "RET" ) {
       retstring = "0";                 // successful completion
     }

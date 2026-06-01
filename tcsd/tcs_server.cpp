@@ -630,6 +630,15 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
           polling = true;
         }
 
+        // Commands that are inherently polling are silent without needing the client
+        // to send a "poll" prefix. Keeps the log readable when external clients
+        // (status displays, observer tools) poll status at ~1 Hz.
+        //
+        static const std::set<std::string> auto_poll = {
+          TCSD_GET_MOTION, TCSD_GET_FOCUS, TCSD_GET_NAME, TCSD_ISOPEN
+        };
+        if ( auto_poll.count(cmd) ) polling = true;
+
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,

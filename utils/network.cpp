@@ -474,7 +474,7 @@ namespace Network {
     asyncflag = obj.asyncflag;
     totime = obj.totime;
     id = obj.id;
-    fd = obj.fd;
+    fd = obj.fd.load();
     listenfd = obj.listenfd;
     host = obj.host;
     connection_open = obj.connection_open;
@@ -522,6 +522,37 @@ namespace Network {
     }
   };
   /***** Network::TcpSocket::TcpSocket ****************************************/
+
+
+  /***** Network::TcpSocket::operator= ****************************************/
+  /**
+   * @brief      TcpSocket copy-assignment operator
+   * @param[in]  obj  reference to class object
+   * @return     reference to this object
+   *
+   * Memberwise copy, matching the implicitly-generated operator that existed
+   * before fd became std::atomic<int> (which deletes the implicit one). The
+   * only difference is fd is loaded from the source atomic. addrs is copied
+   * shallowly, exactly as before; assignment is only used to (re)seed a fresh
+   * pre-Connect client socket, where addrs is null.
+   *
+   */
+  TcpSocket& TcpSocket::operator=( const TcpSocket &obj ) {
+    if ( this != &obj ) {
+      port = obj.port;
+      blocking = obj.blocking;
+      asyncflag = obj.asyncflag;
+      totime = obj.totime;
+      id = obj.id;
+      fd = obj.fd.load();
+      listenfd = obj.listenfd;
+      host = obj.host;
+      connection_open = obj.connection_open;
+      addrs = obj.addrs;
+    }
+    return *this;
+  }
+  /***** Network::TcpSocket::operator= ****************************************/
 
 
   /***** Network::TcpSocket::Accept *******************************************/
@@ -745,17 +776,23 @@ namespace Network {
     std::stringstream message;
     int error = -1;
 
-    if (this->fd >= 0) {               // if the file descriptor is valid
-      if (close(this->fd) == 0) {      // then close it
+    // Atomically claim the fd and reset it to -1 in one step, so that if two
+    // threads share this socket object only one of them ever calls close() on
+    // the descriptor. The loser sees -1 and no-ops, which prevents a double
+    // close() from closing an unrelated fd that the kernel has since recycled.
+    //
+    int closefd = this->fd.exchange( -1 );
+
+    if (closefd >= 0) {                // if the file descriptor was valid
+      if (close(closefd) == 0) {       // then close it
 #ifdef LOGLEVEL_DEBUG
-        message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
+        message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << closefd << " closed";
         logwrite( function, message.str() );
 #endif
         error = 0;
-        this->fd = -1;
       }
       else {
-        message.str(""); message << "ERROR closing fd " << this->fd << " on port " << this->port
+        message.str(""); message << "ERROR closing fd " << closefd << " on port " << this->port
                                  << " returned " << errno << ": " << strerror(errno);
         logwrite( function, message.str() );
         error = -1;                    // error closing file descriptor
