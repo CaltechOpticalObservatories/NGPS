@@ -39,7 +39,7 @@ namespace Thermal {
    */
   long Server::configure_thermald() {
     std::string function = "Thermal::Server::configure_thermald";
-    std::stringstream message;
+    std::ostringstream message;
     int applied=0;
     long error;
 
@@ -164,7 +164,7 @@ namespace Thermal {
   long Server::parse_lks_unit( std::string &input, 
                                int &lksnum, std::string &name, std::string &host, int &port ) {
     std::string function = "Thermal::Server::parse_lks_unit";
-    std::stringstream message;
+    std::ostringstream message;
     std::vector<std::string> tokens;
 
     Tokenize( input, tokens, " \"" );
@@ -213,7 +213,7 @@ namespace Thermal {
   long Server::parse_lks_chan( std::string &input, 
                                int &lksnum, std::string &chan, bool &heater, std::string &label ) {
     std::string function = "Thermal::Server::parse_lks_chan";
-    std::stringstream message;
+    std::ostringstream message;
     std::vector<std::string> tokens;
 
     Tokenize( input, tokens, " \"" );
@@ -267,7 +267,7 @@ namespace Thermal {
    */
   long Server::parse_camp_chan( std::string &input ) {
     std::string function = "Thermal::Server::parse_camp_chan";
-    std::stringstream message;
+    std::ostringstream message;
     std::vector<std::string> tokens;
     int chan=-1;
     std::string label="undef";
@@ -319,7 +319,7 @@ namespace Thermal {
    */
   long Server::configure_telemetry() {
     std::string function = "Thermal::Server::configure_telemetry";
-    std::stringstream message;
+    std::ostringstream message;
     int applied=0;
     long error;
 
@@ -428,7 +428,7 @@ namespace Thermal {
    */
   long Server::configure_devices() {
     std::string function = "Thermal::Server::configure_devices";
-    std::stringstream message;
+    std::ostringstream message;
     int applied=0;
     long error;
 
@@ -547,7 +547,7 @@ namespace Thermal {
    */
   void Server::telemetry_watchdog( Thermal::Server &server ) {
     std::string function = "Thermal::Server::telemetry_watchdog";
-    std::stringstream message;
+    std::ostringstream message;
 
     logwrite( function, "telemetry watchdog active" );
 
@@ -574,7 +574,16 @@ namespace Thermal {
    */
   void Server::dothread_telemetry( Thermal::Server &server ) {
     std::string function = "Thermal::Server::dothread_telemetry";
-    std::stringstream message;
+    std::ostringstream message;
+
+    // in case of exception, back off before terminating so the
+    // watchdog's 1Hz respawn doesn't hot-spin error messages while
+    // the database is unreachable
+    //
+    auto backoff = [&]() {
+      std::this_thread::sleep_for( std::chrono::seconds( server.telem_backoff_sec ) );
+      if ( ( server.telem_backoff_sec *= 2 ) > 30 ) server.telem_backoff_sec = 30;
+    };
 
     logwrite( function, "telemetry thread running" );
 
@@ -585,7 +594,7 @@ namespace Thermal {
     //
     while ( server.telem_running ) {
 
-      logwrite( function, "NOTICE:thermald telemetry has started" );
+      logwrite( function, "thermald telemetry has started" );
 
       try {
         // Creating a Database object here connects to the database
@@ -594,6 +603,10 @@ namespace Thermal {
         // automatically closes.
         //
         Database::Database database( server.db_info );
+
+        // connection succeeded; reset the reconnect backoff
+        //
+        server.telem_backoff_sec = 1;
 
         int duration=server.telem_period;
 
@@ -654,23 +667,24 @@ namespace Thermal {
       catch ( const mysqlx::Error &err ) {
         message.str(""); message << "ERROR: " << err;
         logwrite( function, message.str() );
+        backoff();
         break;
       }
       catch ( std::exception &e ) {
         message.str(""); message << "ERROR: " << e.what();
         logwrite( function, message.str() );
+        backoff();
         break;
       }
       catch ( ... ) {
         logwrite( function, "ERROR: unknown exception." );
+        backoff();
         break;
       }
-
-      logwrite( function, "NOTICE:thermald telemetry has stopped" );
     }
 
     server.telem_running = false;
-    logwrite( function, "NOTICE:thermald telemetry thread terminated" );
+    logwrite( function, "thermald telemetry thread terminated" );
     return;
   }
   /***** Thermal::Server::dothread_telemetry *********************************/
@@ -686,7 +700,7 @@ namespace Thermal {
    */
   long Server::telemetry( std::string args, std::string &retstring ) {
     std::string function = "Thermal::Server::telemetry";
-    std::stringstream message;
+    std::ostringstream message;
 
     // "?" or no arg displays usage and possible inputs, then return
     //
@@ -851,7 +865,7 @@ namespace Thermal {
       std::string message = thermal.interface.async.dequeue();   // get the latest message from the queue (blocks)
       retval = sock.Send(message);                            // transmit the message
       if (retval < 0) {
-        std::stringstream errstm;
+        std::ostringstream errstm;
         errstm << "error sending UDP message: " << message;
         logwrite(function, errstm.str());
       }
@@ -882,7 +896,7 @@ namespace Thermal {
   void Server::doit(Network::TcpSocket &sock) {
     std::string function = "Thermal::Server::doit";
     long  ret;
-    std::stringstream message;
+    std::ostringstream message;
     std::string cmd, args;        // arg string is everything after command
     std::vector<std::string> tokens;
 
@@ -972,7 +986,7 @@ namespace Thermal {
         }
       }
       catch ( const std::runtime_error &e ) {
-        std::stringstream errstream; errstream << e.what();
+        std::ostringstream errstream; errstream << e.what();
         message.str(""); message << "error parsing arguments: " << errstream.str();
         logwrite(function, message.str());
         ret = -1;

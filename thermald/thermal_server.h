@@ -91,6 +91,7 @@ namespace Thermal {
       std::vector<std::string> db_info;                 ///< info for constructing telemetry Database object
 
       std::atomic<bool> telem_running;      ///< is the main telemetry thread running?
+      unsigned int telem_backoff_sec=1;     ///< reconnect backoff (s); doubles to a cap on telemetry DB failure, reset on success
 
       std::mutex conn_mutex;                ///< mutex to protect against simultaneous access to Accept()
 
