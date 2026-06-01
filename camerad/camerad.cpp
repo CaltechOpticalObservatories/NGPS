@@ -388,8 +388,10 @@ void doit(Network::TcpSocket &sock) {
 
   bool connection_open=true;
 
-  message.str(""); message << "thread " << sock.id << " accepted connection on fd " << sock.getfd();
+#ifdef LOGLEVEL_DEBUG
+  message.str(""); message << "[DEBUG] thread " << sock.id << " accepted connection on fd " << sock.getfd();
   logwrite( function, message.str() );
+#endif
 
   while (connection_open) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
@@ -412,18 +414,14 @@ void doit(Network::TcpSocket &sock) {
     // Data available, now read from connected socket...
     //
     std::string sbuf;
+    const int fd_before_read = sock.getfd();
     if ( ( ret=sock.Read( sbuf, '\n' ) ) <= 0 ) {
-      if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
+      if (ret<0) {                // real read error
+        message.str(""); message << "Read error on fd " << fd_before_read << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
-      if (ret==0) {
-        message.str(""); message << "timeout reading from fd " << sock.getfd();
-        logwrite( function, message.str() );
-      }
-      break;                      // Breaking out of the while loop will close the connection.
-                                  // This probably means that the client has terminated abruptly, 
-                                  // having sent FIN but not stuck around long enough
-                                  // to accept CLOSE and give the LAST_ACK.
+      // ret==0 is orderly peer shutdown (TCP FIN); not an error, lower layer logs at DEBUG
+      break;
     }
 
     // convert the input buffer into a string and remove any trailing linefeed

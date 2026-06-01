@@ -1183,11 +1183,6 @@ namespace Acam {
     Py_DECREF( pArgList );
     Py_DECREF( pKeywords );
 
-//#ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] Python call time " << (t1-t0) << " sec";
-//    logwrite( function, message.str() );
-//#endif
-
     // Check the return values from Python here
     //
     if ( !pReturn ) {

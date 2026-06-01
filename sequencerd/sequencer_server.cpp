@@ -90,11 +90,6 @@ namespace Sequencer {
         return ERROR;
       }
 
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] configkey " << configkey << "=" << configval;
-      logwrite( function, message.str() );
-#endif
-
       // NBPORT
       if ( configkey == "NBPORT" ) {
         try {
@@ -1054,12 +1049,14 @@ namespace Sequencer {
 
     bool connection_open=true;
 
-    message.str(""); message << "thread " << sock.id << " accepted "
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread " << sock.id << " accepted "
                              << (sock.isasync() ? "ASYNC " : "" )
                              << (sock.isblocking() ? "BLOCKING " : "NON-BLOCKING " )
                              << "connection on fd " << sock.getfd()
                              << " port " << sock.getport();
     logwrite( function, message.str() );
+#endif
 
     while ( connection_open ) {
 

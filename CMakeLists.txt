@@ -4,7 +4,7 @@
 # @author  David Hale <dhale@caltech.edu>
 # ----------------------------------------------------------------------------
 
-add_definitions(-DLOGLEVEL_DEBUG)
+#add_definitions(-DLOGLEVEL_DEBUG)
 
 cmake_minimum_required( VERSION 3.12 )
 

@@ -30,7 +30,7 @@ const std::string ACAMD_FAN      = "fan";       ///< set Andor fan mode
 const std::string ACAMD_FILTER   = "filter";    ///< filter [ name ] to set or get the filter
 const std::string ACAMD_GUIDESET = "guideset";  ///< set params for guider display
 const std::string ACAMD_HOME     = "home";      const int ACAMD_HOME_TIMEOUT = 180000; ///< home all motors
-                                                const int ACAMD_MOVE_TIMEOUT = 40000;  ///< covers filter and cover moves
+                                                const int ACAMD_MOVE_TIMEOUT = 60000;  ///< covers filter and cover moves (PI motor wait = 40s; +20s slack for reply round-trip)
 const std::string ACAMD_INIT     = "init";      ///< ***
 const std::string ACAMD_ISACQUIRED = "isacquired";  ///< is the target acquired?
 const std::string ACAMD_ISHOME   = "ishome";    ///< are all motors homed?

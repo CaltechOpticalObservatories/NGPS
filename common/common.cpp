@@ -560,9 +560,11 @@ namespace Common {
     // Do not wait for a reply.
     //
     if ( reply == "NOREPLY" ) {
-      message.str(""); message << "not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
                                << "/" << _sock.getport() << " on fd " << _sock.getfd();
       logwrite( function, message.str() );
+#endif
       _sock.Close();
       return( error );
     }
@@ -604,9 +606,11 @@ namespace Common {
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << _sock.gethost()
                              << "/" << _sock.getport() << " on fd " << _sock.getfd();
     logwrite( function, message.str() );
+#endif
     _sock.Close();
 
     // assign the response to the reply string, passed in by reference
@@ -838,17 +842,11 @@ namespace Common {
     // that is no longer pertinent.
     //
     if ( this->timedout ) {
-      logwrite( function, "[TEST] attempting to flush after timeout" );
       if ( ( pollret = this->socket.Poll(2000) ) > 0 ) {
+        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual )
+                                        : socket.Read( reply, term_read ) );
         reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] I read this: " << reply << " but I'm going to read again!";
-        logwrite( function, message.str() );
-        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] and the 2nd read was this: " << reply;
-        logwrite( function, message.str() );
       }
       this->timedout=false;
     }
@@ -1099,9 +1097,9 @@ namespace Common {
       //
       if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
     }
     else
@@ -1115,9 +1113,9 @@ namespace Common {
     //
     if ( args == "disconnect" ) {
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
       // then close the connection
       //
@@ -1135,9 +1133,9 @@ namespace Common {
     }
 
 #ifdef LOGLEVEL_DEBUG
-//  message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
-//                           << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
-//  logwrite( function, message.str() );
+    message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
+                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
+    logwrite( function, message.str() );
 #endif
 
     return( error );
@@ -1211,9 +1209,11 @@ namespace Common {
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << this->socket.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << this->socket.gethost()
                              << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
     logwrite( function, message.str() );
+#endif
     this->socket.Close();
 
     return;

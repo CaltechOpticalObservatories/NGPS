@@ -748,8 +748,8 @@ namespace Network {
     if (this->fd >= 0) {               // if the file descriptor is valid
       if (close(this->fd) == 0) {      // then close it
 #ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
-//      logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << this->fd << " closed";
+        logwrite( function, message.str() );
 #endif
         error = 0;
         this->fd = -1;
@@ -995,8 +995,10 @@ namespace Network {
         break;
       }
       if ( nread == 0 ) {
-        message << "ERROR no data from socket " << this->host << "/" << this->port << " on fd " << this->fd << ": closing connection";
+#ifdef LOGLEVEL_DEBUG
+        message << "[DEBUG] no data from socket " << this->host << "/" << this->port << " on fd " << this->fd << ": closing connection";
         logwrite( function, message.str() );
+#endif
         this->Close();
         break;
       }

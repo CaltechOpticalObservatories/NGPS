@@ -1369,11 +1369,6 @@ namespace TCS {
       error = ERROR;
     }
 
-#ifdef LOGLEVEL_DEBUG
-//  message.str(""); message << "[DEBUG] requested cass angle " << angle;
-//  logwrite( function, message.str() );
-#endif
-
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
 

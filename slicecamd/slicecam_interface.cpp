@@ -48,7 +48,9 @@ namespace Slicecam {
 
     // empty args returns status
     if (action=="status") {
-      retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+      const bool running = this->is_fineacquire_running.load(std::memory_order_acquire);
+      const bool locked  = this->is_fineacquire_locked.load(std::memory_order_acquire);
+      retstring = running ? "running" : ( locked ? "stopped (locked)" : "stopped" );
       return NO_ERROR;
     }
     else
@@ -323,7 +325,14 @@ namespace Slicecam {
     // convergence check
     //
     if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
-      logwrite( function, "fine acquisition converged" );
+      std::ostringstream oss;
+      oss << "fine acquisition converged: offset dRA=" << med_dra * 3600.0
+          << " dDEC=" << med_ddec * 3600.0
+          << " arcsec (r=" << offset_arcsec
+          << " arcsec, n=" << n
+          << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+          << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
+      logwrite( function, oss.str() );
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
       this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
