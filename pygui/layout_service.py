@@ -373,10 +373,18 @@ class LayoutService:
 
         self.parent.sequencer_mode_single = QRadioButton("Single")
         self.parent.sequencer_mode_all = QRadioButton("All")
+
+        self.parent.sequencer_mode_single.clicked.connect(
+            self.on_sequencer_mode_single_clicked
+        )
+        self.parent.sequencer_mode_all.clicked.connect(
+            self.on_sequencer_mode_all_clicked
+        )
+
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_single)
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_all)
 
-       # Fine acquire toggle
+        # Fine acquire toggle
         self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Enabled")
         self.parent.fine_acquire_toggle.setCheckable(True)
         self.parent.fine_acquire_toggle.setChecked(True)
@@ -399,12 +407,23 @@ class LayoutService:
         sequencer_mode_layout.addWidget(self.parent.fine_acquire_toggle)
 
         sequencer_mode_group.setLayout(sequencer_mode_layout)
-
-        # Set maximum width and height for the sequencer mode group
-        sequencer_mode_group.setMaximumWidth(300)  # Maximum width
-        sequencer_mode_group.setMaximumHeight(145)  # Maximum height
+        sequencer_mode_group.setMaximumWidth(300)
+        sequencer_mode_group.setMaximumHeight(145)
 
         return sequencer_mode_group
+
+    def on_sequencer_mode_single_clicked(self):
+        """Set sequencer to single-target mode."""
+        print("Sequencer mode selected: Single")
+        print("Sending command: seq do one")
+        self.parent.send_command("do one\n")
+
+
+    def on_sequencer_mode_all_clicked(self):
+        """Set sequencer to all-targets mode."""
+        print("Sequencer mode selected: All")
+        print("Sending command: seq do all")
+        self.parent.send_command("do all\n")
 
     def on_fine_acquire_toggled(self, checked):
         """Enable/disable the sequencer fine-acquire step."""

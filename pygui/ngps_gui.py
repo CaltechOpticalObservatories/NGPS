@@ -198,6 +198,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
         self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
         self.zmq_status_service.system_status_signal.connect(self.layout_service.update_system_status)
+        self.zmq_status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
@@ -562,6 +563,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.daemonstate_signal.connect(self._on_daemonstate_update)
         self.zmq_status_service.waitstate_signal.connect(self._on_waitstate_update)
         self.zmq_status_service.sequencerd_alive_signal.connect(self.daemon_row.set_sequencerd_online)
+        
 
     @pyqtSlot(dict)
     def _on_daemonstate_update(self, state: dict):

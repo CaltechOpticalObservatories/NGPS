@@ -21,6 +21,11 @@ class ZmqStatusService(QObject):
     
     system_status_signal = pyqtSignal(str)
 
+    # Emitted when sequencerd says it is waiting for the USER continue signal.
+    # This replaces the old UDP StatusService detection path for:
+    # waiting for USER to send "continue" signal
+    user_can_expose_signal = pyqtSignal(bool)
+
     # seqgui-style daemon status signals
     daemonstate_signal = pyqtSignal(dict)     # seq_daemonstate: daemon-key -> bool
     waitstate_signal = pyqtSignal(dict)       # seq_waitstate: wait-key -> bool
@@ -50,6 +55,7 @@ class ZmqStatusService(QObject):
         self.subscribed_topics = set()  # Set of subscribed topics
         self._last_seq_lifecycle_status = "stopped"
         self._last_seq_wait_status = None
+        self._user_continue_ready_emitted = False
 
         # Set up logging
         self.setup_logging()
@@ -67,6 +73,42 @@ class ZmqStatusService(QObject):
         """
         if self.emit_debug_messages:
             self.new_message_signal.emit(message)
+
+    @staticmethod
+    def _contains_user_continue_message(value) -> bool:
+        """
+        Return True if a raw or decoded ZMQ payload contains the sequencer
+        message that tells the GUI the operator can press Expose/Continue.
+        """
+        needle = 'waiting for USER to send "continue" signal'
+
+        if value is None:
+            return False
+
+        if isinstance(value, dict):
+            return any(ZmqStatusService._contains_user_continue_message(v) for v in value.values())
+
+        if isinstance(value, (list, tuple, set)):
+            return any(ZmqStatusService._contains_user_continue_message(v) for v in value)
+
+        return needle in str(value)
+
+    def _emit_user_can_expose_once(self):
+        """
+        Emit user_can_expose_signal once per USER wait-state/message.
+        Repeated ZMQ publications should not repeatedly restyle/pop the GUI.
+        """
+        if not self._user_continue_ready_emitted:
+            self.logger.info('Sequencer is waiting for USER continue; enabling Expose/Offset controls.')
+            self.user_can_expose_signal.emit(True)
+            self._user_continue_ready_emitted = True
+
+    def _clear_user_can_expose_latch(self):
+        """
+        Allow a future USER wait-state/message to emit again after the
+        sequencer leaves the USER wait state.
+        """
+        self._user_continue_ready_emitted = False
 
     def setup_logging(self):
         """ Set up logging for the status service in a 'logs' folder. """
@@ -202,8 +244,19 @@ class ZmqStatusService(QObject):
                 # Always log to file, even when GUI debug messages are disabled.
                 self.logger.info(f"Received message: Topic = {topic}, Payload = {payload}")
 
+                # Some sequencerd messages are plain text status messages rather
+                # than JSON objects. Detect the USER continue message before
+                # json.loads so raw text payloads are handled too.
+                if topic == "sequencerd" and self._contains_user_continue_message(payload):
+                    self._emit_user_can_expose_once()
+
                 try:
                     data = json.loads(payload)
+
+                    # Also support JSON payloads that contain the same text in a
+                    # field such as {"message": "..."} or {"status": "..."}.
+                    if topic == "sequencerd" and self._contains_user_continue_message(data):
+                        self._emit_user_can_expose_once()
 
                     if topic == "acamd":
                         self._emit_debug_message(f"Topic: {topic}, Payload: {payload}")
@@ -216,7 +269,17 @@ class ZmqStatusService(QObject):
 
                     elif topic == "seq_waitstate":
                         # seqgui-style busy/blink source.
-                        self.waitstate_signal.emit(self._bool_payload(data))
+                        wait_flags = self._bool_payload(data)
+                        self.waitstate_signal.emit(wait_flags)
+
+                        # USER wait-state is the structured equivalent of the
+                        # sequencerd text message:
+                        # waiting for USER to send "continue" signal
+                        if wait_flags.get("USER", False):
+                            self._emit_user_can_expose_once()
+                        else:
+                            self._clear_user_can_expose_latch()
+
                         self._last_seq_wait_status = self._status_from_seq_waitstate(data)
                         self._emit_resolved_system_status()
 
