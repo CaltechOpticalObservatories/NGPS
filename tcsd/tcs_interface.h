@@ -228,8 +228,6 @@ namespace TCS {
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command, lock and return the slow command socket connection
           std::lock_guard<std::mutex> lock( mtx_slow );
-//        logwrite( function, "[DEBUG] slow command socket connection acquired on fd "
-//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           return sock_slow;
         }
         else {
@@ -237,9 +235,6 @@ namespace TCS {
           // fast command, take a socket connection from the pool
           while ( true ) {
             for ( auto &conn : pool ) {
-//            logwrite(function, "[DEBUG] checking connection: fd " + std::to_string(conn.socket->sock.getfd()) +
-//                               ", inuse: " + std::to_string(conn.inuse) +
-//                               ", connected: " + std::to_string(conn.socket->sock.isconnected()));
               if ( !conn.socket->sock.isconnected() ) {
                 logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())
                                     +" not open, attempting to reconnect" );
@@ -247,14 +242,10 @@ namespace TCS {
                   logwrite( function, "ERROR opening fast command socket connection" );
                   return nullptr;
                 }
-//              logwrite( function, "[DEBUG] returning fast command socket connection on fd "
-//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               if ( !conn.inuse ) {
                 conn.inuse=true;
-//              logwrite( function, "[DEBUG] fast command socket connection acquired on fd "
-//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())+" inuse, trying another" );
@@ -282,9 +273,6 @@ namespace TCS {
        *
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
-std::stringstream message;
-message << "[DEBUG] in 3 arg version and using polltimeout=" << POLLTIMEOUT;
-logwrite("TCS::TcsIO::execute_command", message.str());
         return execute_command( cmd, reply, conn_type, POLLTIMEOUT );
       }
       /***** TCS::TcsIO::execute_command **************************************/
@@ -301,33 +289,21 @@ logwrite("TCS::TcsIO::execute_command", message.str());
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type, int timeout ) {
         const std::string function("TCS::TcsIO::execute_command");
-std::stringstream message;
-message << "[DEBUG] in 4 arg version with timeout=" << timeout;
-logwrite(function,message.str());
         long ret=ERROR;
 
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command
           {
           std::lock_guard<std::mutex> lock( mtx_slow );
-          logwrite( function, "[DEBUG] slow command socket acquired on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port)
-                              +" timeout="+std::to_string(timeout) );
           ret = sock_slow->send_command( cmd, reply, timeout );
           }
-          logwrite( function, "[DEBUG] releasing slow command socket connection on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           if (ret!=NO_ERROR) sock_slow->reconnect();
           return ret;
         }
         else {
-//        logwrite(function,"[DEBUG] asking for fast connection");
           auto conn = this->get_connection( TCS::FAST_RESPONSE );
           if (conn) {
-//          logwrite(function,"[DEBUG] sending fast command");
             ret = conn->send_command( cmd, reply );
-//          logwrite(function,"[DEBUG] fast command sent");
-//          logwrite(function,"[DEBUG] returning fast connection");
             return_connection( conn );
           }
           else {
@@ -354,8 +330,6 @@ logwrite(function,message.str());
         for ( auto &conn : pool ) {
           if ( conn.socket == sock ) {
             conn.inuse = false;
-//          logwrite( function, "[DEBUG] returned socket connection to pool for fd "
-//                              +std::to_string(conn.socket->sock.getfd()) );
             cv.notify_one();  // notifies any waiting get_connections()
             return;
           }

@@ -366,7 +366,14 @@ namespace TCS {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, TCS::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, TCS::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (TCS::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -623,6 +630,15 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
           polling = true;
         }
 
+        // Commands that are inherently polling are silent without needing the client
+        // to send a "poll" prefix. Keeps the log readable when external clients
+        // (status displays, observer tools) poll status at ~1 Hz.
+        //
+        static const std::set<std::string> auto_poll = {
+          TCSD_GET_MOTION, TCSD_GET_FOCUS, TCSD_GET_NAME, TCSD_ISOPEN
+        };
+        if ( auto_poll.count(cmd) ) polling = true;
+
         if (cmd.empty()) {sock.Write("\n"); continue;} // acknowledge empty command so client doesn't time out
 
         if (cmd_sep == std::string::npos) {            // If no space was found,
@@ -800,9 +816,9 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
                       ret = this->interface.native( args, retstring );
       }
       else
-      if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
+      if ( cmd == SNAPSHOT ) {
                       if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
+                        retstring=SNAPSHOT+"\n";
                         retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
                         retstring.append( "  information, terminated with \"EOF\\n\".\n" );
                         ret=HELP;

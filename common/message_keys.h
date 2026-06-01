@@ -36,6 +36,7 @@ namespace Topic {
   inline const std::string SLITD      = "slitd";
   inline const std::string CAMERAD    = "camerad";
   inline const std::string ACAMD      = "acamd";
+  inline const std::string ACAMD_TEMP = "acamd_temp";
   inline const std::string CALIBD     = "calibd";
   inline const std::string FLEXURED   = "flexured";
   inline const std::string FOCUSD     = "focusd";
@@ -61,6 +62,17 @@ namespace Key {
   namespace Sequencer {
     inline const std::string SEQSTATE           = "seqstate";
     inline const std::string SHOULD_FINEACQUIRE = "should_fineacquire";
+  }
+
+  namespace TargetInfo {
+    inline const std::string OBS_ID    = "OBS_ID";
+    inline const std::string NAME      = "NAME";
+    inline const std::string SLITA     = "SLITA";
+    inline const std::string BINSPECT  = "BINSPECT";
+    inline const std::string BINSPAT   = "BINSPAT";
+    inline const std::string POINTMODE = "POINTMODE";
+    inline const std::string RA        = "RA";
+    inline const std::string DECL      = "DECL";
   }
 
   namespace Camerad {
@@ -92,6 +104,8 @@ namespace Key {
   namespace Slicecamd {
     inline const std::string FINEACQUIRE_LOCKED  = "fineacquire_locked";
     inline const std::string FINEACQUIRE_RUNNING = "fineacquire_running";
+    inline const std::string TANDOR_L            = "tandor_L";
+    inline const std::string TANDOR_R            = "tandor_R";
   }
 
   namespace Slitd {

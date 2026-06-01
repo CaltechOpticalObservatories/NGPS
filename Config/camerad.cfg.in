@@ -155,20 +155,11 @@ ACTIVATE_COMMANDS=(G PON, ERS 1000 1000, EPG 500, CLR)
 ACTIVATE_COMMANDS=(U PON, CLR)
 
 # -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
+# SUBSCRIBE_TO=( <name> <endpoint> )
 #
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request. These are the
-# sources for telemetry information for FITS headers. Provide one per line.
-#
-TELEM_PROVIDER=(calibd     @CALIBD_NB_PORT@)
-TELEM_PROVIDER=(flexured   @FLEXURED_NB_PORT@)
-TELEM_PROVIDER=(focusd     @FOCUSD_NB_PORT@)
-TELEM_PROVIDER=(powerd     @POWERD_NB_PORT@)
-TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
-TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(thermald   @THERMALD_NB_PORT@)
+# This is a list of pub/sub sources to subscribe to, where <name> is the daemon
+# name and <endpoint> is its ZeroMQ publish endpoint. These are the sources for
+# telemetry information for FITS headers. Provide one per line.
 #
 SUBSCRIBE_TO=(calibd     "tcp://127.0.0.1:@CALIBD_PUB_PORT@")
 SUBSCRIBE_TO=(flexured   "tcp://127.0.0.1:@FLEXURED_PUB_PORT@")

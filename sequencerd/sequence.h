@@ -527,6 +527,8 @@ namespace Sequencer {
       Common::Broadcaster broadcast { this->publisher, Sequencer::DAEMON_NAME };  ///< logs and publishes a narrative message on Topic::BROADCAST
 
       std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
+      nlohmann::json last_published_targetinfo; ///< last published targetinfo (for change detection)
+      std::mutex publish_targetinfo_mtx;        ///< guards last_published_targetinfo check-then-act
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -564,7 +566,7 @@ namespace Sequencer {
       long get_tcs_cass( double &cass );
       long target_offset();
 
-      void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
+      void publish_targetinfo( bool force=false );                  ///< publish target info on change (or force)
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
@@ -579,6 +581,7 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      long set_imgtype();            ///< set IMGTYPE
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure

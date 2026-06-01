@@ -23,6 +23,7 @@
 #include <memory>
 #include <json.hpp>
 
+#include "fits_header_defs.h"
 #include "utilities.h"
 #include "common.h"
 #include "camera.h"
@@ -637,7 +638,23 @@ namespace AstroCam {
           useframes(true) {
         topic_handlers = {
           { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
-                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+              [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { Topic::CALIBD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_calib(msg); } ) },
+          { Topic::FLEXURED, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_flexure(msg); } ) },
+          { Topic::FOCUSD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_focus(msg); } ) },
+          { Topic::POWERD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_power(msg); } ) },
+          { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_slit(msg); } ) },
+          { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) },
+          { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_tcs(msg); } ) },
+          { Topic::THERMALD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_thermal(msg); } ) }
         };
 
         this->pFits.resize( NUM_EXPBUF );           // pre-allocate FITS_file object pointers for each exposure buffer
@@ -670,6 +687,9 @@ namespace AstroCam {
       Camera::Camera camera;            /// instantiate a Camera object
       Camera::Information camera_info;  /// this is the main camera_info object
 
+      std::map<std::string, nlohmann::json> live_telemetry;  ///< latest JSON snapshot per provider, keyed by Topic
+      std::mutex live_telemetry_mtx;
+
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint
       std::string publisher_topic;                     ///< my default topic for publishing
@@ -693,6 +713,14 @@ namespace AstroCam {
       void publish_status(bool force=false);
       void request_snapshot();
       void handletopic_snapshot(const nlohmann::json &jmessage_in);
+      void handletopic_calib(const nlohmann::json &jmessage_in);
+      void handletopic_flexure(const nlohmann::json &jmessage_in);
+      void handletopic_focus(const nlohmann::json &jmessage_in);
+      void handletopic_power(const nlohmann::json &jmessage_in);
+      void handletopic_slit(const nlohmann::json &jmessage_in);
+      void handletopic_targetinfo(const nlohmann::json &jmessage_in);
+      void handletopic_tcs(const nlohmann::json &jmessage_in);
+      void handletopic_thermal(const nlohmann::json &jmessage_in);
 
       Common::Broadcaster broadcast { this->publisher, Daemon::CAMERAD };
 
@@ -1139,8 +1167,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       std::map< std::string, readout_info_t > readout_source;  //!< STL map of readout sources indexed by readout name
 
-      std::map<std::string, int> telemetry_providers;  //!< a map of port[daemon_name] for telemetry providers
-
       // Functions
       //
       void get_logical(Controller* pcontroller,
@@ -1150,7 +1176,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       Controller* get_active_controller(const int dev);
       void exposure_progress();
       void make_image_keywords( int dev );
-      long handle_json_message( std::string message_in );
       long parse_spec_info( std::string args );
       long parse_det_geometry( std::string args );
       long parse_controller_config( std::string args );
@@ -1210,9 +1235,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 
       long expose(std::string nexp_in);
       long do_expose(int nexp_in);
-      void make_telemetry_message( std::string &retstring );
-      void collect_telemetry();
-      void collect_telemetry(std::string name, std::string &retstring);
+      double get_live_airmass();                             ///< latest airmass from cached tcsd telemetry, or NAN
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
 
@@ -1254,77 +1277,6 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
 //    int get_image_rows() { return this->rows; };  // REMOVE
 //    int get_image_cols() { return this->cols; }; // REMOVE
 
-      using json = nlohmann::json;
-      template <typename T>
-      void collect_telemetry_key( const std::string &name, const std::string &key, T &value ) {
-        const std::string function="AstroCam::Interface::collect_telemetry_key";
-        std::stringstream message;
-
-        std::string retstring;
-
-        // collect the telemetry from this one named provider
-        //
-        collect_telemetry(name, retstring);
-
-        // extract the correct typed value for the requested key from that
-        // telemetry message
-        //
-        try {
-          // get a JSON message from the serialized return string
-          //
-          nlohmann::json jmessage = nlohmann::json::parse( retstring );
-
-          // extract the value from the JSON message using jkey as the key
-          //
-          auto jvalue = jmessage.at( key );
-
-          if ( jvalue == nullptr ) return;
-
-          if constexpr ( std::is_same<T, bool>::value ) {
-            if ( jvalue.type() == json::value_t::boolean ) {
-              value = jvalue.template get<bool>();
-            }
-          }
-          else
-          if constexpr ( std::is_same<T, int>::value ) {
-            if ( jvalue.type() == json::value_t::number_integer ) {
-              value = jvalue.template get<int>();
-            }
-          }
-          else
-          if constexpr ( std::is_same<T, uint16_t>::value ) {
-            if ( jvalue.type() == json::value_t::number_unsigned ) {
-              value = jvalue.template get<uint16_t>();
-            }
-          }
-          else
-          if constexpr ( std::is_same<T, float>::value || std::is_same<T, double>::value ) {
-            if ( jvalue.type() == json::value_t::number_float ) {
-              value = jvalue.template get<double>();
-            }
-          }
-          else
-          if constexpr ( std::is_same<T, std::string>::value ) {
-            if ( jvalue.type() == json::value_t::string ) {
-              value = jvalue.template get<std::string>();
-            }
-          }
-          else {
-            message << "ERROR unknown type for key " << key << " from provider " << name;
-            logwrite( function, message.str() );
-            return;
-          }
-        }
-        catch( const json::exception &e ) {
-          message << "JSON exception parsing value for key " << key << " from provider " << name << ": " << e.what();
-          logwrite( function, message.str() );
-        }
-        catch( const std::exception &e ) {
-          message << "ERROR exception parsing value for key " << key << " from provider " << name << ": " << e.what();
-          logwrite( function, message.str() );
-        }
-        return;
-      }
   };
   /***** AstroCam::Interface **************************************************/
 

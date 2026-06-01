@@ -25,7 +25,6 @@ const std::vector<std::string> THERMALD_SYNTAX = {
                                                  THERMALD_NATIVE+" [ ? | <unit> <cmd> [<args>] ]",
                                                  THERMALD_PRINTLABELS+" [?]",
                                                  THERMALD_RECONNECT+" [ ? ]",
-                                                 TELEMREQUEST+" [?]",
                                                  THERMALD_SETPOINT+" [ ? | <unit> <output> [ <temp> ] ]",
                                                  THERMALD_SHOWTELEM+" [ ? | force ]",
                                                  THERMALD_TELEMETRY+" ? | start | stop | status "

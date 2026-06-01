@@ -1183,11 +1183,6 @@ namespace Acam {
     Py_DECREF( pArgList );
     Py_DECREF( pKeywords );
 
-//#ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] Python call time " << (t1-t0) << " sec";
-//    logwrite( function, message.str() );
-//#endif
-
     // Check the return values from Python here
     //
     if ( !pReturn ) {
@@ -1427,32 +1422,9 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-    // force-publish status
+    // emit state on Topic::ACAMD and temperature on Topic::ACAMD_TEMP
     this->publish_status(true);
-
-    nlohmann::json jmessage_out;
-    jmessage_out[Key::SOURCE] = Topic::ACAMD;
-
-    int ccdtemp=99;
-    this->camera.andor.get_temperature( ccdtemp );                      // temp is int
-    jmessage_out[Key::Acamd::TANDOR] = ( this->isopen("camera") ?
-                                         static_cast<float>(ccdtemp) :  // but the database wants floats
-                                         NAN );
-    jmessage_out[Key::Acamd::FILTER] = ( this->isopen("motion" ) ?
-                                         this->motion.get_current_filtername() :
-                                         "not_connected" );
-    jmessage_out[Key::Acamd::COVER]  = ( this->isopen("motion" ) ?
-                                         this->motion.get_current_coverpos() :
-                                         "not_connected" );
-
-    try {
-      this->publisher->publish( jmessage_out, Topic::SNAPSHOT );
-    }
-    catch ( const std::exception &e ) {
-      logwrite( "Acam::Interface::publish_snapshot",
-                "ERROR publishing message: "+std::string(e.what()) );
-      return;
-    }
+    this->publish_temperature();
   }
   /***** Acam::Interface::publish_snapshot ************************************/
 
@@ -1505,6 +1477,41 @@ namespace Acam {
     }
   }
   /***** Acam::Interface::publish_status **************************************/
+
+
+  /***** Acam::Interface::publish_temperature ********************************/
+  /**
+   * @brief      publish only the andor CCD temperature on Topic::ACAMD_TEMP
+   * @details    Published on a fixed interval (see acamd.cpp), not on change,
+   *             since the CCD temperature varies continuously. When the camera
+   *             is not open the thread stays alive but publishes NaN instead
+   *             of attempting a hardware read; this lets the thread resume
+   *             publishing real values when the camera comes back online
+   *             without the get_temperature() error-log spam each cycle.
+   *
+   */
+  void Interface::publish_temperature() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::ACAMD;
+
+    if ( this->isopen("camera") ) {
+      int ccdtemp=99;
+      this->camera.andor.get_temperature( ccdtemp );
+      jmessage[Key::Acamd::TANDOR] = static_cast<float>(ccdtemp);   // database wants float
+    }
+    else {
+      jmessage[Key::Acamd::TANDOR] = NAN;
+    }
+
+    try {
+      this->publisher->publish( jmessage, Topic::ACAMD_TEMP );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_temperature",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Acam::Interface::publish_temperature ********************************/
 
 
   /***** Acam::Interface::request_snapshot ************************************/
@@ -1639,11 +1646,11 @@ namespace Acam {
    *
    */
   void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
-    this->database.add_from_json<int>( jmessage, "OBS_ID" );
-    this->database.add_from_json<std::string>( jmessage, "NAME" );
-    this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
-    this->database.add_from_json<std::string>( jmessage, "RA" );
-    this->database.add_from_json<std::string>( jmessage, "DECL" );
+    this->database.add_from_json<int>(         jmessage, Key::TargetInfo::OBS_ID );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::NAME );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::POINTMODE );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::RA );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::DECL );
   }
   /***** Acam::Interface::handletopic_targetinfo ******************************/
 
@@ -3344,6 +3351,7 @@ logwrite( function, message.str() );
     //
     if ( requested_mode == Acam::TARGET_NOP ) {
       this->stop_acquisition.store( true, std::memory_order_release );
+      this->is_acquired.store( false, std::memory_order_release );  // target no longer acquired when stopped
       logwrite( function, "stop requested" );
     }
 
@@ -4078,17 +4086,17 @@ logwrite( function, message.str() );
     //
     BoolState shutting_down( this->is_shutting_down );
 
-    // close the cover (if motion is in use)
-    //
-    if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
-
-    // diable target acquisition
+    // Stop target acquisition and the framegrab thread FIRST so the guider
+    // stops sending pt_offsets to TCS during the slow cover-close that
+    // follows. TCS is shut down at the orchestration layer after acamd
+    // finishes (see Sequencer::Sequence::shutdown phase split).
     //
     error |= this->acquire( "stop", dontcare);
-
-    // stop the framegrab thread
-    //
     error |= this->framegrab( "stop", dontcare );
+
+    // close the cover (if motion is in use) - this is the slow step
+    //
+    if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
 
     // request stop the focus monitor
     //
@@ -4098,6 +4106,12 @@ logwrite( function, message.str() );
     // close socket connections to hardware
     //
     error |= this->close( "all", dontcare );
+
+    // publish post-shutdown state so subscribers see is_acquired=false /
+    // acquire_mode="stopped" before publishing stops; forced to bypass
+    // publish_status's change-detect early-return.
+    //
+    this->publish_status(true);
 
     if ( error == NO_ERROR ) logwrite( function, "acam interfaces shut down" );
     else logwrite( function, "ERROR shutting down acam interfaces" );

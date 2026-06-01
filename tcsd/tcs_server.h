@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <csignal>
 #include <map>
+#include <set>
 #include <mutex>
 #include <thread>
 #include <vector>

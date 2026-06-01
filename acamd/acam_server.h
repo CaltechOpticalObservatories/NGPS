@@ -112,7 +112,7 @@ namespace Acam {
       static void thread_main( Acam::Server &server, std::shared_ptr<Network::TcpSocket> sock );
       static void async_main( Acam::Server &acam, Network::UdpSocket sock );   ///< asynchronous message sending thread
 
-      void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
+      void doit(Network::TcpSocket &sock);                                     ///< the workhorse of each thread connetion
       void exit_cleanly();                                                     ///< exit
       long configure_acamd();                                                  ///< read and apply the configuration file
       long configure_telemetry();                                              ///< read and apply telem configuration

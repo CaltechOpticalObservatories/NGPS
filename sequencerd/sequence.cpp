@@ -33,10 +33,6 @@ namespace Sequencer {
     if ( jmessage_in.contains( Sequencer::DAEMON_NAME ) ) {
       this->publish_snapshot();
     }
-    else
-    if ( jmessage_in.contains( "test" ) ) {
-      logwrite( "Sequencer::Sequence::handletopic_snapshot", jmessage_in.dump() );
-    }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
 
@@ -175,6 +171,7 @@ namespace Sequencer {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_targetinfo( true );
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
@@ -365,6 +362,7 @@ namespace Sequencer {
     // publish the structured seqstate topic
     //
     this->publish_seqstate();
+    this->publish_targetinfo();   // targetinfo content is gated on seq_state (READY/RUNNING)
     this->cv.notify_all();
 
     // emit a NOTICE on Topic::BROADCAST only when the lifecycle state has
@@ -628,6 +626,12 @@ namespace Sequencer {
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                      // target found, get the threads going
 
+        if (this->target.nexp==0) {                                         // skip target if nexp==0
+          message.str(""); message << "skipping target " << this->target.name;
+          logwrite(function, message.str());
+          continue;
+        }
+
         // If the TCS is not ready and the target contains TCS coordinates,
         // then we cannot proceed.
         //
@@ -646,6 +650,8 @@ namespace Sequencer {
           this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
           break;
         }
+
+        this->publish_targetinfo();   // publish the now-active target
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -834,9 +840,9 @@ namespace Sequencer {
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(15),
+        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
                                             [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
-          logwrite( function, "timeout waiting for readout — requesting snapshot" );
+          logwrite( function, "waiting for readout — requesting snapshot" );
           lock.unlock();
           this->request_snapshot();
           lock.lock();
@@ -2187,7 +2193,12 @@ namespace Sequencer {
     }
 
     // Send casangle using tcsd wrapper for RINGGO command
-    // do not wait for reply
+    // do not wait for reply — intentional: Cassegrain rotation can take tens of
+    // seconds and the sequence continues while the operator guides on-target.
+    //
+    // WATCH: tcsd still sends a CID-tagged reply that accumulates in the socket
+    // receive buffer unread.  DaemonClient::send() drains stale data before each
+    // new write, which prevents that orphaned reply from poisoning the next send.
     //
     {
     std::stringstream ringgo_cmd;
@@ -2705,7 +2716,9 @@ namespace Sequencer {
 
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
-    logwrite( function, "[DEBUG] sending expose command" );
+    this->set_imgtype();
+
+    logwrite( function, "sending expose command" );
 
     // Send the EXPOSE command to camera daemon and wait for the reply.
     // Also verify the reply contains "DONE": command_timeout returns NO_ERROR
@@ -2784,6 +2797,33 @@ namespace Sequencer {
     return;
   }
   /***** Sequencer::Sequence::modify_exptime **********************************/
+
+
+  /***** Sequencer::Sequence::set_imgtype *************************************/
+  /**
+   * @brief      set IMGTYPE FITS keyword in camerad before each exposure
+   * @details    Looks up the imgtype field from the CalibrationTarget config for
+   *             the current target and sends it to camerad as a key command.
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Sequence::set_imgtype() {
+    const std::string function("Sequencer::Sequence::set_imgtype");
+    std::string reply;
+
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const std::string imgtype = this->caltarget.get_info(calname).imgtype;
+
+    const std::string cmd = CAMERAD_KEY + " IMGTYPE=" + imgtype
+                                        + (this->target.iscal ? "//Calibration" : "");
+    if ( this->camerad.send( cmd, reply ) != NO_ERROR ) {
+      logwrite( function, "ERROR sending '"+cmd+"': "+reply );
+      return ERROR;
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::set_imgtype *************************************/
 
 
   /***** Sequencer::Sequence::startup *****************************************/
@@ -3016,7 +3056,7 @@ namespace Sequencer {
    */
   long Sequence::shutdown() {
     const std::string function("Sequencer::Sequence::shutdown");
-    long error=ERROR;
+    long error=NO_ERROR;
 
     // Reject if a conflicting lifecycle transition is already in progress.
     // All other states (READY, NOTREADY, FAILED, RUNNING, PAUSED) are valid
@@ -3071,6 +3111,7 @@ namespace Sequencer {
 
     // container of shutdown threads to launch,
     // pair their ThreadStatusBit with the function to call
+    // (TCS is shut down after these complete; see below)
     //
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads = {
       { THR_ACAM_SHUTDOWN,     std::bind(&Sequence::acam_shutdown, this)     },
@@ -3078,9 +3119,8 @@ namespace Sequencer {
       { THR_CAMERA_SHUTDOWN,   std::bind(&Sequence::camera_shutdown, this)   },
       { THR_FLEXURE_SHUTDOWN,  std::bind(&Sequence::flexure_shutdown, this)  },
       { THR_FOCUS_SHUTDOWN,    std::bind(&Sequence::focus_shutdown, this)    },
-      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slit_shutdown, this)     },
-      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slicecam_shutdown, this) },
-      { THR_TCS_SHUTDOWN,      std::bind(&Sequence::tcs_shutdown, this)      }
+      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slicecam_shutdown, this) },
+      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slit_shutdown, this)     }
     };
 
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
@@ -3109,11 +3149,28 @@ namespace Sequencer {
       }
     }
 
+    // TCS is shut down last so that any lingering guider pt_offsets from
+    // acamd during the slow cover-close above hit an open connection.
+    //
+    try {
+      if ( this->tcs_shutdown() != NO_ERROR ) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" failed" );
+        error = ERROR;
+      }
+      else {
+        this->broadcast.notice( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" shutdown complete" );
+      }
+    }
+    catch (const std::exception& e) {
+      this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" exception: "+std::string(e.what()) );
+      error=ERROR;
+    }
+
     if (error==NO_ERROR) {
       this->broadcast.notice(function, "instrument is shut down");
     }
     else {
-      this->broadcast.error(function, "shut down may not be complete");
+      this->broadcast.warning(function, "shut down may not be complete");
     }
 
     // Always end in NOTREADY regardless of worker errors. SEQ_FAILED is
@@ -3643,44 +3700,50 @@ namespace Sequencer {
   /***** Sequencer::Sequence::target_offset ***********************************/
 
 
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publish target info on Topic::TARGETINFO, on change (or force)
+   * @details    Builds a JSON message of the current target and publishes it
+   *             only when it differs from the last published message, unless
+   *             force is set. The message is empty unless seq state is
+   *             READY or RUNNING.
+   * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
-  void Sequence::make_telemetry_message( std::string &retstring ) {
-    // assemble the telemetry I want to report into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
+  void Sequence::publish_targetinfo( bool force ) {
     nlohmann::json jmessage;
-    jmessage["messagetype"] = "targetinfo";
+    jmessage[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
-    // fill telemetry message only when READY or RUNNING
+    // fill telemetry only when READY or RUNNING; otherwise an empty (no-target) message
     //
     if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
-      // Store unconfigured values as NAN.
-      // NAN values are not logged to the database.
+      // unconfigured values are stored as NAN
       //
-      jmessage["OBS_ID"] = this->target.obsid < 0 ? NAN : this->target.obsid;           //  OBSERVATION_ID
-      jmessage["NAME"] = this->target.name;                                             //  NAME
-      jmessage["SLITA"] = this->target.slitangle;                                       // *OTMslitangle
-      jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.binspect;   // *BINSPECT
-      jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.binspat;      // *BINSPAT
-      jmessage["POINTMODE"] = this->target.pointmode;                                   // *POINTMODE
-      jmessage["RA"] = this->target.ra_hms;                                             // *RA
-      jmessage["DECL"] = this->target.dec_dms;                                          // *DECL
+      jmessage[Key::TargetInfo::OBS_ID]    = this->target.obsid < 0 ? NAN : this->target.obsid;
+      jmessage[Key::TargetInfo::NAME]      = this->target.name;
+      jmessage[Key::TargetInfo::SLITA]     = this->target.slitangle;
+      jmessage[Key::TargetInfo::BINSPECT]  = this->target.binspect < 1 ? NAN : this->target.binspect;
+      jmessage[Key::TargetInfo::BINSPAT]   = this->target.binspat < 1 ? NAN : this->target.binspat;
+      jmessage[Key::TargetInfo::POINTMODE] = this->target.pointmode;
+      jmessage[Key::TargetInfo::RA]        = this->target.ra_hms;
+      jmessage[Key::TargetInfo::DECL]      = this->target.dec_dms;
     }
 
-    retstring = jmessage.dump();  // serialize the json message into a string
+    // unless forced, only publish if the target info changed
+    //
+    std::lock_guard<std::mutex> lock( this->publish_targetinfo_mtx );  // guard check-then-act
+    if ( !force && jmessage == this->last_published_targetinfo ) return;
+    this->last_published_targetinfo = jmessage;
 
-    retstring.append(JEOF);       // append JSON message terminator
-
-    return;
+    try {
+      this->publisher->publish( jmessage, Topic::TARGETINFO );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Sequencer::Sequence::publish_targetinfo",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
   }
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
 
 
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/

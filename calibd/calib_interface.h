@@ -145,6 +145,21 @@ namespace Calib {
     private:
       zmqpp::context context;
 
+      /**
+       * @struct Status
+       * @brief  published calib state: value strings indexed by key (modulators + actuators)
+       */
+      struct Status {
+        std::map<std::string,std::string> values;
+        bool operator==(const Status &o) const { return values == o.values; }
+        bool operator!=(const Status &o) const { return !(*this == o); }
+      };
+      Status status;                                   ///< current calib state
+      Status last_published_status;                    ///< last published calib state
+      std::mutex publish_mutex;                        ///< serializes publish-on-change; held over get_status() for now — @TODO revist
+
+      void get_status();                               ///< refresh status from hardware
+
     public:
       Interface()
         : context(),
@@ -153,7 +168,7 @@ namespace Calib {
           should_subscriber_thread_run(false)
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
         };
       }
@@ -188,8 +203,7 @@ namespace Calib {
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
 
-      void publish_snapshot();
-      void publish_snapshot(std::string &retstring);
+      void publish_status( bool force=false );         ///< publish calib state on change (or force)
 
       long open(std::string args, std::string &retstring);
       long is_open(std::string args, std::string &retstring);

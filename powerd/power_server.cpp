@@ -291,7 +291,14 @@ namespace Power {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Power::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -409,7 +416,7 @@ namespace Power {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit(Network::TcpSocket sock) {
+  void Server::doit(Network::TcpSocket &sock) {
     std::string function = "Power::Server::doit";
     long  ret;
     std::stringstream message;
@@ -606,27 +613,11 @@ namespace Power {
       // power status
       //
       if ( cmd == POWERD_STATUS ) {
-                    ret = this->interface.status( args, retstring );
+                    ret = this->interface.get_status( args, retstring );
                     if ( ret==NO_ERROR ) {
                       ret=NOTHING;
                       if ( sock.Write( retstring ) < 0 ) connection_open=false;
                     }
-      }
-      else
-
-      // telemetry request
-      //
-      if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.publish_snapshot( retstring );
-                        ret = JSON;
-                      }
       }
 
       // all other commands go to the powerd interface for parsing
@@ -679,8 +670,6 @@ namespace Power {
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
-
-      if ( ret==NO_ERROR ) this->interface.publish_snapshot();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.

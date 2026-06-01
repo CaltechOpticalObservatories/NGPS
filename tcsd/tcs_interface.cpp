@@ -18,10 +18,6 @@ namespace TCS {
     if ( jmessage.contains( TCS::DAEMON_NAME ) ) {
       this->publish_snapshot();
     }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "TCS::Interface::handletopic_snapshot", jmessage.dump() );
-    }
   }
 
 
@@ -72,10 +68,13 @@ namespace TCS {
     }
 
     // broadcast motion status if it changed
+    {
+    std::lock_guard<std::mutex> lock(this->publish_mutex);  // guard check-then-act on last_published_motion
     if (!motion.empty() &&
         motion != this->last_published_motion) {
       this->broadcast.notice("TCS::Interface::publish_snapshot", "telescope "+motion);
       this->last_published_motion = motion;
+    }
     }
 
     // for backwards compatibility
@@ -1282,6 +1281,15 @@ namespace TCS {
       return HELP;
     }
 
+    // Skip the hardware send when not connected, so callers that poll
+    // continuously (sequencerd, targetcontrol GUI) don't flood the log
+    // with ERROR on every call after a shutdown.
+    //
+    if ( ! this->tcs_info.isopen ) {
+      retstring = "not_connected";
+      return NO_ERROR;
+    }
+
     // Send the command
     //
     if ( this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE ) != NO_ERROR ) {
@@ -1360,11 +1368,6 @@ namespace TCS {
       logwrite( function, message.str() );
       error = ERROR;
     }
-
-#ifdef LOGLEVEL_DEBUG
-    message.str(""); message << "[DEBUG] requested cass angle " << angle;
-    logwrite( function, message.str() );
-#endif
 
     std::stringstream cmd;
     cmd << "RINGGO " << std::fixed << std::setprecision(2) << angle;
@@ -1636,10 +1639,7 @@ namespace TCS {
 
     std::string reply;
 
-message.str(""); message << "DEBUG] sending cmd=" << cmd << " with type=" << (conn_type==TCS::FAST_RESPONSE?"fast":"slow") << " and to=" << to;
-logwrite(function,message.str());
     tcs.execute_command( cmd, reply, conn_type, to );
-logwrite(function,"[DEBUG] back from cmd="+cmd+" with reply="+reply);
 
     // Success or failure depends on what's in the TCS reply,
     // which depends on the command.

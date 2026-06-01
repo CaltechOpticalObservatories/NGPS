@@ -95,7 +95,7 @@ namespace Telemetry {
       static void thread_main( Telemetry::Server &telem, Network::TcpSocket sock );  ///< main function for all non-blocked threads
       static void async_main( Telemetry::Server &telem, Network::UdpSocket sock );   ///< asynchronous message sending thread
 
-      void doit(Network::TcpSocket sock);                                      ///< the workhorse of each thread connetion
+      void doit(Network::TcpSocket &sock);                                     ///< the workhorse of each thread connetion
       void exit_cleanly();                                                     ///< exit
       long configure_telemd();                                                 ///< read and apply the configuration file
   };

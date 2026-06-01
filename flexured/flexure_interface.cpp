@@ -322,10 +322,6 @@ namespace Flexure {
       return HELP;
     }
 
-    // get the needed telemetry (telescope position and temperatures)
-    //
-    this->get_external_telemetry();
-
     // perform the calculations
     //
     retstring="not_yet_implemented";
@@ -390,164 +386,93 @@ namespace Flexure {
   /***** Flexure::Interface::send_command *************************************/
 
 
-  /***** Flexure::Interface::make_telemetry_message ***************************/
+  /***** Flexure::Interface::get_status **************************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      read all flexure actuator positions into status
    *
    */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    const std::string function="Flexure::Interface::make_telemetry_message";
+  void Interface::get_status() {
+    const std::string function="Flexure::Interface::get_status";
     std::stringstream message;
 
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"]="flexureinfo";
+    this->status.positions.clear();
 
-    // get all flexure actuator positions
-    //
     auto _motormap = this->motorinterface.get_motormap();
-
-    // loop through all motors in motormap
     for ( const auto &mot : _motormap ) {
-      // loop through all axes for each motor
+      bool connected = this->motorinterface.is_connected( mot.second.name );
       for ( const auto &axis : mot.second.axes ) {
         auto chan = mot.second.name;
         auto addr = mot.second.addr;
         float position = NAN;
         std::string posname;
         std::string key;
-        this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
+        if ( connected ) {
+          this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
+        }
         switch ( axis.second.axisnum ) {
           case 1 : key = "FLXPIS_" + chan; break;
-          case 2:  key = "FLXSPE_" + chan; break;
-          case 3:  key = "FLXSPA_" + chan; break;
-          default: key = "error";
-                   message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
+          case 2 : key = "FLXSPE_" + chan; break;
+          case 3 : key = "FLXSPA_" + chan; break;
+          default: message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
                    logwrite( function, message.str() );
+                   continue;
         }
-
-        // assign the position or NaN to a key in the JSON jmessage
-        //
-        if ( !std::isnan(position) ) jmessage[key]=position; else jmessage[key]="NAN";
+        this->status.positions[key] = position;
       }
     }
-
-    retstring = jmessage.dump();  // serialize the json message into retstring
-
-    retstring.append(JEOF);       // append the JSON message terminator
-
-    return;
   }
-  /***** Flexure::Interface::make_telemetry_message ***************************/
+  /***** Flexure::Interface::get_status **************************************/
 
 
-  /***** Flexure::Interface::get_external_telemetry ***************************/
+  /***** Flexure::Interface::publish_status **********************************/
   /**
-   * @brief      collect telemetry from another daemon
-   * @details    This is used for any telemetry that I need to collect from
-   *             another daemon. Send the command "sendtelem" to the daemon, which
-   *             will respond with a JSON message. The daemon(s) to contact
-   *             are configured with the TELEM_PROVIDER key in the config file.
+   * @brief      publish flexure state, but only if it changed (or forced)
+   * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
-  void Interface::get_external_telemetry() {
+  void Interface::publish_status( bool force ) {
+    // Serialize publish-on-change; held across get_status() hardware I/O for now @TODO revisit
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
 
-    // Loop through each configured telemetry provider. This requests
-    // their telemetry which is returned as a serialized json string
-    // held in retstring.
+    // refresh current state from hardware
     //
-    // handle_json_message() will parse the serialized json string.
+    this->get_status();
+
+    // unless forced, only publish if the state changed
     //
-    std::string retstring;
-    for ( const auto &provider : this->telemetry_providers ) {
-      Common::collect_telemetry( provider, retstring );
-      handle_json_message(retstring);
+    if ( !force && this->status == this->last_published_status ) return;
+
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::FLEXURED;
+    for ( const auto &[key,pos] : this->status.positions ) {
+      if ( !std::isnan(pos) ) jmessage[key] = pos; else jmessage[key] = "NAN";
     }
-    return;
-  }
-  /***** Flexure::Interface::get_external_telemetry ***************************/
 
-
-  /***** Flexure::Interface::handle_json_message ******************************/
-  /**
-   * @brief      parses incoming telemetry messages
-   * @details    Requesting telemetry from another daemon returns a serialized
-   *             JSON message which needs to be passed in here to parse it.
-   * @param[in]  message_in  incoming serialized JSON message (as a string)
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::handle_json_message( std::string message_in ) {
-    const std::string function="Flexure::Interface::handle_json_message";
-    std::stringstream message;
+    this->last_published_status = this->status;
 
     try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-      std::string messagetype;
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
-          messagetype = jmessage["messagetype"];
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
-          return ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        return ERROR;
-      }
-
-      // no errors, so disseminate the message contents based on the message type
-      //
-      if ( messagetype == "thermalinfo" ) {
-        double TCOLL_I=NAN, TCOLL_R=NAN, TCOLL_G=NAN, TCOLL_U=NAN;
-        Common::extract_telemetry_value( message_in, "TCOLL_I", TCOLL_I );
-        Common::extract_telemetry_value( message_in, "TCOLL_R", TCOLL_R );
-        Common::extract_telemetry_value( message_in, "TCOLL_G", TCOLL_G );
-        Common::extract_telemetry_value( message_in, "TCOLL_U", TCOLL_U );
-        message.str(""); message << "TCOLL_I=" << TCOLL_I << " TCOLL_R=" << TCOLL_R << " TCOLL_G=" << TCOLL_G << " TCOLL_U=" << TCOLL_U;
-        logwrite( function, message.str() );
-      }
-      else
-      if ( messagetype == "tcsinfo" ) {
-        double casangle=NAN, alt=NAN;
-        Common::extract_telemetry_value( message_in, Key::Tcsd::CASANGLE, casangle );
-        Common::extract_telemetry_value( message_in, Key::Tcsd::ALT,      alt );
-        message.str(""); message << "casangle=" << casangle << " alt=" << alt;
-        logwrite( function, message.str() );
-      }
-      else
-      if ( messagetype == "test" ) {
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
+      this->publisher->publish( jmessage, Topic::FLEXURED );
     }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
+    catch( const std::exception &e ) {
+      logwrite( "Flexure::Interface::publish_status",
+                "ERROR publishing message: "+std::string(e.what()) );
     }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
   }
-  /***** Flexure::Interface::handle_json_message ******************************/
+  /***** Flexure::Interface::publish_status **********************************/
+
+
+  /***** Flexure::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      respond to a snapshot request by publishing my status
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
+    if ( jmessage.contains( Topic::FLEXURED ) ) {
+      this->publish_status();
+    }
+  }
+  /***** Flexure::Interface::handletopic_snapshot ****************************/
 
 
   /***** Flexure::Interface::test *********************************************/

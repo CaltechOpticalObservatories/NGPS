@@ -286,15 +286,15 @@ namespace Power {
   /***** Power::Interface::list ***********************************************/
 
 
-  /***** Power::Interface::status *********************************************/
+  /***** Power::Interface::get_status *****************************************/
   /**
    * @brief      list status of all plug devices
    * @param[out] retstring  reference to string to contain the status of plug devices
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::status( std::string args, std::string &retstring ) {
-    std::string function = "Power::Interface::status";
+  long Interface::get_status( std::string args, std::string &retstring ) {
+    std::string function = "Power::Interface::get_status";
     std::stringstream message, plugid;
 
     // Help
@@ -344,7 +344,7 @@ namespace Power {
 
           message << plugid.str() << " " << status_string
                                   << " " << this->plugname[ plugid.str() ] << "\n";
-          this->telemetry_map[this->plugname[plugid.str()]] = status;
+          this->status.plugstate[this->plugname[plugid.str()]] = status;
         }
       }
       message << this->missing;  // notify of missing hardware, if any
@@ -357,9 +357,13 @@ namespace Power {
 
     retstring = message.str();
 
+    // status has been refreshed from hardware; publish if it changed
+    //
+    this->publish_status();
+
     return NO_ERROR;
   }
-  /***** Power::Interface::status *********************************************/
+  /***** Power::Interface::get_status *****************************************/
 
 
   /***** Power::Interface::command ********************************************/
@@ -580,6 +584,15 @@ namespace Power {
                return( ERROR );
                break;
     }
+
+    // After a successful set (ON/OFF/BOOT), re-read state which refreshes the
+    // status struct and publishes the change. Reads (command==-1) don't change state.
+    //
+    if ( command >= 0 && error == NO_ERROR ) {
+      std::string dontcare;
+      this->get_status( "", dontcare );
+    }
+
     return( error );
     }
     catch ( const std::exception &e ) {
@@ -591,62 +604,48 @@ namespace Power {
   /***** Power::Interface::command ********************************************/
 
 
-  /***** Power::Interface::publish_snapshot ***********************************/
+  /***** Power::Interface::publish_status *************************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publish the power state, but only if it changed (or forced)
+   * @param[in]  force  optional (default=false) publish irrespective of change
    *
    * powerd telemetry is reported as true|false if the plug is on
    *
    */
-  void Interface::publish_snapshot() {
-    std::string dontcare;
-    this->publish_snapshot(dontcare);
-  }
-  void Interface::publish_snapshot( std::string &retstring ) {
+  void Interface::publish_status( bool force ) {
+    std::lock_guard<std::mutex> lock( this->publish_mutex );  // serialize publish-on-change
 
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
+    // unless forced, only publish if the power state changed
     //
+    if ( !force && this->status == this->last_published_status ) return;
+
     nlohmann::json jmessage_out;
-    jmessage_out["source"] = "powerd";        // source of this telemetry
+    jmessage_out[Key::SOURCE] = Topic::POWERD;
 
-    // get power status
+    // a plug is reported true when it is on
     //
-    this->status("", retstring);
-
-    // fill the jmessage_out with boolean values for the key/val pairs just retrieved
-    // to represent the powered state of the plug ("on" is true)
-    //
-    for ( const auto &[key,val] : this->telemetry_map ) {
-      jmessage_out[key]=(val==1?true:false);
+    for ( const auto &[key,val] : this->status.plugstate ) {
+      jmessage_out[key] = ( val==1 ? true : false );
     }
 
-    // for backwards compatibility
-    jmessage_out["messagetype"]="powerinfo";
-    retstring = jmessage_out.dump();  // serialize the json message into retstring
-    retstring.append(JEOF);           // append the JSON message terminator
+    this->last_published_status = this->status;
 
-    // publish the jmessage
-    //
     try {
       this->publisher->publish( jmessage_out );
     }
     catch( const std::exception &e ) {
-      logwrite( "Power::Interface::publish_snapshot",
+      logwrite( "Power::Interface::publish_status",
                 "ERROR publishing message: "+std::string(e.what()) );
     }
   }
-  /***** Power::Interface::publish_snapshot ***********************************/
+  /***** Power::Interface::publish_status *************************************/
 
 
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    // If my name is in the jmessage then publish my snapshot
+    // If my topic is in the jmessage then publish my status
     //
-    if ( jmessage.contains( Power::DAEMON_NAME ) ) {
-      this->publish_snapshot();
+    if ( jmessage.contains( Topic::POWERD ) ) {
+      this->publish_status();
     }
   }
 }

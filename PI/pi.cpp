@@ -424,6 +424,11 @@ namespace Physik_Instrumente {
 
     this->thread_error.store( NO_ERROR );  // initialize the thread_error state.
 
+    // vector of threads to perform the operation for each motor
+    //
+    std::vector<std::thread> workers;
+    workers.reserve(motornames.size());
+
     for ( size_t n=0; n < motornames.size(); n++ ) {
 
       auto name = motornames[n];
@@ -434,16 +439,15 @@ namespace Physik_Instrumente {
       // Spawn a thread to performm the move.
       // If there is more than one then they can be done in parallel.
       //
-      std::thread( _dothread_moveto, std::ref( *this ), name, addr, axis, position ).detach();
-      this->motors_running++;
+      try {
+        workers.emplace_back( _dothread_moveto, std::ref( *this ), name, addr, axis, position );
+      }
+      catch(...) { for ( auto &t : workers ) t.join(); throw; }
     }
 
     // wait for the threads to finish
-    // TODO add a way to abort this
     //
-    while ( this->motors_running != 0 ) {
-      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
-    }
+    for ( auto &t : workers ) t.join();
 
     logwrite( function, "move(s) complete" );
 
@@ -685,8 +689,6 @@ namespace Physik_Instrumente {
 
     iface.thread_error.fetch_or( error );        // preserve any error returned
 
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
-
     message.str(""); message << "completed move " << name << ( error!=NO_ERROR ? " with error" : "" );
     logwrite( function, message.str() );
 
@@ -811,6 +813,11 @@ namespace Physik_Instrumente {
     //
     this->thread_error.store( NO_ERROR );
 
+    // vector of threads to perform the operation for each motor
+    //
+    std::vector<std::thread> workers;
+    workers.reserve(name_list.size());
+
     // Now loop through the built up list of motor names
     //
     for ( const auto &name : name_list ) {
@@ -823,22 +830,22 @@ namespace Physik_Instrumente {
         message << " }";
         logwrite( function, message.str() );
         retstring="unknown_motor";
+        for ( auto &t : workers ) t.join();  // join any workers spawned before returning
         return ERROR;
       }
 
       // Spawn a thread to performm the home move.
       // If there is more than one then they can be done in parallel.
       //
-      std::thread( _dothread_home, std::ref( *this ), name ).detach();
-      this->motors_running++;
+      try {
+        workers.emplace_back( _dothread_home, std::ref( *this ), name );
+      }
+      catch(...) { for ( auto &t : workers ) t.join(); throw; }
     }
 
     // wait for the threads to finish
-    // TODO add a way to abort this
     //
-    while ( this->motors_running != 0 ) {
-      std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
-    }
+    for ( auto &t : workers ) t.join();
 
     logwrite( function, "home complete" );
 
@@ -878,14 +885,12 @@ namespace Physik_Instrumente {
       message.str(""); message << "ERROR: name \"" << name << "\" not in motormap: " << e.what();
       logwrite( function, message.str() );
       iface.thread_error.fetch_or( ERROR );      // preserve this error
-      --iface.motors_running;                    // atomically decrement the number of motors waiting
       return;
     }
 
     if ( reftype.empty() ) {
       message.str(""); message << "NOTICE referencing not available for " << name;
       logwrite( function, message.str() );
-      --iface.motors_running;                    // atomically decrement the number of motors waiting
       return;
     }
 
@@ -936,8 +941,6 @@ namespace Physik_Instrumente {
     }
 
     iface.thread_error.fetch_or( error );        // preserve any error returned
-
-    --iface.motors_running;                      // atomically decrement the number of motors waiting
 
     message.str(""); message << "completed home " << name << ( error!=NO_ERROR ? " with error" : "" );
     logwrite( function, message.str() );

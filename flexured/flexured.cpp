@@ -122,6 +122,18 @@ int main(int argc, char **argv) {
     flexured.exit_cleanly();
   }
 
+  // initialize the pub/sub handler
+  //
+  if ( flexured.interface.init_pubsub() == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    flexured.exit_cleanly();
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  // publish current state so the world knows I'm online
+  //
+  flexured.interface.publish_status( true );
+
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
   // Each thread gets a socket object. All of the socket objects are stored in a vector container.

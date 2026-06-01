@@ -27,7 +27,6 @@ const std::vector<std::string> FLEXURED_SYNTAX = {
                                                  FLEXURED_NATIVE+" ? | <chan> <cmd>",
                                                  FLEXURED_OPEN,
                                                  FLEXURED_SET+" ? | <chan> <axis> <pos>",
-                                                 TELEMREQUEST+" [ ? ]",
                                                  FLEXURED_TEST+" ? | <testname> ...",
                                                  "   motormap",
                                                  "   posmap",

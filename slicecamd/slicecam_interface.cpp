@@ -48,7 +48,9 @@ namespace Slicecam {
 
     // empty args returns status
     if (action=="status") {
-      retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
+      const bool running = this->is_fineacquire_running.load(std::memory_order_acquire);
+      const bool locked  = this->is_fineacquire_locked.load(std::memory_order_acquire);
+      retstring = running ? "running" : ( locked ? "stopped (locked)" : "stopped" );
       return NO_ERROR;
     }
     else
@@ -323,7 +325,14 @@ namespace Slicecam {
     // convergence check
     //
     if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
-      logwrite( function, "fine acquisition converged" );
+      std::ostringstream oss;
+      oss << "fine acquisition converged: offset dRA=" << med_dra * 3600.0
+          << " dDEC=" << med_ddec * 3600.0
+          << " arcsec (r=" << offset_arcsec
+          << " arcsec, n=" << n
+          << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+          << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
+      logwrite( function, oss.str() );
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
       this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
@@ -489,7 +498,7 @@ namespace Slicecam {
     snapshot_status[Topic::ACAMD]=true;
     }
     // set is_acam_guiding flag
-    bool acquired;
+    bool acquired = false;
     Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
     this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
 
@@ -624,7 +633,8 @@ namespace Slicecam {
     jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
 
     for ( const auto &[name, cam] : this->camera.andor ) {
-      std::string key="TANDOR_SCAM_"+name;
+      const std::string &key = (name == "L") ? Key::Slicecamd::TANDOR_L
+                                             : Key::Slicecamd::TANDOR_R;
       jmessage_out[key] = static_cast<float>(cam->camera_info.ccdtemp);  // the database wants a float
     }
     try {
@@ -637,6 +647,40 @@ namespace Slicecam {
     }
   }
   /***** Slicecam::Interface::publish_snapshot ********************************/
+
+
+  /***** Slicecam::Interface::publish_temperature *****************************/
+  /**
+   * @brief      publish only the andor CCD temperatures on Topic::SLICECAMD
+   * @details    Published on a fixed interval (see slicecamd.cpp), not on
+   *             change, since the CCD temperature varies continuously.
+   *
+   */
+  void Interface::publish_temperature() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::SLICECAMD;
+
+    for ( const auto &[name, cam] : this->camera.andor ) {
+      const std::string &key = (name == "L") ? Key::Slicecamd::TANDOR_L
+                                             : Key::Slicecamd::TANDOR_R;
+      if ( cam->is_open() ) {
+        int ccdtemp=99;
+        cam->get_temperature(ccdtemp);
+        jmessage[key] = static_cast<float>(ccdtemp);   // the database wants a float
+      }
+      else {
+        jmessage[key] = NAN;
+      }
+    }
+    try {
+      this->publisher->publish( jmessage, Topic::SLICECAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::publish_temperature",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Slicecam::Interface::publish_temperature *****************************/
 
 
   /***** Slicecam::Interface::request_snapshot ********************************/

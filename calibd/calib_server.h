@@ -96,7 +96,7 @@ namespace Calib {
 
       void exit_cleanly(void);              ///< exit
       long configure_calibd();              ///< read and apply the configuration file
-      void doit(Network::TcpSocket sock);   ///< the workhorse of each thread connetion
+      void doit(Network::TcpSocket &sock);  ///< the workhorse of each thread connetion
 
       void handle_signal( int signo );
 
