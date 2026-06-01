@@ -365,30 +365,6 @@ namespace Acam {
         applied++;
       }
 
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
-      // (these don't get counted with "applied++")
-      //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
-          }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-      }
 
     } // end loop through the entries in the configuration file
 
@@ -426,7 +402,14 @@ namespace Acam {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Acam::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -542,7 +525,7 @@ namespace Acam {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Acam::Server::doit";
     long  ret;
     std::stringstream message;

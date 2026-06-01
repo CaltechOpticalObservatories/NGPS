@@ -184,8 +184,8 @@ int main(int argc, char **argv) {
                              Topic::FLEXURED,
                              Topic::FOCUSD,
                              Topic::POWERD,
-                             Topic::TARGETINFO,
                              Topic::SLITD,
+                             Topic::TARGETINFO,
                              Topic::TCSD,
                              Topic::THERMALD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
@@ -262,7 +262,14 @@ void new_log_day() {
     auto newlogtime = next_occurrence( 12, 01, 00 );
     std::this_thread::sleep_until( newlogtime );
     close_log();
-    init_log( logpath, Camera::DAEMON_NAME );
+    // retry the re-open on a short timer so a transient failure (missing
+    // datedir, permission/owner drift, full disk) doesn't silence logging
+    // for ~24h until the next rotation
+    while ( init_log( logpath, Camera::DAEMON_NAME ) != 0 ) {
+      std::cerr << get_timestamp() << "  (Camera::new_log_day) "
+                << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+      std::this_thread::sleep_for( std::chrono::seconds(60) );
+    }
     // ensure it doesn't immediately re-open
     std::this_thread::sleep_for( std::chrono::seconds(1) );
   }
@@ -388,8 +395,10 @@ void doit(Network::TcpSocket &sock) {
 
   bool connection_open=true;
 
-  message.str(""); message << "thread " << sock.id << " accepted connection on fd " << sock.getfd();
+#ifdef LOGLEVEL_DEBUG
+  message.str(""); message << "[DEBUG] thread " << sock.id << " accepted connection on fd " << sock.getfd();
   logwrite( function, message.str() );
+#endif
 
   while (connection_open) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
@@ -412,18 +421,14 @@ void doit(Network::TcpSocket &sock) {
     // Data available, now read from connected socket...
     //
     std::string sbuf;
+    const int fd_before_read = sock.getfd();
     if ( ( ret=sock.Read( sbuf, '\n' ) ) <= 0 ) {
-      if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
+      if (ret<0) {                // real read error
+        message.str(""); message << "Read error on fd " << fd_before_read << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
-      if (ret==0) {
-        message.str(""); message << "timeout reading from fd " << sock.getfd();
-        logwrite( function, message.str() );
-      }
-      break;                      // Breaking out of the while loop will close the connection.
-                                  // This probably means that the client has terminated abruptly, 
-                                  // having sent FIN but not stuck around long enough
-                                  // to accept CLOSE and give the LAST_ACK.
+      // ret==0 is orderly peer shutdown (TCP FIN); not an error, lower layer logs at DEBUG
+      break;
     }
 
     // convert the input buffer into a string and remove any trailing linefeed
@@ -518,21 +523,6 @@ void doit(Network::TcpSocket &sock) {
                     sock.Write( " " );
                     ret = NO_ERROR;
                     }
-    // send telemetry as json message
-    //
-    if ( cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      server.make_telemetry_message( retstring );
-                      ret = JSON;
-                    }
-    }
-    else
     if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
                     }

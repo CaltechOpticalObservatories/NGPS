@@ -735,9 +735,10 @@ namespace Sequencer {
       }
     }
 
-    // number of exposures must be >= 1
+    // number of exposures must be >= 0
+    // class constructed with 1 but an intentional 0 means skip this target
     //
-    if (this->nexp <= 0) this->nexp=1;
+    if (this->nexp < 0) this->nexp=1;
 
     return NO_ERROR;
   }
@@ -959,9 +960,9 @@ namespace Sequencer {
 
     auto size = Tokenize( args, tokens, " \t" );
 
-    // there must be 19 args. see cfg file for complete description
-    if ( size != 19 ) {
-      logwrite(function, "ERROR bad config file. expected 19 but received "
+    // there must be 20 args. see cfg file for complete description
+    if ( size != 20 ) {
+      logwrite(function, "ERROR bad config file. expected 20 but received "
                          +std::to_string(size)+" parameters");
       return ERROR;
     }
@@ -1000,10 +1001,13 @@ namespace Sequencer {
         info.domelamp[i] = on_off(tokens.at(11+i));
       }
 
-      // tokens 13-19
+      // tokens 13-18 -- modulator numbers are {1:6}
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i] = on_off(tokens.at(13+i));
+        info.lampmod[i+1] = on_off(tokens.at(13+i));
       }
+
+      // token[19] is FITS IMGTYPE
+      info.imgtype = tokens.at(19);
     }
     catch (const std::exception &e) {
       logwrite(function, "ERROR: "+std::string(e.what()));

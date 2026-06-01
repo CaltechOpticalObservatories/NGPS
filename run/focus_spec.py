@@ -7,20 +7,21 @@ Assumes regions are labeled in the format "SLICE_FEATURE" e.g. "A_1" or "CENTER_
 
 No image processing - assumes 1 FITS file per focus position
 '''
-
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 rcParams.update({'font.size': 12})
 
-import argparse, sys
+import argparse, subprocess, sys
 import numpy as np
 import astropy.io.fits as pf
 from pandas.api.types import is_numeric_dtype
 
 from FITS_tools.organize_headers import all_headers_to_df
 from FITS_tools.regions import make_region_dict
+
+LOGFILE = '/data/logs/internal_focus.log'
 
 
 help = 'Script to plot the focus metric from a series of NGPS spectrum images.'
@@ -157,6 +158,8 @@ df['std_dict'] = df.apply(lambda row: get_stds_from_row(row, focus_axis=args.foc
 
 # PLOTTING -- 1 file per channel, 1 axis per group
 
+best_focus = {}
+
 for ch in regdict:
 
     plt.figure()
@@ -187,8 +190,12 @@ for ch in regdict:
 
             x = df_ch[focuskey]
             y = df_ch.apply(lambda row: row['std_dict'][rn], axis=1)
-            ax.plot(x, y/y.max(), label="%s"%(c))
 
+            # breakpoint()
+
+            best_focus[ch+'_'+rn] = x.values[y.argmax()]
+
+            ax.plot(x, y/y.max(), label="%s"%(c))
             ax.tick_params(top=True, labeltop=True, bottom=True, labelbottom=True)
             ax.tick_params(axis="x",direction="in", pad=-17)
 
@@ -203,3 +210,19 @@ for ch in regdict:
     outname = 'focus_spec_%s.png'%ch
     plt.savefig(outname)
     print(outname)
+
+# Logging
+printline = ['DATETIME='+df.DATE.iloc[0].split('.')[0]]  # time of first exposure of series, remove decimal seconds
+printline += [ k+'='+str(v.round(2)) for k,v in best_focus.items() ]  # best focus for each region
+
+temps = subprocess.run(['thermal', 'show'], stdout=subprocess.PIPE).stdout.decode('utf-8') # dump of all thermal data in form "k = v"
+temps = [ s.replace(" ", "")  for s in temps.split('\n') if s.startswith('T') ] # only temperatures; reduce to "k=v"; split into list
+printline += temps
+print(','.join(printline))
+
+# Add one line to the logfile
+try:
+    with open(LOGFILE, 'a') as file:
+        file.write(','.join(printline))
+except Exception as e:
+    print(e)

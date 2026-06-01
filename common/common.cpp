@@ -44,34 +44,6 @@ namespace Common {
   /***** Common::Broadcaster::emit ********************************************/
 
 
-  /***** Common::collect_telemetry ********************************************/
-  /**
-   * @brief      send the TELEMREQUEST command to daemon to get telemetry
-   * @param[in]  provider   pair contains <"provider", port>
-   * @param[out] retstring  serialized string of json telemetry message
-   *
-   */
-  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring) {
-    // Instantiate a client to communicate with each daemon,
-    // constructed with no name, newline termination on command writes,
-    // and JEOF termination on reply reads.
-    //
-    Common::DaemonClient jclient("", "\n", JEOF );
-
-    // Send the command TELEMREQUEST to each daemon and read back the reply into
-    // retstring, which will be the serialized JSON telemetry message.
-    //
-    jclient.set_name(provider.first);
-    jclient.set_port(provider.second);
-    jclient.connect();
-    jclient.command(TELEMREQUEST, retstring);
-    jclient.disconnect();
-
-    return;
-  }
-  /***** Common::collect_telemetry ********************************************/
-
-
   /***** Common::extract_correlation_id ***************************************/
   /**
    * @brief      detect and strip a correlation ID prefix from an inter-daemon message
@@ -588,9 +560,11 @@ namespace Common {
     // Do not wait for a reply.
     //
     if ( reply == "NOREPLY" ) {
-      message.str(""); message << "not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
                                << "/" << _sock.getport() << " on fd " << _sock.getfd();
       logwrite( function, message.str() );
+#endif
       _sock.Close();
       return( error );
     }
@@ -632,9 +606,11 @@ namespace Common {
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << _sock.gethost()
                              << "/" << _sock.getport() << " on fd " << _sock.getfd();
     logwrite( function, message.str() );
+#endif
     _sock.Close();
 
     // assign the response to the reply string, passed in by reference
@@ -712,13 +688,21 @@ namespace Common {
     std::stringstream message;
     long ret;
 
-    std::unique_lock<std::mutex> lock( this->client_access );
+    std::unique_lock<std::recursive_mutex> lock( this->client_access );
 
+    // Auto-reconnect if the connection has dropped (peer hung up, idle
+    // timeout, etc.). The recursive mutex allows nested locking when
+    // this calls connect() under the same lock. Both command() callers
+    // and direct .send() callers benefit from this single-location fix.
+    //
     if ( ! this->socket.isconnected() ) {
-      message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
-                               << " because daemon is not connected";
-      logwrite( function, message.str() );
-      return ERROR;
+      if ( this->connect() != NO_ERROR ) {
+        message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to "
+                                 << this->name << ": reconnect failed";
+        logwrite( function, message.str() );
+        std::this_thread::sleep_for( std::chrono::milliseconds(100) );  // rate-limit retry storms
+        return ERROR;
+      }
     }
 
     if ( this->socket.getfd() < 1 ) {
@@ -756,6 +740,23 @@ namespace Common {
     }
     else {
       command += this->term_write;
+    }
+
+    // Drain any stale reply that was buffered from a prior send whose reply was
+    // never read (e.g. a DONTWAIT send, or a send that timed out before the reply
+    // arrived and reconnected without draining).  Without this, the stale CID-tagged
+    // reply would be read as the response to the current command and cause a
+    // mismatch, propagating through every subsequent send until the socket is cycled.
+    // Safe: client_access mutex is held, so no concurrent sender touches this socket;
+    // and in the command/reply protocol daemons never push unsolicited TCP data.
+    //
+    {
+    std::string discard;
+    while ( this->socket.Poll(0) > 0 ) {
+      if ( this->socket.Read( discard, this->term_read ) <= 0 ) break;
+      message.str(""); message << "drained stale buffered reply from " << this->name << ": \"" << discard << "\"";
+      logwrite( function, message.str() );
+    }
     }
 
     int trys=0;
@@ -841,17 +842,11 @@ namespace Common {
     // that is no longer pertinent.
     //
     if ( this->timedout ) {
-      logwrite( function, "[TEST] attempting to flush after timeout" );
       if ( ( pollret = this->socket.Poll(2000) ) > 0 ) {
+        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual )
+                                        : socket.Read( reply, term_read ) );
         reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] I read this: " << reply << " but I'm going to read again!";
-        logwrite( function, message.str() );
-        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] and the 2nd read was this: " << reply;
-        logwrite( function, message.str() );
       }
       this->timedout=false;
     }
@@ -1102,9 +1097,9 @@ namespace Common {
       //
       if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
     }
     else
@@ -1118,9 +1113,9 @@ namespace Common {
     //
     if ( args == "disconnect" ) {
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
       // then close the connection
       //
@@ -1131,27 +1126,16 @@ namespace Common {
     // all other commands go straight on through, as-is
     //
     else {
-      // but only if the connection is open of course
+      // send() handles auto-reconnect-if-needed and uses client_access
+      // internally for serialization.
       //
-      if ( !this->socket.isconnected() ) {
-        message.str(""); message << "ERROR: connection not open to " << this->name;
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-      else {
-#ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
-//                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
-//      logwrite( function, message.str() );
-#endif
-        error = this->send( args, retstring );
-      }
+      error = this->send( args, retstring );
     }
 
 #ifdef LOGLEVEL_DEBUG
-//  message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
-//                           << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
-//  logwrite( function, message.str() );
+    message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
+                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
+    logwrite( function, message.str() );
 #endif
 
     return( error );
@@ -1171,7 +1155,7 @@ namespace Common {
     std::stringstream message;
     long error = NO_ERROR;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // probably a programming error if this Common::DaemonClient object is not configured
     //
@@ -1221,13 +1205,15 @@ namespace Common {
     std::string function = "Common::DaemonClient::disconnect";
     std::stringstream message;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << this->socket.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << this->socket.gethost()
                              << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
     logwrite( function, message.str() );
+#endif
     this->socket.Close();
 
     return;

@@ -139,6 +139,7 @@ namespace Sequencer {
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
         std::string name;                  // calibration target name
+        std::string imgtype;               // FITS IMGTYPE keyword for target
         std::map<std::string, bool> channel_active;  // true=on
         bool caldoor;                      // true=open
         bool calcover;                     // true=open

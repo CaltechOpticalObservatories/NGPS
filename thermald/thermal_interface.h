@@ -9,6 +9,7 @@
 #pragma once
 
 #include "message_keys.h"
+#include "db_column_defs.h"
 #include "network.h"
 #include "logentry.h"
 #include "common.h"
@@ -110,14 +111,57 @@ namespace Thermal {
    *
    */
   class Interface {
+    private:
+      zmqpp::context context;
+
     public:
+      Interface()
+        : context(),
+          is_subscriber_thread_running(false),
+          should_subscriber_thread_run(false)
+      {
+        topic_handlers = {
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { Topic::ACAMD_TEMP, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+          { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) }
+        };
+      }
+
+      std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
+      std::string publisher_address;                   ///< publish socket endpoint
+      std::string publisher_topic;                     ///< my default topic for publishing
+      std::unique_ptr<Common::PubSub> subscriber;      ///< subscriber object
+      std::string subscriber_address;                  ///< subscribe socket endpoint
+      std::vector<std::string> subscriber_topics;      ///< list of topics I subscribe to
+      std::atomic<bool> is_subscriber_thread_running;  ///< is my subscriber thread running?
+      std::atomic<bool> should_subscriber_thread_run;  ///< should my subscriber thread run?
+      std::unordered_map<std::string,
+                         std::function<void(const nlohmann::json&)>> topic_handlers;
+                                                       ///< maps a handler function to each topic
+
+      long init_pubsub(const std::initializer_list<std::string> &topics={}) {
+        if (!subscriber) {
+          subscriber = std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB);
+        }
+        return Common::PubSubHandler::init_pubsub(context, *this, topics);
+      }
+      void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
+      void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
+
+      void handletopic_snapshot( const nlohmann::json &jmessage );  ///< respond to a snapshot request
+      void handletopic_acamd( const nlohmann::json &jmessage );     ///< stash acam CCD temperature into externaldata
+      void handletopic_slicecamd( const nlohmann::json &jmessage ); ///< stash slicecam CCD temperatures into externaldata
+      void publish_status();                                        ///< publish thermalinfo on Topic::THERMALD
+      void request_snapshot();                                      ///< ask subscribed daemons to publish their status
+
       Common::Queue async;
 
       std::map<int, Thermal::Lakeshore> lakeshore;      ///< STL map of all Lakeshores indexed by LKS#
 
       Thermal::Campbell campbell;                       ///< Campbell object for datalogger
-
-      std::map<std::string, int> telemetry_providers;   ///< map of port[daemon_name] for external telemetry providers
 
       std::mutex lakeshoredata_mtx;
       std::mutex telemdata_mtx;
@@ -130,40 +174,13 @@ namespace Thermal {
       std::map<std::string, mysqlx::Value> externaldata;   ///< map of telemetry received from other daemons
 
       /**
-       * @brief      save a key=value pair to the externaldata map
-       * @details    The template allows the compiler to automatically deduce
-       *             the type of the value and store it in the externaldata
-       *             map. The mysqlx::Value element supports multiple types and
-       *             requires correct type assignment.
-       * @param[in]  key    jmessage key
-       * @param[in]  value  any type of value
+       * @brief      apply DB-bound JSON keys from a pub/sub message to externaldata
+       * @details    Iterates DbColumnDefs::ExternalDataColumns; for each entry whose
+       *             jkey appears in the message with a non-null value, stores the
+       *             value into externaldata under the bound column name.
+       * @param[in]  jmessage  json message received via pub/sub
        */
-      template <typename T>
-      void save_to_externaldata( const std::string &key, const T &value ) {
-        this->externaldata[key] = value;
-      }
-
-      /**
-       * @brief      verifies key before saving to externaldata map
-       * @param[in]  jmessage  json message
-       * @param[in]  key       key to save
-       */
-      template <typename T>
-      void process_key( const nlohmann::json &jmessage, const std::string &key ) {
-        if ( jmessage.contains(key) ) {
-          if ( !jmessage[key].is_null() ) {
-            try {
-              this->save_to_externaldata( key, jmessage[key].get<T>() );
-            }
-            catch ( const nlohmann::json::type_error &e ) {
-              logwrite( "Thermal::Interface::process_key", "ERROR key \""+key+"\" not expected type: "+e.what() );
-            }
-          }
-          else {
-            logwrite( "Thermal::Interface::process_key", "ERROR bad key \""+key+"\"" );
-          }
-        }
-      }
+      void process_external_data( const nlohmann::json &jmessage );
 
       /**
        * @typedef thermal_t
@@ -178,10 +195,6 @@ namespace Thermal {
       } thermal_info_t;
 
       std::map<std::string, thermal_info_t> thermal_info;   ///< thermal info database, indexed by channel label
-
-      void make_telemetry_message( std::string &retstring );  ///< assembles JSON telemetry message
-      void get_external_telemetry();                          ///< collect telemetry from other daemons
-      long handle_json_message( std::string message_in );     ///< parses incoming telemetry messages
 
       long reconnect( std::string args, std::string &retstring );  ///< close,open all hardware devices
 

@@ -284,7 +284,14 @@ namespace Focus {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Focus::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Focus::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Focus::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -403,7 +410,7 @@ namespace Focus {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit(Network::TcpSocket sock) {
+  void Server::doit(Network::TcpSocket &sock) {
     std::string function = "Focus::Server::doit";
     long  ret;
     std::stringstream message;
@@ -616,22 +623,6 @@ namespace Focus {
       }
       else
 
-      // send telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-      else
-
       // test routines
       //
       if ( cmd == FOCUSD_TEST ) {
@@ -683,6 +674,8 @@ namespace Focus {
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
+
+      if ( ret==NO_ERROR ) this->interface.publish_status();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.

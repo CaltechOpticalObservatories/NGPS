@@ -226,6 +226,7 @@ namespace Slit {
 
       Status status;
       Status last_published_status;
+      std::mutex publish_mutex;                  ///< serializes publish-on-change
 
       Common::Queue async;
 

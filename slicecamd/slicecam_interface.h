@@ -263,6 +263,7 @@ namespace Slicecam {
       void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_status(bool force=false);
       void publish_snapshot();
+      void publish_temperature();                ///< publish only the andor temperatures on Topic::SLICECAMD (periodic)
       void request_snapshot();
       bool wait_for_snapshots();
 

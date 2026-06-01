@@ -31,7 +31,5 @@ const std::vector<std::string> CALIBD_SYNTAX = {
                                                  CALIBD_NATIVE+" <addr> <cmd>",
                                                  CALIBD_SET+" [ <actuator>=open|close ... ] | [?]",
                                                  "  LAMP MODULATOR CONTROL",
-                                                 CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]",
-                                                 "  OTHER",
-                                                 TELEMREQUEST+" [ ? ]"
+                                                 CALIBD_LAMPMOD+" ? | open | close | reconnect | default | <n> [ [ on|off ] | [ <D> <T> ] ]"
                                                };

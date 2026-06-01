@@ -90,11 +90,6 @@ namespace Sequencer {
         return ERROR;
       }
 
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] configkey " << configkey << "=" << configval;
-      logwrite( function, message.str() );
-#endif
-
       // NBPORT
       if ( configkey == "NBPORT" ) {
         try {
@@ -897,7 +892,14 @@ namespace Sequencer {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Sequencer::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Sequencer::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Sequencer::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -1054,12 +1056,14 @@ namespace Sequencer {
 
     bool connection_open=true;
 
-    message.str(""); message << "thread " << sock.id << " accepted "
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread " << sock.id << " accepted "
                              << (sock.isasync() ? "ASYNC " : "" )
                              << (sock.isblocking() ? "BLOCKING " : "NON-BLOCKING " )
                              << "connection on fd " << sock.getfd()
                              << " port " << sock.getport();
     logwrite( function, message.str() );
+#endif
 
     while ( connection_open ) {
 
@@ -1594,23 +1598,6 @@ namespace Sequencer {
                       if ( ret != NO_ERROR ) logwrite(function, "ERROR: unable to load config file");
                       else ret = this->configure_sequencer();
       }
-      else
-
-      // send my telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->sequence.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-
       // Unknown commands generate an error
       //
       else {

@@ -56,7 +56,6 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_RETOFFSETS+" [ ? ]",
                                                TCSD_RINGGO+" ? | <angle>",
                                                TCSD_SET_FOCUS+" ? | <value>",
-                                               TELEMREQUEST+" [ ? ]",
                                                TCSD_WEATHER_COORDS+" [ ? ]",
                                                TCSD_ZERO_OFFSETS+" [ ? ]"
                                              };

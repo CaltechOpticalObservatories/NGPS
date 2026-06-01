@@ -111,7 +111,7 @@ class SeqguiMainWindow(QMainWindow):
         # Connect the signals from SeqguiZmqService to the appropriate slots
         self.zmq_service.seqstate_changed.connect(self.state_panel.set_state)
         self.zmq_service.waitstate_changed.connect(self._on_waitstate)
-        self.zmq_service.daemonstate_changed.connect(self.subsys_panel.set_daemonstate)
+        self.zmq_service.daemonstate_changed.connect(self._on_daemonstate)
         self.zmq_service.acamd_changed.connect(self.acq_panel.set_acamd)
         self.zmq_service.slicecamd_changed.connect(self.acq_panel.set_slicecamd)
         self.zmq_service.camerad_changed.connect(self.camera_panel.set_camerad)
@@ -128,6 +128,15 @@ class SeqguiMainWindow(QMainWindow):
         self.subsys_panel.set_waitstate(state)
         self.state_panel.set_tcsop_active(bool(state.get(WAIT_TCSOP, False)))
         self.state_panel.set_user_active(bool(state.get(WAIT_USER, False)))
+
+    def _on_daemonstate(self, state):
+        """ Fan out a daemonstate update; clear stale indicators on dependent
+            panels when their owning daemon goes DOWN, otherwise the last
+            published acam/slicecam/camera state would stick on the UI. """
+        self.subsys_panel.set_daemonstate(state)
+        self.camera_panel.set_camerad_online(bool(state.get("camerad", False)))
+        self.acq_panel.set_acamd_online(bool(state.get("acamd", False)))
+        self.acq_panel.set_slicecamd_online(bool(state.get("slicecamd", False)))
 
     def _on_connection_error(self, msg):
         """ Surface a ZMQ connection error as an ERROR row in the log. """
