@@ -748,8 +748,19 @@ namespace Sequencer {
       //
       if ( !this->target.iscal ) {
 
+        // during acam acquisition, enable slicecam autoexpose to try to get the
+        // exposure time set before fine acquisition starts.
+        //
+        const bool dofine = this->should_fineacquire.load();
+        if ( dofine ) (void)this->do_slicecam_autoexpose( true );
+
         // start ACAM acquisition. If it fails then wait for user to continue or cancel.
-        if ( this->do_acam_acquire() != NO_ERROR ) {
+        const long acq_error = this->do_acam_acquire();
+
+        // disable autoexpose no matter how ACAM finished
+        if ( dofine ) (void)this->do_slicecam_autoexpose( false );
+
+        if ( acq_error != NO_ERROR ) {
           this->broadcast.warning( function, "acam acquisition failed" );
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
@@ -759,7 +770,6 @@ namespace Sequencer {
         else {  // ACAM success...
           // start SLICECAM fine acquisition if enabled
           long ret=NO_ERROR;
-          bool dofine = this->should_fineacquire.load();
           if ( dofine ) ret = this->do_slicecam_fineacquire();
           if ( ret!=NO_ERROR ) this->broadcast.warning( function, "slicecam fine acquisition failed" );
 
@@ -847,6 +857,7 @@ namespace Sequencer {
           this->request_snapshot();
           lock.lock();
         }
+        this->broadcast.notice( function, "done waiting for readout" );
       }
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 

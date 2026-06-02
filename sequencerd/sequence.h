@@ -605,6 +605,7 @@ namespace Sequencer {
       long do_acam_stop();
       long do_slicecam_fineacquire();
       long do_slicecam_stop();
+      long do_slicecam_autoexpose( bool enable );
 
 
       long acam_init();                                        ///< initializes connection to acamd

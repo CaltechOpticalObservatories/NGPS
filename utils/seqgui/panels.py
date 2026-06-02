@@ -40,6 +40,7 @@ KEY_IS_ACQUIRED         = "is_acquired"
 KEY_SEEING              = "seeing"
 KEY_FINEACQUIRE_LOCKED  = "fineacquire_locked"
 KEY_FINEACQUIRE_RUNNING = "fineacquire_running"
+KEY_AUTOEXPOSE_RUNNING  = "autoexpose_running"
 KEY_INREADOUT           = "inreadout"
 KEY_EXPOSING            = "exposing"
 
@@ -403,6 +404,7 @@ class AcquisitionPanel(QWidget):
         self.acquiring_active = False
         self.locked_state = False
         self.running_state = False
+        self.autoexpose_state = False
         self.init_ui()
 
     def init_ui(self):
@@ -437,10 +439,12 @@ class AcquisitionPanel(QWidget):
         slice_row.setSpacing(8)
         slice_row.addWidget(QLabel("SLICECAM:"))
 
-        self.lbl_locked  = Badge("locked")
-        self.lbl_running = Badge("running")
+        self.lbl_locked     = Badge("locked")
+        self.lbl_running    = Badge("running")
+        self.lbl_autoexpose = Badge("autoexpose")
         slice_row.addWidget(self.lbl_locked)
         slice_row.addWidget(self.lbl_running)
+        slice_row.addWidget(self.lbl_autoexpose)
         slice_row.addStretch(1)
         layout.addLayout(slice_row)
 
@@ -494,6 +498,13 @@ class AcquisitionPanel(QWidget):
             self.running_state = bool(data[KEY_FINEACQUIRE_RUNNING])
             if not self.running_state:
                 self.lbl_running.set_not_ready()
+        if KEY_AUTOEXPOSE_RUNNING in data:
+            self.autoexpose_state = bool(data[KEY_AUTOEXPOSE_RUNNING])
+            if self.autoexpose_state:
+                # active = steady green (two-state, never blinks)
+                self.lbl_autoexpose.set_ready()
+            else:
+                self.lbl_autoexpose.set_not_ready()
 
     def set_acamd_online(self, online):
         """ Clear ACAM indicators when acamd goes offline (defense-in-depth). """
@@ -509,8 +520,10 @@ class AcquisitionPanel(QWidget):
         if not online:
             self.locked_state = False
             self.running_state = False
+            self.autoexpose_state = False
             self.lbl_locked.set_not_ready()
             self.lbl_running.set_not_ready()
+            self.lbl_autoexpose.set_not_ready()
 
     def blink_tick(self, phase):
         """ Drive blink phase for any active acquisition badges. """
