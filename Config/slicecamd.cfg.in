@@ -117,13 +117,24 @@ FINE_ACQUIRE_GAIN_THRESHOLD=2.0
 FINE_ACQUIRE_EXPTIME_MIN=0.1
 FINE_ACQUIRE_EXPTIME_MAX=15.0
 
+# Exposure-compensation band (two-band model). FAINT/BRIGHT are the trip points
+# that decide WHETHER to adjust; the _GOAL values are what the exposure is scaled
+# toward once it does. Within [FAINT, BRIGHT] the source is adequately exposed and
+# the exposure is left unchanged.
+#
+# REQUIRED ORDERING (enforced at config time -- slicecamd will refuse to start if
+# violated): FAINT <= FAINT_GOAL <= BRIGHT  and  FAINT <= BRIGHT_GOAL <= BRIGHT,
+# with FAINT, BRIGHT > 0. A goal left unset defaults to its own threshold. A goal
+# outside its band edge would make the correction scale the WRONG way (e.g. a
+# BRIGHT_GOAL above BRIGHT drives the source brighter and never re-enters the band).
+#
 # FINE_ACQUIRE_COUNTS_FAINT / _FAINT_GOAL = <counts>
 # Below COUNTS_FAINT (top-10%-mean of background-subtracted pixels) the source is
 # under-exposed: raise exposure toward COUNTS_FAINT_GOAL. Leave both unset to
 # disable exposure compensation.
 #
-FINE_ACQUIRE_COUNTS_FAINT=500
-FINE_ACQUIRE_COUNTS_FAINT_GOAL=500
+FINE_ACQUIRE_COUNTS_FAINT=250
+FINE_ACQUIRE_COUNTS_FAINT_GOAL=1500
 
 # FINE_ACQUIRE_SATURATION=<counts>
 # Raw-peak ceiling. A source is treated as saturated at or above this value.
@@ -136,7 +147,7 @@ FINE_ACQUIRE_SATURATION=55000
 # (the source is adequately exposed).
 #
 FINE_ACQUIRE_COUNTS_BRIGHT=10000
-FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=10000
+FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=2500
 
 # FINE_ACQUIRE_AUTOEXPOSE_WINDOW=<n>
 # Number of frames the pre-acquisition auto-exposure averages before each

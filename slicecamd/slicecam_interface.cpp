@@ -1469,6 +1469,52 @@ namespace Slicecam {
       return ERROR;
     }
 
+    // Validate the exposure-compensation band ordering. A goal must lie within
+    // its band edge, otherwise banded_exptime() would scale the wrong way (e.g. a
+    // bright_goal above counts_bright drives the source brighter, never re-entering
+    // the band). An unset goal defaults to its own threshold (as banded_exptime
+    // does), which trivially satisfies the ordering. Only configured edges are
+    // checked, so partial configurations remain valid.
+    //
+    {
+      const FineAcqState &fa = this->fineacquire_state;
+      const bool have_faint  = std::isfinite( fa.counts_faint );
+      const bool have_bright = std::isfinite( fa.counts_bright );
+      const double fgoal = std::isfinite( fa.counts_faint_goal )  ? fa.counts_faint_goal  : fa.counts_faint;
+      const double bgoal = std::isfinite( fa.counts_bright_goal ) ? fa.counts_bright_goal : fa.counts_bright;
+
+      if ( have_faint  && !( fa.counts_faint  > 0.0 ) ) {
+        logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_FAINT must be > 0" );
+        return ERROR;
+      }
+      if ( have_bright && !( fa.counts_bright > 0.0 ) ) {
+        logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_BRIGHT must be > 0" );
+        return ERROR;
+      }
+      if ( have_faint && have_bright && fa.counts_faint > fa.counts_bright ) {
+        logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_FAINT must be <= FINE_ACQUIRE_COUNTS_BRIGHT" );
+        return ERROR;
+      }
+      if ( have_faint && fgoal < fa.counts_faint ) {
+        logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_FAINT_GOAL must be >= FINE_ACQUIRE_COUNTS_FAINT" );
+        return ERROR;
+      }
+      if ( have_bright && bgoal > fa.counts_bright ) {
+        logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_BRIGHT_GOAL must be <= FINE_ACQUIRE_COUNTS_BRIGHT" );
+        return ERROR;
+      }
+      if ( have_faint && have_bright ) {
+        if ( fgoal > fa.counts_bright ) {
+          logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_FAINT_GOAL must be <= FINE_ACQUIRE_COUNTS_BRIGHT" );
+          return ERROR;
+        }
+        if ( bgoal < fa.counts_faint ) {
+          logwrite( function, "ERROR FINE_ACQUIRE_COUNTS_BRIGHT_GOAL must be >= FINE_ACQUIRE_COUNTS_FAINT" );
+          return ERROR;
+        }
+      }
+    }
+
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
     logwrite(function, message.str());
 
