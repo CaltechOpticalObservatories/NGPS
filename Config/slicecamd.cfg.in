@@ -111,6 +111,35 @@ FINE_ACQUIRE_GAIN_LARGE=1.0
 #
 FINE_ACQUIRE_GAIN_THRESHOLD=2.0
 
+# FINE_ACQUIRE_EXPTIME_MIN / _MAX = <sec>
+# Clamp range for auto-adjusted fine-acquisition exposure time.
+#
+FINE_ACQUIRE_EXPTIME_MIN=0.1
+FINE_ACQUIRE_EXPTIME_MAX=15.0
+
+# FINE_ACQUIRE_COUNTS_TARGET=<counts>
+# Target source brightness (top-10%-mean of background-subtracted pixels) that
+# the auto-exposure aims for. When empty exposure compensation will be disabled.
+#
+FINE_ACQUIRE_COUNTS_TARGET=6000
+
+# FINE_ACQUIRE_SATURATION=<counts>
+# Raw-peak ceiling. A source is treated as saturated at or above this value.
+#
+FINE_ACQUIRE_SATURATION=55000
+
+# FINE_ACQUIRE_COUNTS_DEADBAND=<frac>
+# No exposure change is made while the measured brightness is within +/- <frac>
+# of FINE_ACQUIRE_COUNTS_TARGET.
+#
+FINE_ACQUIRE_COUNTS_DEADBAND=0.15
+
+# FINE_ACQUIRE_AUTOEXPOSE_WINDOW=<n>
+# Number of frames the pre-acquisition auto-exposure averages before each
+# decision.
+#
+FINE_ACQUIRE_AUTOEXPOSE_WINDOW=3
+
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
 # Sets the keyword argument "IMAGE_SIZE=<is>"

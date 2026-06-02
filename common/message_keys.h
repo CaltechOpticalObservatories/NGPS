@@ -104,6 +104,7 @@ namespace Key {
   namespace Slicecamd {
     inline const std::string FINEACQUIRE_LOCKED  = "fineacquire_locked";
     inline const std::string FINEACQUIRE_RUNNING = "fineacquire_running";
+    inline const std::string AUTOEXPOSE_RUNNING  = "autoexpose_running";
     inline const std::string TANDOR_L            = "tandor_L";
     inline const std::string TANDOR_R            = "tandor_R";
   }

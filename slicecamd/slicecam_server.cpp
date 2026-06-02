@@ -567,6 +567,10 @@ namespace Slicecam {
                       ret = this->interface.fineacquire( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_AUTOEXPOSE ) {
+                      ret = this->interface.autoexpose( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_GAIN ) {
                       ret  = this->interface.gain( args, retstring );            // set gain
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
