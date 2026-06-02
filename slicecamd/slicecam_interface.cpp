@@ -217,6 +217,45 @@ namespace Slicecam {
   /***** Slicecam::Interface::tuned_exptime ***********************************/
 
 
+  /***** Slicecam::Interface::banded_exptime **********************************/
+  /**
+   * @brief      scale exposure toward the nearest in-band brightness goal
+   * @details    Two-band model: below counts_faint, raise toward counts_faint_goal;
+   *             above counts_bright, lower toward counts_bright_goal; within the
+   *             [counts_faint, counts_bright] band the source is adequately exposed
+   *             and the exposure is left unchanged. Each edge is independent: an
+   *             unset (NAN) threshold disables that direction. When a goal is unset
+   *             it defaults to its own threshold (CF uses faint == faint_goal and
+   *             bright == bright_goal), so configuring only the thresholds works.
+   * @param[in]  cur     current exposure time (sec)
+   * @param[in]  metric  measured brightness metric (top-10%-mean)
+   * @return     new exposure time (sec); equals cur when in band or disabled
+   *
+   */
+  double Interface::banded_exptime( double cur, double metric ) const {
+    if ( !( metric > 0.0 ) ) return cur;
+
+    const double faint = this->fineacquire_state.counts_faint;
+    if ( std::isfinite( faint ) && metric < faint ) {
+      // goal defaults to the threshold when unset
+      const double goal = std::isfinite( this->fineacquire_state.counts_faint_goal )
+                        ? this->fineacquire_state.counts_faint_goal : faint;
+      return this->tuned_exptime( cur, metric, goal );
+    }
+
+    const double bright = this->fineacquire_state.counts_bright;
+    if ( std::isfinite( bright ) && metric > bright ) {
+      // goal defaults to the threshold when unset
+      const double goal = std::isfinite( this->fineacquire_state.counts_bright_goal )
+                        ? this->fineacquire_state.counts_bright_goal : bright;
+      return this->tuned_exptime( cur, metric, goal );
+    }
+
+    return cur;  // in band: adequately exposed, no change
+  }
+  /***** Slicecam::Interface::banded_exptime **********************************/
+
+
   /***** Slicecam::Interface::do_fineacquire **********************************/
   /**
    * @brief      Evaluates fine acquisition natively per-frame
@@ -434,33 +473,29 @@ namespace Slicecam {
     // spikes). If we do change the exposure, skip this cycle's offset and start a
     // fresh sample set at the new exposure rather than acting on marginal data.
     //
-    if ( std::isfinite( this->fineacquire_state.counts_target ) &&
+    if ( ( std::isfinite( this->fineacquire_state.counts_faint ) ||
+           std::isfinite( this->fineacquire_state.counts_bright ) ) &&
          !this->fineacquire_state.top10_samp.empty() ) {
 
       std::vector<double> sorted_top10 = this->fineacquire_state.top10_samp;
       std::sort( sorted_top10.begin(), sorted_top10.end() );
-      const double median_top10  = sorted_top10[ sorted_top10.size() / 2 ];
-      const double target_counts = this->fineacquire_state.counts_target;
-      const double deadband      = this->fineacquire_state.counts_deadband;
+      const double median_top10 = sorted_top10[ sorted_top10.size() / 2 ];
 
-      if ( median_top10 > 0.0 &&
-           ( median_top10 < target_counts * (1.0 - deadband) ||
-             median_top10 > target_counts * (1.0 + deadband) ) ) {
+      const double cur = this->camera.andor.empty() ? 0.0
+                       : this->camera.andor.begin()->second->camera_info.exptime;
+      const double new_exptime = this->banded_exptime( cur, median_top10 );
 
-        const double cur = this->camera.andor.empty() ? 0.0
-                         : this->camera.andor.begin()->second->camera_info.exptime;
-        const double new_exptime = this->tuned_exptime( cur, median_top10, target_counts );
-
-        // ignore changes too small to matter (avoids needless acquisition restarts)
-        if ( std::abs( new_exptime - cur ) >= 0.02 ) {
-          logwrite( function, "exptime trim "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
-                    +" s (top10="+std::to_string(median_top10)+", target="+std::to_string(target_counts)+")" );
-          float newexp = static_cast<float>( new_exptime );
-          this->camera.set_exptime( newexp );
-          this->fineacquire_state.reset();
-          this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
-          return;
-        }
+      // banded_exptime returns cur when in band; only act on a material change
+      if ( std::abs( new_exptime - cur ) >= 0.02 ) {
+        logwrite( function, "exptime trim "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
+                  +" s (top10="+std::to_string(median_top10)
+                  +", band=["+std::to_string(this->fineacquire_state.counts_faint)+","
+                  +std::to_string(this->fineacquire_state.counts_bright)+"])" );
+        float newexp = static_cast<float>( new_exptime );
+        this->camera.set_exptime( newexp );
+        this->fineacquire_state.reset();
+        this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
+        return;
       }
     }
 
@@ -560,8 +595,9 @@ namespace Slicecam {
       retstring="not_configured";
       return ERROR;
     }
-    if (!std::isfinite(this->fineacquire_state.counts_target)) {
-      logwrite(function, "ERROR FINE_ACQUIRE_COUNTS_TARGET not configured; auto-exposure unavailable");
+    if (!std::isfinite(this->fineacquire_state.counts_faint) &&
+        !std::isfinite(this->fineacquire_state.counts_bright)) {
+      logwrite(function, "ERROR fine-acquire counts band not configured; auto-exposure unavailable");
       retstring="not_configured";
       return ERROR;
     }
@@ -581,7 +617,8 @@ namespace Slicecam {
    * @brief      per-frame pre-acquisition auto-exposure
    * @details    Called from dothread_framegrab when auto-exposure is enabled.
    *             Accumulates a window of brightness samples, then adjusts the
-   *             slicecam exposure toward FINE_ACQUIRE_COUNTS_TARGET.
+   *             slicecam exposure to keep the source within the configured
+   *             [FINE_ACQUIRE_COUNTS_FAINT, FINE_ACQUIRE_COUNTS_BRIGHT] band.
    *
    */
   void Interface::do_autoexpose() {
@@ -658,18 +695,15 @@ namespace Slicecam {
       const double estimate = window[idx];
       this->autoexpose_state.no_detect_count = 0;
 
-      const double target_counts = this->fineacquire_state.counts_target;
-      const double deadband      = this->fineacquire_state.counts_deadband;
-      if (estimate > 0.0 &&
-          (estimate < target_counts * (1.0 - deadband) || estimate > target_counts * (1.0 + deadband))) {
-        const double new_exptime = this->tuned_exptime( cur, estimate, target_counts );
-        if (std::abs(new_exptime - cur) >= 0.02) {
-          logwrite(function, "exptime "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
-                   +" s (top10="+std::to_string(estimate)+", target="+std::to_string(target_counts)+")");
-          float newexp = static_cast<float>(new_exptime);
-          this->camera.set_exptime( newexp );
-          this->autoexpose_state.settle_frames = this->fineacquire_state.settle_count;
-        }
+      const double new_exptime = this->banded_exptime( cur, estimate );
+      if (std::abs(new_exptime - cur) >= 0.02) {
+        logwrite(function, "exptime "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
+                 +" s (top10="+std::to_string(estimate)
+                 +", band=["+std::to_string(this->fineacquire_state.counts_faint)+","
+                 +std::to_string(this->fineacquire_state.counts_bright)+"])");
+        float newexp = static_cast<float>(new_exptime);
+        this->camera.set_exptime( newexp );
+        this->autoexpose_state.settle_frames = this->fineacquire_state.settle_count;
       }
       this->autoexpose_state.start_window();
       return;
@@ -1343,10 +1377,23 @@ namespace Slicecam {
         applied++;
       }
 
-      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_TARGET" ) {
-        try { this->fineacquire_state.counts_target = std::stod( config.arg[entry] ); }
+      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_FAINT" ) {
+        try { this->fineacquire_state.counts_faint = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_TARGET "
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_FAINT "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_FAINT_GOAL" ) {
+        try { this->fineacquire_state.counts_faint_goal = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_FAINT_GOAL "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
@@ -1369,10 +1416,23 @@ namespace Slicecam {
         applied++;
       }
 
-      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_DEADBAND" ) {
-        try { this->fineacquire_state.counts_deadband = std::stod( config.arg[entry] ); }
+      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_BRIGHT" ) {
+        try { this->fineacquire_state.counts_bright = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_DEADBAND "
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_BRIGHT "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_BRIGHT_GOAL" ) {
+        try { this->fineacquire_state.counts_bright_goal = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_COUNTS_BRIGHT_GOAL "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;

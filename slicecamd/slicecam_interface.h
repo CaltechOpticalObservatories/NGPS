@@ -98,9 +98,11 @@ namespace Slicecam {
     // exposure compensation (shared by the reactive trim and, later, autoexpose)
     double exptime_min     = 0.1;   ///< clamp: minimum auto-adjusted exposure (sec)
     double exptime_max     = 15.0;  ///< clamp: maximum auto-adjusted exposure (sec)
-    double counts_target   = NAN;   ///< target brightness (top-10%-mean); NAN disables compensation
     double saturation      = NAN;   ///< raw-peak saturation ceiling; NAN disables the guard
-    double counts_deadband = 0.15;  ///< fractional deadband around counts_target
+    double counts_faint       = NAN;   ///< below this (top-10%-mean) raise toward counts_faint_goal
+    double counts_faint_goal  = NAN;   ///< faint-mode brightness goal
+    double counts_bright      = NAN;   ///< above this lower toward counts_bright_goal
+    double counts_bright_goal = NAN;   ///< bright-mode brightness goal
     int    autoexpose_window = 2;    ///< frames per pre-acquisition auto-exposure decision
     std::vector<double> top10_samp; ///< per-frame top-10%-mean brightness samples, parallel to dra_samp
 
@@ -189,6 +191,9 @@ namespace Slicecam {
 
       /// scale exposure toward target brightness; sqrt-law, factor-clamped, exptime-clamped
       double tuned_exptime( double cur, double measured, double target ) const;
+      /// two-band exposure: raise toward faint_goal below counts_faint, lower toward
+      /// bright_goal above counts_bright, unchanged in band. Returns cur when in band/disabled.
+      double banded_exptime( double cur, double metric ) const;
 
       /** these are set by Interface::saveframes()
        */
