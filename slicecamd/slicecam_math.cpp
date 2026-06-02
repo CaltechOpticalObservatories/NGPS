@@ -196,7 +196,9 @@ namespace Slicecam {
                                   long ncols, long nrows,
                                   Rect background,
                                   Point aimpoint,
-                                  Point &centroid ) {
+                                  Point &centroid,
+                                  double &peak_raw,
+                                  double &top10_mean ) {
     if ( image.empty() || ncols <= 0 || nrows <= 0 ) return ERROR;
 
     // Convert 1-based inclusive ROI to 0-based, clamped
@@ -366,6 +368,44 @@ namespace Slicecam {
     }
 
     if ( sumI <= 0.0 || !std::isfinite( cx ) || !std::isfinite( cy ) ) return ERROR;
+
+    // --- brightness metrics for exposure compensation ---
+    // peak_raw  : actual ADU at the source peak. best_val is background-subtracted
+    //             (patch = image - bkg), so add bkg back to recover the raw level
+    //             used for the saturation test.
+    // top10_mean: mean of the top 10% of background-subtracted positive pixels in
+    //             the centroid window. Averaging the brightest pixels gives a
+    //             brightness measure more stable than the single peak (less
+    //             sensitive to seeing and intra-pixel position) that also tracks
+    //             exposure time linearly, which is what the scaling relies on.
+    peak_raw = best_val + bkg;
+    {
+      const long bxp = static_cast<long>( std::floor( cx ) );
+      const long byp = static_cast<long>( std::floor( cy ) );
+      const long xlo = std::max( sx1, bxp - hw );
+      const long xhi = std::min( sx2, bxp + hw );
+      const long ylo = std::max( sy1, byp - hw );
+      const long yhi = std::min( sy2, byp + hw );
+      std::vector<float> vals;
+      vals.reserve( static_cast<size_t>( (xhi-xlo+1) * (yhi-ylo+1) ) );
+      for ( long y = ylo; y <= yhi; y++ ) {
+        for ( long x = xlo; x <= xhi; x++ ) {
+          const double v = static_cast<double>( image[y * ncols + x] ) - bkg;
+          if ( v > 0.0 ) vals.push_back( static_cast<float>( v ) );
+        }
+      }
+      if ( vals.empty() ) { top10_mean = 0.0; }
+      else {
+        std::sort( vals.begin(), vals.end() );
+        // top 10% of the brightest pixels (at least one)
+        long k = static_cast<long>( std::ceil( 0.10 * static_cast<double>( vals.size() ) ) );
+        if ( k < 1 ) k = 1;
+        double sum = 0.0;
+        for ( long i = static_cast<long>( vals.size() ) - k; i < static_cast<long>( vals.size() ); i++ )
+          sum += static_cast<double>( vals[i] );
+        top10_mean = sum / static_cast<double>( k );
+      }
+    }
 
     // Return in FITS 1-based coordinates
     centroid.x = cx + 1.0;

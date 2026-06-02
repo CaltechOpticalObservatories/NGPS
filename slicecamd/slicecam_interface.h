@@ -95,9 +95,19 @@ namespace Slicecam {
     int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
     int    settle_count  = 2;       ///< configured: frames to discard after each move
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
+    // exposure compensation (shared by the reactive trim and, later, autoexpose)
+    double exptime_min     = 0.1;   ///< clamp: minimum auto-adjusted exposure (sec)
+    double exptime_max     = 15.0;  ///< clamp: maximum auto-adjusted exposure (sec)
+    double saturation      = NAN;   ///< raw-peak saturation ceiling; NAN disables the guard
+    double counts_faint       = NAN;   ///< below this (top-10%-mean) raise toward counts_faint_goal
+    double counts_faint_goal  = NAN;   ///< faint-mode brightness goal
+    double counts_bright      = NAN;   ///< above this lower toward counts_bright_goal
+    double counts_bright_goal = NAN;   ///< bright-mode brightness goal
+    int    autoexpose_window = 2;    ///< frames per pre-acquisition auto-exposure decision
+    std::vector<double> top10_samp; ///< per-frame top-10%-mean brightness samples, parallel to dra_samp
 
-    void reset() { dra_samp.clear(); ddec_samp.clear(); settle_frames = 0;
-                   consecutive_centroid_failures = 0; }
+    void reset() { dra_samp.clear(); ddec_samp.clear(); top10_samp.clear();
+                   settle_frames = 0; consecutive_centroid_failures = 0; }
     bool is_valid() const noexcept {
       return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
     }
@@ -131,6 +141,21 @@ namespace Slicecam {
 
       FineAcqState fineacquire_state;
 
+      /// per-frame auto-exposure runtime (ACAM-window pre-tuning). Brightness is
+      /// sampled over a window of frames; a high percentile (near-max) is used
+      /// because telescope motion only smears light out (lowering brightness),
+      /// so the brightest frames are the most stationary and most trustworthy.
+      struct AutoExpState {
+        std::vector<double> top10_window;  ///< per-frame top-10%-mean values in the window
+        double max_peak_raw    = 0.0;      ///< max raw peak in the window (saturation)
+        int    detect_count    = 0;        ///< detections in the window
+        int    frames_seen     = 0;        ///< frames accumulated in the window
+        int    no_detect_count = 0;        ///< consecutive empty windows
+        int    settle_frames   = 0;        ///< skip stale frames after an exptime change
+        void start_window() { top10_window.clear(); max_peak_raw = 0.0; detect_count = 0; frames_seen = 0; }
+        void reset() { start_window(); no_detect_count = 0; settle_frames = 0; }
+      } autoexpose_state;
+
       std::string default_which;                    ///< configured default camera for fineacquire
       Point       default_aimpoint { NAN, NAN };    ///< configured default aimpoint for fineacquire
 
@@ -151,6 +176,7 @@ namespace Slicecam {
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
       std::atomic<bool> is_fineacquire_running;  ///< set if fine target acquisition is running
       std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
+      std::atomic<bool> is_autoexpose_running;    ///< set if pre-acquisition auto-exposure is running
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
       std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
@@ -162,6 +188,12 @@ namespace Slicecam {
       static constexpr int64_t ACAM_WAIT_TIMEOUT_US = 2'000'000;
 
       bool is_acam_status_fresh() const;
+
+      /// scale exposure toward target brightness; sqrt-law, factor-clamped, exptime-clamped
+      double tuned_exptime( double cur, double measured, double target ) const;
+      /// two-band exposure: raise toward faint_goal below counts_faint, lower toward
+      /// bright_goal above counts_bright, unchanged in band. Returns cur when in band/disabled.
+      double banded_exptime( double cur, double metric ) const;
 
       /** these are set by Interface::saveframes()
        */
@@ -191,6 +223,7 @@ namespace Slicecam {
       struct {
         bool is_fineacquire_running=false;
         bool is_fineacquire_locked=false;
+        bool is_autoexpose_running=false;
       } last_status;
 
       GUIManager gui_manager;
@@ -206,6 +239,7 @@ namespace Slicecam {
           is_framegrab_running(false),
           is_fineacquire_running(false),
           is_fineacquire_locked(false),
+          is_autoexpose_running(false),
           is_acam_guiding(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
@@ -269,6 +303,8 @@ namespace Slicecam {
 
       long fineacquire(std::string args, std::string &retstring);
       void do_fineacquire();
+      long autoexpose(std::string args, std::string &retstring);
+      void do_autoexpose();
 
       long avg_frames( std::string args, std::string &retstring );
       long bin( std::string args, std::string &retstring );
