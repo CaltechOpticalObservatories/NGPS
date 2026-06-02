@@ -153,7 +153,7 @@ FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=2500
 # Number of frames the pre-acquisition auto-exposure averages before each
 # decision.
 #
-FINE_ACQUIRE_AUTOEXPOSE_WINDOW=3
+FINE_ACQUIRE_AUTOEXPOSE_WINDOW=2
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
