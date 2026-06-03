@@ -103,10 +103,12 @@ namespace Slicecam {
     double counts_faint_goal  = NAN;   ///< faint-mode brightness goal
     double counts_bright      = NAN;   ///< above this lower toward counts_bright_goal
     double counts_bright_goal = NAN;   ///< bright-mode brightness goal
-    int    autoexpose_window = 2;    ///< frames per pre-acquisition auto-exposure decision
-    std::vector<double> top10_samp; ///< per-frame top-10%-mean brightness samples, parallel to dra_samp
+    double min_snr            = NAN;   ///< peak SNR at/above which faint raises are vetoed; NAN disables
+    int    autoexpose_window = 2;      ///< frames per pre-acquisition auto-exposure decision
+    std::vector<double> top10_samp;    ///< per-frame top-10%-mean brightness samples, parallel to dra_samp
+    std::vector<double> snr_samp;      ///< per-frame peak-SNR samples, parallel to top10_samp
 
-    void reset() { dra_samp.clear(); ddec_samp.clear(); top10_samp.clear();
+    void reset() { dra_samp.clear(); ddec_samp.clear(); top10_samp.clear(); snr_samp.clear();
                    settle_frames = 0; consecutive_centroid_failures = 0; }
     bool is_valid() const noexcept {
       return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
@@ -148,11 +150,12 @@ namespace Slicecam {
       struct AutoExpState {
         std::vector<double> top10_window;  ///< per-frame top-10%-mean values in the window
         double max_peak_raw    = 0.0;      ///< max raw peak in the window (saturation)
+        double max_snr         = 0.0;      ///< max peak-SNR in the window
         int    detect_count    = 0;        ///< detections in the window
         int    frames_seen     = 0;        ///< frames accumulated in the window
         int    no_detect_count = 0;        ///< consecutive empty windows
         int    settle_frames   = 0;        ///< skip stale frames after an exptime change
-        void start_window() { top10_window.clear(); max_peak_raw = 0.0; detect_count = 0; frames_seen = 0; }
+        void start_window() { top10_window.clear(); max_peak_raw = 0.0; max_snr = 0.0; detect_count = 0; frames_seen = 0; }
         void reset() { start_window(); no_detect_count = 0; settle_frames = 0; }
       } autoexpose_state;
 

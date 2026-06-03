@@ -305,12 +305,12 @@ namespace Slicecam {
     // find the star centroid near the aim point
     //
     Point  centroid;
-    double peak_raw = 0.0, top10 = 0.0;
+    double peak_raw = 0.0, top10 = 0.0, peak_snr = 0.0;
 
     if ( Math::calculate_centroid( img_data, ncols, nrows,
                                    this->fineacquire_state.bg_region,
                                    this->fineacquire_state.aimpoint,
-                                   centroid, peak_raw, top10 ) != NO_ERROR ) {
+                                   centroid, peak_raw, top10, peak_snr ) != NO_ERROR ) {
       const int max_failures = 3 * this->fineacquire_state.max_samples;
 
       // ----- Auto-Adjust exposure time while finding centroid ---------------
@@ -405,6 +405,7 @@ namespace Slicecam {
     this->fineacquire_state.dra_samp.push_back( offsets.first );
     this->fineacquire_state.ddec_samp.push_back( offsets.second );
     this->fineacquire_state.top10_samp.push_back( top10 );
+    this->fineacquire_state.snr_samp.push_back( peak_snr );
 
     const int n           = static_cast<int>( this->fineacquire_state.dra_samp.size() );
     const int max_samples = this->fineacquire_state.max_samples;
@@ -481,11 +482,25 @@ namespace Slicecam {
       std::sort( sorted_top10.begin(), sorted_top10.end() );
       const double median_top10 = sorted_top10[ sorted_top10.size() / 2 ];
 
+      std::vector<double> sorted_snr = this->fineacquire_state.snr_samp;
+      std::sort( sorted_snr.begin(), sorted_snr.end() );
+      const double median_snr = sorted_snr.empty() ? 0.0 : sorted_snr[ sorted_snr.size() / 2 ];
+
       const double cur = this->camera.andor.empty() ? 0.0
                        : this->camera.andor.begin()->second->camera_info.exptime;
-      const double new_exptime = this->banded_exptime( cur, median_top10 );
+      double new_exptime = this->banded_exptime( cur, median_top10 );
+
+      // meeting SNR requirement overrides count requirement
+      //
+      if ( new_exptime > cur && std::isfinite( this->fineacquire_state.min_snr ) &&
+           median_snr >= this->fineacquire_state.min_snr ) {
+        logwrite( function, "exptime raise vetoed: peak SNR "+std::to_string(median_snr)
+                  +" >= "+std::to_string(this->fineacquire_state.min_snr)+" (adequate for centroid)" );
+        new_exptime = cur;
+      }
 
       // banded_exptime returns cur when in band; only act on a material change
+      //
       if ( std::abs( new_exptime - cur ) >= 0.02 ) {
         logwrite( function, "exptime trim "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
                   +" s (top10="+std::to_string(median_top10)
@@ -651,15 +666,16 @@ namespace Slicecam {
     // is fine -- it just means "no source in this frame")
     //
     Point  centroid;
-    double peak_raw = 0.0, top10 = 0.0;
+    double peak_raw = 0.0, top10 = 0.0, peak_snr = 0.0;
     const bool detected = ( Math::calculate_centroid( img_data, ncols, nrows,
                             this->fineacquire_state.bg_region,
                             this->default_aimpoint,
-                            centroid, peak_raw, top10 ) == NO_ERROR );
+                            centroid, peak_raw, top10, peak_snr ) == NO_ERROR );
 
     if (detected) {
       this->autoexpose_state.top10_window.push_back( top10 );
       if (peak_raw > this->autoexpose_state.max_peak_raw) this->autoexpose_state.max_peak_raw = peak_raw;
+      if (peak_snr > this->autoexpose_state.max_snr) this->autoexpose_state.max_snr = peak_snr;
       this->autoexpose_state.detect_count++;
     }
 
@@ -695,7 +711,11 @@ namespace Slicecam {
       const double estimate = window[idx];
       this->autoexpose_state.no_detect_count = 0;
 
-      const double new_exptime = this->banded_exptime( cur, estimate );
+      double new_exptime = this->banded_exptime( cur, estimate );
+      if ( new_exptime > cur && std::isfinite( this->fineacquire_state.min_snr ) &&
+           this->autoexpose_state.max_snr >= this->fineacquire_state.min_snr ) {
+        new_exptime = cur;  // already well above noise; do not raise
+      }
       if (std::abs(new_exptime - cur) >= 0.02) {
         logwrite(function, "exptime "+std::to_string(cur)+" -> "+std::to_string(new_exptime)
                  +" s (top10="+std::to_string(estimate)
@@ -1416,6 +1436,19 @@ namespace Slicecam {
         applied++;
       }
 
+      if ( config.param[entry] == "FINE_ACQUIRE_MIN_SNR" ) {
+        try { this->fineacquire_state.min_snr = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_MIN_SNR "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       if ( config.param[entry] == "FINE_ACQUIRE_COUNTS_BRIGHT" ) {
         try { this->fineacquire_state.counts_bright = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
@@ -1513,6 +1546,15 @@ namespace Slicecam {
           return ERROR;
         }
       }
+    }
+
+    // min_snr, when set, must be at least 2
+    // NAN (unset) disables SNR override
+    //
+    if ( std::isfinite( this->fineacquire_state.min_snr ) &&
+         this->fineacquire_state.min_snr < 2.0 ) {
+      logwrite( function, "ERROR FINE_ACQUIRE_MIN_SNR must be >= 2 when set" );
+      return ERROR;
     }
 
     message.str(""); message << "applied " << applied << " configuration lines to the slicecam interface";
