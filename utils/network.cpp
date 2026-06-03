@@ -965,10 +965,9 @@ namespace Network {
         return -1;                       // indicates error
       }
       if ( nread == 0 ) {
-#ifdef LOGLEVEL_DEBUG
-        message << "[DEBUG] no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
+        message.str(""); message << "peer closed connection (EOF) on fd " << this->fd
+                                 << " for " << this->host << "/" << this->port << "; closing";
         logwrite( function, message.str() );
-#endif
         this->Close();
         return 0;                        // not an error
       }
