@@ -149,6 +149,15 @@ FINE_ACQUIRE_SATURATION=55000
 FINE_ACQUIRE_COUNTS_BRIGHT=10000
 FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=2500
 
+# FINE_ACQUIRE_MIN_SNR=<snr>
+# Peak signal-to-noise (background-subtracted peak / background sigma) at or above
+# which a source is considered well enough defined to centroid reliably. Above this
+# fine-acquire and autoexpose stop RAISING the exposure even if the source is still
+# below FINE_ACQUIRE_COUNTS_FAINT.
+# Must be >=2 if set, or leave unset to disable SNR requirement and use only count band.
+#
+FINE_ACQUIRE_MIN_SNR=3
+
 # FINE_ACQUIRE_AUTOEXPOSE_WINDOW=<n>
 # Number of frames the pre-acquisition auto-exposure averages before each
 # decision.

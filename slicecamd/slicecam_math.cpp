@@ -198,7 +198,8 @@ namespace Slicecam {
                                   Point aimpoint,
                                   Point &centroid,
                                   double &peak_raw,
-                                  double &top10_mean ) {
+                                  double &top10_mean,
+                                  double &peak_snr ) {
     if ( image.empty() || ncols <= 0 || nrows <= 0 ) return ERROR;
 
     // Convert 1-based inclusive ROI to 0-based, clamped
@@ -379,6 +380,10 @@ namespace Slicecam {
     //             sensitive to seeing and intra-pixel position) that also tracks
     //             exposure time linearly, which is what the scaling relies on.
     peak_raw = best_val + bkg;
+
+    // peak_snr is background-subtracted peak over the background noise sigma.
+    //
+    peak_snr = ( sigma > 0.0 ) ? best_val / sigma : 0.0;
     {
       const long bxp = static_cast<long>( std::floor( cx ) );
       const long byp = static_cast<long>( std::floor( cy ) );
