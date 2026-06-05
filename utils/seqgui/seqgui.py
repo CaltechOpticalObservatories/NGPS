@@ -2,7 +2,9 @@ import sys
 import argparse
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QGroupBox, QHBoxLayout, QVBoxLayout
+)
 
 from zmq_service import (
     SeqguiZmqService, SeqguiZmqServiceThread,
@@ -12,9 +14,11 @@ from zmq_service import (
 from panels import (
     StatePanel, SubsystemPanel, CameraPanel, AcquisitionPanel,
     WAIT_TCSOP, WAIT_USER,
-    hline, vline, section_label,
 )
 from broadcast_log import BroadcastLog
+from udp_service import (
+    SeqguiUdpService, SeqguiUdpServiceThread, MULTICAST_GROUP, MULTICAST_PORT,
+)
 
 
 BROKER_SUB_ENDPOINT = "tcp://localhost:5556"
@@ -24,15 +28,19 @@ BLINK_INTERVAL_MS = 500
 
 
 class SeqguiMainWindow(QMainWindow):
-    def __init__(self, sub_endpoint=BROKER_SUB_ENDPOINT, pub_endpoint=BROKER_PUB_ENDPOINT):
+    def __init__(self, sub_endpoint=BROKER_SUB_ENDPOINT, pub_endpoint=BROKER_PUB_ENDPOINT,
+                 udp_group=MULTICAST_GROUP, udp_port=MULTICAST_PORT):
         super().__init__()
         self.setWindowTitle("Sequencer Monitor")
-        self.resize(1000, 554)
 
         self.sub_endpoint = sub_endpoint
         self.pub_endpoint = pub_endpoint
+        self.udp_group = udp_group
+        self.udp_port = udp_port
         self.zmq_service = None
         self.zmq_service_thread = None
+        self.udp_service = None
+        self.udp_service_thread = None
 
         # Dark theme applied globally via stylesheet
         self.setStyleSheet(
@@ -42,13 +50,27 @@ class SeqguiMainWindow(QMainWindow):
             "  background-color: #111111; color: #cccccc;"
             "  border: 1px solid #444;"
             "}"
+            "QGroupBox {"
+            "  border: 1px solid #3a3a3a; border-radius: 6px;"
+            "  margin-top: 14px; padding-top: 2px;"
+            "}"
+            "QGroupBox::title {"
+            "  subcontrol-origin: margin; subcontrol-position: top left;"
+            "  left: 10px; padding: 0 4px;"
+            "  color: #aaaaaa; font-weight: bold; font-size: 10pt;"
+            "}"
         )
 
         # Initialize the UI
         self.init_ui()
 
+        # Open at a fixed, non-resizable size (the status layout's minimum).
+        self.centralWidget().layout().activate()
+        self.setFixedSize(self.minimumSizeHint().width(), 554)
+
         # Initialize services
         self.initialize_services()
+        self.initialize_udp_service()
 
         # Single shared blink timer drives all animated widgets
         self.blink_phase = False
@@ -69,11 +91,9 @@ class SeqguiMainWindow(QMainWindow):
         right = QWidget()
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
+        right_layout.setSpacing(6)
         right_layout.addWidget(self.subsys_panel, 0)
-        right_layout.addWidget(hline())
         right_layout.addWidget(self.camera_panel, 0)
-        right_layout.addWidget(hline())
         right_layout.addWidget(self.acq_panel, 0)
         right_layout.addStretch(1)
 
@@ -81,21 +101,23 @@ class SeqguiMainWindow(QMainWindow):
         top = QWidget()
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(0)
+        top_layout.setSpacing(6)
         top_layout.addWidget(self.state_panel, 0)
-        top_layout.addWidget(vline())
         top_layout.addWidget(right, 1)
+
+        # MESSAGES card wrapping the broadcast log
+        msg_box = QGroupBox("MESSAGES")
+        msg_layout = QVBoxLayout(msg_box)
+        msg_layout.setContentsMargins(6, 4, 6, 6)
+        msg_layout.addWidget(self.log)
 
         # Central layout: top status, message log
         central = QWidget()
         cl = QVBoxLayout(central)
-        cl.setContentsMargins(4, 4, 4, 4)
-        cl.setSpacing(0)
+        cl.setContentsMargins(6, 6, 6, 6)
+        cl.setSpacing(6)
         cl.addWidget(top, 0)
-        cl.addWidget(hline())
-        cl.addSpacing(6)
-        cl.addWidget(section_label("MESSAGES"))
-        cl.addWidget(self.log, 1)
+        cl.addWidget(msg_box, 1)
         self.setCentralWidget(central)
 
     def initialize_services(self):
@@ -123,6 +145,24 @@ class SeqguiMainWindow(QMainWindow):
         self.zmq_service_thread = SeqguiZmqServiceThread(self.zmq_service)
         self.zmq_service_thread.start()
 
+    def initialize_udp_service(self):
+        """ Start the UDP multicast listener that drives the camera progress
+            bars. Failure to open the socket is non-fatal -- the rest of the
+            GUI still runs, just without progress updates. """
+        self.udp_service = SeqguiUdpService(self.udp_group, self.udp_port)
+        try:
+            self.udp_service.connect()
+        except OSError as e:
+            self.log.append("ERROR", "seqgui", f"UDP listener failed: {e}")
+            self.udp_service = None
+            return
+        self.udp_service.exposure_progress.connect(self.camera_panel.set_exposure_progress)
+        self.udp_service.readout_progress.connect(self.camera_panel.set_readout_progress)
+        self.udp_service.connection_error.connect(self._on_connection_error)
+
+        self.udp_service_thread = SeqguiUdpServiceThread(self.udp_service)
+        self.udp_service_thread.start()
+
     def _on_waitstate(self, state):
         """ Fan out a waitstate update to the panels that care about it. """
         self.subsys_panel.set_waitstate(state)
@@ -147,7 +187,6 @@ class SeqguiMainWindow(QMainWindow):
         self.blink_phase = not self.blink_phase
         self.state_panel.blink_tick(self.blink_phase)
         self.subsys_panel.blink_tick(self.blink_phase)
-        self.camera_panel.blink_tick(self.blink_phase)
         self.acq_panel.blink_tick(self.blink_phase)
 
     def closeEvent(self, event):
@@ -156,6 +195,10 @@ class SeqguiMainWindow(QMainWindow):
             self.zmq_service.stop()
         if self.zmq_service_thread is not None:
             self.zmq_service_thread.wait(2000)
+        if self.udp_service is not None:
+            self.udp_service.stop()
+        if self.udp_service_thread is not None:
+            self.udp_service_thread.wait(2000)
         super().closeEvent(event)
 
 
@@ -165,11 +208,15 @@ def main():
                         help="ZMQ broker subscriber endpoint")
     parser.add_argument("--pub", default=BROKER_PUB_ENDPOINT,
                         help="ZMQ broker publisher endpoint")
+    parser.add_argument("--group", default=MULTICAST_GROUP,
+                        help="UDP multicast group for camera progress")
+    parser.add_argument("--port", type=int, default=MULTICAST_PORT,
+                        help="UDP multicast port for camera progress")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)
     app.setFont(QFont("Sans", 10))
-    window = SeqguiMainWindow(args.sub, args.pub)
+    window = SeqguiMainWindow(args.sub, args.pub, args.group, args.port)
     window.show()
     return app.exec_()
 

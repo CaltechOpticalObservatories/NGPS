@@ -15,6 +15,9 @@ class BroadcastLog(QPlainTextEdit):
     def init_ui(self):
         self.setReadOnly(True)
         self.setMaximumBlockCount(2000)
+        # Don't wrap long lines; show a horizontal scrollbar instead (as needed),
+        # mirroring the vertical one.
+        self.setLineWrapMode(QPlainTextEdit.NoWrap)
         font = QFont("Monospace")
         font.setStyleHint(QFont.TypeWriter)
         font.setPointSize(9)
