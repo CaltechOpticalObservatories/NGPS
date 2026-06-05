@@ -2455,13 +2455,13 @@ namespace Sequencer {
   /***** Sequencer::Sequence::abort_process *********************************/
   /**
    * @brief      tries to abort everything happening
-   * @details    Sets SEQ_ABORTING via RAII for the duration of the abort,
-   *             then on exit:
-   *               - if aborting during RUNNING or PAUSED, restores SEQ_READY
-   *               - if aborting during STARTING or STOPPING, sets SEQ_FAILED
+   * @details    Sets SEQ_ABORTING for the duration of the abort, then on exit
+   *             selects a one-hot terminal seqstate:
+   *               - aborting during STARTING or STOPPING sets SEQ_FAILED
    *                 (indeterminate lifecycle state; requires startup/shutdown
    *                  to clear)
-   *               - otherwise leaves seqstate unchanged on exit
+   *               - otherwise the terminal state reflects actual readiness:
+   *                 SEQ_READY when all daemons are ready, else SEQ_NOTREADY
    *
    */
   void Sequence::abort_process() {
@@ -2538,16 +2538,21 @@ namespace Sequencer {
       }
     }
 
-    // Exit SEQ_ABORTING to a strict one-hot terminal state chosen from the
-    // snapshot taken at entry. If neither condition applies (e.g. abort
-    // invoked while READY/NOTREADY/FAILED) we leave the state at NOTREADY
-    // so callers never see SEQ_ABORTING linger and no prior bit is retained.
+    // Exit SEQ_ABORTING to a strict one-hot terminal state. A lifecycle abort
+    // (STARTING/STOPPING) leaves hardware in an indeterminate state, so it must
+    // go to SEQ_FAILED (cleared only by a subsequent startup/shutdown).
+    // Otherwise the abort has only stopped activity, so the terminal state is
+    // the system's actual readiness: SEQ_READY when every subsystem is ready,
+    // else SEQ_NOTREADY. This mirrors the readiness contract used by startup()
+    // (the are_all_set gate) and broadcast_daemonstate(), so an abort issued
+    // while already READY with all daemons up returns to READY -- and one
+    // issued after a daemon dropped correctly settles on NOTREADY.
     //
-    if ( abort_during_run ) {
-      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
-    }
-    else if ( abort_during_lifecycle ) {
+    if ( abort_during_lifecycle ) {
       this->seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+    }
+    else if ( this->daemon_manager.are_all_set() ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
     }
     else {
       this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );

@@ -516,6 +516,8 @@ namespace Acam {
         bool        is_acquired  = false;
         int         nacquired    = 0;
         int         attempts     = 0;
+        std::string filter       = "";
+        std::string cover        = "";
       } last_status;
 
     public:

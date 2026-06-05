@@ -1,7 +1,8 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+    QGridLayout, QGroupBox, QHBoxLayout, QLabel, QProgressBar, QSizePolicy,
+    QVBoxLayout
 )
 
 # Wait-state JSON keys (mirrors Sequencer::wait_state_names in sequence.h)
@@ -38,6 +39,8 @@ SUBSYSTEMS = [
 KEY_ACQUIRE_MODE        = "acquire_mode"
 KEY_IS_ACQUIRED         = "is_acquired"
 KEY_SEEING              = "seeing"
+KEY_FILTER              = "filter"
+KEY_COVER               = "cover"
 KEY_FINEACQUIRE_LOCKED  = "fineacquire_locked"
 KEY_FINEACQUIRE_RUNNING = "fineacquire_running"
 KEY_AUTOEXPOSE_RUNNING  = "autoexpose_running"
@@ -57,6 +60,13 @@ COLOR_ORANGE    = "#ff9933"     # ABORTING
 COLOR_BG_DARK   = "#1e1e1e"     # panel background
 COLOR_BG_MID    = "#2a2a2a"     # widget background
 
+# Type scale -- keep the UI on a small, deliberate set of sizes
+FONT_PT_STATE   = 20            # the big STATE badge
+FONT_PT_READOUT = 11            # numeric readouts (seeing)
+FONT_PT_LABEL   = 10            # default labels / badges
+FONT_PT_SMALL   = 8             # legends / progress text
+FONT_MONO       = "Monospace"   # numeric readouts, so digits don't jitter
+
 
 def color_for_state(state):
     """ Return a CSS hex color for a seqstate label string. """
@@ -70,33 +80,6 @@ def color_for_state(state):
     return COLOR_GRAY
 
 
-def section_label(text):
-    """ Return a small bold section-header label. """
-    lbl = QLabel(text)
-    lbl.setStyleSheet("font-weight: bold; color: #aaaaaa; font-size: 10pt;")
-    return lbl
-
-
-def hline():
-    """ Return a thin horizontal separator. """
-    line = QFrame()
-    line.setFrameShape(QFrame.HLine)
-    line.setFrameShadow(QFrame.Sunken)
-    line.setStyleSheet("color: #333333;")
-    line.setMaximumHeight(2)
-    return line
-
-
-def vline():
-    """ Return a thin vertical separator for use in horizontal layouts. """
-    line = QFrame()
-    line.setFrameShape(QFrame.VLine)
-    line.setFrameShadow(QFrame.Sunken)
-    line.setStyleSheet("color: #333333;")
-    line.setMaximumWidth(2)
-    return line
-
-
 class Badge(QLabel):
     """ Tri-state colored pill: not-ready (dim), ready (green), busy (blink). """
 
@@ -108,7 +91,7 @@ class Badge(QLabel):
         self.setAlignment(Qt.AlignCenter)
         font = self.font()
         font.setBold(True)
-        font.setPointSize(10)
+        font.setPointSize(FONT_PT_LABEL)
         self.setFont(font)
         self.setMinimumWidth(82)
         self.setFixedHeight(28)
@@ -136,7 +119,7 @@ class Badge(QLabel):
             self._set("#cccccc", COLOR_GREEN_DIM)
 
 
-class SubsystemPanel(QWidget):
+class SubsystemPanel(QGroupBox):
     """ Tri-state grid of daemon badges plus a sequencerd online indicator. """
 
     def __init__(self, parent=None):
@@ -147,10 +130,10 @@ class SubsystemPanel(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.setTitle("SUBSYSTEMS")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(4)
-        layout.addWidget(section_label("SUBSYSTEMS"))
 
         grid = QGridLayout()
         grid.setHorizontalSpacing(5)
@@ -164,7 +147,7 @@ class SubsystemPanel(QWidget):
         layout.addLayout(grid)
 
         legend = QLabel("dim = not ready   green = ready   blink = busy")
-        legend.setStyleSheet("color: #555555; font-size: 8pt;")
+        legend.setStyleSheet(f"color: #555555; font-size: {FONT_PT_SMALL}pt;")
         layout.addWidget(legend)
 
     def set_sequencerd_online(self):
@@ -201,7 +184,7 @@ class SubsystemPanel(QWidget):
                 self.badges[name].set_blink(phase)
 
 
-class StatePanel(QWidget):
+class StatePanel(QGroupBox):
     """ Left panel: STATE badge and (when active) TCSOP / USER alert. """
 
     def __init__(self, parent=None):
@@ -211,18 +194,18 @@ class StatePanel(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setMinimumWidth(160)
+        self.setTitle("STATE")
+        self.setMinimumWidth(130)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(8)
-        layout.addWidget(section_label("STATE"))
 
         self.state_label = QLabel("")
         self.state_label.setAlignment(Qt.AlignCenter)
         font = QFont()
-        font.setPointSize(20)
+        font.setPointSize(FONT_PT_STATE)
         font.setBold(True)
         self.state_label.setFont(font)
         self.state_label.setFixedHeight(60)
@@ -307,8 +290,8 @@ class StatePanel(QWidget):
                 )
 
 
-class CameraPanel(QWidget):
-    """ Exposing / Reading out indicators. """
+class CameraPanel(QGroupBox):
+    """ Exposure / readout progress bars whose labels track camerad state. """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -317,66 +300,103 @@ class CameraPanel(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.setTitle("CAMERA")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(4)
-        layout.addWidget(section_label("CAMERA"))
 
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        self.lbl_exposing = self._make_indicator("Exposing")
-        self.lbl_readout  = self._make_indicator("Reading out")
-        row.addWidget(self.lbl_exposing)
-        row.addWidget(self.lbl_readout)
-        row.addStretch(1)
-        layout.addLayout(row)
+        # Exposure / readout progress bars are filled from the UDP async stream;
+        # their row labels recolor (idle -> active) from the camerad ZMQ
+        # exposing/inreadout flags, so the two transports cross-check each other.
+        prog = QGridLayout()
+        prog.setHorizontalSpacing(8)
+        prog.setVerticalSpacing(4)
+        prog.setContentsMargins(0, 2, 0, 0)
+        self.lbl_exposure   = self._make_bar_label("Exposure")
+        self.lbl_readout    = self._make_bar_label("Readout")
+        self.exposure_bar   = self._make_progress_bar()
+        self.readout_bar    = self._make_progress_bar()
+        self.exposure_value = self._make_value_label()
+        self.readout_value  = self._make_value_label()
+        prog.addWidget(self.lbl_exposure,   0, 0)
+        prog.addWidget(self.exposure_bar,   0, 1)
+        prog.addWidget(self.exposure_value, 0, 2)
+        prog.addWidget(self.lbl_readout,    1, 0)
+        prog.addWidget(self.readout_bar,    1, 1)
+        prog.addWidget(self.readout_value,  1, 2)
+        prog.setColumnStretch(1, 1)
+        layout.addLayout(prog)
 
     @staticmethod
-    def _make_indicator(text):
+    def _make_progress_bar():
+        bar = QProgressBar()
+        bar.setRange(0, 100)
+        bar.setValue(0)
+        bar.setFixedHeight(16)
+        bar.setTextVisible(False)        # percent shown only while active
+        bar.setStyleSheet(
+            "QProgressBar {"
+            f"  background-color: {COLOR_BG_MID}; color: {COLOR_GRAY}; "
+            "  border: 1px solid #444; border-radius: 4px; text-align: center; "
+            f"  font-family: '{FONT_MONO}'; font-size: {FONT_PT_SMALL}pt;"
+            "}"
+            f"QProgressBar::chunk {{ background-color: {COLOR_GREEN}; "
+            "  border-radius: 3px; }"
+        )
+        return bar
+
+    @staticmethod
+    def _make_bar_label(text):
         lbl = QLabel(text)
-        lbl.setAlignment(Qt.AlignCenter)
         font = lbl.font()
         font.setBold(True)
-        font.setPointSize(10)
         lbl.setFont(font)
-        lbl.setFixedHeight(28)
-        lbl.setMinimumWidth(110)
+        lbl.setStyleSheet(f"color: {COLOR_GRAY};")
+        return lbl
+
+    @staticmethod
+    def _make_value_label():
+        """ Right-aligned monospaced readout to the right of a bar, so the
+            number stays legible (never drawn over the green chunk). """
+        lbl = QLabel("")
+        lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lbl.setMinimumWidth(44)
         lbl.setStyleSheet(
-            f"color: {COLOR_INACTIVE}; background-color: {COLOR_BG_MID}; "
-            "border: 1px solid #444; border-radius: 5px; padding: 0 8px;"
+            f"color: #cccccc; font-family: '{FONT_MONO}'; font-size: {FONT_PT_LABEL}pt;"
         )
         return lbl
 
     @staticmethod
-    def _set_idle(lbl):
-        lbl.setStyleSheet(
-            f"color: {COLOR_INACTIVE}; background-color: {COLOR_BG_MID}; "
-            "border: 1px solid #444; border-radius: 5px; padding: 0 8px;"
-        )
+    def _set_label_active(lbl, active):
+        """ Recolor a bar label: bright green when active, dim gray when idle. """
+        lbl.setStyleSheet(f"color: {COLOR_GREEN if active else COLOR_GRAY};")
 
-    @staticmethod
-    def _set_blink(lbl, phase):
-        if phase:
-            lbl.setStyleSheet(
-                f"color: #000000; background-color: {COLOR_GREEN}; "
-                "border: 1px solid #22aa22; border-radius: 5px; padding: 0 8px;"
-            )
-        else:
-            lbl.setStyleSheet(
-                f"color: {COLOR_GREEN}; background-color: {COLOR_GREEN_DIM}; "
-                "border: 1px solid #22aa22; border-radius: 5px; padding: 0 8px;"
-            )
+    def set_exposure_progress(self, percent, seconds):
+        """ Exposure bar shows percent; the value shows seconds remaining. """
+        self.exposure_bar.setValue(percent)
+        self.exposure_value.setText(f"{seconds}s")
+
+    def set_readout_progress(self, percent, eta):
+        """ Readout bar shows percent; the value shows the ETA in seconds once a
+            pixel-rate estimate exists, otherwise falls back to percent. """
+        self.readout_bar.setValue(percent)
+        self.readout_value.setText(f"{eta}s" if eta >= 0 else f"{percent}%")
 
     def set_camerad(self, data):
-        """ Update exposing / readout active flags from a camerad payload. """
+        """ Update exposing / readout state from a camerad payload: recolor the
+            row labels and clear a bar when its phase ends. """
         if KEY_EXPOSING in data:
             self.exposing_active = bool(data[KEY_EXPOSING])
+            self._set_label_active(self.lbl_exposure, self.exposing_active)
             if not self.exposing_active:
-                self._set_idle(self.lbl_exposing)
+                self.exposure_bar.setValue(0)
+                self.exposure_value.setText("")
         if KEY_INREADOUT in data:
             self.readout_active = bool(data[KEY_INREADOUT])
+            self._set_label_active(self.lbl_readout, self.readout_active)
             if not self.readout_active:
-                self._set_idle(self.lbl_readout)
+                self.readout_bar.setValue(0)
+                self.readout_value.setText("")
 
     def set_camerad_online(self, online):
         """ Clear indicators when camerad goes offline (defense-in-depth).
@@ -385,19 +405,19 @@ class CameraPanel(QWidget):
         if not online:
             self.exposing_active = False
             self.readout_active = False
-            self._set_idle(self.lbl_exposing)
-            self._set_idle(self.lbl_readout)
-
-    def blink_tick(self, phase):
-        """ Drive blink phase for any active camera indicators. """
-        if self.exposing_active:
-            self._set_blink(self.lbl_exposing, phase)
-        if self.readout_active:
-            self._set_blink(self.lbl_readout, phase)
+            self._set_label_active(self.lbl_exposure, False)
+            self._set_label_active(self.lbl_readout, False)
+            self.exposure_bar.setValue(0)
+            self.readout_bar.setValue(0)
+            self.exposure_value.setText("")
+            self.readout_value.setText("")
 
 
-class AcquisitionPanel(QWidget):
+class AcquisitionPanel(QGroupBox):
     """ ACAM + SLICECAM acquisition status display. """
+
+    # equal-width row prefixes so the ACAM / SLICECAM badge columns line up
+    PREFIX_WIDTH = 72
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -408,15 +428,15 @@ class AcquisitionPanel(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        self.setTitle("ACQUISITION")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(3)
-        layout.addWidget(section_label("ACQUISITION"))
+        layout.setSpacing(6)
 
         # ACAM row
         acam_row = QHBoxLayout()
         acam_row.setSpacing(8)
-        acam_row.addWidget(QLabel("ACAM:"))
+        acam_row.addWidget(self._row_prefix("ACAM:"))
 
         self.acam_mode_badge     = Badge("acquiring")
         self.acam_guiding_badge  = Badge("guiding")
@@ -428,16 +448,37 @@ class AcquisitionPanel(QWidget):
         acam_row.addSpacing(16)
         self.seeing = QLabel("seeing: --")
         self.seeing.setStyleSheet(
-            f"color: {COLOR_BLUE}; font-weight: bold; font-size: 11pt;"
+            f"color: {COLOR_BLUE}; font-weight: bold; "
+            f"font-family: '{FONT_MONO}'; font-size: {FONT_PT_READOUT}pt;"
         )
         acam_row.addWidget(self.seeing)
         acam_row.addStretch(1)
         layout.addLayout(acam_row)
 
+        # ACAM cover + filter, aligned under the ACAM badges
+        cfg_row = QHBoxLayout()
+        cfg_row.setSpacing(8)
+        cfg_row.addWidget(self._row_prefix(""))
+
+        cfg_row.addWidget(QLabel("cover"))
+        self.cover_dot = QLabel()
+        self.cover_dot.setFixedSize(14, 14)
+        cfg_row.addWidget(self.cover_dot)
+
+        cfg_row.addSpacing(16)
+        self.filter_label = QLabel("filter: --")
+        self.filter_label.setStyleSheet(
+            f"color: {COLOR_GRAY}; font-family: '{FONT_MONO}'; font-size: {FONT_PT_READOUT}pt;"
+        )
+        cfg_row.addWidget(self.filter_label)
+        cfg_row.addStretch(1)
+        layout.addLayout(cfg_row)
+        self._set_cover("--")
+
         # SLICECAM row
         slice_row = QHBoxLayout()
         slice_row.setSpacing(8)
-        slice_row.addWidget(QLabel("SLICECAM:"))
+        slice_row.addWidget(self._row_prefix("SLICECAM:"))
 
         self.lbl_locked     = Badge("locked")
         self.lbl_running    = Badge("running")
@@ -447,6 +488,27 @@ class AcquisitionPanel(QWidget):
         slice_row.addWidget(self.lbl_autoexpose)
         slice_row.addStretch(1)
         layout.addLayout(slice_row)
+
+    def _row_prefix(self, text):
+        """ Fixed-width row label so the ACAM / SLICECAM badge columns align. """
+        lbl = QLabel(text)
+        lbl.setMinimumWidth(self.PREFIX_WIDTH)
+        return lbl
+
+    def _set_cover(self, pos):
+        """ Paint the cover dot: open = green ring, closed = filled dim disc,
+            home/unknown = neutral outline. `pos` is the raw acamd cover string. """
+        p = str(pos).lower()
+        if p == "open":
+            fill, edge = "transparent", COLOR_GREEN
+        elif p.startswith("close"):
+            fill, edge = COLOR_GRAY, COLOR_GRAY
+        else:
+            fill, edge = COLOR_BG_MID, COLOR_INACTIVE
+        self.cover_dot.setStyleSheet(
+            f"background-color: {fill}; border: 2px solid {edge}; border-radius: 7px;"
+        )
+        self.cover_dot.setToolTip(f"cover: {pos}")
 
     def _apply_guiding_blue(self):
         """ Paint the guiding badge with a steady solid-blue style. """
@@ -484,6 +546,10 @@ class AcquisitionPanel(QWidget):
                     self.seeing.setText(f"seeing: {float(data[KEY_SEEING]):.2f}\"")
                 except (TypeError, ValueError):
                     self.seeing.setText("seeing: --")
+        if KEY_COVER in data:
+            self._set_cover(data[KEY_COVER])
+        if KEY_FILTER in data:
+            self.filter_label.setText(f"filter: {data[KEY_FILTER]}")
 
     def set_slicecamd(self, data):
         """ Update SLICECAM locked / running flags from slicecamd payload. """
@@ -514,6 +580,8 @@ class AcquisitionPanel(QWidget):
             self.acam_guiding_badge.set_not_ready()
             self.acam_acquired_badge.set_not_ready()
             self.seeing.setText("seeing: --")
+            self._set_cover("--")
+            self.filter_label.setText("filter: --")
 
     def set_slicecamd_online(self, online):
         """ Clear SLICECAM indicators when slicecamd goes offline. """
