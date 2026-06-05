@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string SLICECAMD_AVGFRAMES= "avgframes"; ///< set/get camera binning
 const std::string SLICECAMD_BIN      = "bin";       ///< set/get camera binning
 const std::string SLICECAMD_CLOSE    = "close";     ///< *** close connection to all devices

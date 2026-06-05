@@ -53,6 +53,7 @@ namespace Key {
 
   inline const std::string SOURCE  = "source";
   inline const std::string PUBTIME = "pubtime";
+  inline const std::string ISOPEN  = "isopen";   // hardware connection state, published by every hardware daemon
 
   namespace Broadcast {
     inline const std::string SEVERITY = "severity";
@@ -113,7 +114,6 @@ namespace Key {
     inline const std::string SLITPOSB = "slitposb";
     inline const std::string SLITW    = "slitw";
     inline const std::string SLITO    = "slito";
-    inline const std::string ISOPEN   = "isopen";
     inline const std::string ISHOME   = "ishome";
   }
 

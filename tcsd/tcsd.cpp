@@ -6,6 +6,7 @@
  */
 
 #include "tcsd.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -193,6 +194,8 @@ int main(int argc, char **argv) {
   }
 
   logwrite(function, "tcsd online");
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   while (true) {
     auto newid = tcsd.id_pool.get_next_number();  // get the next available number from the pool

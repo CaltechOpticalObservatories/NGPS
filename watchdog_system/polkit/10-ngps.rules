@@ -1,0 +1,31 @@
+// 10-ngps.rules
+//
+// Allow the NGPS service account and operators to manage ONLY the ngps* systemd
+// units without authentication. This lets the sequencer (running as user
+// "dataowner") restart its peer daemons via `systemctl restart ngps@<name>`,
+// and lets interactive operators use the `ngps` wrapper without a password.
+//
+// Install to: /etc/polkit-1/rules.d/10-ngps.rules
+// CentOS 8 ships polkit 0.115, which uses these JavaScript rules.
+//
+// Permits:
+//   - user "dataowner"            (the daemon service account / sequencer)
+//   - any member of "datawriters" (interactive operators)
+
+polkit.addRule(function(action, subject) {
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    if (unit === null) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    // restrict to ngps.target and ngps@<name>.service instances only
+    if (unit != "ngps.target" && unit.indexOf("ngps@") !== 0) {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (subject.user == "dataowner" || subject.isInGroup("datawriters")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

@@ -6,6 +6,7 @@
  */
 
 #include "thermald.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -204,6 +205,8 @@ int main(int argc, char **argv) {
   std::thread( std::ref(thermald.telemetry_watchdog), std::ref(thermald) ).detach();
 
   logwrite( function, "daemon is running" );
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   for (;;) pause();                                  // main thread suspends
   return 0;

@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string CAMERAD_ABORT = "abort";
 const std::string CAMERAD_ACTIVATE = "activate";
 const std::string CAMERAD_AUTODIR = "autodir";

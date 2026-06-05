@@ -621,6 +621,7 @@ namespace Power {
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::POWERD;
+    jmessage_out[Key::ISOPEN] = this->isopen();
 
     // a plug is reported true when it is on
     //

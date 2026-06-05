@@ -44,6 +44,10 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_CAMERA );
+
     // when I write to the completed table I will write the actual EXPTIME
     this->target.column_from_json<double>( "EXPTIME", Key::Camerad::SHUTTERTIME, jmessage );
 
@@ -64,6 +68,10 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_slitd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_SLIT );
+
     this->target.column_from_json<double>( "SLITWIDTH",  Key::Slitd::SLITW, jmessage );
     this->target.column_from_json<double>( "SLITOFFSET", Key::Slitd::SLITO, jmessage );
 
@@ -80,6 +88,10 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_SLICECAM );
+
     const bool has_running = jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING );
     const bool has_locked  = jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED );
     if ( !has_running && !has_locked ) return;
@@ -111,6 +123,10 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_tcsd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_TCS );
+
     // the completed target table contains TCS data now
     this->target.column_from_json<std::string>( "TELRA",   Key::Tcsd::TELRA,    jmessage );
     this->target.column_from_json<std::string>( "TELDECL", Key::Tcsd::TELDEC,   jmessage );
@@ -132,6 +148,10 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_ACAM );
+
     // Parse JSON values before taking the lock (parsing may throw).
     // extract_telemetry_value leaves its out-param unchanged on missing key
     // or type mismatch, so default-initialize before the call.
@@ -158,6 +178,62 @@ namespace Sequencer {
     this->acam_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
+
+
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+  /**
+   * @brief      handles Topic::CALIBD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_calibd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
+  }
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_flexured ***************************/
+  /**
+   * @brief      handles Topic::FLEXURED telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_flexured(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_FLEXURE );
+  }
+  /***** Sequencer::Sequence::handletopic_flexured ***************************/
+
+
+  /***** Sequencer::Sequence::handletopic_focusd *****************************/
+  /**
+   * @brief      handles Topic::FOCUSD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_focusd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_FOCUS );
+  }
+  /***** Sequencer::Sequence::handletopic_focusd *****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
+  /**
+   * @brief      handles Topic::POWERD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_powerd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_POWER );
+  }
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
 
 
   /***** Sequencer::Sequence::publish_snapshot *******************************/
@@ -193,6 +269,10 @@ namespace Sequencer {
     jmessage[Daemon::SLICECAMD] = true;
     jmessage[Daemon::SLITD]     = true;
     jmessage[Daemon::TCSD]      = true;
+    jmessage[Daemon::CALIBD]    = true;
+    jmessage[Daemon::FLEXURED]  = true;
+    jmessage[Daemon::FOCUSD]    = true;
+    jmessage[Daemon::POWERD]    = true;
     this->publisher->publish( jmessage, Topic::SNAPSHOT );
   }
   /***** Sequencer::Sequence::request_snapshot *******************************/
@@ -3973,47 +4053,60 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::daemon_restart **********************************/
   /**
-   * @brief      kill, then start acamd
-   * @details    Uses the ngps daemon control script (specified in config file)
-   *             to stop and restart the daemon specified by daemonbit.
-   * @param      daemonbit  accepts a Sequencer::DaemonBit
-   * @return     ERROR|NO_ERROR
+   * @brief      restart a daemon and verify it comes back
+   * @details    Uses systemctl to restart the unit ngps@<name>.service, then
+   *             confirms success by reconnecting. The std::system() return
+   *             value is deliberately NOT used: a daemonized sequencer ignores
+   *             SIGCHLD (see Daemon::daemonize), so std::system() yields
+   *             -1/ECHILD regardless of outcome. Success is therefore verified
+   *             out-of-band by reconnecting to the daemon.
+   * @param[in]  daemon  daemon client object; its .name selects the unit
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::daemon_restart(Common::DaemonClient &daemon) {
     const std::string function("Sequencer::Sequence::daemon_restart");
-    std::string command;
+    const int restart_timeout_sec = 30;  ///< max wait for the daemon to accept connections
 
-    // the daemon control script must have been specified in the config file
-    if (this->daemon_control.empty()) {
-      logwrite(function, "ERROR killing "+daemon.name+": daemon_control undefined");
+    // Refuse to act on an unnamed daemon: an empty name would expand to a
+    // control command with no instance and could affect unintended units.
+    if (daemon.name.empty()) {
+      logwrite(function, "ERROR cannot restart: daemon name is empty");
       return ERROR;
     }
 
-    // disconnect from the daemon
+    // disconnect from the daemon; the unit is about to be replaced
     daemon.disconnect();
 
-    // kill daemon using ngps script
-    command = this->daemon_control + std::string(" kill ") + daemon.name;
-    if ( std::system( command.c_str() ) && errno!=ECHILD ) {
-      logwrite(function, "ERROR killing "+daemon.name);
-      return ERROR;
+    // Ask systemd to restart the unit. With Type=notify this blocks until the
+    // new process signals READY (or TimeoutStartSec elapses). We ignore the
+    // return value (unreliable under SIGCHLD=SIG_IGN) and verify by reconnect.
+    static const std::string systemctl = "/usr/bin/systemctl";
+    const std::string unit = "ngps@" + daemon.name + ".service";
+    const std::string command = systemctl + " restart " + unit;
+    logwrite(function, "restarting "+unit);
+    std::system( command.c_str() );
+
+    // Verify by reconnecting, bounded and cancellable. In practice the first
+    // attempt succeeds because systemctl (Type=notify) already waited for READY;
+    // the loop is a safety net for slow starts.
+    const auto deadline = std::chrono::steady_clock::now()
+                          + std::chrono::seconds(restart_timeout_sec);
+    while ( std::chrono::steady_clock::now() < deadline ) {
+      if ( this->cancel_flag.load() ) {
+        logwrite(function, "restart of "+unit+" cancelled");
+        return ERROR;
+      }
+      if ( this->connect_to_daemon(daemon) == NO_ERROR ) {
+        logwrite(function, "restarted "+unit+" and reconnected");
+        return NO_ERROR;
+      }
+      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    else logwrite(function, "killed "+daemon.name);
 
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-
-    // start daemon using ngps script
-    command = this->daemon_control + std::string(" start ") + daemon.name;
-    if ( std::system( command.c_str() ) && errno!=ECHILD ) {
-      logwrite(function, "ERROR starting "+daemon.name);
-      return ERROR;
-    }
-    else logwrite(function, "started "+daemon.name);
-
-    std::this_thread::sleep_for(std::chrono::seconds(3));
-
-    return NO_ERROR;
+    logwrite(function, "ERROR "+unit+" did not come back within "
+                       +std::to_string(restart_timeout_sec)+"s");
+    return ERROR;
   }
   /***** Sequencer::Sequence::daemon_restart **********************************/
 

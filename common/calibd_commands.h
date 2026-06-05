@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string CALIBD_CLOSE = "close";    ///< close connection to calibd hardware
 const std::string CALIBD_EXIT = "exit";      ///< is calib open
 const std::string CALIBD_GET = "get";        ///< get state of both actuators

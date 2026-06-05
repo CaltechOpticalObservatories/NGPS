@@ -744,7 +744,7 @@ namespace Slit {
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::SLITD;
-    jmessage_out[Key::Slitd::ISOPEN]   = this->status.isopen;
+    jmessage_out[Key::ISOPEN]          = this->status.isopen;
     jmessage_out[Key::Slitd::ISHOME]   = this->status.ishome;
     jmessage_out[Key::Slitd::SLITW]    = this->status.width.arcsec();
     jmessage_out[Key::Slitd::SLITO]    = this->status.offset.arcsec();

@@ -175,13 +175,6 @@ namespace Sequencer {
         applied++;
       }
 
-      // DAEMON_CONTROL_SCRIPT
-      if (config.param[entry] == "DAEMON_CONTROL_SCRIPT") {
-        this->sequence.daemon_control = config.arg[entry];
-        logwrite(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
-        applied++;
-      }
-
       // ACAMD_PORT
       if (config.param[entry] == "ACAMD_PORT") {
         try {
@@ -1182,6 +1175,10 @@ namespace Sequencer {
                     retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
                   }
                   ret = HELP;
+      }
+      else
+      if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
+                  sock.Write( CMD_PONG + "\n" );
       }
       else
       if ( cmd == SEQUENCERD_EXIT ) {

@@ -6,6 +6,7 @@
  */
 
 #include "focusd.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -187,6 +188,8 @@ int main(int argc, char **argv) {
   // thread to start a new logbook each day
   //
   std::thread( std::ref(Focus::Server::new_log_day), logpath ).detach();
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   for (;;) pause();                                  // main thread suspends
   return 0;

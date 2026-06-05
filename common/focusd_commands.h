@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string FOCUSD_CLOSE = "close";    const int FOCUSD_CLOSE_TIMEOUT = 3000;
 const std::string FOCUSD_DEFAULTPOS = "default";    const int FOCUSD_DEFAULTPOS_TIMEOUT = 3000;
 const std::string FOCUSD_GET = "get";        const int FOCUSD_GET_TIMEOUT = 3000;

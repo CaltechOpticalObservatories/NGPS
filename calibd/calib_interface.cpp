@@ -759,6 +759,18 @@ namespace Calib {
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::CALIBD;
+    {
+    // AND across motion controllers + lampmod modulator; uses silent primitives
+    // (Calib::Interface::is_open would log every call).
+    bool all_open = true;
+    for ( const auto &mot : this->motion.motorinterface.get_motormap() ) {
+      all_open = all_open && this->motion.motorinterface.is_connected( mot.second.name );
+    }
+    std::string ret;
+    this->modulator.control( "isopen", ret );
+    all_open = all_open && ( ret == "true" );
+    jmessage_out[Key::ISOPEN] = all_open;
+    }
     for ( const auto &[key,val] : this->status.values ) {
       jmessage_out[key] = val;
     }

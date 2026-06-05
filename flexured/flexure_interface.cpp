@@ -444,6 +444,14 @@ namespace Flexure {
 
     nlohmann::json jmessage;
     jmessage[Key::SOURCE] = Topic::FLEXURED;
+    {
+    // AND across all motor controllers; uses silent primitive (Interface::is_open would log every call).
+    bool all_open = true;
+    for ( const auto &mot : this->motorinterface.get_motormap() ) {
+      all_open = all_open && this->motorinterface.is_connected( mot.second.name );
+    }
+    jmessage[Key::ISOPEN] = all_open;
+    }
     for ( const auto &[key,pos] : this->status.positions ) {
       if ( !std::isnan(pos) ) jmessage[key] = pos; else jmessage[key] = "NAN";
     }

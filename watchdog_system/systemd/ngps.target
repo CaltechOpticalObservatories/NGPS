@@ -1,0 +1,16 @@
+# NGPS aggregate target -- pulls in all NGPS daemons.
+#
+# Install to: /etc/systemd/system/ngps.target
+# Enable + start everything with:
+#   systemctl enable --now ngps.target
+#
+# Because each ngps@<name>.service is PartOf=ngps.target, stopping or restarting
+# the target cascades to every instance.
+
+[Unit]
+Description=All NGPS daemons
+Wants=ngps@messaged.service ngps@acamd.service ngps@slicecamd.service ngps@calibd.service ngps@camerad.service ngps@flexured.service ngps@focusd.service ngps@thermald.service ngps@powerd.service ngps@slitd.service ngps@tcsd.service ngps@sequencerd.service
+After=ngps@messaged.service
+
+[Install]
+WantedBy=multi-user.target

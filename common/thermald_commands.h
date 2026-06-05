@@ -9,6 +9,8 @@
 
 #ifndef THERMALD_COMMANDS_H
 #define THERMALD_COMMANDS_H
+
+#include "common_commands.h"
 const std::string THERMALD_ECHO     = "echo";      ///< 
 const std::string THERMALD_EXIT     = "exit";      ///< 
 const std::string THERMALD_GET      = "get";       ///< 

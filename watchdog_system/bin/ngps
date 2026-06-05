@@ -1,0 +1,78 @@
+#!/bin/bash
+#
+# ngps -- operator front-end to NGPS daemon processes via systemd.
+#
+#   ngps start|stop|restart|kill|status|list [daemon ...]
+#
+# With no daemon arguments, start/stop/restart act on the whole set (via
+# ngps.target, which cascades through PartOf=). With one or more names, they act
+# on those instances only.
+#
+# Requires the polkit rule (10-ngps.rules) so the invoking operator may manage
+# ngps units without a password.
+#
+
+SYSTEMCTL=/usr/bin/systemctl
+
+# Valid daemon instance names. Must match run/ngps-config PROCNAMES order
+# (sequencer last). Note: telemd is intentionally excluded -- it is not in
+# PROCNAMES and is not managed here.
+DAEMONS=(messaged acamd slicecamd calibd camerad flexured focusd thermald powerd slitd tcsd sequencerd)
+
+usage() {
+  echo "Usage: ngps {start|stop|restart|kill|status|list} [daemon ...]"
+  echo "       daemons: ${DAEMONS[*]}"
+  exit 1
+}
+
+# Validate the given names and populate UNITS=() with ngps@<name>.service.
+build_units() {
+  UNITS=()
+  local n d ok
+  for n in "$@"; do
+    ok=0
+    for d in "${DAEMONS[@]}"; do
+      [ "$n" = "$d" ] && ok=1 && break
+    done
+    if [ $ok -eq 0 ]; then
+      echo "ERROR: unknown daemon: $n" >&2
+      echo "       valid: ${DAEMONS[*]}" >&2
+      exit 1
+    fi
+    UNITS+=("ngps@$n.service")
+  done
+}
+
+[ $# -ge 1 ] || usage
+cmd="$1"; shift
+
+case "$cmd" in
+  start|stop|restart)
+    if [ $# -eq 0 ]; then
+      exec "$SYSTEMCTL" "$cmd" ngps.target
+    else
+      build_units "$@"
+      exec "$SYSTEMCTL" "$cmd" "${UNITS[@]}"
+    fi
+    ;;
+  kill)
+    # kill does not follow target dependencies, so enumerate instances
+    [ $# -eq 0 ] && set -- "${DAEMONS[@]}"
+    build_units "$@"
+    exec "$SYSTEMCTL" kill --signal=SIGKILL "${UNITS[@]}"
+    ;;
+  status)
+    if [ $# -eq 0 ]; then
+      exec "$SYSTEMCTL" --no-pager status ngps.target 'ngps@*'
+    else
+      build_units "$@"
+      exec "$SYSTEMCTL" --no-pager status "${UNITS[@]}"
+    fi
+    ;;
+  list)
+    printf '%s\n' "${DAEMONS[@]}"
+    ;;
+  *)
+    usage
+    ;;
+esac

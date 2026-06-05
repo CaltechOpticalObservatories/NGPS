@@ -46,7 +46,7 @@ namespace TCS {
 
     motion = this->tcs_info.motion;
     jmessage_out[Key::Tcsd::MOTION] = motion;
-    jmessage_out["ISOPEN"]          = this->tcs_info.isopen;
+    jmessage_out[Key::ISOPEN]       = this->tcs_info.isopen;
     jmessage_out["TCSNAME"]         = this->tcs_info.tcsname;
 
     jmessage_out["PA"]              = this->tcs_info.pa;         // double

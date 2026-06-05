@@ -369,7 +369,15 @@ namespace Sequencer {
               { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
+                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) },
+              { Topic::CALIBD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_calibd(msg); } ) },
+              { Topic::FLEXURED, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_flexured(msg); } ) },
+              { Topic::FOCUSD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_focusd(msg); } ) },
+              { Topic::POWERD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_powerd(msg); } ) }
             };
           }
 
@@ -455,8 +463,6 @@ namespace Sequencer {
 
       std::string test_solver_args;   ///< optional solver args that can be passed in with a test command
 
-      std::string daemon_control;     ///< daemon control script
-
       // Here are all the daemon client objects that the Sequencer connects to.
       //
       Common::DaemonClient acamd { "acamd" };
@@ -490,6 +496,10 @@ namespace Sequencer {
       void handletopic_slicecamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_calibd( const nlohmann::json &jmessage );
+      void handletopic_flexured( const nlohmann::json &jmessage );
+      void handletopic_focusd( const nlohmann::json &jmessage );
+      void handletopic_powerd( const nlohmann::json &jmessage );
       void publish_snapshot();
       void request_snapshot();
       void publish_seqstate();

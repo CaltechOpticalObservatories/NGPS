@@ -1,0 +1,58 @@
+# NGPS per-daemon template unit.
+#
+# One instance per daemon, e.g.  systemctl start ngps@acamd
+# The instance name (%i) must match the binary and config basename, i.e.
+#   /home/developer/Software/bin/<name>  and  /home/developer/Software/Config/<name>.cfg
+#
+# Install to: /etc/systemd/system/ngps@.service
+
+[Unit]
+Description=NGPS daemon: %i
+PartOf=ngps.target
+After=network-online.target
+Wants=network-online.target
+# No give-up cap: always bring a daemon back (see [Service] Restart=always).
+# StartLimitIntervalSec=0 disables start-rate limiting so systemd never parks a
+# unit in "failed" after repeated quick exits.
+# Trade-off: a hard-broken daemon (bad config, missing dep) will relaunch every
+# RestartSec forever -- stop it deliberately with `ngps stop <name>`.
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=dataowner
+Group=datawriters
+UMask=0002
+
+# Centralized environment (PYTHONPATH, RUBIN_SIM_DATA_DIR, XPA_NSUSERS, ...).
+# The leading '-' makes the file optional.
+EnvironmentFile=-/etc/sysconfig/ngps
+
+# Run in the foreground so systemd tracks the real PID (no double-fork).
+ExecStart=/home/developer/Software/bin/%i /home/developer/Software/Config/%i.cfg --foreground
+
+# The daemons already shut down cleanly on SIGINT; reuse that handler for stop.
+KillSignal=SIGINT
+
+# Type=notify: systemd waits for the daemon's sd_notify(READY=1) before
+# considering the unit started. Bump if a daemon is slow to begin listening.
+TimeoutStartSec=60
+TimeoutStopSec=30
+
+# Restart on EVERY exit -- crash, signal, or a clean exit(0) (the daemons'
+# exit_cleanly() exits 0) -- about RestartSec after it exits (<3 s). systemd
+# does NOT restart after a commanded `systemctl stop`/`restart`, which is the
+# intended off switch (and how to halt a crash-looping daemon). Does NOT cover a
+# hung-but-alive daemon (nothing exits) -- that needs WatchdogSec= + a periodic
+# sd_notify("WATCHDOG=1") heartbeat, which is not configured here.
+# NOTE: during a hardware power-cycle the sequencer should `systemctl stop` the
+# affected unit before cutting power and `start` it after.
+Restart=always
+RestartSec=2
+
+# tag each daemon's stdout/stderr in the journal/syslog with its unit name
+SyslogIdentifier=%N
+
+[Install]
+WantedBy=ngps.target

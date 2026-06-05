@@ -567,7 +567,7 @@ namespace Slicecam {
     // extract and store values in the class
     //
     Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN,  telem.is_tcs_open );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, telem.angle_scope );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    telem.ra_scope_hms );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   telem.dec_scope_dms );
@@ -604,6 +604,14 @@ namespace Slicecam {
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
+    {
+    // AND across both Andor cameras (Slicecam::Interface::isopen("") returns OR, not AND).
+    bool all_open = !this->camera.andor.empty();
+    for ( const auto &pair : this->camera.andor ) {
+      all_open = all_open && pair.second->is_open();
+    }
+    jmessage_out[Key::ISOPEN] = all_open;
+    }
     jmessage_out[Key::Slicecamd::FINEACQUIRE_RUNNING] = this->is_fineacquire_running.load();
     jmessage_out[Key::Slicecamd::FINEACQUIRE_LOCKED]  = this->is_fineacquire_locked.load();
 

@@ -1,0 +1,38 @@
+# NGPS hang watchdog -- restarts daemons that are alive but unresponsive.
+#
+# Install to: /etc/systemd/system/ngps-watchdog.service
+# Enable with: systemctl enable --now ngps-watchdog.service
+#
+# Independent of ngps.target: it idles (probes find nothing active) when the
+# daemons are stopped and resumes watching when they return. Runs as dataowner,
+# so the 10-ngps.rules polkit rule already authorizes its `systemctl restart`.
+
+[Unit]
+Description=NGPS daemon hang watchdog
+After=ngps.target
+Wants=ngps.target
+# Always bring the watchdog back, even after repeated quick exits.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=dataowner
+Group=datawriters
+EnvironmentFile=-/etc/sysconfig/ngps
+# Reads daemon command ports from the sequencer config (single source of truth).
+ExecStart=/home/developer/Software/bin/ngps-watchdog
+
+Restart=always
+RestartSec=5
+
+# Self-liveness: the watchdog emits sd_notify("WATCHDOG=1") from inside its probe
+# loop. If that loop wedges, systemd (PID 1) aborts and restarts the watchdog --
+# this is the honest, single-loop case where a native watchdog is trustworthy.
+# WatchdogSec must exceed the worst-case gap between heartbeats (one probe round);
+# 30 s is safely above PROBE_PERIOD_SEC(10) + per-daemon PROBE_TIMEOUT(5).
+WatchdogSec=30
+
+SyslogIdentifier=ngps-watchdog
+
+[Install]
+WantedBy=multi-user.target

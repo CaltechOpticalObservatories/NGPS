@@ -9,6 +9,7 @@
  */
 
 #include "sequencerd.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -133,7 +134,11 @@ int main(int argc, char **argv) {
                                           Topic::ACAMD,
                                           Topic::SLICECAMD,
                                           Topic::SLITD,
-                                          Topic::TCSD } ) == ERROR ) {
+                                          Topic::TCSD,
+                                          Topic::CALIBD,
+                                          Topic::FLEXURED,
+                                          Topic::FOCUSD,
+                                          Topic::POWERD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }
@@ -270,6 +275,8 @@ int main(int argc, char **argv) {
     logwrite( function, "ERROR could not create listening socket" );
     sequencerd.exit_cleanly();
   }
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   while (true) {
     auto newid = sequencerd.id_pool.get_next_number();  // get the next available number from the pool

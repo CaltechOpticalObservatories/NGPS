@@ -9,6 +9,7 @@
 #include "build_date.h"
 #include "camerad.h"
 #include "daemonize.h"
+#include "sd_notify.h"
 
 Camera::Server server;
 std::string logpath; 
@@ -146,6 +147,12 @@ int main(int argc, char **argv) {
     start_daemon = true;
   }
 
+  // --foreground forces foreground regardless of -d or config DAEMON= (for systemd Type=notify)
+  //
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
+  }
+
   if ( start_daemon ) {
     logwrite( function, "starting daemon" );
     Daemon::daemonize( Camera::DAEMON_NAME, "/tmp", "", "", "" );
@@ -239,6 +246,8 @@ int main(int argc, char **argv) {
   // thread to start a new logbook each day
   //
   std::thread( new_log_day ).detach();
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   for (;;) pause();                                  // main thread suspends
   return 0;
@@ -508,6 +517,10 @@ void doit(Network::TcpSocket &sock) {
                       retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
                     }
                     ret = HELP;
+    }
+    else
+    if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
+                    sock.Write( CMD_PONG + "\n" );
     }
     else
     if ( cmd == "exit" ) {

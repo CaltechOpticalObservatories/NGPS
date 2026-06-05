@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string ACAMD_ACQUIRE  = "acquire";   ///< acquire target
 const std::string ACAMD_AVGFRAMES= "avgframes"; ///< average frames
 const std::string ACAMD_BIN      = "bin";       ///< set/get camera binning

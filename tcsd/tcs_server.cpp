@@ -683,6 +683,10 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
                       ret = HELP;
       }
       else
+      if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
+                      sock.Write( CMD_PONG + "\n" );
+      }
+      else
       if ( cmd.compare( TCSD_EXIT ) == 0 ) {
                       this->exit_cleanly();                     // shutdown the daemon
       }

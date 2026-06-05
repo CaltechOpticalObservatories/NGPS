@@ -12,9 +12,8 @@ set( CMAKE_CXX_STANDARD 17 )
 
 # C-Python API Development libraries and headers
 #
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-add_link_options( -L/usr/lib64 -lpython3.9 -lcrypt -lpthread -ldl  -lutil -lm -lm )
+find_path(PYTHON_DEV "Python.h" PATHS ${PYTHON_INCLUDE_DIR} NO_DEFAULT_PATH)
+find_library(PYTHON_LIB ${PYTHON_VERSION} PATHS ${PYTHON_LIB_DIR} NO_DEFAULT_PATH)
 
 # ZeroMQ
 #
@@ -40,21 +39,20 @@ add_executable(slicecamd
         ${SLICECAMD_DIR}/slicecam_camera.cpp
         ${SLICECAMD_DIR}/slicecam_fits.cpp
         ${SLICECAMD_DIR}/slicecam_math.cpp
-        ${PYTHON_DEV}
         )
 
 target_link_libraries(slicecamd
         andor
-        python3.9
+        ${PYTHON_LIB}
         network
         common
         tcsd_client
         logentry
         utilities
+        md5
         skyinfo
         ${ZMQPP_LIB}
         ${ZMQ_LIB}
-        ${PYTHON_LIB}
         ${CCFITS_LIB}
         ${CFITS_LIB}
         ${CMAKE_THREAD_LIBS_INIT}

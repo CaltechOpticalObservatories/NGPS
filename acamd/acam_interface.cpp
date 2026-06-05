@@ -1459,6 +1459,7 @@ namespace Acam {
     //
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Topic::ACAMD;
+    jmessage_out[Key::ISOPEN] = this->isopen("");
     jmessage_out[Key::Acamd::ACQUIRE_MODE] = this->target.acquire_mode_string();
     jmessage_out[Key::Acamd::IS_ACQUIRED]  = this->target.is_acquired.load();
     jmessage_out[Key::Acamd::NACQUIRED]    = this->target.nacquired;
@@ -1614,7 +1615,7 @@ namespace Acam {
     // extract and store values in the class
     //
     Common::extract_telemetry_value( jmessage, "TCSNAME",           tcsdata.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",            tcsdata.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN,         tcsdata.is_tcs_open );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, tcsdata.angle_scope );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    tcsdata.ra_scope_hms );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   tcsdata.dec_scope_dms );

@@ -6,6 +6,7 @@
  */
 
 #include "flexured.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -92,6 +93,12 @@ int main(int argc, char **argv) {
   //
   if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
     start_daemon = true;
+  }
+
+  // --foreground forces foreground regardless of -d or config DAEMON= (for systemd Type=notify)
+  //
+  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    start_daemon = false;
   }
 
   if ( start_daemon ) {
@@ -193,6 +200,8 @@ int main(int argc, char **argv) {
     logwrite( function, "ERROR could not create listening socket" );
     flexured.exit_cleanly();
   }
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   while (true) {
     auto newid = flexured.id_pool.get_next_number(); // get the next available number from the pool

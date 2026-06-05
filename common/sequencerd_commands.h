@@ -7,6 +7,8 @@
 
 #ifndef SEQEUNCERD_COMMANDS_H
 #define SEQEUNCERD_COMMANDS_H
+
+#include "common_commands.h"
 const std::string SEQUENCERD_ABORT      = "abort";
 const std::string SEQUENCERD_CONFIG     = "config";
 const std::string SEQUENCERD_DOTYPE     = "do";

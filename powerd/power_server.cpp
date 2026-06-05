@@ -555,6 +555,10 @@ namespace Power {
                       ret = HELP;
       }
       else
+      if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
+                      sock.Write( CMD_PONG + "\n" );
+      }
+      else
 
       if ( cmd == "exit" ) {
                       sock.Write( "\n" );  // write terminating char in case client is waiting for something

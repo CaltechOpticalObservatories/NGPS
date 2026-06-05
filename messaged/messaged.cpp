@@ -9,6 +9,7 @@
  */
 
 #include "daemonize.h"
+#include "sd_notify.h"
 #include "logentry.h"
 #include "common.h"
 #include "utilities.h"
@@ -107,6 +108,8 @@ void runbroker() {
   logwrite( "messaged::runbroker", "starting message broker" );
   std::thread proxy_thread(dothread_runproxy, xsub_socket, xpub_socket);
 
+  Daemon::sd_notify_ready();   // notify systemd (Type=notify): broker is bound and proxying
+
   {
   BoolState broker_running( is_broker_running );
 
@@ -128,7 +131,11 @@ void runbroker() {
 }
 
 void dothread_runproxy( void* pxsub, void* pxpub ) {
+  // zmq_proxy() only returns on error/termination. If it fails the broker is no
+  // longer forwarding, so exit non-zero and let systemd (Restart=always) start a
+  // fresh process, rather than linger as an alive-but-dead broker.
   if (zmq_proxy(pxsub, pxpub, nullptr) == -1) {
     logwrite( "messaged::dothread_runproxy", "ERROR proxy failed: "+std::string(zmq_strerror(zmq_errno())) );
+    std::exit( EXIT_FAILURE );
   }
 }

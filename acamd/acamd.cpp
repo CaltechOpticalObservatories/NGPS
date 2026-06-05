@@ -9,6 +9,7 @@
  */
 
 #include "acamd.h"
+#include "sd_notify.h"
 
 /***** main *******************************************************************/
 /**
@@ -253,6 +254,8 @@ int main(int argc, char **argv) {
     logwrite( function, "ERROR could not create listening socket" );
     acamd.exit_cleanly();
   }
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   while (true) {
     auto newid = acamd.id_pool.get_next_number();  // get the next available number from the pool

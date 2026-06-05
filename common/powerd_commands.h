@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "common_commands.h"
+
 const std::string POWERD_CLOSE  = "close";
 const std::string POWERD_ISOPEN = "isopen";
 const std::string POWERD_LIST   = "list";

@@ -9,6 +9,8 @@
 
 #ifndef TELEMD_COMMANDS_H
 #define TELEMD_COMMANDS_H
+
+#include "common_commands.h"
 const std::string TELEMD_EXIT     = "exit";      ///< 
 const std::string TELEMD_ECHO     = "echo";      ///< 
 const std::vector<std::string> TELEMD_SYNTAX = { 

@@ -8,6 +8,8 @@
 
 #ifndef TCSD_COMMANDS_H
 #define TCSD_COMMANDS_H
+
+#include "common_commands.h"
 const std::string TCSD_CLOSE = "close";
 const std::string TCSD_COORDS = "coords";
 const std::string TCSD_EXIT = "exit";

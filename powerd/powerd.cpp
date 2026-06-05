@@ -6,6 +6,7 @@
  */
 
 #include "powerd.h"
+#include "sd_notify.h"
 
 
 /***** main *******************************************************************/
@@ -193,6 +194,8 @@ int main(int argc, char **argv) {
   // config file, which will require the user to send an "open" command.
   //
   if ( powerd.open_on_start ) powerd.interface.open();
+
+  Daemon::sd_notify_ready();                         // notify systemd (Type=notify) that we are listening
 
   for (;;) pause();                                  // main thread suspends
 

@@ -8,6 +8,8 @@
 
 #ifndef SLITD_COMMANDS_H
 #define SLITD_COMMANDS_H
+
+#include "common_commands.h"
 const std::string SLITD_CLOSE = "close";    const int SLITD_CLOSE_TIMEOUT = 3000;
 const std::string SLITD_GET = "get";        const int SLITD_GET_TIMEOUT = 3000;
 const std::string SLITD_HOME = "home";      const int SLITD_HOME_TIMEOUT = 60000;

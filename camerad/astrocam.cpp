@@ -32,6 +32,12 @@ namespace AstroCam {
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE]               = Topic::CAMERAD;
+    {
+    // AND across all targeted ARC controllers; logs only in LOGLEVEL_DEBUG builds.
+    std::string ret;
+    this->is_connected( ret );
+    jmessage_out[Key::ISOPEN]               = ( ret == "true" );
+    }
     jmessage_out[Key::Camerad::READY]       = this->status.can_expose.load();
     jmessage_out[Key::Camerad::INREADOUT]   = this->status.in_readout;
     jmessage_out[Key::Camerad::EXPOSING]    = this->status.is_exposing;
