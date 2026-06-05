@@ -1441,6 +1441,8 @@ namespace Acam {
     const bool        is_acquired  = this->target.is_acquired.load();
     const int         nacquired    = this->target.nacquired;
     const int         attempts     = this->target.attempts;
+    const std::string filter       = this->motion.get_current_filtername();
+    const std::string cover        = this->motion.get_current_coverpos();
 
     // unless forced, only publish if there was a change in any one of these
     //
@@ -1448,12 +1450,16 @@ namespace Acam {
 	 acquire_mode == this->last_status.acquire_mode &&
          is_acquired  == this->last_status.is_acquired  &&
          nacquired    == this->last_status.nacquired    &&
-         attempts     == this->last_status.attempts ) return;
+         attempts     == this->last_status.attempts     &&
+         filter       == this->last_status.filter       &&
+         cover        == this->last_status.cover ) return;
 
     this->last_status.acquire_mode = acquire_mode;
     this->last_status.is_acquired  = is_acquired;
     this->last_status.nacquired    = nacquired;
     this->last_status.attempts     = attempts;
+    this->last_status.filter       = filter;
+    this->last_status.cover        = cover;
 
     // assemble the telemetry into a json message
     //
@@ -1465,6 +1471,8 @@ namespace Acam {
     jmessage_out[Key::Acamd::ATTEMPTS]     = this->target.attempts;
     jmessage_out[Key::Acamd::SEEING]       = this->astrometry.get_seeing();
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
+    jmessage_out[Key::Acamd::FILTER]       = filter;
+    jmessage_out[Key::Acamd::COVER]        = cover;
     jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
@@ -3877,6 +3885,8 @@ logwrite( function, message.str() );
       logwrite( function, "ERROR reading filter" );
       iface.guide_manager.filter="error";
     }
+
+    iface.publish_status();   // push filter change to subscribers
 
     return;
   }
