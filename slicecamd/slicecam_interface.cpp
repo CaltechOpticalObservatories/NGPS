@@ -2507,7 +2507,21 @@ namespace Slicecam {
     // If ACAM is guiding then slicecam must not move the telescope,
     // but must allow ACAM to perform the offset.
     //
-    bool is_guiding = this->is_acam_guiding.load();
+    // Ask acamd directly for its guide state instead of trusting the cached
+    // pub/sub flag (is_acam_guiding). ACAM publishes its status only on change
+    // and skips frames between solves, so the cache can read "guiding" while
+    // stale or lag a state change. Routing on a wrong "not guiding" would send
+    // a PT offset and move the telescope while ACAM is actively guiding; a
+    // wrong "guiding" would send a no-op offsetgoal and never move. A direct
+    // query is authoritative and current. ACAMD_ACQUIRE with no args returns
+    // the mode string { stopped | acquiring | guiding }.
+    //
+    std::string acam_mode;
+    if ( this->acamd.command( ACAMD_ACQUIRE, acam_mode ) != NO_ERROR ) {
+      logwrite( function, "ERROR querying ACAM guide state" );
+      return ERROR;
+    }
+    bool is_guiding = ( acam_mode.find("guiding") != std::string::npos );
 
     // send the offsets now
     //
