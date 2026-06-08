@@ -16,11 +16,6 @@ namespace Acam {
   constexpr int OFFSETRATE=40;
   constexpr float  GAIN1=0.71;      ///< e-/ADU for unity CCD gain
 
-  /// Max offset (arcsec) allowed for a deliberate goal offset applied while
-  /// guiding (put-on-slit, offset-star, end-of-fineacquire, pyGUI 'Offset').
-  /// Ordinary guiding corrections use the smaller ACQUIRE_TCS_MAX_OFFSET.
-  constexpr double PUTONSLIT_TCS_MAX_OFFSET=300.;
-
   int npreserve=0;  ///< counter used for Interface::preserve_framegrab()
 
   /***** Acam::Camera::emulator ***********************************************/
@@ -1952,6 +1947,27 @@ namespace Acam {
         applied++;
       }
 
+      if ( config.param[entry] == "ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET" ) {
+        double offset;
+        try {
+          offset = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_tcs_max_putonslit_offset( offset ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
       if ( config.param[entry] == "ACQUIRE_MIN_REPEAT" ) {
         int repeat;
         try {
@@ -3623,12 +3639,13 @@ logwrite( function, message.str() );
       // applied while guiding -- via offset_goal, which covers put-on-slit,
       // offset-star acquisition, the end-of-fineacquire target offset, and the
       // pyGUI 'Offset' button -- is intentionally larger, so for the one
-      // correction that consumes it we allow up to PUTONSLIT_TCS_MAX_OFFSET.
-      // The ACQUIRE path uses tcs_max_offset and is unaffected.
+      // correction that consumes it we allow up to tcs_max_putonslit_offset
+      // (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET). The ACQUIRE path uses tcs_max_offset
+      // and is unaffected.
       //
       double maxoffset = this->tcs_max_offset;
       if ( this->acquire_mode == Acam::TARGET_GUIDE && this->allow_large_offset.load() ) {
-        maxoffset = PUTONSLIT_TCS_MAX_OFFSET;
+        maxoffset = this->tcs_max_putonslit_offset;
       }
 
       // Check the requested offset against the applicable max allowed offset
@@ -5512,8 +5529,8 @@ logwrite( function, message.str() );
     //
     // This is a deliberate offset (put-on-slit, offset-star, end-of-fineacquire,
     // or the pyGUI 'Offset' button) and may exceed the normal guiding cap, so
-    // allow the next correction up to PUTONSLIT_TCS_MAX_OFFSET. The allowance is
-    // one-shot: do_acquire consumes it when that correction is actually sent.
+    // allow the next correction up to ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. The
+    // allowance is one-shot: do_acquire consumes it when the offset is sent.
     //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
       this->target.allow_large_offset.store(true);
