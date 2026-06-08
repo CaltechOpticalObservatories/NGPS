@@ -472,7 +472,7 @@ namespace Acam {
         double angle;
       } acam_goal;
 
-      double putonslit_offset, last_putonslit_offset;
+      std::atomic<bool> allow_large_offset{false};  ///< one-shot: allow the next guiding correction up to PUTONSLIT_TCS_MAX_OFFSET
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  is_acquired(false),
@@ -482,8 +482,7 @@ namespace Acam {
                  tcs_offset_period(1),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
-                 dRA(0), dDEC(0),
-                 putonslit_offset(0), last_putonslit_offset(0) { }
+                 dRA(0), dDEC(0) { }
   };
   /***** Acam::Target *********************************************************/
 
