@@ -1947,6 +1947,27 @@ namespace Acam {
         applied++;
       }
 
+      if ( config.param[entry] == "ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET" ) {
+        double offset;
+        try {
+          offset = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_tcs_max_putonslit_offset( offset ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
       if ( config.param[entry] == "ACQUIRE_MIN_REPEAT" ) {
         int repeat;
         try {
@@ -3371,6 +3392,7 @@ logwrite( function, message.str() );
       this->nacquired = 0;
       this->attempts = 0;
       this->sequential_failures = 0;
+      this->allow_large_offset.store(false);  // no stale deliberate-offset allowance
       this->is_acquired.store( false, std::memory_order_release );
 
       // Start the timeout clock, initialized as the time now plus the
@@ -3610,40 +3632,23 @@ logwrite( function, message.str() );
 
       message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
 
-      // There is a maximum offset allowed to the TCS.
-      // This is not a TCS limit (their limit is very large).
-      // This is our limit so that we don't accidentally move too far off the
-      // slit. However, "putonslit" can include a desired offset which is
-      // outside this limit, so when checking the calculated offset, include a
-      // delta which is the change introduced by putonslit.
+      // There is a maximum offset we send to the TCS. This is not a TCS limit
+      // (theirs is very large); it is our safety limit so that a bad solution
+      // can't move us far off the slit. Ordinary guiding corrections use the
+      // normal tcs_max_offset (ACQUIRE_TCS_MAX_OFFSET). A deliberate goal offset
+      // applied while guiding -- via offset_goal, which covers put-on-slit,
+      // offset-star acquisition, the end-of-fineacquire target offset, and the
+      // pyGUI 'Offset' button -- is intentionally larger, so for the one
+      // correction that consumes it we allow up to tcs_max_putonslit_offset
+      // (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET). The ACQUIRE path uses tcs_max_offset
+      // and is unaffected.
       //
+      double maxoffset = this->tcs_max_offset;
+      if ( this->acquire_mode == Acam::TARGET_GUIDE && this->allow_large_offset.load() ) {
+        maxoffset = this->tcs_max_putonslit_offset;
+      }
 
-      // this will be the solution plus dRA, dDEC
-      // start by initializing with acam_ra,acam_dec
-      //
-      double acam_ra_dRA   = acam_ra;
-      double acam_dec_dDEC = acam_dec;
-
-      // Then acam_ra_dRA, acam_dec_dDEC will be modified by applying dRA, dDEC
-      //
-      iface->fpoffsets.apply_offset( acam_ra_dRA,   iface->target.dRA,
-                                     acam_dec_dDEC, iface->target.dDEC );
-
-      // the offset introduced by putonslit is therefore the separation between
-      // acam_ra,acam_dec and acam_ra_dRA,acam_dec_dDEC
-      //
-      this->putonslit_offset = angular_separation( acam_ra_dRA, acam_dec_dDEC, acam_ra, acam_dec );
-
-      // and the delta is the difference between this and the last time,
-      // which gets added to the tcs_max_offset.
-      //
-      double maxoffset = this->tcs_max_offset + std::fabs(this->putonslit_offset - this->last_putonslit_offset);
-
-      // so remember this for next time
-      //
-      this->last_putonslit_offset = this->putonslit_offset;
-
-      // Finally, check the requested offset against this putonslit-modified max allowed offset
+      // Check the requested offset against the applicable max allowed offset
       //
       if ( offset >= maxoffset ) {
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
@@ -3685,6 +3690,7 @@ logwrite( function, message.str() );
         if ( should_offset ) {
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
+          this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 
@@ -5484,11 +5490,10 @@ logwrite( function, message.str() );
     //
     if ( args == "?" ) {
       retstring = ACAMD_OFFSETGOAL;
-      retstring.append( " [ <dRA> <dDEC> [ fineguiding ]\n" );
+      retstring.append( " [ <dRA> <dDEC> ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
       retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
-      retstring.append( "  The optional 'fineguiding' is used for slicecam fine acquisition.\n" );
       return HELP;
     }
 
@@ -5497,16 +5502,12 @@ logwrite( function, message.str() );
     double dRA=NAN, dDEC=NAN;
     if (!(iss >> dRA >> dDEC) ||
         (std::isnan(dRA) || std::isnan(dDEC)) ) {
-      logwrite( function, "ERROR expected <dRA> <dDEC> [ fineguiding ]" );
+      logwrite( function, "ERROR expected <dRA> <dDEC>" );
       retstring="invalid_argument";
       return ERROR;
     }
     this->target.dRA  = dRA;
     this->target.dDEC = dDEC;
-
-    // optional fineguiding flag used for slicecam fineacquisition mode
-    std::string flag;
-    bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
     // Apply any dRA, dDEC goal offsets from the "put on slit" action to
     // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -5521,20 +5522,19 @@ logwrite( function, message.str() );
     message.str(""); message << this->target.dRA << " " << this->target.dDEC;
     retstring = message.str();
 
+    // Applying an offset to the goal while guiding must never drop out of
+    // guiding -- there is no use case for re-acquiring on an offset. Stay in
+    // TARGET_GUIDE and reset the offset filter so the new goal takes effect
+    // quickly. This covers GUI "put on slit" and sequencer target offsets.
+    //
+    // This is a deliberate offset (put-on-slit, offset-star, end-of-fineacquire,
+    // or the pyGUI 'Offset' button) and may exceed the normal guiding cap, so
+    // allow the next correction up to ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. The
+    // allowance is one-shot: do_acquire consumes it when the offset is sent.
+    //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      // for slicecam fine aquisition/guiding, stay in TARGET_GUIDE but
-      // reset the filtering so the goal takes effect quickly
-      if ( is_fineguiding ) {
-        this->target.reset_offset_params();
-      }
-      else {
-        this->target.acquire_mode = Acam::TARGET_ACQUIRE;
-        this->target.nacquired = 0;
-        this->target.attempts = 0;
-        this->target.sequential_failures = 0;
-        this->target.timeout_time = std::chrono::steady_clock::now()
-                                  + std::chrono::duration<double>(this->target.timeout);
-      }
+      this->target.allow_large_offset.store(true);
+      this->target.reset_offset_params();
     }
 
     this->publish_status();

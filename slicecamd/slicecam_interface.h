@@ -336,7 +336,7 @@ namespace Slicecam {
       long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
 
-      long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt);
+      long offset_acam_goal(const std::pair<double, double> &offsets);
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 
