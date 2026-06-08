@@ -535,7 +535,7 @@ namespace Slicecam {
     const double cmd_dra  = effective_gain * med_dra;
     const double cmd_ddec = effective_gain * med_ddec;
 
-    if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
+    if ( this->offset_acam_goal( { cmd_dra, cmd_ddec } ) != NO_ERROR ) {
       logwrite( function, "ERROR failed to send offset to ACAM" );
       this->is_fineacquire_running.store( false, std::memory_order_release );
       this->publish_status();
@@ -2496,13 +2496,10 @@ namespace Slicecam {
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire) {
+  long Interface::offset_acam_goal(const std::pair<double, double> &offsets) {
     const char* function = "Slicecam::Interface::offset_acam_goal";
 
     auto [ra_off, dec_off] = offsets;  // local copy
-
-    bool is_fineacquire=false;
-    if (fineacquire) is_fineacquire = *fineacquire;
 
     // If ACAM is guiding then slicecam must not move the telescope,
     // but must allow ACAM to perform the offset.
@@ -2516,9 +2513,6 @@ namespace Slicecam {
       //
       std::ostringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << ra_off << " " << dec_off;
-
-      // add fineguiding arg when used for fine acquisition mode
-      if (is_fineacquire) cmd << " fineguiding";
 
       if (this->acamd.command( cmd.str() ) != NO_ERROR) {
         logwrite( function, "ERROR adding offset to acam goal" );

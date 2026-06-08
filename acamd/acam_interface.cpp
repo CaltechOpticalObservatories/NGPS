@@ -5484,11 +5484,10 @@ logwrite( function, message.str() );
     //
     if ( args == "?" ) {
       retstring = ACAMD_OFFSETGOAL;
-      retstring.append( " [ <dRA> <dDEC> [ fineguiding ]\n" );
+      retstring.append( " [ <dRA> <dDEC> ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
       retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
-      retstring.append( "  The optional 'fineguiding' is used for slicecam fine acquisition.\n" );
       return HELP;
     }
 
@@ -5497,16 +5496,12 @@ logwrite( function, message.str() );
     double dRA=NAN, dDEC=NAN;
     if (!(iss >> dRA >> dDEC) ||
         (std::isnan(dRA) || std::isnan(dDEC)) ) {
-      logwrite( function, "ERROR expected <dRA> <dDEC> [ fineguiding ]" );
+      logwrite( function, "ERROR expected <dRA> <dDEC>" );
       retstring="invalid_argument";
       return ERROR;
     }
     this->target.dRA  = dRA;
     this->target.dDEC = dDEC;
-
-    // optional fineguiding flag used for slicecam fineacquisition mode
-    std::string flag;
-    bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
     // Apply any dRA, dDEC goal offsets from the "put on slit" action to
     // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -5521,20 +5516,13 @@ logwrite( function, message.str() );
     message.str(""); message << this->target.dRA << " " << this->target.dDEC;
     retstring = message.str();
 
+    // Applying an offset to the goal while guiding must never drop out of
+    // guiding -- there is no use case for re-acquiring on an offset. Stay in
+    // TARGET_GUIDE and reset the offset filter so the new goal takes effect
+    // quickly. This covers GUI "put on slit" and sequencer target offsets.
+    //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      // for slicecam fine aquisition/guiding, stay in TARGET_GUIDE but
-      // reset the filtering so the goal takes effect quickly
-      if ( is_fineguiding ) {
-        this->target.reset_offset_params();
-      }
-      else {
-        this->target.acquire_mode = Acam::TARGET_ACQUIRE;
-        this->target.nacquired = 0;
-        this->target.attempts = 0;
-        this->target.sequential_failures = 0;
-        this->target.timeout_time = std::chrono::steady_clock::now()
-                                  + std::chrono::duration<double>(this->target.timeout);
-      }
+      this->target.reset_offset_params();
     }
 
     this->publish_status();
