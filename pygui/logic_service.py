@@ -1476,6 +1476,9 @@ class LogicService:
         next_obs_id = str(target.get("OBSERVATION_ID")) if target else None
 
         colors = {
+            # Give plain PENDING rows a subtle background so they do not blend
+            # into the dark table background.
+            "PENDING": (QColor(78, 88, 104), QColor(255, 255, 255), False),
             "COMPLETED": (QColor(75, 75, 75), QColor(180, 180, 180), False),
             "EXPOSING": (QColor(46, 125, 50), QColor(255, 255, 255), True),
             "NEXT": (QColor(255, 204, 64), QColor(0, 0, 0), True),
