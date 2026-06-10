@@ -427,6 +427,7 @@ class NgpsGUI(QMainWindow):
         #         f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
         #     )
 
+        csv_path = None
         self.current_target_list_name = target_list_name
 
         # Make calibration mode active
