@@ -208,6 +208,7 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
         self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
         self.zmq_status_service.system_status_signal.connect(self.layout_service.update_system_status)
+        self.zmq_status_service.shutter_status_signal.connect(self.layout_service.update_shutter_status)
         self.zmq_status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
 
     def on_date_time_changed(self, datetime):
@@ -431,7 +432,6 @@ class NgpsGUI(QMainWindow):
         #         "CSV Save Warning",
         #         f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
         #     )
-
         csv_path = None
         self.current_target_list_name = target_list_name
 

@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QStyle, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
-from PyQt5.QtGui import QColor, QFont, QDoubleValidator
+from PyQt5.QtGui import QColor, QFont, QDoubleValidator, QTextCursor
 from logic_service import LogicService
 from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
+import html
 import re
 import subprocess
 
@@ -375,7 +376,7 @@ class LayoutService:
 
         self.next_target_label = QLabel("Single: no target list loaded yet.")
         self.next_target_label.setWordWrap(True)
-        self.next_target_label.setStyleSheet("font-size: 10pt; color: #fff; padding: 3px;")
+        self.next_target_label.setStyleSheet("font-size: 10pt; color: #222; padding: 3px;")
         sequencer_mode_layout.addWidget(self.next_target_label)
 
         # Fine acquire toggle
@@ -489,7 +490,7 @@ class LayoutService:
         # Add all components to the main layout
         progress_and_image_layout.addLayout(progress_layout)
         progress_and_image_layout.addLayout(image_info_layout)
-        progress_and_image_layout.addWidget(QLabel("Messages:"))
+        progress_and_image_layout.addWidget(QLabel("Topic Broadcast:"))
         progress_and_image_layout.addWidget(message_log)
 
         progress_and_image_group.setLayout(progress_and_image_layout)
@@ -621,6 +622,7 @@ class LayoutService:
         # Set size policies to allow the widget to stretch and grow proportionally
         self.parent.message_log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.parent.message_log.setReadOnly(True)
+        self.parent.message_log.document().setMaximumBlockCount(100)
 
         # Optionally set a minimum height or width if desired
         self.parent.message_log.setMinimumHeight(60)
@@ -638,44 +640,44 @@ class LayoutService:
         self.parent.message_log.clear()
 
     
-    def update_topic_broadcast_log(self, message):
-        """Append a message received from a subscribed ZMQ topic broadcast.
+    def update_topic_broadcast_log(self, message, severity="NOTICE"):
+        """Append a parsed operator broadcast message to the visible log.
 
-        The visible message log should only show topic-broadcast traffic.
-        Local GUI status, command, and database messages should use print(),
-        dialogs, or dedicated widgets instead of this log.
+        The ZMQ service should pass only the payload's ``message`` field here.
+        The ``severity`` field controls display color only; it is not printed
+        in the log line.
         """
-        self.update_message_log(message)
+        self.update_message_log(message, severity)
 
 
-    def update_message_log(self, message):
-        MAX_LOG_SIZE = 1000  # Max number of characters in the log
-        MAX_MESSAGES = 100  # Max number of messages in the log
-        """ Update the message log with the new message, maintaining a limit on the size. """
-        if self.parent.message_log:
-            current_text = self.parent.message_log.toPlainText()
+    def update_message_log(self, message, severity="NOTICE"):
+        """Append one colored broadcast message to the log."""
+        if not self.parent.message_log:
+            return
 
-            # Add the new message
-            updated_text = current_text + "\n" + message
-            
-            # Limit the log to the most recent MAX_LOG_SIZE characters
-            if len(updated_text) > MAX_LOG_SIZE:
-                updated_text = updated_text[-MAX_LOG_SIZE:]
+        severity = str(severity).strip().upper() or "NOTICE"
+        message = str(message).strip()
 
-            # Optionally, limit to the most recent MAX_MESSAGES messages
-            messages = updated_text.split("\n")
-            if len(messages) > MAX_MESSAGES:
-                messages = messages[-MAX_MESSAGES:]
-            
-            updated_text = "\n".join(messages)
+        if not message:
+            return
 
-            # Update the message log with the new, trimmed text
-            self.parent.message_log.setPlainText(updated_text)
+        color_by_severity = {
+            "NOTICE": "#e0e0e0",
+            "WARNING": "#ffcc40",
+            "ERROR": "#ff5c5c",
+        }
+        font_weight = "bold" if severity in ("WARNING", "ERROR") else "normal"
+        color = color_by_severity.get(severity, color_by_severity["NOTICE"])
+        safe_message = html.escape(message)
 
-            # Optionally, scroll to the bottom of the text log
-            cursor = self.parent.message_log.textCursor()
-            cursor.movePosition(cursor.End)
-            self.parent.message_log.setTextCursor(cursor)
+        self.parent.message_log.append(
+            f'<span style="color:{color}; font-weight:{font_weight};">'
+            f'{safe_message}</span>'
+        )
+
+        cursor = self.parent.message_log.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.parent.message_log.setTextCursor(cursor)
 
     def _connect_button_once(self, button, slot):
         """

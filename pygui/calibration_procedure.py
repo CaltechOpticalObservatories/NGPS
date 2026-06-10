@@ -106,7 +106,7 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     n_etalon = 0
     n_dome = 0
     n_dome_ug = 0
-    n_bias = 5
+    n_bias = 7
     n_dark = 0
 
     arc_multiplier = 1.0 / (xbin * ybin)

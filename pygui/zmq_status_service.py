@@ -2,17 +2,20 @@ import zmq
 import os
 import logging
 import json
+from json import JSONDecoder
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
-from typing import Dict, Any
+from typing import Dict, Any, Iterable, Tuple
 
 class ZmqStatusService(QObject):
     # Legacy/debug signal. Keep this separate from the operator-facing log.
     new_message_signal = pyqtSignal(str)
 
     # Operator-facing message-log signal. This is emitted only for messages
-    # whose ZMQ topic is exactly ``broadcast``. Other subscribed topics still
-    # update their dedicated GUI widgets, but they do not go to the message log.
-    topic_broadcast_signal = pyqtSignal(str)
+    # whose ZMQ topic is exactly ``broadcast``. It carries only the parsed
+    # message text plus severity for display styling. Other subscribed topics
+    # still update their dedicated GUI widgets, but they do not go to the
+    # message log.
+    topic_broadcast_signal = pyqtSignal(str, str)
 
     # Signal to send lamp states as a dictionary {lamp_name: bool}
     lamp_states_signal = pyqtSignal(dict)
@@ -25,6 +28,10 @@ class ZmqStatusService(QObject):
     slit_info_signal = pyqtSignal(float, float)
     
     system_status_signal = pyqtSignal(str)
+
+    # Broadcast-derived shutter status. This mirrors StatusService.shutter_status_signal
+    # so the GUI can update the existing shutter widget from camerad broadcasts.
+    shutter_status_signal = pyqtSignal(bool)
 
     # Emitted when sequencerd says it is waiting for the USER continue signal.
     # This replaces the old UDP StatusService detection path for:
@@ -100,16 +107,111 @@ class ZmqStatusService(QObject):
         if self.emit_debug_messages:
             self.new_message_signal.emit(message)
 
+    def _iter_broadcast_records(self, payload: str) -> Iterable[Tuple[str, str, str]]:
+        """
+        Yield ``(message, severity, source)`` records from a broadcast payload.
+
+        Expected payloads look like:
+            {"message": "camera_set ready", "severity": "NOTICE", "source": "sequencerd"}
+
+        Only ``message`` is displayed in the GUI log. ``severity`` is carried
+        separately so the layout can color the message. ``source`` is kept for
+        side effects such as camerad shutter updates. If the payload is plain
+        text or malformed JSON, show the raw payload as a NOTICE instead of
+        dropping it.
+        """
+        text = str(payload).strip()
+
+        if not text:
+            return
+
+        def record_from_obj(obj):
+            if isinstance(obj, dict):
+                message = obj.get("message", text)
+                severity = obj.get("severity", "NOTICE")
+                source = obj.get("source", "")
+            else:
+                message = obj
+                severity = "NOTICE"
+                source = ""
+
+            message = str(message).strip()
+            severity = str(severity).strip().upper() or "NOTICE"
+            source = str(source).strip()
+
+            if message:
+                yield message, severity, source
+
+        try:
+            data = json.loads(text)
+            if isinstance(data, list):
+                for item in data:
+                    yield from record_from_obj(item)
+            else:
+                yield from record_from_obj(data)
+            return
+        except json.JSONDecodeError:
+            pass
+
+        # Be tolerant of payloads that contain several JSON objects separated
+        # by whitespace. This can happen when log output is pasted or batched.
+        decoder = JSONDecoder()
+        idx = 0
+        emitted_any = False
+        while idx < len(text):
+            while idx < len(text) and text[idx].isspace():
+                idx += 1
+
+            if idx >= len(text):
+                break
+
+            try:
+                obj, end = decoder.raw_decode(text, idx)
+            except json.JSONDecodeError:
+                break
+
+            emitted_any = True
+            yield from record_from_obj(obj)
+            idx = end
+
+        if not emitted_any:
+            yield text, "NOTICE", ""
+
+    @staticmethod
+    def _shutter_status_from_broadcast_message(message: str, source: str = ""):
+        """Return True/False for shutter open/closed broadcasts, else None."""
+        source_text = str(source).strip().lower()
+        message_text = str(message).strip().lower()
+
+        # The shutter messages are expected from camerad, for example:
+        #   {"message":"shutter opened at ...", "source":"camerad"}
+        # Keep the source check permissive for older broadcasts that may not
+        # include source, but ignore messages that explicitly come from a
+        # different daemon.
+        if source_text and source_text != "camerad":
+            return None
+
+        if message_text.startswith("shutter opened") or message_text.startswith("shutter open"):
+            return True
+
+        if message_text.startswith("shutter closed") or message_text.startswith("shutter close"):
+            return False
+
+        return None
+
+    def _handle_broadcast_side_effects(self, message: str, source: str = ""):
+        """Update dedicated GUI state from structured broadcast messages."""
+        shutter_is_open = self._shutter_status_from_broadcast_message(message, source)
+        if shutter_is_open is not None:
+            self.shutter_status_signal.emit(shutter_is_open)
+
     def _emit_topic_broadcast_message(self, topic: str, payload: str):
         """
-        Emit only the configured operator-facing message-log topic.
+        Emit only parsed messages from the configured message-log topic.
 
         Other subscribed topics such as seq_seqstate, seq_waitstate, powerd,
         calibd, tcsd, etc. are still processed below for dedicated GUI state,
         but they must not be copied into the visible message log.
-
-        This runs before JSON parsing so plain-text broadcast messages still
-        appear to the observer.
         """
         if not self.emit_topic_broadcasts:
             return
@@ -117,7 +219,9 @@ class ZmqStatusService(QObject):
         if str(topic).strip() != self.message_log_topic:
             return
 
-        self.topic_broadcast_signal.emit(payload)
+        for message, severity, source in self._iter_broadcast_records(payload):
+            self.topic_broadcast_signal.emit(message, severity)
+            self._handle_broadcast_side_effects(message, source)
 
     @staticmethod
     def _contains_user_continue_message(value) -> bool:
