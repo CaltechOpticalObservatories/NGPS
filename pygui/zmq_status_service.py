@@ -9,8 +9,9 @@ class ZmqStatusService(QObject):
     # Legacy/debug signal. Keep this separate from the operator-facing log.
     new_message_signal = pyqtSignal(str)
 
-    # Operator-facing message-log signal. This is emitted for every valid
-    # subscribed topic broadcast received from the ZMQ broker.
+    # Operator-facing message-log signal. This is emitted only for messages
+    # whose ZMQ topic is exactly ``broadcast``. Other subscribed topics still
+    # update their dedicated GUI widgets, but they do not go to the message log.
     topic_broadcast_signal = pyqtSignal(str)
 
     # Signal to send lamp states as a dictionary {lamp_name: bool}
@@ -42,6 +43,7 @@ class ZmqStatusService(QObject):
         broker_snapshot_endpoint="tcp://127.0.0.1:5555",
         emit_debug_messages=False,
         emit_topic_broadcasts=True,
+        message_log_topic="broadcast",
     ):
         super().__init__()
         self.parent = parent  # Reference to the parent window or main UI
@@ -53,10 +55,11 @@ class ZmqStatusService(QObject):
         self.emit_debug_messages = emit_debug_messages
 
         # Operator-facing broadcast log flag.
-        # True = emit received subscribed topic/payload messages through
+        # True = emit only the configured message-log topic through
         # topic_broadcast_signal. This is the only signal the GUI message log
         # should connect to.
         self.emit_topic_broadcasts = bool(emit_topic_broadcasts)
+        self.message_log_topic = str(message_log_topic).strip() or "broadcast"
 
         self.context = zmq.Context()
         self.socket = None
@@ -83,7 +86,10 @@ class ZmqStatusService(QObject):
 
     def set_topic_broadcast_messages(self, enabled: bool):
         """
-        Enable or disable the operator-facing topic broadcast log signal.
+        Enable or disable the operator-facing message-log topic signal.
+
+        This only controls whether the configured message-log topic is shown.
+        It does not cause other subscribed telemetry topics to appear there.
         """
         self.emit_topic_broadcasts = bool(enabled)
 
@@ -96,13 +102,22 @@ class ZmqStatusService(QObject):
 
     def _emit_topic_broadcast_message(self, topic: str, payload: str):
         """
-        Emit the exact subscribed topic broadcast to the GUI message log.
+        Emit only the configured operator-facing message-log topic.
 
-        This is intentionally independent from JSON parsing and debug output,
-        so malformed/non-JSON broadcasts can still be shown to the observer.
+        Other subscribed topics such as seq_seqstate, seq_waitstate, powerd,
+        calibd, tcsd, etc. are still processed below for dedicated GUI state,
+        but they must not be copied into the visible message log.
+
+        This runs before JSON parsing so plain-text broadcast messages still
+        appear to the observer.
         """
-        if self.emit_topic_broadcasts:
-            self.topic_broadcast_signal.emit(f"Topic: {topic}, Payload: {payload}")
+        if not self.emit_topic_broadcasts:
+            return
+
+        if str(topic).strip() != self.message_log_topic:
+            return
+
+        self.topic_broadcast_signal.emit(payload)
 
     @staticmethod
     def _contains_user_continue_message(value) -> bool:
@@ -274,9 +289,9 @@ class ZmqStatusService(QObject):
                 # Always log to file, even when GUI debug messages are disabled.
                 self.logger.info(f"Received message: Topic = {topic}, Payload = {payload}")
 
-                # The GUI message log should show subscribed ZMQ topic broadcasts,
-                # not local GUI/status chatter. Emit this before JSON parsing so
-                # plain-text broadcasts and malformed JSON still appear.
+                # The GUI message log should show only the dedicated ``broadcast``
+                # topic. All other topics are still processed below for their
+                # dedicated widgets/signals, but they do not appear in the log.
                 self._emit_topic_broadcast_message(topic, payload)
 
                 # Some sequencerd messages are plain text status messages rather

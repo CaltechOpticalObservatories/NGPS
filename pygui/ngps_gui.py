@@ -190,6 +190,11 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         self.zmq_status_service.subscribe_to_topic("tcsd")
         self.zmq_status_service.subscribe_to_topic("acamd")
+
+        # Only this topic is allowed to feed the visible message log.
+        # The other subscriptions below still drive dedicated widgets/status.
+        self.zmq_status_service.subscribe_to_topic("broadcast")
+
         self.zmq_status_service.subscribe_to_topic("seq_waitstate")
         self.zmq_status_service.subscribe_to_topic("seq_seqstate")
         self.zmq_status_service.subscribe_to_topic("seq_daemonstate")

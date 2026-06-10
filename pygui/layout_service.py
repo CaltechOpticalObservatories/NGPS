@@ -375,7 +375,7 @@ class LayoutService:
 
         self.next_target_label = QLabel("Single: no target list loaded yet.")
         self.next_target_label.setWordWrap(True)
-        self.next_target_label.setStyleSheet("font-size: 10pt; color: #222; padding: 3px;")
+        self.next_target_label.setStyleSheet("font-size: 10pt; color: #fff; padding: 3px;")
         sequencer_mode_layout.addWidget(self.next_target_label)
 
         # Fine acquire toggle
