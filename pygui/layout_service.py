@@ -197,11 +197,19 @@ class LayoutService:
         # states from seq_seqstate only. Busy/wait states from seq_waitstate
         # belong to the bottom daemon/status bar, not this panel.
         status_map = {
-            "stopped": QColor(169, 169, 169),
+            # These are lifecycle states from seq_seqstate only.
+            # seq_waitstate belongs to the daemon/status bar, not this panel.
             "not_ready": QColor(255, 0, 0),
-            "idle": QColor(255, 255, 0),
+            "ready": QColor(0, 180, 0),
+            "running": QColor(0, 255, 0),
+            "stopping": QColor(255, 165, 0),
             "paused": QColor(255, 165, 0),
-            "error": QColor(255, 0, 0),
+            "starting": QColor(255, 255, 0),
+            "failed": QColor(255, 0, 0),
+            "aborting": QColor(255, 0, 0),
+
+            # Backward-compatible fallback if older code still sends STOPPED.
+            "stopped": QColor(169, 169, 169),
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable
@@ -260,16 +268,47 @@ class LayoutService:
 
     def update_system_status(self, status):
         """
-        Update the system status and make only the relevant widget visible.
-        Hide all other status widgets.
+        Update Instrument System Status from seq_seqstate lifecycle states.
+
+        The ZMQ service normally sends normalized lower-case keys, but this
+        method also accepts the raw sequencer strings so local startup checks
+        or future callers can pass values like READY/RUNNING directly.
         """
+        raw_status = "" if status is None else str(status).strip()
+        seqstate_to_ui = {
+            "NOTREADY": "not_ready",
+            "READY": "ready",
+            "RUNNING": "running",
+            "STOPPING": "stopping",
+            "PAUSED": "paused",
+            "STARTING": "starting",
+            "FAILED": "failed",
+            "ABORTING": "aborting",
+            "IDLE": "ready",
+            "STOPPED": "stopped",
+            "ERROR": "failed",
+        }
+        status_key = seqstate_to_ui.get(
+            raw_status.upper(),
+            raw_status.lower().replace(" ", "_"),
+        )
+
+        # Backward-compatible aliases from older GUI/status code.
+        if status_key == "idle":
+            status_key = "ready"
+        elif status_key == "error":
+            status_key = "failed"
+
         # Hide all status widgets
-        for status_key, status_info in self.status_widgets.items():
+        for status_info in self.status_widgets.values():
             status_info['widget'].setVisible(False)
 
-        # Show the widget corresponding to the current status
-        if status in self.status_widgets:
-            self.status_widgets[status]['widget'].setVisible(True)
+        # Show the widget corresponding to the current status.
+        # Fall back to stopped if the value is unknown.
+        if status_key not in self.status_widgets:
+            status_key = "stopped"
+
+        self.status_widgets[status_key]['widget'].setVisible(True)
 
     def create_tcs_status_group(self):
         tcs_status_group = QGroupBox("TCS Status")
@@ -490,7 +529,7 @@ class LayoutService:
         # Add all components to the main layout
         progress_and_image_layout.addLayout(progress_layout)
         progress_and_image_layout.addLayout(image_info_layout)
-        progress_and_image_layout.addWidget(QLabel("Topic Broadcast:"))
+        progress_and_image_layout.addWidget(QLabel("Messages:"))
         progress_and_image_layout.addWidget(message_log)
 
         progress_and_image_group.setLayout(progress_and_image_layout)

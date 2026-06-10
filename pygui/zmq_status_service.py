@@ -561,12 +561,20 @@ class ZmqStatusService(QObject):
         seqstate = str(data.get("seqstate", "")).strip().upper()
 
         state_map = {
+            # seq_seqstate lifecycle states -> Instrument System Status UI keys
             "NOTREADY": "not_ready",
-            "READY": "idle",
-            "IDLE": "idle",
+            "READY": "ready",
+            "RUNNING": "running",
+            "STOPPING": "stopping",
             "PAUSED": "paused",
+            "STARTING": "starting",
+            "FAILED": "failed",
+            "ABORTING": "aborting",
+
+            # Backward-compatible aliases that may still appear from older seq output.
+            "IDLE": "ready",
             "STOPPED": "stopped",
-            "ERROR": "error",
+            "ERROR": "failed",
         }
 
         return state_map.get(seqstate, seqstate.lower() if seqstate else "stopped")
