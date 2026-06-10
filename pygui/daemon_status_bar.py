@@ -32,7 +32,6 @@ DAEMON_SUBSYSTEMS = [
     {"label": "SLICECAM",  "daemon": "slicecamd",  "wait": WAIT_SLICECAM},
     {"label": "SLIT",      "daemon": "slitd",      "wait": WAIT_SLIT},
     {"label": "TCS",       "daemon": "tcsd",       "wait": WAIT_TCS},
-    {"label": "THERMAL",   "daemon": "thermald",   "wait": None},
 ]
 
 

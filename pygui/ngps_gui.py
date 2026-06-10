@@ -160,16 +160,19 @@ class NgpsGUI(QMainWindow):
         self.sequencer_service = SequencerService(self)
         self.sequencer_service.connect()
         
-        # Start the StatusService in a separate thread with heartbeat
+        # Start the StatusService in a separate thread with heartbeat.
+        # Do not send StatusService chatter to the visible message log; that
+        # widget is reserved for subscribed topic-broadcast messages only.
         self.status_service = StatusService(self)
-        self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
         self.status_service.start()
         
         self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
         self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
         self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
         self.status_service.image_name_updated_signal.connect(self.layout_service.update_image_name)
-        self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
+        # Instrument System Status is driven only by ZMQ seq_seqstate.
+        # Do not let the legacy StatusService or seq_waitstate override it.
+        # self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
         self.status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
         self.status_service.shutter_status_signal.connect(self.layout_service.update_shutter_status)
 
@@ -191,8 +194,10 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("seq_seqstate")
         self.zmq_status_service.subscribe_to_topic("seq_daemonstate")
 
-        # Connect the message_received signal from ZMQStatusService to the update_message_log slot
-        self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        # Only subscribed ZMQ topic broadcasts should appear in the visible message log.
+        self.zmq_status_service.topic_broadcast_signal.connect(
+            self.layout_service.update_topic_broadcast_log
+        )
         self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
         self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
@@ -411,15 +416,16 @@ class NgpsGUI(QMainWindow):
         if set_id is None:
             return
 
-        try:
-            csv_path = save_calibration_csv(rows, target_list_name)
-        except Exception as e:
-            csv_path = None
-            QMessageBox.warning(
-                self,
-                "CSV Save Warning",
-                f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
-            )
+        # Saving CSV for CALS disabled for now
+        # try:
+        #     csv_path = save_calibration_csv(rows, target_list_name)
+        # except Exception as e:
+        #     csv_path = None
+        #     QMessageBox.warning(
+        #         self,
+        #         "CSV Save Warning",
+        #         f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
+        #     )
 
         self.current_target_list_name = target_list_name
 
@@ -686,7 +692,7 @@ class NgpsGUI(QMainWindow):
             self.zmq_status_service.set_debug_messages(enabled)
 
         state = "enabled" if enabled else "disabled"
-        self.layout_service.update_message_log(f"ZMQ debug messages {state}.")
+        print(f"ZMQ debug messages {state}.")
 
 
 if __name__ == '__main__':

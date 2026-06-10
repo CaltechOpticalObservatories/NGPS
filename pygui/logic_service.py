@@ -2,7 +2,7 @@ import mysql.connector
 import configparser
 from PyQt5.QtWidgets import QTableWidgetItem
 from PyQt5.QtCore import Qt, pyqtSignal, QSignalBlocker
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QBrush
 import os
 import csv
 import pytz
@@ -144,7 +144,7 @@ class LogicService:
                         elif column in ['BINSPAT']:
                             value = 2
                         elif column in ['STATE']:
-                            value = "pending"  # Empty string as default for text fields
+                            value = "PENDING"  # Default initial target state
                         elif column in ['STATE', 'RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""  # Empty string as default for text fields
                         # Timestamp columns (defaults to NULL)
@@ -261,12 +261,12 @@ class LogicService:
                     if value is None or value == "":
                         if column in ['OBS_ORDER', 'TARGET_NUMBER', 'SEQUENCE_NUMBER']:
                             value = 0
-                        elif column == ['BINSPECT', 'NEXP']:
+                        elif column in ['BINSPECT', 'NEXP']:
                             value = 1
                         elif column == 'BINSPAT':
                             value = 2
                         elif column == 'STATE':
-                            value = "pending"
+                            value = "PENDING"
                         elif column in ['RA', 'DECL', 'EXPTIME', 'SLITWIDTH']:
                             value = ""
                         elif column in ['NOTBEFORE', 'OTMslewgo', 'OTMexp_start', 'OTMexp_end']:
@@ -848,7 +848,11 @@ class LogicService:
                     FROM targets t
                     INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
                     WHERE s.OWNER = %s
-                    ORDER BY t.SET_ID, t.NAME
+                    ORDER BY t.SET_ID,
+                         COALESCE(t.OBS_ORDER, 0),
+                         COALESCE(t.TARGET_NUMBER, 0),
+                         COALESCE(t.SEQUENCE_NUMBER, 0),
+                         t.OBSERVATION_ID
                 """
                 params = (owner,)
                 cur = conn.cursor(dictionary=True)
@@ -903,7 +907,10 @@ class LogicService:
                 FROM targets t
                 INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
                 WHERE t.SET_ID = %s AND s.OWNER = %s
-                ORDER BY t.NAME
+                ORDER BY COALESCE(t.OBS_ORDER, 0),
+                         COALESCE(t.TARGET_NUMBER, 0),
+                         COALESCE(t.SEQUENCE_NUMBER, 0),
+                         t.OBSERVATION_ID
             """
             params = (set_id, owner)
             cur = conn.cursor(dictionary=True)
@@ -919,20 +926,27 @@ class LogicService:
 
     def update_target_list_table(self, data):
         """
-        Idempotently repopulates the UI table with 'data'.
-        Clears first, blocks internal signals during rebuild, and restores sorting after.
+        Idempotently repopulate the target table.
+
+        The DB STATE column is intentionally visible because it is the
+        source of truth for whether a target is PENDING, COMPLETED, or
+        EXPOSING.  The table may be user-sorted, so the next target is
+        tracked by OBSERVATION_ID rather than by the visible row number.
         """
-        # Access widgets safely
         ls = getattr(self.parent, "layout_service", None)
         if ls is None or not hasattr(ls, "target_list_display"):
             print("layout_service or target_list_display not available yet.")
             return
 
         table = ls.target_list_display
-        self.parent.all_targets = data  # canonical cache for filtering
+        rows = data if isinstance(data, list) else [data]
+
+        # Keep the DB/query order as the canonical sequencer order.  The user
+        # can sort the visible table without changing what Single/All will do.
+        self.parent.all_targets = rows
 
         columns_to_hide = {
-            "SET_ID", "STATE", "OBS_ORDER", "TARGET_NUMBER", "SEQUENCE_NUMBER",
+            "SET_ID", "OBS_ORDER", "TARGET_NUMBER", "SEQUENCE_NUMBER",
             "SLITOFFSET", "OBSMODE", "AIRMASS_MAX", "WRANGE_LOW", "WRANGE_HIGH",
             "SRCMODEL", "OTMexpt", "OTMslitwidth", "OTMcass", "OTMairmass_start",
             "OTMairmass_end", "OTMsky", "OTMdead", "OTMslewgo", "OTMexp_start",
@@ -941,23 +955,40 @@ class LogicService:
             "NOTE", "COMMENT", "OWNER", "NOTBEFORE", "POINTMODE"
         }
 
-        rows = data if isinstance(data, list) else [data]
         filtered_rows = []
         for r in rows:
-            if isinstance(r, dict):
-                filtered_rows.append({k: v for k, v in r.items() if k not in columns_to_hide})
+            if not isinstance(r, dict):
+                continue
+
+            display_row = {k: v for k, v in r.items() if k not in columns_to_hide}
+
+            # STATE should always be visible and normalized for display only.
+            # This does not write to the database; it just makes blanks readable.
+            display_row["STATE"] = self.normalize_target_state(
+                display_row.get("STATE") or r.get("STATE") or "PENDING"
+            )
+            filtered_rows.append(display_row)
 
         table_blocker = QSignalBlocker(table)
         try:
             table.setSortingEnabled(False)
-            table.clear()             # headers + contents
+            table.clear()
             table.setRowCount(0)
             table.setColumnCount(0)
 
             if not filtered_rows:
+                self.refresh_target_status_summary([])
                 return
 
             headers = list(filtered_rows[0].keys())
+
+            # Make the most operational columns easy to see even if the DB
+            # returns a different column order.
+            preferred = ["STATE", "OBSERVATION_ID", "NAME", "RA", "DECL", "EXPTIME", "SLITWIDTH", "BINSPECT", "BINSPAT", "NEXP"]
+            ordered_headers = [h for h in preferred if h in headers]
+            ordered_headers.extend([h for h in headers if h not in ordered_headers])
+            headers = ordered_headers
+
             table.setColumnCount(len(headers))
             table.setHorizontalHeaderLabels(headers)
 
@@ -968,24 +999,21 @@ class LogicService:
                 row_idx = table.rowCount()
                 table.insertRow(row_idx)
                 for col_idx, key in enumerate(headers):
-                    table.setItem(row_idx, col_idx, QTableWidgetItem(str(row.get(key, ""))))
+                    item = QTableWidgetItem(str(row.get(key, "")))
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    table.setItem(row_idx, col_idx, item)
 
-            table.sortItems(0, Qt.AscendingOrder)
         finally:
             table.setSortingEnabled(True)
             del table_blocker
-
 
         ls.load_target_button.setVisible(False)
         table.setVisible(True)
         ls.set_column_widths()
         ls.add_row_button.setEnabled(True)
 
-        try:
-            self.apply_active_highlight()
-        except Exception as _e:
-            pass
-
+        self.refresh_target_table_status_styles()
+        self.refresh_target_status_summary(rows)
 
     def update_target_table_with_list(self, target_list=None):
         """Rebuild table for the selected target list using the same safe path."""
@@ -1015,32 +1043,154 @@ class LogicService:
 
     def send_update_to_db(self, observation_id, field_name, value):
         """
-        Sends an update query to the database to modify a specific field for the given observation ID.
+        Sends an update query to the database to modify a specific field for the
+        given observation ID.
+
+        Keep this for existing callers, but restrict writable fields so table UI
+        actions cannot accidentally update arbitrary SQL column names.
         """
+        allowed_fields = {
+            "STATE", "RA", "DECL", "OFFSET_RA", "OFFSET_DEC", "EXPTIME",
+            "SLITWIDTH", "BINSPECT", "BINSPAT", "NEXP", "OTMslitangle",
+            "OTMexpt", "OTMslitwidth", "OTMcass",
+        }
+        field = str(field_name).strip()
+        field_upper = field.upper()
+        resolved_field = next((f for f in allowed_fields if f.upper() == field_upper), None)
+        if resolved_field is None:
+            print(f"Refusing to update unsupported target field: {field_name}")
+            return False
+
+        connection = None
+        cursor = None
         try:
-            # Step 1: Connect to MySQL using the config file
             connection = self.connect_to_mysql("config/db_config.ini")
-            
             if connection is None:
-                print("Failed to connect to MySQL. Cannot load target data.")
-                return
-            cursor = connection.cursor()  # Create a cursor for executing the query
+                print("Failed to connect to MySQL. Cannot update target data.")
+                return False
 
-            # Prepare the SQL query to update the field in the database
-            query = f"UPDATE ngps.targets SET {field_name} = %s WHERE observation_id = %s"
-            print(query)
-
-            # Execute the query with the provided value and observation_id
+            cursor = connection.cursor()
+            query = f"UPDATE targets SET {resolved_field} = %s WHERE OBSERVATION_ID = %s"
             cursor.execute(query, (value, observation_id))
-
-            # Commit the transaction to apply the changes
             connection.commit()
+            print(f"Successfully updated {resolved_field} to {value} for OBSERVATION_ID {observation_id}")
+            return True
 
-            cursor.close()
-            print(f"Successfully updated {field_name} to {value} for observation ID {observation_id}")
         except mysql.connector.Error as err:
             print(f"Error executing update query: {err}")
-            
+            return False
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()
+
+    def update_target_state(self, observation_id, state):
+        """Set a target STATE to PENDING, COMPLETED, or EXPOSING."""
+        state = self.normalize_target_state(state)
+        if state not in ("PENDING", "COMPLETED", "EXPOSING"):
+            raise ValueError(f"Invalid target STATE: {state}")
+
+        ok = self.send_update_to_db(observation_id, "STATE", state)
+        if not ok:
+            return False
+
+        # Update the local cache immediately so the next-target label does not
+        # wait for a full DB refresh.
+        for row in getattr(self.parent, "all_targets", []) or []:
+            if isinstance(row, dict) and str(row.get("OBSERVATION_ID")) == str(observation_id):
+                row["STATE"] = state
+                break
+
+        self.refresh_visible_target_states()
+        return True
+
+    def refresh_visible_target_states(self):
+        """
+        Refresh only OBSERVATION_ID/STATE for rows currently visible in the table.
+        This preserves the observer's table sorting and selected row while still
+        showing target progress as the sequencer updates the DB.
+        """
+        ls = getattr(self.parent, "layout_service", None)
+        table = getattr(ls, "target_list_display", None)
+        owner = getattr(self.parent, "current_owner", None)
+        if table is None or table.rowCount() == 0 or not owner:
+            return
+
+        obs_col = self._column_index(table, "OBSERVATION_ID", "OBS_ID", "OBSERVATIONID")
+        state_col = self._column_index(table, "STATE")
+        if obs_col is None or state_col is None:
+            return
+
+        obs_ids = []
+        for row in range(table.rowCount()):
+            item = table.item(row, obs_col)
+            if item and item.text().strip():
+                obs_ids.append(item.text().strip())
+
+        if not obs_ids:
+            return
+
+        connection = None
+        cursor = None
+        try:
+            connection = self.connect_to_mysql("config/db_config.ini")
+            if connection is None:
+                return
+
+            placeholders = ", ".join(["%s"] * len(obs_ids))
+            sql = f"""
+                SELECT OBSERVATION_ID, STATE
+                FROM targets
+                WHERE OBSERVATION_ID IN ({placeholders})
+            """
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(sql, tuple(obs_ids))
+            state_by_obs = {
+                str(row["OBSERVATION_ID"]): self.normalize_target_state(row.get("STATE"))
+                for row in cursor.fetchall()
+            }
+
+        except mysql.connector.Error as err:
+            print(f"Error refreshing target states: {err}")
+            return
+
+        finally:
+            if cursor is not None:
+                cursor.close()
+            if connection is not None:
+                connection.close()
+
+        blocker = QSignalBlocker(table)
+        try:
+            for row in range(table.rowCount()):
+                obs_item = table.item(row, obs_col)
+                if not obs_item:
+                    continue
+                obs_id = obs_item.text().strip()
+                state = state_by_obs.get(obs_id)
+                if state is None:
+                    continue
+                state_item = table.item(row, state_col)
+                if state_item is None:
+                    state_item = QTableWidgetItem(state)
+                    table.setItem(row, state_col, state_item)
+                else:
+                    state_item.setText(state)
+
+            for cached in getattr(self.parent, "all_targets", []) or []:
+                if not isinstance(cached, dict):
+                    continue
+                obs_id = str(cached.get("OBSERVATION_ID"))
+                if obs_id in state_by_obs:
+                    cached["STATE"] = state_by_obs[obs_id]
+        finally:
+            del blocker
+
+        self.refresh_target_table_status_styles()
+        self.refresh_target_status_summary(getattr(self.parent, "all_targets", []) or [])
+
     def refresh_table(self):
         """
         Refreshes the table by querying the database for the latest data
@@ -1194,73 +1344,192 @@ class LogicService:
         except Exception as e:
             print("create_empty_target_set failed:", e)
 
-    def set_active_target(self, observation_id):
-        """Remember the active obs_id and update row highlight."""
-        prev = getattr(self.parent, "active_observation_id", None)
-        if prev != observation_id:
-            setattr(self.parent, "prev_active_observation_id", prev)
-        setattr(self.parent, "active_observation_id", observation_id)
+    def normalize_target_state(self, state):
+        """Normalize target STATE values for display and DB writes."""
+        text = str(state or "PENDING").strip().upper()
+        aliases = {
+            "": "PENDING",
+            "PEND": "PENDING",
+            "PENDING": "PENDING",
+            "DONE": "COMPLETED",
+            "COMPLETE": "COMPLETED",
+            "COMPLETED": "COMPLETED",
+            "ACTIVE": "EXPOSING",
+            "RUNNING": "EXPOSING",
+            "EXPOSE": "EXPOSING",
+            "EXPOSING": "EXPOSING",
+        }
+        return aliases.get(text, text)
 
-        # Update UI highlight now
-        self.clear_previous_active_highlight()
-        self.apply_active_highlight()
-
-    def _obs_id_column_index(self, table):
-        """Find the Observation ID column (case-insensitive)."""
-        cols = table.columnCount()
-        for i in range(cols):
-            item = table.horizontalHeaderItem(i)
-            if not item:
-                continue
-            name = item.text().strip().lower()
-            if name in ("observation_id", "obs_id", "observationid"):
-                return i
+    def _column_index(self, table, *names):
+        """Find a table column by header name, case-insensitive."""
+        wanted = {str(name).strip().upper() for name in names}
+        for col in range(table.columnCount()):
+            item = table.horizontalHeaderItem(col)
+            if item and item.text().strip().upper() in wanted:
+                return col
         return None
 
-    def _find_row_by_obs_id(self, table, obs_id):
-        """Return the row index with matching observation_id (string compare)."""
-        col = self._obs_id_column_index(table)
+    def _table_value(self, table, row, *headers):
+        col = self._column_index(table, *headers)
         if col is None:
+            return ""
+        item = table.item(row, col)
+        return item.text().strip() if item else ""
+
+    def _target_sort_key(self, row):
+        """
+        Sequencer/default target order.  Calibration lists often have order
+        fields set to zero, so OBSERVATION_ID becomes the stable insertion order.
+        """
+        def as_int(value, default=0):
+            try:
+                if value is None or value == "":
+                    return default
+                return int(float(value))
+            except Exception:
+                return default
+
+        return (
+            as_int(row.get("SET_ID")),
+            as_int(row.get("OBS_ORDER")),
+            as_int(row.get("TARGET_NUMBER")),
+            as_int(row.get("SEQUENCE_NUMBER")),
+            as_int(row.get("OBSERVATION_ID")),
+        )
+
+    def current_or_next_target(self, rows=None):
+        """
+        Return (mode, row) where mode is EXPOSING or NEXT.
+        EXPOSING wins; otherwise the next PENDING target in sequencer order wins.
+        """
+        rows = rows if rows is not None else (getattr(self.parent, "all_targets", []) or [])
+        rows = [r for r in rows if isinstance(r, dict)]
+        if not rows:
+            return None, None
+
+        ordered_rows = sorted(rows, key=self._target_sort_key)
+
+        for row in ordered_rows:
+            if self.normalize_target_state(row.get("STATE")) == "EXPOSING":
+                return "EXPOSING", row
+
+        for row in ordered_rows:
+            if self.normalize_target_state(row.get("STATE")) == "PENDING":
+                return "NEXT", row
+
+        return None, None
+
+    def refresh_target_status_summary(self, rows=None):
+        """Update the target-state summary and next-target label."""
+        rows = rows if rows is not None else (getattr(self.parent, "all_targets", []) or [])
+        rows = [r for r in rows if isinstance(r, dict)]
+
+        counts = {"PENDING": 0, "COMPLETED": 0, "EXPOSING": 0}
+        for row in rows:
+            state = self.normalize_target_state(row.get("STATE"))
+            if state in counts:
+                counts[state] += 1
+
+        mode, target = self.current_or_next_target(rows)
+        ls = getattr(self.parent, "layout_service", None)
+
+        summary_label = getattr(ls, "target_state_summary_label", None)
+        if summary_label is not None:
+            summary_label.setText(
+                f"PENDING: {counts['PENDING']}   COMPLETED: {counts['COMPLETED']}   EXPOSING: {counts['EXPOSING']}"
+            )
+
+        next_label = getattr(ls, "next_target_label", None)
+        if next_label is not None:
+            if target is None:
+                next_label.setText("Single: no PENDING targets remain.")
+                next_label.setToolTip("All visible targets are completed, or no target list is loaded.")
+                setattr(self.parent, "current_sequence_observation_id", None)
+            else:
+                obs_id = target.get("OBSERVATION_ID", "")
+                name = target.get("NAME", "Unnamed")
+                state = self.normalize_target_state(target.get("STATE"))
+                if mode == "EXPOSING":
+                    text = f"Current: {name}  (OBS {obs_id}, EXPOSING)"
+                else:
+                    text = f"Single will run next: {name}  (OBS {obs_id}, {state})"
+                next_label.setText(text)
+                next_label.setToolTip(
+                    "This follows database sequence order and STATE, not the selected row or the current table sort."
+                )
+                setattr(self.parent, "current_sequence_observation_id", obs_id)
+
+    def refresh_target_table_status_styles(self):
+        """Apply row styling based on STATE and the computed next target."""
+        ls = getattr(self.parent, "layout_service", None)
+        table = getattr(ls, "target_list_display", None)
+        if table is None or table.rowCount() == 0:
+            return
+
+        obs_col = self._column_index(table, "OBSERVATION_ID", "OBS_ID", "OBSERVATIONID")
+        state_col = self._column_index(table, "STATE")
+        if obs_col is None or state_col is None:
+            return
+
+        mode, target = self.current_or_next_target()
+        next_obs_id = str(target.get("OBSERVATION_ID")) if target else None
+
+        colors = {
+            "COMPLETED": (QColor(75, 75, 75), QColor(180, 180, 180), False),
+            "EXPOSING": (QColor(46, 125, 50), QColor(255, 255, 255), True),
+            "NEXT": (QColor(255, 204, 64), QColor(0, 0, 0), True),
+        }
+
+        for row in range(table.rowCount()):
+            obs_id = self._table_value(table, row, "OBSERVATION_ID", "OBS_ID", "OBSERVATIONID")
+            state = self.normalize_target_state(self._table_value(table, row, "STATE"))
+            style_key = state
+            if state == "PENDING" and next_obs_id is not None and obs_id == next_obs_id:
+                style_key = "NEXT"
+
+            color_tuple = colors.get(style_key)
+            for col in range(table.columnCount()):
+                item = table.item(row, col)
+                if item is None:
+                    continue
+
+                font = item.font()
+                if color_tuple is None:
+                    item.setBackground(QBrush())
+                    item.setForeground(QBrush())
+                    font.setBold(False)
+                else:
+                    bg, fg, bold = color_tuple
+                    item.setBackground(bg)
+                    item.setForeground(fg)
+                    font.setBold(bold)
+                item.setFont(font)
+
+    def selected_observation_id(self):
+        """Return OBSERVATION_ID for the selected table row, if any."""
+        ls = getattr(self.parent, "layout_service", None)
+        table = getattr(ls, "target_list_display", None)
+        if table is None:
             return None
-        target = str(obs_id)
-        for r in range(table.rowCount()):
-            cell = table.item(r, col)
-            if cell and cell.text().strip() == target:
-                return r
-        return None
+
+        selected_rows = table.selectionModel().selectedRows()
+        if not selected_rows:
+            return None
+
+        row = selected_rows[0].row()
+        return self._table_value(table, row, "OBSERVATION_ID", "OBS_ID", "OBSERVATIONID") or None
+
+    def set_active_target(self, observation_id):
+        """Remember an active obs_id and refresh row styling."""
+        setattr(self.parent, "active_observation_id", observation_id)
+        self.refresh_target_table_status_styles()
+        self.refresh_target_status_summary(getattr(self.parent, "all_targets", []) or [])
 
     def clear_previous_active_highlight(self):
-        """Remove yellow highlight from the previously active row, if any."""
-        table = getattr(self.parent.layout_service, "target_list_display", None)
-        if table is None:
-            return
-        prev_id = getattr(self.parent, "prev_active_observation_id", None)
-        if prev_id is None:
-            return
-        row = self._find_row_by_obs_id(table, prev_id)
-        if row is None:
-            return
-        for c in range(table.columnCount()):
-            item = table.item(row, c)
-            if item:
-                # reset to default background
-                item.setBackground(Qt.white)
-                item.setForeground(Qt.black)
+        """Compatibility wrapper for older callers."""
+        self.refresh_target_table_status_styles()
 
     def apply_active_highlight(self):
-        """Paint the active row yellow (soft) if visible."""
-        table = getattr(self.parent.layout_service, "target_list_display", None)
-        if table is None:
-            return
-        active_id = getattr(self.parent, "active_observation_id", None)
-        if active_id is None:
-            return
-        row = self._find_row_by_obs_id(table, active_id)
-        if row is None:
-            return
-        yellow = QColor(255, 204, 64)
-        for c in range(table.columnCount()):
-            item = table.item(row, c)
-            if item:
-                item.setBackground(yellow)
-                item.setForeground(Qt.black)
+        """Compatibility wrapper for older callers."""
+        self.refresh_target_table_status_styles()
