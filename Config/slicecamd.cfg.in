@@ -84,17 +84,32 @@ FINE_ACQUIRE_BACKGROUND=(80 165 30 210)
 #
 FINE_ACQUIRE_MIN_SAMPLES=3
 
+# FINE_ACQUIRE_PREC=<arcsec>
+# MAD scatter threshold per axis (arcsec). A correction is only commanded when
+# the per-axis scatter of the collected samples is within this; a noisier batch
+# is discarded and re-gathered rather than moving on an untrustworthy median.
+#
+FINE_ACQUIRE_PREC=0.4
+
 # FINE_ACQUIRE_SETTLE_FRAMES=<n>
 # <n> frames discarded after each telescope move to allow settling before
 # centroid measurements resume.
 #
 FINE_ACQUIRE_SETTLE_FRAMES=2
 
-# FINE_ACQUIRE_GAIN=<g>
-# Proportional gain <g> = {0..1} applied to the commanded offset when the residual
-# is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.
+# FINE_ACQUIRE_SETTLE_SEC=<sec>
+# Seconds to wait after a commanded telescope move before evaluating the next
+# frame. The move plus CCD readout takes time; acting on a frame grabbed mid-
+# move/mid-settle gives a wrong correction. Time-based, independent of cadence.
 #
-FINE_ACQUIRE_GAIN=0.7
+FINE_ACQUIRE_SETTLE_SEC=4
+
+# FINE_ACQUIRE_GAIN=<g>
+# Proportional gain <g> applied to the commanded offset. Use 1.0: a fine-tune
+# step should apply the full measured offset -- deliberately under-correcting a
+# known offset is never beneficial here.
+#
+FINE_ACQUIRE_GAIN=1.0
 
 # FINE_ACQUIRE_GAIN_LARGE=<g>
 # Proportional gain <g> applied when the residual exceeds FINE_ACQUIRE_GAIN_THRESHOLD.

@@ -185,7 +185,7 @@ namespace Slicecam {
    *             Among all qualifying candidates, select the brightest.
    *
    *             Step 4: refine to sub-pixel centroid via iterative Gaussian-
-   *             windowed first-moment (centroid_sigma_pix = 2.0, 12 iterations,
+   *             windowed first-moment (centroid_sigma_pix = 1.2, 12 iterations,
    *             eps = 0.01 px).
    *
    *             All pixel coordinates are FITS 1-based on input and output.
@@ -324,12 +324,12 @@ namespace Slicecam {
     // --- Step 4: iterative Gaussian-windowed first-moment centroid ---
     //
     // centroid_halfwin    = 4   (CF's --centroid-hw default)
-    // centroid_sigma_pix  = 2.0 (CF's default, NOTE: different from filt_sigma)
+    // centroid_sigma_pix  = 1.2 (matches auto-acq-clean --centroid-sigma 1.2)
     // centroid_maxiter    = 12  (CF's default)
     // centroid_eps_pix    = 0.01
     //
     const int    hw  = 4;
-    const double s2  = 2.0 * 2.0;  // centroid_sigma_pix^2
+    const double s2  = 1.2 * 1.2;  // centroid_sigma_pix^2
 
     double cx   = static_cast<double>( best_x );
     double cy   = static_cast<double>( best_y );

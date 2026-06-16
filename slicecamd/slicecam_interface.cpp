@@ -269,6 +269,13 @@ namespace Slicecam {
   void Interface::do_fineacquire() {
     const char* function = "Slicecam::Interface::do_fineacquire";
 
+    // After commanding a TCS move, wait settle_sec before evaluating another
+    // frame. The move plus CCD readout takes time; acting on an image grabbed
+    // mid-move or mid-settle yields a wrong correction. Time-based so it does
+    // not depend on the frame cadence.
+    //
+    if ( std::chrono::steady_clock::now() < this->fineacquire_state.settle_until ) return;
+
     // skip frames if we are waiting for the telescope to settle after a move
     //
     if (this->fineacquire_state.settle_frames > 0) {
@@ -300,6 +307,21 @@ namespace Slicecam {
     if (img_data.empty()) {
       logwrite(function, "no image data for slicecam '"+which+"'");
       return;
+    }
+
+    // Reject a duplicate frame. A commanded framegrab does not guarantee the
+    // image has refreshed; processing the same frame twice double-counts
+    // samples and can command a second move from a pre-move image (overshoot).
+    // Skip the frame if a cheap subsample signature matches the last one.
+    //
+    {
+      uint64_t sig = 1469598103934665603ULL;  // FNV-1a offset basis
+      const size_t step = img_data.size() > 4096 ? img_data.size() / 4096 : 1;
+      for ( size_t i = 0; i < img_data.size(); i += step ) {
+        sig = ( sig ^ static_cast<uint64_t>( static_cast<int64_t>( img_data[i] ) ) ) * 1099511628211ULL;
+      }
+      if ( sig == this->fineacquire_state.last_frame_sig ) return;  // identical frame; wait for a fresh one
+      this->fineacquire_state.last_frame_sig = sig;
     }
 
     // find the star centroid near the aim point
@@ -514,6 +536,21 @@ namespace Slicecam {
       }
     }
 
+    // Never command a move from a noisy solution. We reach here either with the
+    // scatter within tolerance, or because we hit max_samples. In the latter
+    // case, if the scatter is still too high the median is not trustworthy:
+    // discard the batch and re-gather rather than applying a full-gain move to
+    // an unreliable position (which causes wrong/overshooting moves). This
+    // matches the reference engine, which refuses to move until precision is met.
+    //
+    if ( !scatter_ok ) {
+      logwrite( function, "fine acquisition: scatter too high to move safely after "
+                +std::to_string(n)+" samples (scatter=("+std::to_string(sig_dra)+","
+                +std::to_string(sig_ddec)+") > "+std::to_string(prec)+" arcsec); re-gathering" );
+      this->fineacquire_state.reset();
+      return;
+    }
+
     // select gain: use gain_large when offset is well above the goal threshold
     //
     const double effective_gain = ( offset_arcsec > this->fineacquire_state.gain_threshold_arcsec )
@@ -542,9 +579,13 @@ namespace Slicecam {
       return;
     }
 
-    // reset samples and discard settle_count frames for telescope settling
+    // reset samples; ignore frames for settle_count frames AND for settle_sec
+    // seconds so the telescope move + readout completes before we measure again
     this->fineacquire_state.reset();
     this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
+    this->fineacquire_state.settle_until  = std::chrono::steady_clock::now()
+      + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+          std::chrono::duration<double>( this->fineacquire_state.settle_sec ) );
   }
   /***** Slicecam::Interface::do_fineacquire **********************************/
 
@@ -1362,6 +1403,32 @@ namespace Slicecam {
         try { this->fineacquire_state.gain_threshold_arcsec = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid FINE_ACQUIRE_GAIN_THRESHOLD "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "FINE_ACQUIRE_PREC" ) {
+        try { this->fineacquire_state.prec_arcsec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_PREC "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "FINE_ACQUIRE_SETTLE_SEC" ) {
+        try { this->fineacquire_state.settle_sec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_SEC "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
