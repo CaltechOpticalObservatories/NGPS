@@ -178,26 +178,35 @@ namespace Sequencer {
     // before slicecamd's first telemetry publish arrives.
     //
     bool was_running = false;
-    std::unique_lock<std::mutex> lock(this->fineacquire_mtx);
-    this->fineacquire_cv.wait(lock, [&]() {
-        if ( this->is_fineacquire_running.load() ) was_running = true;
-        return this->is_fineacquire_locked.load() || this->cancel_flag.load() ||
-               ( was_running && !this->is_fineacquire_running.load() ) ||
-               (use_timeout && std::chrono::steady_clock::now() > timeout_time);
-    });
+    bool cancelled, locked, timed_out;
+    {
+      std::unique_lock<std::mutex> lock(this->fineacquire_mtx);
+      this->fineacquire_cv.wait(lock, [&]() {
+          if ( this->is_fineacquire_running.load() ) was_running = true;
+          return this->is_fineacquire_locked.load() || this->cancel_flag.load() ||
+                 ( was_running && !this->is_fineacquire_running.load() ) ||
+                 (use_timeout && std::chrono::steady_clock::now() > timeout_time);
+      });
+      // Classify the outcome while still holding the mutex. is_fineacquire_*
+      // are written under this mutex by handletopic_slicecamd(); releasing
+      // first would let a late publish flip them between here and the checks
+      // (e.g. a stale "locked" arriving after a timeout wake, making a
+      // timed-out run look successful and skipping the stop).
+      cancelled = this->cancel_flag.load();
+      locked    = this->is_fineacquire_locked.load();
+      timed_out = use_timeout && std::chrono::steady_clock::now() >= timeout_time;
+    }  // release fineacquire_mtx before do_slicecam_stop() below (it locks the same mutex)
 
-    if (this->cancel_flag.load()) return ABORT;
+    if (cancelled) return ABORT;
 
-    // Determine outcome by reading state. If not locked, then this is a
-    // failure of some kind; distinguish a true timeout from slicecamd
-    // stopping without locking by consulting the clock. This ordering
-    // ensures that a failure publish arriving at or near the timeout
-    // boundary is still reported as a failure (not mis-labeled as a
-    // timeout).
+    // If not locked this is a failure of some kind; distinguish a true timeout
+    // from slicecamd stopping without locking. A failure at/near the timeout
+    // boundary is still reported as a failure, not mis-labeled as a timeout.
     //
-    if (!this->is_fineacquire_locked.load()) {
-      if (use_timeout && std::chrono::steady_clock::now() >= timeout_time) {
-        logwrite( function, "ERROR slicecam fine acquisition timed out!" );
+    if (!locked) {
+      if (timed_out) {
+        logwrite( function, "ERROR slicecam fine acquisition timed out; aborting" );
+        this->do_slicecam_stop();  // stop the running loop so it can't perturb the exposure
         return TIMEOUT;
       }
       logwrite( function, "ERROR slicecam fine acquisition stopped without locking" );
