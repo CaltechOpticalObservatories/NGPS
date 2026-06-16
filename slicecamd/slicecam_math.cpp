@@ -185,7 +185,8 @@ namespace Slicecam {
    *             Among all qualifying candidates, select the brightest.
    *
    *             Step 4: refine to sub-pixel centroid via iterative Gaussian-
-   *             windowed first-moment (centroid_sigma_pix = 2.0, 12 iterations,
+   *             windowed first-moment (centroid_sigma_pix = centroid_sigma arg,
+   *             12 iterations,
    *             eps = 0.01 px).
    *
    *             All pixel coordinates are FITS 1-based on input and output.
@@ -199,7 +200,8 @@ namespace Slicecam {
                                   Point &centroid,
                                   double &peak_raw,
                                   double &top10_mean,
-                                  double &peak_snr ) {
+                                  double &peak_snr,
+                                  double centroid_sigma ) {
     if ( image.empty() || ncols <= 0 || nrows <= 0 ) return ERROR;
 
     // Convert 1-based inclusive ROI to 0-based, clamped
@@ -324,12 +326,14 @@ namespace Slicecam {
     // --- Step 4: iterative Gaussian-windowed first-moment centroid ---
     //
     // centroid_halfwin    = 4   (CF's --centroid-hw default)
-    // centroid_sigma_pix  = 2.0 (CF's default, NOTE: different from filt_sigma)
+    // centroid_sigma_pix  = centroid_sigma arg (configurable; default 1.5,
+    //                       empirically optimal on real SCAM data across SNR
+    //                       and seeing -- see tools/eval_centroid_*.py)
     // centroid_maxiter    = 12  (CF's default)
     // centroid_eps_pix    = 0.01
     //
     const int    hw  = 4;
-    const double s2  = 2.0 * 2.0;  // centroid_sigma_pix^2
+    const double s2  = centroid_sigma * centroid_sigma;  // centroid_sigma_pix^2
 
     double cx   = static_cast<double>( best_x );
     double cy   = static_cast<double>( best_y );
