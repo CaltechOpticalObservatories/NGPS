@@ -163,6 +163,8 @@ namespace Slicecam {
 
     // start the state machine
     this->fineacquire_state.reset();
+    this->fineacq_total_dra  = 0.0;   // reset per-run ACAM->slit residual accumulators
+    this->fineacq_total_ddec = 0.0;
     this->is_fineacquire_locked.store(false, std::memory_order_release);
     this->is_fineacquire_running.store(true, std::memory_order_release);
     this->is_autoexpose_running.store(false, std::memory_order_release);  // fineacquire supersedes auto-exposure
@@ -461,6 +463,30 @@ namespace Slicecam {
           << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
           << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
       logwrite( function, oss.str() );
+
+      // One structured per-run line for building an ACAM->slit geometric (flexure)
+      // model over time. fineacq_total_{dra,ddec} is the total correction applied this
+      // run = the ACAM->slit residual that acam-acquire left behind. We pair it with the
+      // pointing geometry (cass rotator angle, altitude, azimuth) and the telescope
+      // RA/DEC at lock (TCS telemetry, i.e. the database-fed on-target/goal position).
+      // ALT is derived from AIRMASS (site-independent); HA is derived offline from
+      // TELRA + this line's timestamp, so no site ephemeris lives in this daemon.
+      const double am  = this->telem.airmass;
+      const double alt = ( std::isfinite(am) && am >= 1.0 )
+                         ? 90.0 - std::acos( 1.0 / am ) * 180.0 / PI : NAN;
+      std::ostringstream acqmodel;
+      acqmodel << "[ACQMODEL] acam2slit dRA=" << this->fineacq_total_dra
+               << " dDEC="    << this->fineacq_total_ddec << " arcsec"
+               << " CASANGLE="<< this->telem.angle_scope
+               << " ALT="     << alt
+               << " AZ="      << this->telem.az
+               << " AIRMASS=" << am
+               << " TELRA="   << this->telem.ra_scope_h
+               << " TELDEC="  << this->telem.dec_scope_d
+               << " n="       << n
+               << " cam="     << which;
+      logwrite( function, acqmodel.str() );
+
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
       this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
@@ -541,6 +567,11 @@ namespace Slicecam {
       this->publish_status();
       return;
     }
+
+    // accumulate the applied correction (arcsec). Summed over the run this is the
+    // total ACAM->slit residual that acam-acquire left behind (the [ACQMODEL] line).
+    this->fineacq_total_dra  += cmd_dra  * 3600.0;
+    this->fineacq_total_ddec += cmd_ddec * 3600.0;
 
     // reset samples and discard settle_count frames for telescope settling
     this->fineacquire_state.reset();
