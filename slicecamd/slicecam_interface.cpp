@@ -33,7 +33,7 @@ namespace Slicecam {
     // Help
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_FINEACQUIRE;
-      retstring.append( " stop | start [ { L | R } <x> <y> ] | [ status ]\n" );
+      retstring.append( " stop | start [ goal <ra_deg> <dec_deg> ] [ { L | R } <x> <y> ] | [ status ]\n" );
       retstring.append( "   start or stop fine target acquisition.\n" );
       retstring.append( "   aimpoint is optional and uses configuration by default, but\n" );
       retstring.append( "   if specified must contain both L or R to specify which camera,\n" );
@@ -114,6 +114,20 @@ namespace Slicecam {
       retstring = "stopped";
       return ERROR;
     }
+    }
+
+    // optional "goal <ra_deg> <dec_deg>": the database target (goal) coordinates, i.e. the
+    // INPUT to the SCOPE->ACAM transform. Stripped here, stored, and logged at lock for the
+    // ACAM->slit geometry model. Absent (e.g. manual runs) -> logged as nan.
+    this->fineacq_goal_ra = NAN; this->fineacq_goal_dec = NAN;
+    for ( size_t i=0; i+2 < tokens.size(); ++i ) {
+      if ( tokens[i] == "goal" ) {
+        try { this->fineacq_goal_ra  = std::stod( tokens.at(i+1) );
+              this->fineacq_goal_dec = std::stod( tokens.at(i+2) ); }
+        catch ( const std::exception & ) { this->fineacq_goal_ra = this->fineacq_goal_dec = NAN; }
+        tokens.erase( tokens.begin()+i, tokens.begin()+i+3 );
+        break;
+      }
     }
 
     // <which> <x> <y> are optional but if specified then require all three
@@ -464,27 +478,22 @@ namespace Slicecam {
           << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
       logwrite( function, oss.str() );
 
-      // One structured per-run line for building an ACAM->slit geometric (flexure)
-      // model over time. fineacq_total_{dra,ddec} is the total correction applied this
-      // run = the ACAM->slit residual that acam-acquire left behind. We pair it with the
-      // pointing geometry (cass rotator angle, altitude, azimuth) and the telescope
-      // RA/DEC at lock (TCS telemetry, i.e. the database-fed on-target/goal position).
-      // ALT is derived from AIRMASS (site-independent); HA is derived offline from
-      // TELRA + this line's timestamp, so no site ephemeris lives in this daemon.
-      const double am  = this->telem.airmass;
-      const double alt = ( std::isfinite(am) && am >= 1.0 )
-                         ? 90.0 - std::acos( 1.0 / am ) * 180.0 / PI : NAN;
+      // One structured per-run line for building an ACAM->slit geometric (flexure) model
+      // over time. fineacq_total_{dra,ddec} is the total correction applied this run = the
+      // ACAM->slit residual that acam-acquire left behind. We log it against the GOAL
+      // (database target) coordinates -- the INPUT to the SCOPE->ACAM transform -- plus the
+      // cassegrain angle. Altitude/hour-angle are derived offline from GOALRA/GOALDEC + this
+      // line's timestamp. We deliberately do NOT log the telescope's actual RA/DEC: that is
+      // the transform's OUTPUT and drifts as fine-acquire applies offsets, so it cannot be
+      // used to fit the geometry.
       std::ostringstream acqmodel;
       acqmodel << "[ACQMODEL] acam2slit dRA=" << this->fineacq_total_dra
-               << " dDEC="    << this->fineacq_total_ddec << " arcsec"
-               << " CASANGLE="<< this->telem.angle_scope
-               << " ALT="     << alt
-               << " AZ="      << this->telem.az
-               << " AIRMASS=" << am
-               << " TELRA="   << this->telem.ra_scope_h
-               << " TELDEC="  << this->telem.dec_scope_d
-               << " n="       << n
-               << " cam="     << which;
+               << " dDEC="     << this->fineacq_total_ddec << " arcsec"
+               << " GOALRA="   << this->fineacq_goal_ra
+               << " GOALDEC="  << this->fineacq_goal_dec
+               << " CASANGLE=" << this->telem.angle_scope
+               << " n="        << n
+               << " cam="      << which;
       logwrite( function, acqmodel.str() );
 
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
