@@ -5577,6 +5577,17 @@ logwrite( function, message.str() );
       return ERROR;
     }
 
+    // Lock out user-initiated moves while actively acquiring (converging on the
+    // target); a manual move would disrupt the acquisition. Allowed while
+    // guiding or stopped.
+    //
+    if ( this->target.acquire_mode == Acam::TARGET_ACQUIRE ||
+         this->target.acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
+      logwrite( function, "ERROR cannot move while ACAM is acquiring" );
+      retstring="acquiring";
+      return ERROR;
+    }
+
     std::vector<std::string> tokens;
     Tokenize( args, tokens, " " );
 
