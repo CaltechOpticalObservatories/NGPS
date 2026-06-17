@@ -57,7 +57,8 @@ namespace Slicecam {
                                       Point &centroid,
                                       double &peak_raw,     // raw ADU at source peak (saturation test)
                                       double &top10_mean,   // mean of top 10% bkg-subtracted pixels (scaling)
-                                      double &peak_snr );   // background-subtracted peak / background sigma
+                                      double &peak_snr,     // background-subtracted peak / background sigma
+                                      double centroid_sigma = 1.5 ); // Gaussian weighting sigma (px) for the Step-4 centroid
       /**
        * @brief      convert pixel coordinates to sky coordinates using WCS keys
        */
