@@ -148,6 +148,15 @@ namespace Slicecam {
 
       FineAcqState fineacquire_state;
 
+      // Per-run accumulators for the ACAM->slit residual, summed over a fine-acquire
+      // run and logged once at lock (the [ACQMODEL] line) to build a flexure model of
+      // the ACAM->slit pointing offset vs geometry over time. Touched only from the
+      // single framegrab thread, so plain doubles are sufficient.
+      double fineacq_total_dra  = 0.0;     ///< sum of applied dRA corrections this run [arcsec]
+      double fineacq_total_ddec = 0.0;     ///< sum of applied dDEC corrections this run [arcsec]
+      double fineacq_goal_ra    = NAN;     ///< database target (goal) RA  [deg], passed at start, logged at lock
+      double fineacq_goal_dec   = NAN;     ///< database target (goal) DEC [deg], passed at start, logged at lock
+
       /// per-frame auto-exposure runtime (ACAM-window pre-tuning). Brightness is
       /// sampled over a window of frames; a high percentile (near-max) is used
       /// because telescope motion only smears light out (lowering brightness),
