@@ -542,6 +542,14 @@ namespace Slicecam {
       return;
     }
 
+    // time-based settle: wait for the TCS to physically finish the move before
+    // sampling resumes. The frame-count settle (settle_frames) is too short in
+    // wall-clock when autoexpose shortens the exposure (e.g. bright targets), so
+    // apply a configurable time-based settle on top of it; settle_sec=0 disables.
+    if ( this->fineacquire_state.settle_sec > 0.0 ) {
+      std::this_thread::sleep_for( std::chrono::duration<double>( this->fineacquire_state.settle_sec ) );
+    }
+
     // reset samples and discard settle_count frames for telescope settling
     this->fineacquire_state.reset();
     this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
@@ -1323,6 +1331,19 @@ namespace Slicecam {
         try { this->fineacquire_state.settle_count = std::stoi( config.arg[entry] ); }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_FRAMES "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_SETTLE_SEC" ) {
+        try { this->fineacquire_state.settle_sec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_SEC "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;

@@ -90,11 +90,19 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 #
 FINE_ACQUIRE_SETTLE_FRAMES=2
 
+# FINE_ACQUIRE_SETTLE_SEC=<sec>
+# Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
+# to let the TCS physically finish the move before sampling resumes. This matters
+# when autoexpose shortens the exposure (e.g. bright targets): the frame-count
+# settle then elapses too quickly in wall-clock. Set to 0 to disable.
+#
+FINE_ACQUIRE_SETTLE_SEC=3.0
+
 # FINE_ACQUIRE_GAIN=<g>
 # Proportional gain <g> = {0..1} applied to the commanded offset when the residual
 # is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.
 #
-FINE_ACQUIRE_GAIN=0.7
+FINE_ACQUIRE_GAIN=1.0
 
 # FINE_ACQUIRE_GAIN_LARGE=<g>
 # Proportional gain <g> applied when the residual exceeds FINE_ACQUIRE_GAIN_THRESHOLD.
