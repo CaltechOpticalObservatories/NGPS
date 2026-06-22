@@ -24,22 +24,14 @@ Service account / group: user "dataowner", group "datawriters".
   - daemons run as this user/group
   - the sequencer runs as dataowner and restarts peers via systemctl
   - members of datawriters (typically including the observer) may run `ngps`
-    without a password (per polkit rule, see step 4)
+    without a password (per polkit rule, see step 3)
 Create them if they do not exist. Add observers to datawriters.
 
 
 ------------------------------------------------------------------------------
-1. Build the software
+1. Install the systemd units
 ------------------------------------------------------------------------------
-Build per the project's standard instructions. The result must include every
-daemon binary plus `ngps-watchdog`. Deploy the freshly built bin/ and Config/
-to BASEDIR/ on the target.
-
-
-------------------------------------------------------------------------------
-2. Install the systemd units
-------------------------------------------------------------------------------
-All install commands in steps 2-5 are run from the watchdog_system/ directory.
+All install commands in steps 1-4 are run from the watchdog_system/ directory.
 
 The files to install live in this directory tree (watchdog_system/):
 
@@ -63,7 +55,7 @@ Install them:
 
 
 ------------------------------------------------------------------------------
-3. Install the environment file
+2. Install the environment file
 ------------------------------------------------------------------------------
     sudo install -m 0644 systemd/ngps.env /etc/sysconfig/ngps
 
@@ -72,7 +64,7 @@ match the target.
 
 
 ------------------------------------------------------------------------------
-4. Install the polkit rule (passwordless systemctl for ngps* units only)
+3. Install the polkit rule (passwordless systemctl for ngps* units only)
 ------------------------------------------------------------------------------
 Lets user "dataowner" (the sequencer + watchdog) and group "datawriters"
 manage ngps* units without a password.
@@ -81,7 +73,7 @@ manage ngps* units without a password.
 
 
 ------------------------------------------------------------------------------
-5. Install the operator wrapper
+4. Install the operator wrapper
 ------------------------------------------------------------------------------
     sudo cp -a "$(command -v ngps)" /root/ngps.pre-systemd.bak 2>/dev/null || true
     sudo install -m 0755 bin/ngps /usr/local/bin/ngps
@@ -92,14 +84,14 @@ manage ngps* units without a password.
 
 
 ------------------------------------------------------------------------------
-6. Disable any old boot mechanism (if migrating from the single-service setup)
+5. Disable any old boot mechanism (if migrating from the single-service setup)
 ------------------------------------------------------------------------------
     sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
     sudo systemctl disable --now ngps-daemon.service   2>/dev/null || true
 
 
 ------------------------------------------------------------------------------
-7. Reload, enable, and start everything
+6. Reload, enable, and start everything
 ------------------------------------------------------------------------------
     sudo systemctl daemon-reload
     sudo systemctl enable --now ngps.target            # Layer 1: all daemons
@@ -107,8 +99,14 @@ manage ngps* units without a password.
 
 
 ------------------------------------------------------------------------------
-8. Verify (do all of these on a new system)
+7. Verify (do all of these on a new system)
 ------------------------------------------------------------------------------
+Boot chain is complete (without this, services show "enabled" yet stay
+"inactive (dead)" after a reboot -- step 6's `enable --now ngps.target` is what
+inserts the target into multi-user.target.wants/):
+    systemctl is-enabled ngps.target                                    # -> enabled
+    ls -l /etc/systemd/system/multi-user.target.wants/ngps.target       # must exist
+
 All instances loaded and the aggregate is healthy:
     systemctl list-units 'ngps@*' --all
     systemctl status ngps.target
@@ -141,7 +139,7 @@ Broker round-trip probe (messaged has no command port):
 
 Sequencer-initiated restart works without a password prompt (as dataowner):
     sudo -u dataowner /usr/bin/systemctl restart ngps@acamd.service && echo OK
-    # if it prompts for a password, the polkit rule (step 4) is not loaded;
+    # if it prompts for a password, the polkit rule (step 3) is not loaded;
     # check:  journalctl -u polkit
 
 
@@ -166,8 +164,10 @@ Notes
       journalctl -u ngps-watchdog -f
 
 - Watchdog tunables (PROBE_PERIOD_SEC=10, PROBE_TIMEOUT_MS=5000,
-  FAIL_THRESHOLD=3, COOLDOWN_SEC=120) are compile-time constants at the top of
-  watchdog_system/ngps_watchdog.cpp. If you change PROBE_PERIOD/timeout, keep
-  WatchdogSec= in ngps-watchdog.service comfortably above one probe round.
+  FAIL_THRESHOLD=3, COOLDOWN_SEC=120, STARTUP_GRACE_SEC=30) are compile-time
+  constants at the top of watchdog_system/ngps_watchdog.cpp. The grace window
+  holds off the first probe so a slow cold-boot is not mistaken for a hang;
+  WatchdogSec= is heartbeated throughout it. If you change PROBE_PERIOD/timeout,
+  keep WatchdogSec= in ngps-watchdog.service comfortably above one probe round.
 
 ==============================================================================

@@ -648,6 +648,13 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
         }
 
+        // liveness probe from watchdog replies "pong" and skips everything else
+        //
+        if ( cmd == CMD_PING ) {
+          sock.Write( CMD_PONG + "\n" );
+          break; // one-shot probe connection, close now
+        }
+
         ++this->cmd_num;
         if ( this->cmd_num == INT_MAX ) this->cmd_num = 0;
 
@@ -681,10 +688,6 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       if ( cmd.compare( "help" ) == 0 || cmd.compare( "?" ) == 0 ) {
                       for ( const auto &s : TCSD_SYNTAX ) { retstring.append( s ); retstring.append( "\n" ); }
                       ret = HELP;
-      }
-      else
-      if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
-                      sock.Write( CMD_PONG + "\n" );
       }
       else
       if ( cmd.compare( TCSD_EXIT ) == 0 ) {

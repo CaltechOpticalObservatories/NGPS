@@ -1145,6 +1145,13 @@ namespace Sequencer {
           args= buf.substr(cmd_sep+1);                 // otherwise args is everything after that space.
         }
 
+        // liveness probe from watchdog replies "pong" and skips everything else
+        //
+        if ( cmd == CMD_PING ) {
+          sock.Write( CMD_PONG + "\n" );
+          break; // one-shot probe connection, close now
+        }
+
         sock.id = ++this->cmd_num;
         if ( this->cmd_num == INT_MAX ) this->cmd_num = 0;
 
@@ -1175,10 +1182,6 @@ namespace Sequencer {
                     retstring.append("  "); retstring.append( s ); retstring.append( "\n" );
                   }
                   ret = HELP;
-      }
-      else
-      if ( cmd == CMD_PING ) {       // liveness probe for the hang watchdog; no side effects
-                  sock.Write( CMD_PONG + "\n" );
       }
       else
       if ( cmd == SEQUENCERD_EXIT ) {

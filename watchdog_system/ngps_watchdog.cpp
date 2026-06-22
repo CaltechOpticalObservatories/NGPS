@@ -56,11 +56,12 @@
 #include <unistd.h>
 
 namespace {
-  constexpr int  PROBE_PERIOD_SEC = 10;     ///< seconds between probe rounds
-  constexpr int  PROBE_TIMEOUT_MS = 5000;   ///< time to wait for a probe reply
-  constexpr int  FAIL_THRESHOLD   = 3;      ///< consecutive missed replies before declaring a daemon hung
-  constexpr long COOLDOWN_SEC     = 120;    ///< minimum seconds between restarts of the same daemon
-  constexpr int  BROKER_SETTLE_MS = 300;    ///< let the SUB subscription propagate to our PUB before probing
+  constexpr int  PROBE_PERIOD_SEC  = 10;    ///< seconds between probe rounds
+  constexpr int  PROBE_TIMEOUT_MS  = 5000;  ///< time to wait for a probe reply
+  constexpr int  FAIL_THRESHOLD    = 3;     ///< consecutive missed replies before declaring a daemon hung
+  constexpr long COOLDOWN_SEC      = 120;   ///< minimum seconds between restarts of the same daemon
+  constexpr int  BROKER_SETTLE_MS  = 300;   ///< let the SUB subscription propagate to our PUB before probing
+  constexpr int  STARTUP_GRACE_SEC = 30;    ///< delay before the first probe, so a slow cold-boot is not mistaken for a hang
 
   const std::string DEFAULT_CFG  = "/home/developer/Software/Config/sequencerd.cfg";
   const std::string LOCALHOST    = "127.0.0.1";
@@ -408,6 +409,20 @@ int main( int argc, char **argv ) {
   }
   else {
     logmsg( "broker endpoints not in config; " + BROKER_UNIT + " will not be hang-probed" );
+  }
+
+  // Startup grace: give daemons time to come up before probing for liveness, so
+  // a slow first start (sequencerd opening many connections, cameras enumerating
+  // hardware) is not mistaken for a hang. systemd's WatchdogSec= is heartbeated
+  // throughout the wait so the watchdog itself remains supervised.
+  //
+  logmsg( "startup grace " + std::to_string( STARTUP_GRACE_SEC ) + "s before first probe" );
+  {
+    const auto grace_end = std::chrono::steady_clock::now() + std::chrono::seconds( STARTUP_GRACE_SEC );
+    while ( std::chrono::steady_clock::now() < grace_end ) {
+      Daemon::sd_notify( "WATCHDOG=1\n" );
+      std::this_thread::sleep_for( std::chrono::seconds( PROBE_PERIOD_SEC ) );
+    }
   }
 
   while ( true ) {
