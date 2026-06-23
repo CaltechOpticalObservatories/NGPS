@@ -817,20 +817,23 @@ namespace Sequencer {
         }
       }
 
-      // On a repeat this whole block is skipped: the science offset was already
-      // applied and the slit is already at the EXPOSE (science) position, so neither
-      // the telescope nor the slit should move at all. (The VSM_ACQUIRE worker above
-      // also self-skips on a repeat, so the slit was never moved to ACQUIRE.)
-      if ( !this->target.iscal && !repeat_target ) {
-        // send offsets only on fineacquire, otherwise user needs to fix things
-        if ( this->is_fineacquire_locked.load() &&
+      if ( !this->target.iscal ) {
+        // Apply the science (telescope) offset only when NOT a repeat. On a repeat it
+        // was already applied last time and re-applying would double it (is_fineacquire_locked
+        // is telemetry-driven and can be stale-true on a repeat).
+        if ( !repeat_target && this->is_fineacquire_locked.load() &&
             this->target_offset() == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
             return;
           }
         }
-        // ensure slit offset is in "expose" position when needed
+        // Always set the slit to EXPOSE -- this applies the slit WIDTH from the target
+        // entry (so a width change for a repeat exposure is honored) and re-asserts the
+        // EXPOSE offset. On a repeat the offset is unchanged, so the slit does NOT
+        // translate (it stays at the science position); only the width is (re)applied.
+        // The VSM_ACQUIRE worker above self-skips on a repeat, so the slit was never
+        // moved off the science position.
         try {
           error |= this->slit_set(Sequencer::VSM_EXPOSE);
         }
