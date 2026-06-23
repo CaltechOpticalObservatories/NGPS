@@ -817,10 +817,13 @@ namespace Sequencer {
         }
       }
 
-      if ( !this->target.iscal ) {
-        // send offsets only on fineacquire, otherwise user needs to fix things.
-        // skip on a repeat: the science offset was already applied last time.
-        if ( !repeat_target && this->is_fineacquire_locked.load() &&
+      // On a repeat this whole block is skipped: the science offset was already
+      // applied and the slit is already at the EXPOSE (science) position, so neither
+      // the telescope nor the slit should move at all. (The VSM_ACQUIRE worker above
+      // also self-skips on a repeat, so the slit was never moved to ACQUIRE.)
+      if ( !this->target.iscal && !repeat_target ) {
+        // send offsets only on fineacquire, otherwise user needs to fix things
+        if ( this->is_fineacquire_locked.load() &&
             this->target_offset() == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
