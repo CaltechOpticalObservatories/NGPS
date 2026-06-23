@@ -33,7 +33,7 @@ namespace Slicecam {
     // Help
     if ( args == "?" || args == "help" ) {
       retstring = SLICECAMD_FINEACQUIRE;
-      retstring.append( " stop | start [ goal <ra_deg> <dec_deg> ] [ { L | R } <x> <y> ] | [ status ]\n" );
+      retstring.append( " stop | start [ { L | R } <x> <y> ] | [ status ]\n" );
       retstring.append( "   start or stop fine target acquisition.\n" );
       retstring.append( "   aimpoint is optional and uses configuration by default, but\n" );
       retstring.append( "   if specified must contain both L or R to specify which camera,\n" );
@@ -116,20 +116,6 @@ namespace Slicecam {
     }
     }
 
-    // optional "goal <ra_deg> <dec_deg>": the database target (goal) coordinates, i.e. the
-    // INPUT to the SCOPE->ACAM transform. Stripped here, stored, and logged at lock for the
-    // ACAM->slit geometry model. Absent (e.g. manual runs) -> logged as nan.
-    this->fineacq_goal_ra = NAN; this->fineacq_goal_dec = NAN;
-    for ( size_t i=0; i+2 < tokens.size(); ++i ) {
-      if ( tokens[i] == "goal" ) {
-        try { this->fineacq_goal_ra  = std::stod( tokens.at(i+1) );
-              this->fineacq_goal_dec = std::stod( tokens.at(i+2) ); }
-        catch ( const std::exception & ) { this->fineacq_goal_ra = this->fineacq_goal_dec = NAN; }
-        tokens.erase( tokens.begin()+i, tokens.begin()+i+3 );
-        break;
-      }
-    }
-
     // <which> <x> <y> are optional but if specified then require all three
     if ( tokens.size() != 1 && tokens.size() != 4 ) {
       logwrite(function, "ERROR expected stop | start [ { L | R } <x> <y> ]");
@@ -179,6 +165,12 @@ namespace Slicecam {
     this->fineacquire_state.reset();
     this->fineacq_total_dra  = 0.0;   // reset per-run ACAM->slit residual accumulators
     this->fineacq_total_ddec = 0.0;
+
+    // snapshot this run's goal (DB target) coords from the TARGETINFO published message; NAN if no target
+    // has been published (manual runs log nan). Frozen for the run via the is_fineacquire_running handoff.
+    this->fineacq_goal_ra  = this->targetinfo_ra_deg.load();
+    this->fineacq_goal_dec = this->targetinfo_dec_deg.load();
+
     this->is_fineacquire_locked.store(false, std::memory_order_release);
     this->is_fineacquire_running.store(true, std::memory_order_release);
     this->is_autoexpose_running.store(false, std::memory_order_release);  // fineacquire supersedes auto-exposure
@@ -998,6 +990,32 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  telem.airmass );
   }
   /***** Slicecam::Interface::handletopic_tcsd ********************************/
+
+
+  /***** Slicecam::Interface::handletopic_targetinfo **************************/
+  /**
+   * @brief      what to do when the topic is Topic::TARGETINFO
+   * @details    This receives target RA/DEC and stores them in the class
+   *             as decimal degrees.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    std::string ra_hms, dec_dms;
+
+    Common::extract_telemetry_value( jmessage, Key::TargetInfo::RA, ra_hms );
+    Common::extract_telemetry_value( jmessage, Key::TargetInfo::DECL, dec_dms );
+
+    try {
+      this->targetinfo_ra_deg.store( radec_to_decimal( ra_hms ) * TO_DEGREES );
+      this->targetinfo_dec_deg.store( radec_to_decimal( dec_dms ) );
+    }
+    catch( const std::exception &e ) {
+      this->targetinfo_ra_deg.store(NAN);
+      this->targetinfo_dec_deg.store(NAN);
+    }
+  }
+  /***** Slicecam::Interface::handletopic_targetinfo **************************/
 
 
   /***** Slicecam::Interface::publish_status **********************************/
@@ -2227,6 +2245,7 @@ namespace Slicecam {
 
     this->is_fineacquire_running.store( false, std::memory_order_release );
     this->is_fineacquire_locked.store(  false, std::memory_order_release );
+
     this->publish_status();
     this->cv.notify_all();  // send notification that the loop has stopped
 

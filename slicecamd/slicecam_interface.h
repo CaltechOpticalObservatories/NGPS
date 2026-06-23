@@ -149,8 +149,8 @@ namespace Slicecam {
       // single framegrab thread, so plain doubles are sufficient.
       double fineacq_total_dra  = 0.0;     ///< sum of applied dRA corrections this run [arcsec]
       double fineacq_total_ddec = 0.0;     ///< sum of applied dDEC corrections this run [arcsec]
-      double fineacq_goal_ra    = NAN;     ///< database target (goal) RA  [deg], passed at start, logged at lock
-      double fineacq_goal_dec   = NAN;     ///< database target (goal) DEC [deg], passed at start, logged at lock
+      double fineacq_goal_ra    = NAN;     ///< per-run snapshot of goal RA  [deg], taken at fineacquire start, logged at lock
+      double fineacq_goal_dec   = NAN;     ///< per-run snapshot of goal DEC [deg], taken at fineacquire start, logged at lock
 
       /// per-frame auto-exposure runtime (ACAM-window pre-tuning). Brightness is
       /// sampled over a window of frames; a high percentile (near-max) is used
@@ -192,6 +192,12 @@ namespace Slicecam {
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
       std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
+
+      // Latest target (goal) coords published on Topic::TARGETINFO
+      // NAN until a TARGETINFO arrives, so manual runs with no sequencer target log nan.
+      //
+      std::atomic<double> targetinfo_ra_deg{NAN};   ///< latest goal RA  [deg] from TARGETINFO
+      std::atomic<double> targetinfo_dec_deg{NAN};  ///< latest goal DEC [deg] from TARGETINFO
 
       /// Max acceptable age (us) for cached ACAM status used by fineacquire.
       static constexpr int64_t ACAM_STATUS_MAX_AGE_US = 10'000'000;
@@ -267,7 +273,9 @@ namespace Slicecam {
           { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
           { Topic::SLITD, std::function<void(const nlohmann::json&)>(
-                     [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
+                     [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+          { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) }
         };
       }
 
@@ -307,6 +315,7 @@ namespace Slicecam {
       void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_targetinfo( const nlohmann::json &jmessage );
       void publish_status(bool force=false);
       void publish_snapshot();
       void publish_temperature();                ///< publish only the andor temperatures on Topic::SLICECAMD (periodic)

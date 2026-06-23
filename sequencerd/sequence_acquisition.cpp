@@ -158,16 +158,8 @@ namespace Sequencer {
 
     ScopedState wait_state(wait_state_manager, Sequencer::SEQ_WAIT_FINEACQUIRE);
 
-    // Pass the database target (goal) coordinates so slicecamd logs them with the per-run
-    // ACAM->slit residual for the geometry model. The goal is the INPUT to the SCOPE->ACAM
-    // transform; the telescope's actual RA/DEC is the output and drifts as fine-acquire
-    // applies offsets, so it cannot be used to fit the geometry.
-    const std::string startcmd = SLICECAMD_FINEACQUIRE + " start goal "
-        + std::to_string( radec_to_decimal( this->target.ra_hms ) * TO_DEGREES ) + " "
-        + std::to_string( radec_to_decimal( this->target.dec_dms ) );
-
     std::string reply;
-    if (this->slicecamd.command( startcmd, reply ) != NO_ERROR
+    if (this->slicecamd.command( SLICECAMD_FINEACQUIRE+" start", reply ) != NO_ERROR
          || reply.find("DONE") == std::string::npos ) {
       logwrite( function, "ERROR starting slicecam fine acquisition: no confirmation (reply=\""+reply+"\")" );
       return ERROR;
