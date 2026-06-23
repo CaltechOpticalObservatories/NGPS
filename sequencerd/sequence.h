@@ -449,8 +449,15 @@ namespace Sequencer {
       std::string last_target;
       mysqlx::string last_ra_hms;
       mysqlx::string last_dec_dms;
-      mysqlx::string last_acquire_ra_hms;   ///< coords of the last target ACQUIRED (repeat-target skip)
-      mysqlx::string last_acquire_dec_dms;  ///< coords of the last target ACQUIRED (repeat-target skip)
+      // Identity of the last target ACQUIRED, used to skip re-acquisition only on a
+      // true repeat. Includes the science offsets and slit angle: two list entries can
+      // share RA/DEC but differ in offset/angle (e.g. one offset star -> several science
+      // targets) -- those are NOT the same target and must be fully re-acquired.
+      mysqlx::string last_acquire_ra_hms;
+      mysqlx::string last_acquire_dec_dms;
+      double last_acquire_offset_ra{0.0};
+      double last_acquire_offset_dec{0.0};
+      double last_acquire_slitangle{0.0};
 
       std::string tcs_which;          ///< configured TCS
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown

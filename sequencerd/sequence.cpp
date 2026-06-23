@@ -744,16 +744,22 @@ namespace Sequencer {
         break;
       }
 
-      // Detect a repeat of the same target: same coordinates as the last target we
-      // acquired. On a repeat the telescope was not moved (move_to_target skips it),
-      // acquisition was already performed, and the science offset was already applied,
-      // so skip ACAM acquire, fine acquire, and the science re-offset, and let the
-      // observer continue straight to the exposure. Guiding state is intentionally NOT
-      // consulted (left to the observer). Use "clearlasttarget" to force re-acquisition.
+      // Detect a repeat of the same target: same coordinates AND same science offsets
+      // AND same slit angle as the last target we acquired. (Two list entries can share
+      // RA/DEC but differ in offset/angle -- e.g. one offset star used to reach several
+      // science targets -- and those are NOT the same target; they must be fully
+      // re-acquired.) On a true repeat the telescope was not moved (move_to_target skips
+      // it), acquisition was already performed, and the science offset was already
+      // applied, so skip ACAM acquire, fine acquire, and the science re-offset, and let
+      // the observer continue straight to the exposure. Guiding state is intentionally
+      // NOT consulted (left to the observer). Use "clearlasttarget" to force re-acquisition.
       //
       const bool repeat_target = ( !this->target.ra_hms.empty() &&
-                                   this->target.ra_hms  == this->last_acquire_ra_hms &&
-                                   this->target.dec_dms == this->last_acquire_dec_dms );
+                                   this->target.ra_hms     == this->last_acquire_ra_hms  &&
+                                   this->target.dec_dms    == this->last_acquire_dec_dms &&
+                                   this->target.offset_ra  == this->last_acquire_offset_ra  &&
+                                   this->target.offset_dec == this->last_acquire_offset_dec &&
+                                   this->target.slitangle  == this->last_acquire_slitangle );
 
       // If not a calibration target then acquire, first acam then slicecam
       //
@@ -792,10 +798,13 @@ namespace Sequencer {
           }
         }
 
-        // remember the target we just acquired so a repeat (GO on the same
-        // target) skips re-acquisition
-        this->last_acquire_ra_hms  = this->target.ra_hms;
-        this->last_acquire_dec_dms = this->target.dec_dms;
+        // remember the target we just acquired (coords + science offsets + slit angle)
+        // so a repeat (GO on the same target) skips re-acquisition
+        this->last_acquire_ra_hms   = this->target.ra_hms;
+        this->last_acquire_dec_dms  = this->target.dec_dms;
+        this->last_acquire_offset_ra  = this->target.offset_ra;
+        this->last_acquire_offset_dec = this->target.offset_dec;
+        this->last_acquire_slitangle  = this->target.slitangle;
       }
 
       // Repeat of the same target: skip all re-acquisition and just wait for the
