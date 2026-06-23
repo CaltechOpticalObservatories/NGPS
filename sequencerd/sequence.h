@@ -449,6 +449,8 @@ namespace Sequencer {
       std::string last_target;
       mysqlx::string last_ra_hms;
       mysqlx::string last_dec_dms;
+      mysqlx::string last_acquire_ra_hms;   ///< coords of the last target ACQUIRED (repeat-target skip)
+      mysqlx::string last_acquire_dec_dms;  ///< coords of the last target ACQUIRED (repeat-target skip)
 
       std::string tcs_which;          ///< configured TCS
       std::string tcs_name;           ///< name of TCS set on tcs initialization and shutdown

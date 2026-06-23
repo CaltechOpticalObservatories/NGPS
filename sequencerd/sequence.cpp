@@ -744,9 +744,20 @@ namespace Sequencer {
         break;
       }
 
+      // Detect a repeat of the same target: same coordinates as the last target we
+      // acquired. On a repeat the telescope was not moved (move_to_target skips it),
+      // acquisition was already performed, and the science offset was already applied,
+      // so skip ACAM acquire, fine acquire, and the science re-offset, and let the
+      // observer continue straight to the exposure. Guiding state is intentionally NOT
+      // consulted (left to the observer). Use "clearlasttarget" to force re-acquisition.
+      //
+      const bool repeat_target = ( !this->target.ra_hms.empty() &&
+                                   this->target.ra_hms  == this->last_acquire_ra_hms &&
+                                   this->target.dec_dms == this->last_acquire_dec_dms );
+
       // If not a calibration target then acquire, first acam then slicecam
       //
-      if ( !this->target.iscal ) {
+      if ( !this->target.iscal && !repeat_target ) {
 
         // during acam acquisition, enable slicecam autoexpose to try to get the
         // exposure time set before fine acquisition starts.
@@ -780,11 +791,27 @@ namespace Sequencer {
             return;
           }
         }
+
+        // remember the target we just acquired so a repeat (GO on the same
+        // target) skips re-acquisition
+        this->last_acquire_ra_hms  = this->target.ra_hms;
+        this->last_acquire_dec_dms = this->target.dec_dms;
+      }
+
+      // Repeat of the same target: skip all re-acquisition and just wait for the
+      // observer to continue (or cancel) before exposing.
+      if ( !this->target.iscal && repeat_target ) {
+        this->broadcast.notice( function, "repeat of same target -- skipping re-acquisition" );
+        if ( this->wait_for_user()==ABORT ) {
+          this->broadcast.notice( function, "cancelled" );
+          return;
+        }
       }
 
       if ( !this->target.iscal ) {
-        // send offsets only on fineacquire, otherwise user needs to fix things
-        if ( this->is_fineacquire_locked.load() &&
+        // send offsets only on fineacquire, otherwise user needs to fix things.
+        // skip on a repeat: the science offset was already applied last time.
+        if ( !repeat_target && this->is_fineacquire_locked.load() &&
             this->target_offset() == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
@@ -4788,6 +4815,8 @@ namespace Sequencer {
     //
     if ( testname == "clearlasttarget" ) {
       this->last_target="";
+      this->last_acquire_ra_hms  = mysqlx::string{};  // force a fresh acquisition on the same target
+      this->last_acquire_dec_dms = mysqlx::string{};
       error=NO_ERROR;
     }
     else
