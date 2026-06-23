@@ -360,6 +360,7 @@ namespace Acam {
 
       std::vector<double> ra_offs, dec_offs;          ///< lists of offsets for median filtering
       std::vector<std::chrono::steady_clock::time_point> time_offs;
+      std::mutex offset_params_mtx;                   ///< guards ra_offs/dec_offs/time_offs (median_filter vs reset_offset_params)
       std::chrono::seconds::rep tcs_offset_period;    ///< period at which to send offsets while guiding
 
       struct coords_t {
@@ -379,6 +380,7 @@ namespace Acam {
 
       inline std::chrono::seconds::rep get_tcs_offset_period() { return this->tcs_offset_period; }
       inline void reset_offset_params(std::chrono::seconds::rep val) {
+        std::lock_guard<std::mutex> lock(this->offset_params_mtx);  // P2: serialize vs median_filter
         this->ra_offs.clear();
         this->dec_offs.clear();
         this->time_offs.clear();

@@ -3654,6 +3654,7 @@ logwrite( function, message.str() );
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
+        this->allow_large_offset.store(false);  // deliberate-offset allowance consumed even when rejected
 
         // Match found but failure to send an offset is considered an attempt
         // so attempts is incremented.
@@ -3804,6 +3805,7 @@ logwrite( function, message.str() );
    *
    */
   bool Target::median_filter( double &ra_off, double &dec_off ) {
+    std::lock_guard<std::mutex> lock(this->offset_params_mtx);  // P2: serialize vs reset_offset_params
 
     if ( this->tcs_offset_period == 1 ) return true;
 
@@ -3839,7 +3841,10 @@ logwrite( function, message.str() );
       dec_off = this->dec_offs[n/2];
     }
 
-    this->reset_offset_params();
+    // accumulators consumed; clear inline (reset_offset_params would re-lock the non-recursive mutex)
+    this->ra_offs.clear();
+    this->dec_offs.clear();
+    this->time_offs.clear();
 
     return true;
   }
@@ -5490,10 +5495,11 @@ logwrite( function, message.str() );
     //
     if ( args == "?" ) {
       retstring = ACAMD_OFFSETGOAL;
-      retstring.append( " [ <dRA> <dDEC> ]\n" );
+      retstring.append( " [ <dRA> <dDEC> [ fineguiding ] ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
       retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
+      retstring.append( "  'fineguiding' marks a slicecam fine-guiding correction (keeps the 60\" cap).\n" );
       return HELP;
     }
 
@@ -5502,12 +5508,19 @@ logwrite( function, message.str() );
     double dRA=NAN, dDEC=NAN;
     if (!(iss >> dRA >> dDEC) ||
         (std::isnan(dRA) || std::isnan(dDEC)) ) {
-      logwrite( function, "ERROR expected <dRA> <dDEC>" );
+      logwrite( function, "ERROR expected <dRA> <dDEC> [ fineguiding ]" );
       retstring="invalid_argument";
       return ERROR;
     }
     this->target.dRA  = dRA;
     this->target.dDEC = dDEC;
+
+    // optional fineguiding flag: marks a slicecam fine-guiding correction, which
+    // must stay within the ordinary 60" guiding cap. Its absence means a
+    // deliberate goal offset (put-on-slit, offset-star, end-of-fineacquire,
+    // pyGUI 'Offset') that may legitimately be larger.
+    std::string flag;
+    const bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
     // Apply any dRA, dDEC goal offsets from the "put on slit" action to
     // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -5533,8 +5546,8 @@ logwrite( function, message.str() );
     // allowance is one-shot: do_acquire consumes it when the offset is sent.
     //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      this->target.allow_large_offset.store(true);
       this->target.reset_offset_params();
+      if ( !is_fineguiding ) this->target.allow_large_offset.store(true);
     }
 
     this->publish_status();
