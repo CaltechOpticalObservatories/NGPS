@@ -875,10 +875,10 @@ namespace Slicecam {
     std::lock_guard<std::mutex> lock(snapshot_mtx);
     snapshot_status[Topic::ACAMD]=true;
     }
-    // set is_acam_guiding flag
-    bool acquired = false;
-    Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
-    this->is_acam_guiding.store(acquired, std::memory_order_relaxed);
+    // set is_acam_guiding from ACAM's acquire mode
+    std::string mode;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::ACQUIRE_MODE, mode );
+    this->is_acam_guiding.store(mode=="guiding", std::memory_order_relaxed);
 
     // acam's publish time
     int64_t pubtime=0;
