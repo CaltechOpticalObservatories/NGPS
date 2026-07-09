@@ -133,6 +133,10 @@ namespace Key {
     inline const std::string DOMEAZ   = "DOMEAZ";
     inline const std::string DOMESHUT = "DOMESHUT";
     inline const std::string TELFOCUS = "TELFOCUS";
+    inline const std::string LAMP_LO  = "LAMP_LO";
+    inline const std::string LAMP_HI  = "LAMP_HI";
+    inline const std::string LAMP_ARC = "LAMP_ARC";
+    inline const std::string LAMP_ULTRA= "LAMP_ULTRA";
   }
 
   namespace Calibd {

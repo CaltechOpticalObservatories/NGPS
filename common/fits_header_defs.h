@@ -103,6 +103,10 @@ namespace FitsHeaderKeys {
     { Key::Tcsd::DOMEAZ.c_str(),   "", "TCS reported dome azimuth", "FLOAT" },
     { Key::Tcsd::DOMESHUT.c_str(), "", "dome shutters" },
     { Key::Tcsd::TELFOCUS.c_str(), "", "TCS reported telescope focus position in mm", "FLOAT" }
+    { Key::Tcsd::LAMP_LO.c_str(),  "LAMP_LO", "TCS LO lamp 0=off 1=on", "INT" }
+    { Key::Tcsd::LAMP_HI.c_str(),  "LAMP_HI", "TCS HI lamp 0=off 1=on", "INT" }
+    { Key::Tcsd::LAMP_ARC.c_str(), "LAMP_ARC", "TCS He-arc lamp 0=off 1=on", "INT" }
+    { Key::Tcsd::LAMP_ULTRA.c_str(), "LAMP_ULT", "TCS ultra-high lamp 0=off 1=on", "INT" }
   };
 
   const Extension ThermalInfoKeys[] = {

@@ -65,6 +65,10 @@ namespace TCS {
     jmessage_out["DOMESHUT"]        = this->tcs_info.domeshutters==1?"open":"closed";
     jmessage_out["TELFOCUS"]        = this->tcs_info.focus;
     jmessage_out[Key::Tcsd::AIRMASS] = this->tcs_info.airmass;
+
+    for (const auto &[name,info] : this->tcs_info.lampinfo) {    // TCS lamp states
+      jmessage_out[info.key] = info.state;
+    }
     }
 
     // broadcast motion status if it changed
@@ -188,6 +192,10 @@ namespace TCS {
     error |= this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE );
     std::replace( retstring.begin(), retstring.end(), '\n', ',');
     this->tcs_info.motion = retstring;
+
+    error |= this->send_command( "LAMPS?", retstring, TCS::FAST_RESPONSE );
+    std::replace( retstring.begin(), retstring.end(), '\n', ',');
+    this->tcs_info.parse_lamps( retstring );
 
     return error;
   }
@@ -414,7 +422,6 @@ namespace TCS {
    */
   long Interface::isopen( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::isopen";
-    std::stringstream message;
 
     // Help
     //
@@ -1269,7 +1276,6 @@ namespace TCS {
    */
   long Interface::get_motion( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_motion";
-    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -1390,8 +1396,6 @@ namespace TCS {
    */
   long Interface::coords( std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::coords";
-    std::string retcode;
-    std::stringstream message;
 
     // Help
     //
@@ -1423,6 +1427,81 @@ namespace TCS {
     return error;
   }
   /***** TCS::Interface::coords ***********************************************/
+
+
+  /***** TCS::Interface::lamp *************************************************/
+  /**
+   * @brief      dome lamp control
+   * @details    TCS-native command is "NPS <cmd> <lamp>" where
+   *             <cmd>  is: 0=off, 1=on, 2=state
+   *             <lamp> is: 1=low, 2=high, 3=He arc, 4=new high
+   * @param[in]  args       expect "<lamp> [ on | off ]"
+   * @param[out] retstring
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::lamp( std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::lamp";
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = TCSD_LAMP;
+      retstring.append( " <lamp> [ on | off ]\n" );
+      retstring.append( "  where <lamp> is one of { " );
+      for (const auto &[name,info] : this->tcs_info.lampinfo) {
+        retstring.append( name );
+        retstring.append( " " );
+      }
+      retstring.append( "}" );
+      retstring.append( "} and is case-insensitive.\n" );
+      retstring.append( "  The optional { on off } will turn the designated lamp on or off.\n" );
+      retstring.append( "  No argument will return the lamp state.\n" );
+      return HELP;
+    }
+
+    // check arguments. default to status and unspecified lamp.
+    //
+    std::vector<std::string> tokens;
+    int ntok = Tokenize( args, tokens, " " );
+
+    std::string state="status";  // optional
+    std::string which="";        // required
+
+    if ( ntok < 1 || ntok > 2 ) { retstring="invalid_arguments"; return ERROR; }
+    if ( ntok > 1 ) state = tokens.at(1);
+    if ( ntok > 0 ) which = tokens.at(0);
+
+    make_uppercase( which );
+
+    // default req_state reads status and arg can override this
+    //
+    int req_state = 2;  // status
+
+    if ( caseCompareString( state, "on" ) )  req_state = 1;
+    else
+    if ( caseCompareString( state, "off" ) ) req_state = 0;
+
+    // no default lamp, must be specified
+    //
+    auto lamploc = this->tcs_info.lampinfo.find(which);
+    if (lamploc==this->tcs_info.lampinfo.end()) {
+      logwrite(function, "ERROR unknown lamp '"+which+"'");
+      retstring = "unknown_lamp";
+      return ERROR;
+    }
+
+    size_t req_lamp = this->tcs_info.lampinfo[which].num;
+
+    std::ostringstream cmd;
+    cmd << "LAMP " << req_state << " " << req_lamp;
+
+    std::string reply;
+    long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    return error;
+  }
+  /***** TCS::Interface::lamp *************************************************/
 
 
   /***** TCS::Interface::pt_offset ********************************************/
@@ -1526,8 +1605,6 @@ namespace TCS {
    */
   long Interface::zero_offsets( const std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::zero_offsets";
-    std::string retcode;
-    std::stringstream message;
 
     // Help
     //
@@ -1649,6 +1726,8 @@ namespace TCS {
     }
     else                                                // These commands reply with information (not a code)...
     if ( cmd == "?NAME"        ||
+         cmd == "LAMPS?"       ||
+         cmd == "?PARALLACTIC" ||
          cmd == "?PARALLACTIC" ||
          cmd == "?WEATHER"     ||
          cmd == "RAWDEC"       ||
@@ -1800,6 +1879,11 @@ namespace TCS {
 
 
   /***** TCS::TcsInfo::parse_pa ***********************************************/
+  /**
+   * @brief      extract parallactic angle from string and store it in the class
+   * @param[in]  input  "PARALLACTIC = xx.xx"
+   *
+   */
   void TcsInfo::parse_pa( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_pa");
 
@@ -1825,6 +1909,11 @@ namespace TCS {
 
 
   /***** TCS::TcsInfo::parse_weather ******************************************/
+  /**
+   * @brief      extract values from "?WEATHER" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_weather( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
@@ -1869,8 +1958,15 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_weather ******************************************/
 
 
+  /***** TCS::TcsInfo::parse_reqstat ******************************************/
+  /**
+   * @brief      extract values from "REQSTAT" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_reqstat( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
@@ -1915,7 +2011,15 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_reqstat ******************************************/
 
+
+  /***** TCS::TcsInfo::parse_reqpos *******************************************/
+  /**
+   * @brief      extract values from "REQPOS" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_reqpos( std::string &input ) {
     const std::string function="TCS::TcsInfo::parse_weather";
     std::stringstream message;
@@ -1959,5 +2063,49 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_reqpos *******************************************/
 
+
+  /***** TCS::TcsInfo::parse_lamps ********************************************/
+  /**
+   * @brief      extract values from "LAMPS?" command and store in TcsInfo class
+   * @details    TCS replies with #,#,#,# where #={0 1} to indicate the state of
+   *             lamps 1,2,3,4
+   * @param[in]  input
+   *
+   */
+  void TcsInfo::parse_lamps( std::string &input ) {
+    const std::string function="TCS::TcsInfo::parse_lamps";
+    std::stringstream message;
+
+    // input string is expected to be: #,#,#,# DONE
+    // Remove "DONE"
+    //
+    size_t pos = input.find("DONE");
+    if ( pos != std::string::npos ) input.erase( pos, 4 );
+
+    // Tokenize on the comma "," and expect 4 tokens
+    //
+    std::vector<std::string> tokens;
+    Tokenize( input, tokens, "," );
+
+    if (tokens.size() != 4) {
+      logwrite(function, "ERROR expected 4 tokens but got '"+input+"'");
+      return;
+    }
+
+    // lampinfo map indexed by name but TCS response held by tokens is indexed by number.
+    // This is not particularly efficient but there are only four to loop through.
+    //
+    for (auto &[name,info] : this->lampinfo) {
+      for (size_t tok=0; tok<tokens.size(); tok++) {  // tokens index is 0-based
+        if (info.num==(tok+1)) {                   // lamp nums are 1-based
+          try { info.state = std::stoi(tokens[tok]); }
+          catch(...) { logwrite(function, "ERROR parsing '"+input+"'"); }
+          break;
+        }
+      }
+    }
+  }
+  /***** TCS::TcsInfo::parse_lamps ********************************************/
 }
