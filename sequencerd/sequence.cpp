@@ -2424,7 +2424,7 @@ namespace Sequencer {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << TCSD_LAMP << lamp << " " << (state==1?"on":"off");
       if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
+        logwrite(function, "ERROR "+cmd.str());
         throw std::runtime_error("setting TCS "+cmd.str());
       }
     }
