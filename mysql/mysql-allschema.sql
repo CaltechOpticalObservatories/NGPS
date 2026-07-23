@@ -775,7 +775,7 @@ CREATE TABLE `completed_obs` (
   `OTMFLAG` varchar(20) DEFAULT NULL COMMENT 'OTM flag codes at time of exposure',
   PRIMARY KEY (`LOG_ID`,`NAME`),
   UNIQUE KEY `LOG_ID_UNIQUE` (`LOG_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=101 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=4181 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -787,7 +787,7 @@ DROP TABLE IF EXISTS `owner`;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `owner` (
   `OWNER_ID` varchar(64) NOT NULL,
-  `PASSWORD` varchar(64) DEFAULT NULL,
+  `PASSWORD` varchar(128) DEFAULT NULL,
   `EMAIL` varchar(128) DEFAULT NULL,
   PRIMARY KEY (`OWNER_ID`),
   UNIQUE KEY `OWNER_ID_UNIQUE` (`OWNER_ID`)
@@ -811,7 +811,7 @@ CREATE TABLE `target_sets` (
   `LAST_UPDATE_TIMESTAMP` timestamp(1) NULL DEFAULT NULL,
   PRIMARY KEY (`SET_ID`),
   UNIQUE KEY `set_id_UNIQUE` (`SET_ID`)
-) ENGINE=InnoDB AUTO_INCREMENT=224 DEFAULT CHARSET=utf8mb3;
+) ENGINE=InnoDB AUTO_INCREMENT=1164 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -825,17 +825,18 @@ CREATE TABLE `targets` (
   `OBSERVATION_ID` int NOT NULL AUTO_INCREMENT,
   `SET_ID` int NOT NULL,
   `STATE` varchar(36) DEFAULT NULL,
-  `OBS_ORDER` int NOT NULL,
-  `TARGET_NUMBER` int NOT NULL,
-  `SEQUENCE_NUMBER` int NOT NULL,
+  `OBS_ORDER` int DEFAULT NULL,
+  `TARGET_NUMBER` int DEFAULT NULL,
+  `SEQUENCE_NUMBER` int DEFAULT NULL,
   `NAME` varchar(128) NOT NULL,
   `RA` varchar(32) DEFAULT NULL,
   `DECL` varchar(32) DEFAULT NULL,
   `OFFSET_RA` double DEFAULT NULL,
   `OFFSET_DEC` double DEFAULT NULL,
-  `EXPTIME` varchar(32) NOT NULL,
-  `SLITWIDTH` varchar(32) NOT NULL,
+  `EXPTIME` varchar(32) NOT NULL DEFAULT '30',
+  `SLITWIDTH` varchar(32) NOT NULL DEFAULT '.5',
   `SLITOFFSET` double DEFAULT NULL,
+  `NEXP` int NOT NULL DEFAULT '1',
   `OBSMODE` varchar(32) DEFAULT NULL,
   `BINSPECT` int DEFAULT NULL,
   `BINSPAT` int DEFAULT NULL,
@@ -849,7 +850,7 @@ CREATE TABLE `targets` (
   `MAGFILTER` varchar(16) DEFAULT NULL,
   `SRCMODEL` varchar(128) DEFAULT NULL,
   `OTMexpt` double DEFAULT NULL,
-  `OTMslitwidth` double NOT NULL,
+  `OTMslitwidth` double DEFAULT NULL,
   `OTMcass` double DEFAULT NULL,
   `OTMairmass_start` double DEFAULT NULL,
   `OTMairmass_end` double DEFAULT NULL,
@@ -873,8 +874,9 @@ CREATE TABLE `targets` (
   `OWNER` varchar(64) DEFAULT NULL,
   `NOTBEFORE` timestamp NULL DEFAULT NULL,
   `POINTMODE` varchar(45) DEFAULT NULL,
-  PRIMARY KEY (`OBSERVATION_ID`,`OTMslitwidth`)
-) ENGINE=InnoDB AUTO_INCREMENT=4448 DEFAULT CHARSET=utf8mb3;
+  `PRIORITY` int NOT NULL DEFAULT '1',
+  PRIMARY KEY (`OBSERVATION_ID`)
+) ENGINE=InnoDB AUTO_INCREMENT=95368 DEFAULT CHARSET=utf8mb3;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -977,7 +979,7 @@ CREATE TABLE `acamd` (
   `DECsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM center (deg)',
   `ANGsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM position angle (deg)',
   `rms_arcsec` float DEFAULT NULL COMMENT 'RMS residuals of solver WCS fit (arcsec)',
-  `result` varchar(8) DEFAULT NULL COMMENT 'Result of astrometry solver (GOOD, NOISY, etc.)',
+  `result` varchar(16) DEFAULT NULL COMMENT 'Result of astrometry solver (GOOD, NOISY, etc.)',
   `matches` int DEFAULT NULL COMMENT 'Number of matches sources from solver',
   `seeing` float DEFAULT NULL COMMENT 'median seeing in ACAM field (arcsec)',
   `seeing_zen` float DEFAULT NULL COMMENT 'seeing extrapolated to zenith (arcsec)',
@@ -1159,4 +1161,4 @@ CREATE TABLE `thermald_old` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-10-30  9:37:59
+-- Dump completed on 2026-07-22 11:22:04
