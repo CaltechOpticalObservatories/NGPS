@@ -163,6 +163,14 @@ namespace Slicecam {
 
     // start the state machine
     this->fineacquire_state.reset();
+    this->fineacq_total_dra  = 0.0;   // reset per-run ACAM->slit residual accumulators
+    this->fineacq_total_ddec = 0.0;
+
+    // snapshot this run's goal (DB target) coords from the TARGETINFO published message; NAN if no target
+    // has been published (manual runs log nan). Frozen for the run via the is_fineacquire_running handoff.
+    this->fineacq_goal_ra  = this->targetinfo_ra_deg.load();
+    this->fineacq_goal_dec = this->targetinfo_dec_deg.load();
+
     this->is_fineacquire_locked.store(false, std::memory_order_release);
     this->is_fineacquire_running.store(true, std::memory_order_release);
     this->is_autoexpose_running.store(false, std::memory_order_release);  // fineacquire supersedes auto-exposure
@@ -461,6 +469,25 @@ namespace Slicecam {
           << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
           << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
       logwrite( function, oss.str() );
+
+      // One structured per-run line for building an ACAM->slit geometric (flexure) model
+      // over time. fineacq_total_{dra,ddec} is the total correction applied this run = the
+      // ACAM->slit residual that acam-acquire left behind. We log it against the GOAL
+      // (database target) coordinates -- the INPUT to the SCOPE->ACAM transform -- plus the
+      // cassegrain angle. Altitude/hour-angle are derived offline from GOALRA/GOALDEC + this
+      // line's timestamp. We deliberately do NOT log the telescope's actual RA/DEC: that is
+      // the transform's OUTPUT and drifts as fine-acquire applies offsets, so it cannot be
+      // used to fit the geometry.
+      std::ostringstream acqmodel;
+      acqmodel << "[ACQMODEL] acam2slit dRA=" << this->fineacq_total_dra
+               << " dDEC="     << this->fineacq_total_ddec << " arcsec"
+               << " GOALRA="   << this->fineacq_goal_ra
+               << " GOALDEC="  << this->fineacq_goal_dec
+               << " CASANGLE=" << this->telem.angle_scope
+               << " n="        << n
+               << " cam="      << which;
+      logwrite( function, acqmodel.str() );
+
       this->is_fineacquire_locked.store( true,  std::memory_order_release );
       this->is_fineacquire_running.store( false,  std::memory_order_release );
       this->fineacquire_state.reset();
@@ -541,6 +568,11 @@ namespace Slicecam {
       this->publish_status();
       return;
     }
+
+    // accumulate the applied correction (arcsec). Summed over the run this is the
+    // total ACAM->slit residual that acam-acquire left behind (the [ACQMODEL] line).
+    this->fineacq_total_dra  += cmd_dra  * 3600.0;
+    this->fineacq_total_ddec += cmd_ddec * 3600.0;
 
     // reset samples and discard settle_count frames for telescope settling
     this->fineacquire_state.reset();
@@ -958,6 +990,32 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  telem.airmass );
   }
   /***** Slicecam::Interface::handletopic_tcsd ********************************/
+
+
+  /***** Slicecam::Interface::handletopic_targetinfo **************************/
+  /**
+   * @brief      what to do when the topic is Topic::TARGETINFO
+   * @details    This receives target RA/DEC and stores them in the class
+   *             as decimal degrees.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    std::string ra_hms, dec_dms;
+
+    Common::extract_telemetry_value( jmessage, Key::TargetInfo::RA, ra_hms );
+    Common::extract_telemetry_value( jmessage, Key::TargetInfo::DECL, dec_dms );
+
+    try {
+      this->targetinfo_ra_deg.store( radec_to_decimal( ra_hms ) * TO_DEGREES );
+      this->targetinfo_dec_deg.store( radec_to_decimal( dec_dms ) );
+    }
+    catch( const std::exception &e ) {
+      this->targetinfo_ra_deg.store(NAN);
+      this->targetinfo_dec_deg.store(NAN);
+    }
+  }
+  /***** Slicecam::Interface::handletopic_targetinfo **************************/
 
 
   /***** Slicecam::Interface::publish_status **********************************/
@@ -2187,6 +2245,7 @@ namespace Slicecam {
 
     this->is_fineacquire_running.store( false, std::memory_order_release );
     this->is_fineacquire_locked.store(  false, std::memory_order_release );
+
     this->publish_status();
     this->cv.notify_all();  // send notification that the loop has stopped
 
