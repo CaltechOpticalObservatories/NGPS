@@ -342,6 +342,7 @@ namespace Sequencer {
           tcs_settle_stable(1),
           tcs_domeazi_ready(1),
           tcs_preauth_time(0),
+          offset_settle_sec(3),
           do_once(false),
           tcs_which("real"),
           tcs_name("offline"),
@@ -407,6 +408,7 @@ namespace Sequencer {
       double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
+      double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
