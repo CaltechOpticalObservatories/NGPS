@@ -32,7 +32,7 @@ namespace Flexure {
     // I don't want to prevent the system from working with a subset of controllers,
     // but the user should be warned, in case it wasn't intentional.
     //
-    if ( this->numdev != 2 ) {
+    if ( this->numdev != 4 ) {
       message.str(""); message << "WARNING: " << this->numdev << " PI motor controller"
                                << ( this->numdev == 1 ? "" : "s" ) << " defined! (expected 4)";
       logwrite( function, message.str() );
@@ -79,11 +79,11 @@ namespace Flexure {
     this->tcs_snapshot_status = true;
     }
     // extract and store values in the class
-    double zenangle, casangle, pa;
+    double zenangle, casangle, parallactic;
     Common::extract_telemetry_value(jmessage, "CASANGLE", casangle);
     Common::extract_telemetry_value(jmessage, "ZENANGLE", zenangle);
-    Common::extract_telemetry_value(jmessage, "PA", pa);
-    this->tcs_info.store(zenangle, casangle, pa);
+    Common::extract_telemetry_value(jmessage, "PA", parallactic);
+    this->tcs_info.store(zenangle, casangle, parallactic);
   }
   /***** Flexure::Interface::handletopic_tcsd *********************************/
 
@@ -717,11 +717,11 @@ namespace Flexure {
       }
       else
       if ( messagetype == "tcsinfo" ) {
-        double casangle=NAN, alt=NAN, pa=NAN;
+        double casangle=NAN, alt=NAN, parallactic=NAN;
         Common::extract_telemetry_value( message_in, "CASANGLE", casangle );
         Common::extract_telemetry_value( message_in, "ALT", alt );
-        Common::extract_telemetry_value( message_in, "PA", pa );
-        message.str(""); message << "casangle=" << casangle << " alt=" << alt << " PA=" << pa;
+        Common::extract_telemetry_value( message_in, "PA", parallactic );
+        message.str(""); message << "casangle=" << casangle << " alt=" << alt << " PA=" << parallactic;
         logwrite( function, message.str() );
       }
       else
@@ -767,7 +767,11 @@ namespace Flexure {
    *
    * Valid test names are:
    *   motormap
-   *   posmap
+   *   shift
+   *   comp
+   *   tcsinfo
+   *   ishift
+   *   icomp
    *
    */
   long Interface::test( std::string args, std::string &retstring ) {
@@ -790,12 +794,11 @@ namespace Flexure {
     if ( testname == "?" || testname == "help" ) {
       retstring.clear();
       retstring.append( "  motormap  return definition of motormap\n" );
-      retstring.append( "  posmap    return definition of posmap\n" );
-      retstring.append( "  shift     calculate shift(chan,axis) of spectrum on detector\n" );
-      retstring.append( "  comp      calculates adjustments needed to compensate for shift\n" );
+      retstring.append( "  shift     calculate shift(chan,axis) of spectrum on detector using live TCS info\n" );
+      retstring.append( "  comp      calculates adjustments needed to compensate for shift using live TCS info\n" );
       retstring.append( "  tcsinfo   print current tcsinfo\n" );
-      retstring.append( "  ishift    calculate shift for <zenangle> <pa> <casangle> <chan> <axis>\n" );
-      retstring.append( "  icomp     calculate adjustments for <zenangle> <pa> <casangle> <chan>\n" );
+      retstring.append( "  ishift    calculate shift for <zenangle> <parallactic> <casangle> <chan> <axis>\n" );
+      retstring.append( "  icomp     calculate adjustments for <zenangle> <parallactic> <casangle> <chan>\n" );
       return HELP;
     }
     else
@@ -873,7 +876,7 @@ namespace Flexure {
       message.str("");
       message << "zenangle        = " << this->tcs_info.get_zenangle() << "\n"
               << "casangle        = " << this->tcs_info.get_casangle() << "\n"
-              << "pa              = " << this->tcs_info.get_pa() << "\n"
+              << "parallactic     = " << this->tcs_info.get_parallactic() << "\n"
               << "equivalent_cass = " << this->tcs_info.get_equivalentcass() << "\n";
       retstring=message.str();
     }
@@ -884,17 +887,17 @@ namespace Flexure {
     //
     if (testname=="ishift") {
       if (tokens.size()!=6) {
-        retstring="expected <zenangle> <casangle> <pa> <chan> <axis>";
+        retstring="expected <zenangle> <casangle> <parallactic> <chan> <axis>";
         logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
       try {
-        double zenangle = std::stod(tokens[1]);
-        double casangle = std::stod(tokens[2]);
-        double pa       = std::stod(tokens[3]);
+        double zenangle    = std::stod(tokens[1]);
+        double casangle    = std::stod(tokens[2]);
+        double parallactic = std::stod(tokens[3]);
         {
         std::lock_guard<std::mutex> lock(snapshot_mutex);
-        this->tcs_info.store(zenangle, casangle, pa);
+        this->tcs_info.store(zenangle, casangle, parallactic);
         message.str("");
         message << this->compensator.calculate_shift({tokens[4], tokens[5]});
         }
@@ -912,18 +915,18 @@ namespace Flexure {
     //
     if (testname=="icomp") {
       if (tokens.size()!=5) {
-        retstring="expected <zenangle> <casangle> <pa> <chan>";
+        retstring="expected <zenangle> <casangle> <parallactic> <chan>";
         logwrite(function, "ERROR "+retstring);
         return ERROR;
       }
       try {
-        double zenangle = std::stod(tokens[1]);
-        double casangle = std::stod(tokens[2]);
-        double pa       = std::stod(tokens[3]);
+        double zenangle    = std::stod(tokens[1]);
+        double casangle    = std::stod(tokens[2]);
+        double parallactic = std::stod(tokens[3]);
         std::pair<double,double> delta;
         {
         std::lock_guard<std::mutex> lock(snapshot_mutex);
-        this->tcs_info.store(zenangle, casangle, pa);
+        this->tcs_info.store(zenangle, casangle, parallactic);
         this->compensator.calculate_compensation(tokens[4], delta);
         message.str(""); message << "delta X=" << delta.first << " Y=" << delta.second;
         }

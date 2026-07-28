@@ -16,6 +16,9 @@ namespace Flexure {
   constexpr double PI = 3.14159265358979323846;
   constexpr double DEGTORAD = PI/180.0;
 
+  constexpr double ZENMIN =  5.0;  ///< no compensation below this minimum zenangle
+  constexpr double ZENMAX = 60.0;  ///< cap zenangle at this maximum value
+
   // PI actuator axis numbers
   //
   constexpr int AXIS_Z = 1;  ///< piston

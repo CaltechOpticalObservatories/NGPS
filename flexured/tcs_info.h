@@ -21,7 +21,7 @@ namespace Flexure {
     private:
       double zenangle;
       double casangle;
-      double pa;
+      double parallactic;
       double equivalentcass;
 
       bool is_timeset;
@@ -30,11 +30,11 @@ namespace Flexure {
     public:
 
       TcsInfo()
-        : zenangle(0), casangle(0), pa(0), equivalentcass(0), is_timeset(false) { }
+        : zenangle(0), casangle(0), parallactic(0), equivalentcass(0), is_timeset(false) { }
 
       double get_zenangle()       { return this->zenangle; }
       double get_casangle()       { return this->casangle; }
-      double get_pa()             { return this->pa;       }
+      double get_parallactic()    { return this->parallactic;       }
       double get_equivalentcass() { return this->equivalentcass; }
 
       /***** Flexure::TcsInfo:is_older_than ***********************************/
@@ -64,13 +64,13 @@ namespace Flexure {
        */
       void store(const double &_zenangle,
                  const double &_casangle,
-                 const double &_pa,
+                 const double &_parallactic,
                  const std::optional<double> &_equivalentcass=std::nullopt) {
 
         // store the values received
-        this->zenangle = _zenangle;
-        this->casangle = _casangle;
-        this->pa       = _pa;
+        this->zenangle    = _zenangle;
+        this->casangle    = _casangle;
+        this->parallactic = _parallactic;
 
         // if equivalentcass provided then use it
         if (_equivalentcass) {
@@ -78,7 +78,7 @@ namespace Flexure {
         }
         // otherwise calculate it
         else {
-          double angle = this->casangle - this->pa;
+          double angle = this->casangle - this->parallactic;
           if (angle < -180.0) angle += 360.0;
           if (angle >  180.0) angle -= 360.0;
           this->equivalentcass = angle;
