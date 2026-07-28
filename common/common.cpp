@@ -7,34 +7,85 @@
 
 #include "common.h"
 
+#include <iomanip>
+#include <random>
+
 namespace Common {
 
-  /***** Common::collect_telemetry ********************************************/
+  /***** Common::Broadcaster::emit ********************************************/
   /**
-   * @brief      send the TELEMREQUEST command to daemon to get telemetry
-   * @param[in]  provider   pair contains <"provider", port>
-   * @param[out] retstring  serialized string of json telemetry message
+   * @brief      logs a narrative message and publishes it on Topic::BROADCAST
+   * @param[in]  function  name of caller (used for log line)
+   * @param[in]  severity  one of Severity::NOTICE, Severity::WARNING, Severity::ERROR
+   * @param[in]  message   operator-facing narrative text
+   * @details    Logs message via logwrite, then publishes a JSON payload
+   *             on Topic::BROADCAST if the publisher has been initialized.
    *
    */
-  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring) {
-    // Instantiate a client to communicate with each daemon,
-    // constructed with no name, newline termination on command writes,
-    // and JEOF termination on reply reads.
-    //
-    Common::DaemonClient jclient("", "\n", JEOF );
+  void Broadcaster::emit( const std::string &function,
+                          const std::string &severity,
+                          const std::string &message ) {
+    logwrite( function, severity+": "+message );
 
-    // Send the command TELEMREQUEST to each daemon and read back the reply into
-    // retstring, which will be the serialized JSON telemetry message.
-    //
-    jclient.set_name(provider.first);
-    jclient.set_port(provider.second);
-    jclient.connect();
-    jclient.command(TELEMREQUEST, retstring);
-    jclient.disconnect();
+    if ( ! this->publisher ) return;
 
-    return;
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE]              = this->source;
+    jmessage[Key::Broadcast::SEVERITY] = severity;
+    jmessage[Key::Broadcast::MESSAGE]  = message;
+
+    try {
+      this->publisher->publish( jmessage, Topic::BROADCAST );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( function, "ERROR publishing broadcast: "+std::string(e.what()) );
+    }
   }
-  /***** Common::collect_telemetry ********************************************/
+  /***** Common::Broadcaster::emit ********************************************/
+
+
+  /***** Common::extract_correlation_id ***************************************/
+  /**
+   * @brief      detect and strip a correlation ID prefix from an inter-daemon message
+   * @details    Recognizes the wire format "#cid:HHHHHHHH <payload>" where the ID
+   *             is exactly CID_HEX_LEN hex digits followed by a single space.
+   *             Tolerates upper- and lower-case hex on input. The function makes
+   *             no assumption about what follows the prefix and never modifies it.
+   *             If no valid prefix is present, payload_out is set to a copy of
+   *             input and id_out is left unchanged so callers may detect the
+   *             "no ID" case via the boolean return.
+   * @param[in]  input        full message as received from the wire
+   * @param[out] id_out       extracted ID on success; unchanged otherwise
+   * @param[out] payload_out  message with the prefix stripped on success; copy of input otherwise
+   * @return     true if a well-formed correlation ID prefix was found, false otherwise
+   *
+   */
+  bool extract_correlation_id( const std::string &input,
+                               std::string       &id_out,
+                               std::string       &payload_out ) {
+    if ( input.size() < CID_HEADER_LEN ) {
+      payload_out = input;
+      return false;
+    }
+    if ( input.compare( 0, CID_PREFIX.size(), CID_PREFIX ) != 0 ) {
+      payload_out = input;
+      return false;
+    }
+    for ( size_t i = CID_PREFIX.size(); i < CID_PREFIX.size() + CID_HEX_LEN; ++i ) {
+      if ( !std::isxdigit( static_cast<unsigned char>( input[i] ) ) ) {
+        payload_out = input;
+        return false;
+      }
+    }
+    if ( input[ CID_PREFIX.size() + CID_HEX_LEN ] != ' ' ) {
+      payload_out = input;
+      return false;
+    }
+    id_out      = input.substr( CID_PREFIX.size(), CID_HEX_LEN );
+    payload_out = input.substr( CID_HEADER_LEN );
+    return true;
+  }
+  /***** Common::extract_correlation_id ***************************************/
 
 
   /***** Common::Queue::enqueue ***********************************************/
@@ -509,9 +560,11 @@ namespace Common {
     // Do not wait for a reply.
     //
     if ( reply == "NOREPLY" ) {
-      message.str(""); message << "not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+      message.str(""); message << "[DEBUG] not waiting for reply and closing connection to " << this->name << " socket " << _sock.gethost()
                                << "/" << _sock.getport() << " on fd " << _sock.getfd();
       logwrite( function, message.str() );
+#endif
       _sock.Close();
       return( error );
     }
@@ -553,9 +606,11 @@ namespace Common {
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << _sock.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << _sock.gethost()
                              << "/" << _sock.getport() << " on fd " << _sock.getfd();
     logwrite( function, message.str() );
+#endif
     _sock.Close();
 
     // assign the response to the reply string, passed in by reference
@@ -570,6 +625,30 @@ namespace Common {
     return( error );
   }
   /***** Common::DaemonClient::async **************************************************/
+
+
+  namespace {
+    /***** generate_cid *******************************************************/
+    /**
+     * @brief      generate an 8-char lowercase-hex correlation ID
+     * @details    Uses a thread-local Mersenne Twister seeded once per thread
+     *             from std::random_device. Collisions are not security-sensitive
+     *             here; we only need IDs to differ between adjacent in-flight
+     *             commands so a stale reply can be detected. With 32 bits of
+     *             state per ID and at most one in-flight command per client,
+     *             accidental collisions are vanishingly rare.
+     * @return     8-character hex string (no prefix, no separator)
+     *
+     */
+    std::string generate_cid() {
+      thread_local std::mt19937 rng{ std::random_device{}() };
+      std::uniform_int_distribution<uint32_t> dist;
+      std::ostringstream oss;
+      oss << std::hex << std::setw( static_cast<int>( CID_HEX_LEN ) ) << std::setfill( '0' ) << dist( rng );
+      return oss.str();
+    }
+    /***** generate_cid *******************************************************/
+  }
 
 
   /***** Common::DaemonClient::send ***************************************************/
@@ -609,13 +688,21 @@ namespace Common {
     std::stringstream message;
     long ret;
 
-    std::unique_lock<std::mutex> lock( this->client_access );
+    std::unique_lock<std::recursive_mutex> lock( this->client_access );
 
+    // Auto-reconnect if the connection has dropped (peer hung up, idle
+    // timeout, etc.). The recursive mutex allows nested locking when
+    // this calls connect() under the same lock. Both command() callers
+    // and direct .send() callers benefit from this single-location fix.
+    //
     if ( ! this->socket.isconnected() ) {
-      message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to " << this->name
-                               << " because daemon is not connected";
-      logwrite( function, message.str() );
-      return ERROR;
+      if ( this->connect() != NO_ERROR ) {
+        message.str(""); message << "ERROR:cannot send \"" << strip_newline(command) << "\" to "
+                                 << this->name << ": reconnect failed";
+        logwrite( function, message.str() );
+        std::this_thread::sleep_for( std::chrono::milliseconds(100) );  // rate-limit retry storms
+        return ERROR;
+      }
     }
 
     if ( this->socket.getfd() < 1 ) {
@@ -624,6 +711,16 @@ namespace Common {
       logwrite( function, message.str() );
       return ERROR;
     }
+
+    // Generate a correlation ID for this command and prepend it as a wire-level
+    // prefix. The prefix sits ahead of any user payload and any line terminator
+    // so daemons can detect, strip, and echo it without disturbing dispatch.
+    // Receiving a reply that does not carry this exact ID indicates the reply
+    // is stale (e.g. arrived on a reconnected socket from before the drop) and
+    // must not be matched to this command.
+    //
+    const std::string cid = generate_cid();
+    command = CID_PREFIX + cid + " " + command;
 
     // Determine whether to use the override values or not
     // for this call only.
@@ -645,6 +742,34 @@ namespace Common {
       command += this->term_write;
     }
 
+    // Drain any stale reply that was buffered from a prior send whose reply was
+    // never read (e.g. a DONTWAIT send, or a send that timed out before the reply
+    // arrived and reconnected without draining).  Without this, the stale CID-tagged
+    // reply would be read as the response to the current command and cause a
+    // mismatch, propagating through every subsequent send until the socket is cycled.
+    //
+    // client_access mutex is held, so no concurrent sender touches this socket;
+    // and in the command/reply protocol daemons never push unsolicited TCP data.
+    //
+#ifdef LOGLEVEL_DEBUG
+    { std::ostringstream oss; oss << "[DEBUG] send pre-drain: name=" << this->name
+        << " isconnected=" << this->socket.isconnected() << " fd=" << this->socket.getfd();
+      logwrite( function, oss.str() ); }
+#endif
+    {
+    std::string discard;
+    while ( this->socket.Poll(0) > 0 ) {
+      ssize_t rd = this->socket.Read( discard, this->term_read );
+#ifdef LOGLEVEL_DEBUG
+      { std::ostringstream oss; oss << "[DEBUG] drain Read=" << rd << " fd=" << this->socket.getfd();
+        logwrite( function, oss.str() ); }
+#endif
+      if ( rd <= 0 ) break;
+      message.str(""); message << "drained stale buffered reply from " << this->name << ": \"" << discard << "\"";
+      logwrite( function, message.str() );
+    }
+    }
+
     int trys=0;
     int retry_limit=3;
     int pollret=0;
@@ -655,7 +780,23 @@ namespace Common {
 
       // send the command
       //
-      this->socket.Write( command );
+      ssize_t wrote = this->socket.Write( command );
+#ifdef LOGLEVEL_DEBUG
+      { std::ostringstream oss; oss << "[DEBUG] Write()=" << wrote << " fd=" << this->socket.getfd();
+        logwrite( function, oss.str() ); }
+#endif
+
+      // a dead peer leaves fd=-1 which was set by the drain above, via Read()'s EOF-close (FIN) or
+      // Poll()'s POLLHUP-close (RST). Write() returns <=0. Reconnect and retry with the SAME
+      // correlation id (server-side CorrIdCache dedup makes that safe) instead of polling a dead
+      // descriptor for the full timeout. deaths observable before the write (FIN/RST).
+      //
+      if ( wrote <= 0 ) {
+        lock.unlock();
+        this->connect();
+        lock.lock();
+        continue;                                  // bounded by the existing trys < retry_limit
+      }
 
       // This indicates that the caller only wants to send the command,
       // and doesn't want to read the reply.
@@ -664,7 +805,17 @@ namespace Common {
 
       // Wait (poll) connected socket for incoming data...
       //
+#ifdef LOGLEVEL_DEBUG
+      auto _t0 = std::chrono::steady_clock::now();
+#endif
       pollret = this->socket.Poll(timeout_in);
+#ifdef LOGLEVEL_DEBUG
+      { long _ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - _t0 ).count();
+        std::ostringstream oss; oss << "[DEBUG] Poll(timeout=" << timeout_in << ")=" << pollret
+            << " elapsed=" << _ms << "ms fd=" << this->socket.getfd();
+        logwrite( function, oss.str() ); }
+#endif
 
       // got data so break out of retry loop
       //
@@ -676,12 +827,14 @@ namespace Common {
                                  << " on fd " << this->socket.getfd() << " for " << this->name;
         logwrite( function, message.str() );
         this->timedout=true;
+        break;                                     // daemon is busy, not gone — do not resend
       }
       else
       if ( pollret < 0 && errno ) {                // this is probably a real error
         message.str(""); message << "ERROR polling socket " << this->socket.gethost() << "/" << this->socket.getport()
                                  << " on fd " << this->socket.getfd() << " for " << this->name << ": " << strerror(errno);
         logwrite( function, message.str() );
+        break;                                     // real socket error — do not resend
       }
       else
       if ( pollret < 0 && !errno ) {               // this is probably a stale fd
@@ -690,7 +843,7 @@ namespace Common {
         logwrite( function, message.str() );
       }
 
-      // if still here then reconnect, sleep 1s, try again
+      // stale fd only: reconnect and try again
       //
       lock.unlock();
       error = this->connect();
@@ -726,17 +879,11 @@ namespace Common {
     // that is no longer pertinent.
     //
     if ( this->timedout ) {
-      logwrite( function, "[TEST] attempting to flush after timeout" );
       if ( ( pollret = this->socket.Poll(2000) ) > 0 ) {
+        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual )
+                                        : socket.Read( reply, term_read ) );
         reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
         reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] I read this: " << reply << " but I'm going to read again!";
-        logwrite( function, message.str() );
-        ret = ( term_with_string_actual ? socket.Read( reply, term_str_read_actual ) : socket.Read( reply, term_read ) );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
-        reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
-        message.str(""); message << "[TEST] and the 2nd read was this: " << reply;
-        logwrite( function, message.str() );
       }
       this->timedout=false;
     }
@@ -757,14 +904,114 @@ namespace Common {
     reply.erase( std::remove(reply.begin(), reply.end(), '\r' ), reply.end() );
     reply.erase( std::remove(reply.begin(), reply.end(), '\n' ), reply.end() );
 
-    // If the reply contains "ERROR" then return ERROR, otherwise NO_ERROR.
+    // Verify the correlation ID echoed back by the daemon matches the one we
+    // sent. Any non-empty reply that does not carry the expected prefix is
+    // stale - typically a delayed reply from a previous command that landed
+    // on the socket after a reconnect, or an out-of-order frame. Treat such
+    // a reply as a failure so callers never act on data they cannot attribute.
+    // Empty replies are left alone here and are handled by the empty-reply
+    // branch of the classification below.
     //
-    if ( reply.find( std::string( "ERROR" ) ) != std::string::npos ) {
-      return( ERROR );
+    if ( !reply.empty() ) {
+      const std::string expected_prefix = CID_PREFIX + cid + " ";
+      if ( reply.compare( 0, expected_prefix.size(), expected_prefix ) == 0 ) {
+        reply.erase( 0, expected_prefix.size() );
+      }
+      else {
+        message.str(""); message << "ERROR stale or unrecognized reply from " << this->name
+                                 << " (expected ID " << cid << "): \"" << reply << "\"";
+        logwrite( function, message.str() );
+        reply.clear();
+        // drain any further queued replies so stale data does not persist into the next send() call
+        while ( this->socket.Poll(0) > 0 ) {
+          std::string discard;
+          ( term_with_string_actual ? socket.Read( discard, term_str_read_actual )
+                                   : socket.Read( discard, term_read ) );
+        }
+      }
     }
-    else return( NO_ERROR );
+
+    // Classify the reply:
+    //   "ERROR" in reply  → command failed
+    //   empty reply        → socket was lost before any response arrived; treat
+    //                        as failure so callers are never silently misled
+    //   anything else      → success (covers "DONE", JSON payloads, query
+    //                        results such as "yes"/"no", state strings, etc.)
+    //
+    // Note: CLI help output ("HELP" mode) is never produced on inter-daemon
+    // command channels, so there is no need to special-case it here.
+    //
+    if ( reply.find( "ERROR" ) != std::string::npos ) return ERROR;
+    if ( reply.empty() )                               return ERROR;
+    return NO_ERROR;
   }
   /***** Common::DaemonClient::send ***************************************************/
+
+
+  /***** Common::CorrIdCache::lookup ******************************************/
+  /**
+   * @brief      look up a previously-cached reply by correlation ID
+   * @details    Returns true if the ID is present and not yet expired, in which
+   *             case the cached reply is copied to reply_out. If the ID is
+   *             present but expired, the entry is purged and false is returned.
+   * @param[in]  id         correlation ID to look up
+   * @param[out] reply_out  reply string written on hit; unchanged on miss
+   * @return     true on cache hit, false on miss or expired
+   *
+   */
+  bool CorrIdCache::lookup( const std::string &id, std::string &reply_out ) {
+    std::lock_guard<std::mutex> lock( mtx );
+    auto it = cache.find( id );
+    if ( it == cache.end() ) return false;
+    if ( std::chrono::steady_clock::now() >= it->second.expires ) {
+      cache.erase( it );
+      return false;
+    }
+    reply_out = it->second.reply;
+    return true;
+  }
+  /***** Common::CorrIdCache::lookup ******************************************/
+
+
+  /***** Common::CorrIdCache::insert ******************************************/
+  /**
+   * @brief      store a reply under a correlation ID with TTL
+   * @details    Opportunistically prunes expired entries on each call. If the
+   *             cache is still at MAX_ENTRIES capacity after pruning, the
+   *             entry expiring soonest is evicted to make room. An existing
+   *             entry under the same ID is overwritten (which is the desired
+   *             behavior when a slow handler completes and the client has
+   *             already retried).
+   * @param[in]  id     correlation ID to store under
+   * @param[in]  reply  bare reply string to cache (must NOT include CID prefix)
+   *
+   */
+  void CorrIdCache::insert( const std::string &id, const std::string &reply ) {
+    std::lock_guard<std::mutex> lock( mtx );
+    const auto now = std::chrono::steady_clock::now();
+
+    // prune expired entries to bound memory growth
+    //
+    for ( auto it = cache.begin(); it != cache.end(); ) {
+      if ( now >= it->second.expires ) it = cache.erase( it );
+      else                             ++it;
+    }
+
+    // if still at capacity, evict the entry that expires soonest
+    //
+    if ( cache.size() >= MAX_ENTRIES ) {
+      auto oldest = cache.begin();
+      for ( auto it = cache.begin(); it != cache.end(); ++it ) {
+        if ( it->second.expires < oldest->second.expires ) oldest = it;
+      }
+      cache.erase( oldest );
+    }
+
+    Entry &entry = cache[id];
+    entry.reply   = reply;
+    entry.expires = now + std::chrono::seconds( TTL_SECONDS );
+  }
+  /***** Common::CorrIdCache::insert ******************************************/
 
 
   /***** Common::DaemonClient::dothread_command ***************************************/
@@ -887,9 +1134,9 @@ namespace Common {
       //
       if ( ( error = this->connect() ) != NO_ERROR ) retstring="ERROR"; else retstring="DONE"; 
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] connected to " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
     }
     else
@@ -903,9 +1150,9 @@ namespace Common {
     //
     if ( args == "disconnect" ) {
 #ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
-//                             << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
-//    logwrite( function, message.str() );
+      message.str(""); message << "[DEBUG] disconnecting " << this->name << " socket " << this->socket.gethost()
+                               << "/" << this->socket.getport() << " from fd " << this->socket.getfd();
+      logwrite( function, message.str() );
 #endif
       // then close the connection
       //
@@ -916,27 +1163,16 @@ namespace Common {
     // all other commands go straight on through, as-is
     //
     else {
-      // but only if the connection is open of course
+      // send() handles auto-reconnect-if-needed and uses client_access
+      // internally for serialization.
       //
-      if ( !this->socket.isconnected() ) {
-        message.str(""); message << "ERROR: connection not open to " << this->name;
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-      else {
-#ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] sending to " << this->name << " socket " << this->socket.gethost()
-//                               << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << args;
-//      logwrite( function, message.str() );
-#endif
-        error = this->send( args, retstring );
-      }
+      error = this->send( args, retstring );
     }
 
 #ifdef LOGLEVEL_DEBUG
-//  message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
-//                           << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
-//  logwrite( function, message.str() );
+    message.str(""); message << "[DEBUG] reply from " << this->name << " socket " << this->socket.gethost()
+                             << "/" << this->socket.getport() << " on fd " << this->socket.getfd() << ": " << retstring;
+    logwrite( function, message.str() );
 #endif
 
     return( error );
@@ -956,7 +1192,7 @@ namespace Common {
     std::stringstream message;
     long error = NO_ERROR;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // probably a programming error if this Common::DaemonClient object is not configured
     //
@@ -1006,13 +1242,15 @@ namespace Common {
     std::string function = "Common::DaemonClient::disconnect";
     std::stringstream message;
 
-    const std::lock_guard<std::mutex> lock( this->client_access );
+    const std::lock_guard<std::recursive_mutex> lock( this->client_access );
 
     // close the connection
     //
-    message.str(""); message << "closing connection to " << this->name << " socket " << this->socket.gethost()
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] closing connection to " << this->name << " socket " << this->socket.gethost()
                              << "/" << this->socket.getport() << " on fd " << this->socket.getfd();
     logwrite( function, message.str() );
+#endif
     this->socket.Close();
 
     return;

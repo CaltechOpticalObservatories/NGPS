@@ -9,6 +9,7 @@
  */
 
 #include "acam_interface.h"
+#include "fits_header_defs.h"
 
 namespace Acam {
 
@@ -26,8 +27,8 @@ namespace Acam {
    *
    */
   long Camera::emulator( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::emulator";
-    std::stringstream message;
+    const char* function = "Acam::Camera::emulator";
+    std::ostringstream message;
 
     // Help
     //
@@ -81,8 +82,8 @@ namespace Acam {
    * 
    */
   long Camera::open( int sn ) {
-    std::string function = "Acam::Camera::open";
-    std::stringstream message;
+    const char* function = "Acam::Camera::open";
+    std::ostringstream message;
     long error=NO_ERROR;
 
     // Opens the Andor and initializes SDK
@@ -178,8 +179,8 @@ namespace Acam {
    *
    */
   long Camera::imflip( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::imflip";
-    std::stringstream message;
+    const char* function = "Acam::Camera::imflip";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -262,8 +263,8 @@ namespace Acam {
    *
    */
   long Camera::imrot( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::imrot";
-    std::stringstream message;
+    const char* function = "Acam::Camera::imrot";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -366,7 +367,7 @@ namespace Acam {
    * @return     ERROR | NO_ERROR
    */
   long Camera::set_fan( int mode ) {
-    const std::string function="Acam::Camera::set_fan";
+    const char* function="Acam::Camera::set_fan";
 
     // Andor must be connected
     //
@@ -392,8 +393,8 @@ namespace Acam {
    *
    */
   long Camera::gain( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::gain";
-    std::stringstream message;
+    const char* function = "Acam::Camera::gain";
+    std::ostringstream message;
     long error = NO_ERROR;
     int gain = -999;
 
@@ -532,7 +533,6 @@ namespace Acam {
    *
    */
   int Camera::gain() {
-    std::string function = "Acam::Camera::gain";
     std::string svalue;
     int ivalue=0;
     this->gain( "", svalue );
@@ -555,8 +555,8 @@ namespace Acam {
    *
    */
   long Camera::speed( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::speed";
-    std::stringstream message;
+    const char* function = "Acam::Camera::speed";
+    std::ostringstream message;
     long error = NO_ERROR;
     float hori=-1, vert=-1;
 
@@ -656,8 +656,8 @@ namespace Acam {
    *
    */
   long Camera::temperature( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Camera::temperature";
-    std::stringstream message;
+    const char* function = "Acam::Camera::temperature";
+    std::ostringstream message;
     long error = NO_ERROR;
     int temp = 999;
 
@@ -780,8 +780,8 @@ namespace Acam {
    *
    */
   long Camera::write_frame( std::string source_file, std::string &outfile, const bool _tcs_online ) {
-    std::string function = "Acam::Camera::write_frame";
-    std::stringstream message;
+    const char* function = "Acam::Camera::write_frame";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Nothing to do if not Andor image data
@@ -850,13 +850,7 @@ namespace Acam {
    *
    */
   long Interface::test_image( ) {
-    std::string function = "Acam::Interface::test_image";
-    std::stringstream message;
-    long error = NO_ERROR;
-
-    error = this->camera.andor.test();
-
-    return error;
+    return this->camera.andor.test();
   }
   /***** Acam::Camera::test_image *********************************************/
 
@@ -870,7 +864,7 @@ namespace Acam {
    *
    */
   long Astrometry::initialize_python() {
-    std::string function = "Acam::Astrometry::initialize_python";
+    const char* function = "Acam::Astrometry::initialize_python";
 
     if ( ! py_instance.is_initialized() ) {
       logwrite( function, "ERROR could not initialize Python" );
@@ -895,7 +889,7 @@ namespace Acam {
     this->pQualityModule    = PyImport_Import( pModuleNameQuality );
 
     if ( this->pAstrometryModule == nullptr || this->pQualityModule == nullptr ) {
-      std::stringstream message;
+      std::ostringstream message;
       message << "ERROR could not import Python module(s):";
       if ( this->pAstrometryModule == nullptr ) message << " " << PYTHON_ASTROMETRY_MODULE;
       if ( this->pQualityModule == nullptr )    message << " " << PYTHON_IMAGEQUALITY_MODULE;
@@ -928,8 +922,8 @@ namespace Acam {
    *
    */
   long Astrometry::image_quality( ) {
-    std::string function = "Acam::Astrometry::image_quality";
-    std::stringstream message;
+    const char* function = "Acam::Astrometry::image_quality";
+    std::ostringstream message;
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -1079,8 +1073,8 @@ namespace Acam {
    *
    */
   long Astrometry::solve( std::string imagename_in, std::vector<std::string> solverargs_in ) {
-    std::string function = "Acam::Astrometry::solve";
-    std::stringstream message;
+    const char* function = "Acam::Astrometry::solve";
+    std::ostringstream message;
 
     if ( !this->python_initialized ) {
       logwrite( function, "ERROR Python is not initialized" );
@@ -1188,11 +1182,6 @@ namespace Acam {
     Py_DECREF( pFunction );
     Py_DECREF( pArgList );
     Py_DECREF( pKeywords );
-
-//#ifdef LOGLEVEL_DEBUG
-//    message.str(""); message << "[DEBUG] Python call time " << (t1-t0) << " sec";
-//    logwrite( function, message.str() );
-//#endif
 
     // Check the return values from Python here
     //
@@ -1343,8 +1332,8 @@ namespace Acam {
    *
    */
   long Interface::bin( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::bin";
-    std::stringstream message;
+    const char* function = "Acam::Interface::bin";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -1433,41 +1422,111 @@ namespace Acam {
    *
    */
   void Interface::publish_snapshot() {
-
-    // assemble the telemetry into a json message
-    //
-    nlohmann::json jmessage_out;
-
-    jmessage_out["source"]   = "acamd";                            // source of this telemetry
-
-    int ccdtemp=99;
-    this->camera.andor.get_temperature( ccdtemp );                 // temp is int
-    jmessage_out["TANDOR_ACAM"] = ( this->isopen("camera") ?
-                                    static_cast<float>(ccdtemp) :  // but the database wants floats
-                                    NAN );
-
-    jmessage_out["ACAM_FILTER"] = ( this->isopen("motion" ) ?
-                                    this->motion.get_current_filtername() :
-                                    "not_connected" );
-    jmessage_out["ACAM_COVER"] = ( this->isopen("motion" ) ?
-                                    this->motion.get_current_coverpos() :
-                                    "not_connected" );
-
-    try {
-      this->publisher->publish( jmessage_out );
-    }
-    catch ( const std::exception &e ) {
-      logwrite( "Acam::Interface::publish_snapshot",
-                "ERROR publishing message: "+std::string(e.what()) );
-      return;
-    }
+    // emit state on Topic::ACAMD and temperature on Topic::ACAMD_TEMP
+    this->publish_status(true);
+    this->publish_temperature();
   }
   /***** Acam::Interface::publish_snapshot ************************************/
 
 
+  /***** Acam::Interface::publish_status **************************************/
+  /**
+   * @brief      publishes my acam-related (important) status on change
+   * @details    This publishes a JSON message containing important telemetry.
+   * @param[in]  force  optional (default=false) forces publish irrespective of change
+   *
+   */
+  void Interface::publish_status(bool force) {
+    const std::string acquire_mode = this->target.acquire_mode_string();
+    const bool        is_acquired  = this->target.is_acquired.load();
+    const int         nacquired    = this->target.nacquired;
+    const int         attempts     = this->target.attempts;
+    const std::string filter       = this->motion.get_current_filtername();
+    const std::string cover        = this->motion.get_current_coverpos();
+
+    // unless forced, only publish if there was a change in any one of these
+    //
+    if ( !force &&
+	 acquire_mode == this->last_status.acquire_mode &&
+         is_acquired  == this->last_status.is_acquired  &&
+         nacquired    == this->last_status.nacquired    &&
+         attempts     == this->last_status.attempts     &&
+         filter       == this->last_status.filter       &&
+         cover        == this->last_status.cover ) return;
+
+    this->last_status.acquire_mode = acquire_mode;
+    this->last_status.is_acquired  = is_acquired;
+    this->last_status.nacquired    = nacquired;
+    this->last_status.attempts     = attempts;
+    this->last_status.filter       = filter;
+    this->last_status.cover        = cover;
+
+    // assemble the telemetry into a json message
+    //
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::ACAMD;
+    jmessage_out[Key::Acamd::ACQUIRE_MODE] = this->target.acquire_mode_string();
+    jmessage_out[Key::Acamd::IS_ACQUIRED]  = this->target.is_acquired.load();
+    jmessage_out[Key::Acamd::NACQUIRED]    = this->target.nacquired;
+    jmessage_out[Key::Acamd::ATTEMPTS]     = this->target.attempts;
+    jmessage_out[Key::Acamd::SEEING]       = this->astrometry.get_seeing();
+    jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
+    jmessage_out[Key::Acamd::FILTER]       = filter;
+    jmessage_out[Key::Acamd::COVER]        = cover;
+    jmessage_out[Key::PUBTIME] = get_time_us();
+
+    try {
+      this->publisher->publish( jmessage_out, Topic::ACAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_status",
+                "ERROR publishing message: "+std::string(e.what()) );
+      return;
+    }
+  }
+  /***** Acam::Interface::publish_status **************************************/
+
+
+  /***** Acam::Interface::publish_temperature ********************************/
+  /**
+   * @brief      publish only the andor CCD temperature on Topic::ACAMD_TEMP
+   * @details    Published on a fixed interval (see acamd.cpp), not on change,
+   *             since the CCD temperature varies continuously. When the camera
+   *             is not open the thread stays alive but publishes NaN instead
+   *             of attempting a hardware read; this lets the thread resume
+   *             publishing real values when the camera comes back online
+   *             without the get_temperature() error-log spam each cycle.
+   *
+   */
+  void Interface::publish_temperature() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::ACAMD;
+
+    if ( this->isopen("camera") ) {
+      int ccdtemp=99;
+      this->camera.andor.get_temperature( ccdtemp );
+      jmessage[Key::Acamd::TANDOR] = static_cast<float>(ccdtemp);   // database wants float
+    }
+    else {
+      jmessage[Key::Acamd::TANDOR] = NAN;
+    }
+
+    try {
+      this->publisher->publish( jmessage, Topic::ACAMD_TEMP );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_temperature",
+                "ERROR publishing message: "+std::string(e.what()) );
+    }
+  }
+  /***** Acam::Interface::publish_temperature ********************************/
+
+
   /***** Acam::Interface::request_snapshot ************************************/
   /**
-   * @brief      sends request for snapshot
+   * @brief      [obsolete] publises request for snapshot
+   * @details    publishing Topic::SNAPSHOT induces subscribers to publish a
+   *             snapshot of their telemetry
    *
    */
   void Interface::request_snapshot() {
@@ -1479,7 +1538,7 @@ namespace Acam {
     }
     }
     try {
-      this->publisher->publish( jmessage, "_snapshot" );
+      this->publisher->publish( jmessage, Topic::SNAPSHOT );
     }
     catch ( const std::exception &e ) {
       logwrite( "Acam::Interface::request_snapshot",
@@ -1492,7 +1551,9 @@ namespace Acam {
 
   /***** Acam::Interface::wait_for_snapshots **********************************/
   /**
-   * @brief      wait for everyone to publish their snaphots
+   * @brief      [obsolete] wait for everyone to publish their snaphots
+   * @details    When forcing subscribers to publish their telemetry,
+   *             this waits until they have done so.
    *
    */
   bool Interface::wait_for_snapshots() {
@@ -1517,7 +1578,7 @@ namespace Acam {
       if (all_received) return true;
 
       if (std::chrono::steady_clock::now() - start_time > timeout) {
-        std::stringstream message;
+        std::ostringstream message;
         message << "ERROR timeout waiting for telemetry from:";
         for ( const auto &[topic,status] : snapshot_status ) {
           if (!status) message << " " << topic;
@@ -1534,173 +1595,88 @@ namespace Acam {
 
   /***** Acam::Interface::handletopic_snapshot ********************************/
   /**
-   * @brief      publishes snapshot of my telemetry
+   * @brief      what to do when the topic is Topic::ACAMD
    * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry info when the subscriber receives the "_snapshot"
-   *             topic and the payload contains my daemon name.
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
    * @param[in]  jmessage_in  subscribed-received JSON message
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
-    // If my name is in the jmessage then publish my snapshot
-    //
-    if ( jmessage_in.contains( Acam::DAEMON_NAME ) ) {
-      this->publish_snapshot();
-    }
-    else
-    if ( jmessage_in.contains( "test" ) ) {
-      logwrite( "Acamd::Interface::handletopic_snapshot", jmessage_in.dump() );
-    }
+    if ( jmessage_in.contains( Topic::ACAMD ) ) this->publish_snapshot();
   }
   /***** Acam::Interface::handletopic_snapshot ********************************/
 
 
+  /***** Acam::Interface::handletopic_tcsd ************************************/
+  /**
+   * @brief      what to do when the topic is Topic::TCSD
+   * @details    This receives tcs telemetry
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_tcsd( const nlohmann::json &jmessage ) {
-    {
-    std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["tcsd"]=true;
-    }
+
+    std::lock_guard<std::mutex> lock(tcsdata_mtx);
+
     // extract and store values in the class
     //
-    Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
-    Common::extract_telemetry_value( jmessage, "CASANGLE",   telem.angle_scope );
-    Common::extract_telemetry_value( jmessage, "TELRA",      telem.ra_scope_hms );
-    Common::extract_telemetry_value( jmessage, "TELDEC",     telem.dec_scope_dms );
-    Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
-    Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
-    Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
-    Common::extract_telemetry_value( jmessage, "DECLOFFSET", telem.offsetdec );
-    Common::extract_telemetry_value( jmessage, "AZ",         telem.az );
-    Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
-    Common::extract_telemetry_value( jmessage, "AIRMASS",    telem.airmass );
+    Common::extract_telemetry_value( jmessage, "TCSNAME",           tcsdata.tcsname );
+    Common::extract_telemetry_value( jmessage, "ISOPEN",            tcsdata.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, tcsdata.angle_scope );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    tcsdata.ra_scope_hms );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   tcsdata.dec_scope_dms );
+    Common::extract_telemetry_value( jmessage, "RA",                tcsdata.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, "DEC",               tcsdata.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, "RAOFFSET",          tcsdata.offsetra );
+    Common::extract_telemetry_value( jmessage, "DECLOFFS",          tcsdata.offsetdec );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AZ,       tcsdata.az );
+    Common::extract_telemetry_value( jmessage, "TELFOCUS",          tcsdata.telfocus );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  tcsdata.airmass );
 
     // save them to the database
     //
-    this->database.add_key_val<double>( "CASANGLE", telem.angle_scope );
-    this->database.add_key_val<double>( "RAtel",    telem.ra_scope_h );
-    this->database.add_key_val<double>( "DECLtel",  telem.dec_scope_d );
-    this->database.add_key_val<double>( "AZ",       telem.az );
-    this->database.add_key_val<double>( "focus",    telem.telfocus );
-    this->database.add_key_val<double>( "AIRMASS",  telem.airmass );
+    this->database.add_key_val<double>( "CASANGLE", tcsdata.angle_scope );
+    this->database.add_key_val<double>( "RAtel",    tcsdata.ra_scope_h );
+    this->database.add_key_val<double>( "DECLtel",  tcsdata.dec_scope_d );
+    this->database.add_key_val<double>( "AZ",       tcsdata.az );
+    this->database.add_key_val<double>( "focus",    tcsdata.telfocus );
+    this->database.add_key_val<double>( "AIRMASS",  tcsdata.airmass );
   }
+  /***** Acam::Interface::handletopic_tcsd ************************************/
 
 
+  /***** Acam::Interface::handletopic_targetinfo ******************************/
+  /**
+   * @brief      what to do when the topic is Topic::TARGETINFO
+   * @details    This receives target info
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
   void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
-    this->database.add_from_json<int>( jmessage, "OBS_ID" );
-    this->database.add_from_json<std::string>( jmessage, "NAME" );
-    this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
-    this->database.add_from_json<std::string>( jmessage, "RA" );
-    this->database.add_from_json<std::string>( jmessage, "DECL" );
+    this->database.add_from_json<int>(         jmessage, Key::TargetInfo::OBS_ID );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::NAME );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::POINTMODE );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::RA );
+    this->database.add_from_json<std::string>( jmessage, Key::TargetInfo::DECL );
   }
+  /***** Acam::Interface::handletopic_targetinfo ******************************/
 
 
   /***** Acam::Interface::handletopic_slitd ***********************************/
   /**
-   * @brief      handles topic subscription to slitd
+   * @brief      what to do when the topic is Topic::SLITD
+   * @details    This receives slitd telemetry
    * @param[in]  jmessage  incoming json message
    *
    */
   void Interface::handletopic_slitd( const nlohmann::json &jmessage ) {
-    {
-    std::lock_guard<std::mutex> lock(snapshot_mtx);
-    snapshot_status["slitd"]=true;
+    for ( const auto &keyinfo : FitsHeaderKeys::SlitdTelemKeys ) {
+      telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword,
+                             keyinfo.comment, keyinfo.type, false);
     }
-    this->telemkeys.add_json_key(jmessage, "SLITO", "SLITO", "slit offset in arcsec", "FLOAT", false);
-    this->telemkeys.add_json_key(jmessage, "SLITW", "SLITW", "slit width in arcsec", "FLOAT", false);
   }
   /***** Acam::Interface::handletopic_slitd ***********************************/
-
-
-  /***** Acam::Interface::handle_json_message *********************************/
-  /**
-   * @brief      parses incoming telemetry messages
-   * @details    Requesting telemetry from another daemon returns a serialized
-   *             JSON message which needs to be passed in here to parse it.
-   * @param[in]  message_in  incoming serialized JSON message (as a string)
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::handle_json_message( std::string message_in ) {
-    const std::string function="Acam::Interface::handle_json_message";
-    std::stringstream message;
-
-    // nothing to do if the message is empty
-    //
-    if ( message_in.empty() ) {
-      logwrite( function, "ERROR empty JSON message" );
-      return ERROR;
-    }
-
-    try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-      std::string messagetype;
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
-          messagetype = jmessage["messagetype"];
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
-          return ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        return ERROR;
-      }
-
-      // no errors, so disseminate the message contents based on the message type
-      //
-      if ( messagetype == "tcsinfo" ) {
-        this->database.add_from_json<double>( jmessage, "CASANGLE" );
-        this->database.add_from_json<std::string>( jmessage, "TELRA", "RAtel" );
-        this->database.add_from_json<std::string>( jmessage, "TELDEC", "DECLtel" );
-        this->database.add_from_json<double>( jmessage, "AZ" );
-        this->database.add_from_json<double>( jmessage, "TELFOCUS", "focus" );
-        this->database.add_from_json<double>( jmessage, "AIRMASS" );
-      }
-      else
-      if ( messagetype == "targetinfo" ) {
-        this->database.add_from_json<int>( jmessage, "OBS_ID" );
-        this->database.add_from_json<std::string>( jmessage, "NAME" );
-        this->database.add_from_json<std::string>( jmessage, "POINTMODE" );
-        this->database.add_from_json<std::string>( jmessage, "RA" );
-        this->database.add_from_json<std::string>( jmessage, "DECL" );
-      }
-      else
-      if ( messagetype == "slitinfo" ) {
-        float slitw, slito;
-        Common::extract_telemetry_value( message_in, "SLITW", slitw );
-        this->camera.fitsinfo.fitskeys.addkey( "SLITW", slitw, "slit width in arcsec" );
-        Common::extract_telemetry_value( message_in, "SLITO", slito );
-        this->camera.fitsinfo.fitskeys.addkey( "SLITO", slito, "slit offset in arcsec" );
-      }
-      else
-      if ( messagetype == "test" ) {
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
-    }
-
-    return NO_ERROR;
-  }
-  /***** Acam::Interface::handle_json_message *********************************/
 
 
   /***** Acam::Interface::initialize_python_objects ***************************/
@@ -1727,8 +1703,8 @@ namespace Acam {
    *
    */
   long Interface::configure_interface( Config &config ) {
-    std::string function = "Acam::Interface::configure_interface";
-    std::stringstream message;
+    const char* function = "Acam::Interface::configure_interface";
+    std::ostringstream message;
     int applied=0;
     long error = NO_ERROR;
 
@@ -1971,6 +1947,27 @@ namespace Acam {
         applied++;
       }
 
+      if ( config.param[entry] == "ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET" ) {
+        double offset;
+        try {
+          offset = std::stod( config.arg[entry] );
+        } catch ( std::invalid_argument &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        } catch ( std::out_of_range &e ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET " << config.param[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return(ERROR);
+        }
+        if ( this->target.set_tcs_max_putonslit_offset( offset ) != NO_ERROR ) {
+          message.str(""); message << "ERROR bad ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET \"" << config.param[entry] << "\" must be >= 0";
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        applied++;
+      }
+
       if ( config.param[entry] == "ACQUIRE_MIN_REPEAT" ) {
         int repeat;
         try {
@@ -2025,8 +2022,8 @@ namespace Acam {
    *
    */
   long Interface::open( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::open";
-    std::stringstream message;
+    const char* function = "Acam::Interface::open";
+    std::ostringstream message;
     long error = NO_ERROR;
     std::vector<std::string> arglist;
     std::string component, camarg;
@@ -2118,15 +2115,14 @@ namespace Acam {
       // If serial number not specified as an arg then open the s/n specified
       // in the config file.
       //
-      int sn;
+      int sn=-1;
       if ( camarg.empty() ) sn = this->camera.andor.camera_info.serial_number;
       else {
         try {
           sn = std::stoi( camarg );
         }
         catch( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing serial number from \"" << camarg << "\": " << e.what();
-          logwrite( function, message.str() );
+          logwrite(function, "ERROR parsing serial number from '"+camarg+"': "+std::string(e.what()));
           error = ERROR;
         }
       }
@@ -2174,8 +2170,8 @@ namespace Acam {
    *
    */
   long Interface::isopen( std::string component, bool &state, std::string &retstring ) {
-    std::string function = "Acam::Interface::isopen";
-    std::stringstream message;
+    const char* function = "Acam::Interface::isopen";
+    std::ostringstream message;
 
     // Help
     //
@@ -2255,8 +2251,8 @@ namespace Acam {
     this->close("",dontcare);
   }
   long Interface::close( std::string component, std::string &help ) {
-    std::string function = "Acam::Interface::close";
-    std::stringstream message;
+    const char* function = "Acam::Interface::close";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -2325,8 +2321,8 @@ namespace Acam {
    *
    */
   long Interface::tcs_init( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::tcs_init";
-    std::stringstream message;
+    const char* function = "Acam::Interface::tcs_init";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // If shutting down then stop the focus monitoring thread first
@@ -2415,8 +2411,8 @@ namespace Acam {
    *
    */
   long Interface::framegrab_fix( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::framegrab_fix";
-    std::stringstream message;
+    const char* function = "Acam::Interface::framegrab_fix";
+    std::ostringstream message;
 
     // Help
     //
@@ -2473,7 +2469,7 @@ namespace Acam {
    *
    */
   long Interface::saveframes( std::string args, std::string &retstring ) {
-    const std::string function = "Acam::Interface::saveframes";
+    const char* function = "Acam::Interface::saveframes";
 
     // Help
     //
@@ -2526,7 +2522,7 @@ namespace Acam {
    *
    */
   long Interface::skipframes( std::string args, std::string &retstring ) {
-    const std::string function = "Acam::Interface::skipframes";
+    const char* function = "Acam::Interface::skipframes";
 
     // Help
     //
@@ -2572,8 +2568,8 @@ namespace Acam {
    *
    */
   long Interface::framegrab( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::framegrab";
-    std::stringstream message;
+    const char* function = "Acam::Interface::framegrab";
+    std::ostringstream message;
     long error = NO_ERROR;
     std::string _imagename = this->imagename;
 
@@ -2678,8 +2674,8 @@ namespace Acam {
    *
    */
   void Interface::dothread_framegrab( Acam::Interface &iface, const std::string whattodo, std::string sourcefile ) {
-    std::string function = "Acam::Interface::dothread_framegrab";
-    std::stringstream message;
+    const char* function = "Acam::Interface::dothread_framegrab";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     if ( iface.is_framegrab_running.load(std::memory_order_acquire) ) {
@@ -2741,7 +2737,7 @@ namespace Acam {
     do {
       if ( iface.camera.andor.camera_info.exptime == 0 ) continue;    // wait for non-zero exposure time
 
-      if ( iface.collect_header_info() == ERROR ) {                   // collect header information
+      if ( iface.assemble_header_info() == ERROR ) {                  // assemble header keyword information
         logwrite(function,"ERROR collecting header info");
         continue;
       }
@@ -2856,8 +2852,8 @@ namespace Acam {
    *
    */
   long Interface::guider_settings_control( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::guider_settings_control";
-    std::stringstream message;
+    const char* function = "Acam::Interface::guider_settings_control";
+    std::ostringstream message;
 
     // Help
     //
@@ -3100,8 +3096,8 @@ namespace Acam {
    *
    */
   long Interface::acquire( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::acquire";
-    std::stringstream message;
+    const char* function = "Acam::Interface::acquire";
+    std::ostringstream message;
 
     // Help
     //
@@ -3340,8 +3336,8 @@ logwrite( function, message.str() );
    *
    */
   long Target::acquire( Acam::TargetAcquisitionModes requested_mode ) {
-    std::string function = "Acam::Target::acquire";
-    std::stringstream message;
+    const char* function = "Acam::Target::acquire";
+    std::ostringstream message;
 
     // reset guide offset filtering parameters
     //
@@ -3384,6 +3380,7 @@ logwrite( function, message.str() );
     //
     if ( requested_mode == Acam::TARGET_NOP ) {
       this->stop_acquisition.store( true, std::memory_order_release );
+      this->is_acquired.store( false, std::memory_order_release );  // target no longer acquired when stopped
       logwrite( function, "stop requested" );
     }
 
@@ -3395,6 +3392,7 @@ logwrite( function, message.str() );
       this->nacquired = 0;
       this->attempts = 0;
       this->sequential_failures = 0;
+      this->allow_large_offset.store(false);  // no stale deliberate-offset allowance
       this->is_acquired.store( false, std::memory_order_release );
 
       // Start the timeout clock, initialized as the time now plus the
@@ -3411,6 +3409,12 @@ logwrite( function, message.str() );
     }
 
     this->acquire_mode = requested_mode;
+
+    // acam needs to publish status on every acquire command to initialize
+    // a freshness timer in the sequencer. The extra pub noise is a small
+    // price to pay for the simplicity of not adding another mechanism.
+    //
+    iface->publish_status(true);
 
     return NO_ERROR;
   }
@@ -3437,8 +3441,8 @@ logwrite( function, message.str() );
    *
    */
   long Target::do_acquire() {
-    std::string function = "Acam::Target::do_acquire";
-    std::stringstream message;
+    const char* function = "Acam::Target::do_acquire";
+    std::ostringstream message;
 
     // Do nothing, return immediately if no acquisition mode selected
     // or if stop_acquisition is set.
@@ -3628,45 +3632,29 @@ logwrite( function, message.str() );
 
       message.str(""); message << "[ACQUIRE] offset=" << offset << " (arcsec)"; logwrite( function,message.str() );
 
-      // There is a maximum offset allowed to the TCS.
-      // This is not a TCS limit (their limit is very large).
-      // This is our limit so that we don't accidentally move too far off the
-      // slit. However, "putonslit" can include a desired offset which is
-      // outside this limit, so when checking the calculated offset, include a
-      // delta which is the change introduced by putonslit.
+      // There is a maximum offset we send to the TCS. This is not a TCS limit
+      // (theirs is very large); it is our safety limit so that a bad solution
+      // can't move us far off the slit. Ordinary guiding corrections use the
+      // normal tcs_max_offset (ACQUIRE_TCS_MAX_OFFSET). A deliberate goal offset
+      // applied while guiding -- via offset_goal, which covers put-on-slit,
+      // offset-star acquisition, the end-of-fineacquire target offset, and the
+      // pyGUI 'Offset' button -- is intentionally larger, so for the one
+      // correction that consumes it we allow up to tcs_max_putonslit_offset
+      // (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET). The ACQUIRE path uses tcs_max_offset
+      // and is unaffected.
       //
+      double maxoffset = this->tcs_max_offset;
+      if ( this->acquire_mode == Acam::TARGET_GUIDE && this->allow_large_offset.load() ) {
+        maxoffset = this->tcs_max_putonslit_offset;
+      }
 
-      // this will be the solution plus dRA, dDEC
-      // start by initializing with acam_ra,acam_dec
-      //
-      double acam_ra_dRA   = acam_ra;
-      double acam_dec_dDEC = acam_dec;
-
-      // Then acam_ra_dRA, acam_dec_dDEC will be modified by applying dRA, dDEC
-      //
-      iface->fpoffsets.apply_offset( acam_ra_dRA,   iface->target.dRA,
-                                     acam_dec_dDEC, iface->target.dDEC );
-
-      // the offset introduced by putonslit is therefore the separation between
-      // acam_ra,acam_dec and acam_ra_dRA,acam_dec_dDEC
-      //
-      this->putonslit_offset = angular_separation( acam_ra_dRA, acam_dec_dDEC, acam_ra, acam_dec );
-
-      // and the delta is the difference between this and the last time,
-      // which gets added to the tcs_max_offset.
-      //
-      double maxoffset = this->tcs_max_offset + std::fabs(this->putonslit_offset - this->last_putonslit_offset);
-
-      // so remember this for next time
-      //
-      this->last_putonslit_offset = this->putonslit_offset;
-
-      // Finally, check the requested offset against this putonslit-modified max allowed offset
+      // Check the requested offset against the applicable max allowed offset
       //
       if ( offset >= maxoffset ) {
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
+        this->allow_large_offset.store(false);  // deliberate-offset allowance consumed even when rejected
 
         // Match found but failure to send an offset is considered an attempt
         // so attempts is incremented.
@@ -3703,6 +3691,7 @@ logwrite( function, message.str() );
         if ( should_offset ) {
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
+          this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 
@@ -3797,6 +3786,8 @@ logwrite( function, message.str() );
       logwrite( function, "ERROR writing to database: "+std::string(e.what()) );
     }
 
+    iface->publish_status();
+
     return error;
   }
   /***** Acam::Target::do_acquire *********************************************/
@@ -3814,6 +3805,7 @@ logwrite( function, message.str() );
    *
    */
   bool Target::median_filter( double &ra_off, double &dec_off ) {
+    std::lock_guard<std::mutex> lock(this->offset_params_mtx);  // P2: serialize vs reset_offset_params
 
     if ( this->tcs_offset_period == 1 ) return true;
 
@@ -3849,7 +3841,10 @@ logwrite( function, message.str() );
       dec_off = this->dec_offs[n/2];
     }
 
-    this->reset_offset_params();
+    // accumulators consumed; clear inline (reset_offset_params would re-lock the non-recursive mutex)
+    this->ra_offs.clear();
+    this->dec_offs.clear();
+    this->time_offs.clear();
 
     return true;
   }
@@ -3865,8 +3860,8 @@ logwrite( function, message.str() );
    *
    */
   void Interface::dothread_set_filter( Acam::Interface &iface, std::string filter_req ) {
-    std::string function = "Acam::Interface::dothread_set_filter";
-    std::stringstream message;
+    const char* function = "Acam::Interface::dothread_set_filter";
+    std::ostringstream message;
 
     // get current filter, used to determine if it changed
     //
@@ -3902,6 +3897,8 @@ logwrite( function, message.str() );
       iface.guide_manager.filter="error";
     }
 
+    iface.publish_status();   // push filter change to subscribers
+
     return;
   }
   /***** Acam::Interface::dothread_set_filter *********************************/
@@ -3916,9 +3913,9 @@ logwrite( function, message.str() );
    *
    */
   void Interface::dothread_set_focus( Acam::Interface &iface, double focus_req ) {
-    std::string function = "Acam::Interface::dothread_set_focus";
-    std::stringstream message;
 /*****
+    const char* function = "Acam::Interface::dothread_set_focus";
+    std::ostringstream message;
     // get current focus, used to determine if it changed
     //
     double focus_og;
@@ -3973,8 +3970,8 @@ logwrite( function, message.str() );
    *
    */
   void Interface::dothread_fpoffset( Acam::Interface &iface ) {
-    std::string function = "Acam::Interface::dothread_fpoffset";
-    std::stringstream message;
+    const char* function = "Acam::Interface::dothread_fpoffset";
+    std::ostringstream message;
 
     message.str(""); message << "calling fpoffsets.compute_offset() from thread: PyGILState=" << PyGILState_Check();
     logwrite( function, message.str() );
@@ -4000,8 +3997,8 @@ logwrite( function, message.str() );
    */
   void Interface::dothread_monitor_focus( Acam::Interface &iface ) {
 /*****
-    std::string function = "Acam::Interface::dothread_monitor_focus";
-    std::stringstream message;
+    const char* function = "Acam::Interface::dothread_monitor_focus";
+    std::ostringstream message;
 
     if ( iface.monitor_focus_state.load(std::memory_order_seq_cst) == Acam::FOCUS_MONITOR_RUNNING ) {
       logwrite( function, "thread already running" );
@@ -4089,8 +4086,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::shutdown( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::shutdown";
-    std::stringstream message;
+    const char* function = "Acam::Interface::shutdown";
+    std::ostringstream message;
 
     // Help
     //
@@ -4110,13 +4107,17 @@ logwrite( function, message.str() );
     //
     BoolState shutting_down( this->is_shutting_down );
 
-    // close the cover (if motion is in use)
+    // Stop target acquisition and the framegrab thread FIRST so the guider
+    // stops sending pt_offsets to TCS during the slow cover-close that
+    // follows. TCS is shut down at the orchestration layer after acamd
+    // finishes (see Sequencer::Sequence::shutdown phase split).
+    //
+    error |= this->acquire( "stop", dontcare);
+    error |= this->framegrab( "stop", dontcare );
+
+    // close the cover (if motion is in use) - this is the slow step
     //
     if ( this->motion.is_open() ) error |= this->motion.cover( "close", dontcare );
-
-    // stop the framegrab thread
-    //
-    error |= this->framegrab( "stop", dontcare );
 
     // request stop the focus monitor
     //
@@ -4126,6 +4127,12 @@ logwrite( function, message.str() );
     // close socket connections to hardware
     //
     error |= this->close( "all", dontcare );
+
+    // publish post-shutdown state so subscribers see is_acquired=false /
+    // acquire_mode="stopped" before publishing stops; forced to bypass
+    // publish_status's change-detect early-return.
+    //
+    this->publish_status(true);
 
     if ( error == NO_ERROR ) logwrite( function, "acam interfaces shut down" );
     else logwrite( function, "ERROR shutting down acam interfaces" );
@@ -4148,8 +4155,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::test( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::test";
-    std::stringstream message;
+    const char* function = "Acam::Interface::test";
+    std::ostringstream message;
     std::vector<std::string> tokens;
     long error = NO_ERROR;
 
@@ -4172,6 +4179,7 @@ logwrite( function, message.str() );
       retstring.append( "   sleep\n" );
       retstring.append( "   solverargs [ ? | <key=val> [...<keyn=valn>] ]\n" );
       retstring.append( "   threadoffset [ ? ]\n" );
+      retstring.append( "   internalshutter [ ? ]\n" );
       return HELP;
     }
 
@@ -4339,6 +4347,23 @@ logwrite( function, message.str() );
     }
     else
     // --------------------------------
+    // internalshutter
+    //
+    if ( testname == "internalshutter" ) {
+      if ( tokens.size() > 1 && tokens[1] == "?" ) {
+        retstring = ACAMD_TEST;
+        retstring.append( " internalshutter\n" );
+        retstring.append( "  is internal shutter installed?\n" );
+        return HELP;
+      }
+      else {
+       int shut;
+       error = this->camera.andor.sdk._IsInternalMechanicalShutter( shut );
+       retstring=(shut==1?"yes":"no");
+      }
+    }
+    else
+    // --------------------------------
     // camera
     //
     if ( testname == "camera" ) {
@@ -4388,7 +4413,7 @@ logwrite( function, message.str() );
         do {
           logwrite( function, std::to_string(nacquires) );
           error |= this->camera.andor.acquire_one();                     // acquire a single image
-          error |= this->collect_header_info();                          // collect header information
+          error |= this->assemble_header_info();                         // assemble header keyword information
           error |= this->camera.write_frame( "",
                                              this->imagename,
                                              this->tcs_online.load() );  // write to FITS file
@@ -4433,7 +4458,7 @@ logwrite( function, message.str() );
         do {
           logwrite( function, std::to_string(nacquires) );
           error |= this->camera.andor.get_recent(3000);                  // 
-          error |= this->collect_header_info();                          // collect header information
+          error |= this->assemble_header_info();                         // assemble header keyword information
           error |= this->camera.write_frame( "",
                                              this->imagename,
                                              this->tcs_online.load() );  // write to FITS file
@@ -4467,7 +4492,7 @@ logwrite( function, message.str() );
       //
       if ( tokens[1]=="getrecent" ) {
         error = this->camera.andor.get_recent(3000);
-        error |= this->collect_header_info();                          // collect header information
+        error |= this->assemble_header_info();                         // assemble header keyword information
         error |= this->camera.write_frame( "",
                                            this->imagename,
                                            this->tcs_online.load() );  // write to FITS file
@@ -4596,7 +4621,7 @@ logwrite( function, message.str() );
         retstring.append( "  Gather information and add it to the internal keyword database.\n" );
         return HELP;
       }
-      else error = this->collect_header_info();             // collect header information
+      else error = this->assemble_header_info();            // assemble header keyword information
     }
     else
     // --------------------------------
@@ -4717,8 +4742,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::exptime( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::exptime";
-    std::stringstream message;
+    const char* function = "Acam::Interface::exptime";
+    std::ostringstream message;
     long error=NO_ERROR;
 
     if ( args == "?" || args == "help" ) {
@@ -4795,8 +4820,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::fan_mode( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::fan_mode";
-    std::stringstream message;
+    const char* function = "Acam::Interface::fan_mode";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -4868,11 +4893,7 @@ logwrite( function, message.str() );
    *
    */
   long Interface::image_quality( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::image_quality";
-    std::stringstream message;
-
     // Help
-    //
     if ( args == "?" ) {
       retstring = ACAMD_QUALITY;
       retstring.append( "\n" );
@@ -4904,8 +4925,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::solve( std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::solve";
-    std::stringstream message;
+    const char* function = "Acam::Interface::solve";
+    std::ostringstream message;
     long error = NO_ERROR;
     std::string _imagename;
     std::string _wcsname;
@@ -5022,7 +5043,7 @@ logwrite( function, message.str() );
   /***** Acam::Interface::solve ***********************************************/
 
 
-  /***** Acam::Interface::collect_header_info *********************************/
+  /***** Acam::Interface::assemble_header_info ********************************/
   /**
    * @brief      gather information and add it to the internal keyword database
    * @details    Some of the keys are fixed, some come from the Andor::Information
@@ -5033,27 +5054,24 @@ logwrite( function, message.str() );
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::collect_header_info() {
-    std::string function = "Acam::Interface::collect_header_info";
-    std::stringstream message;
-
-    // request external telemetry, results in struct telem.
-    //
-    this->request_snapshot();
-    this->wait_for_snapshots();
-
-    bool _tcs = telem.is_tcs_open;
-    std::string tcsname = ( _tcs ? telem.tcsname : "offline" );
+  long Interface::assemble_header_info() {
 
     double angle_acam=NAN,  ra_acam=NAN,  dec_acam=NAN;  // outputs from fpoffsets
 
-    if ( _tcs ) this->target.save_casangle( telem.angle_scope );      // store in the Target class, required for acquisition
+    // ---------- scope lock tcsdata --------------
+    {
+    std::lock_guard<std::mutex> lock(tcsdata_mtx);
+
+    bool _tcs = tcsdata.is_tcs_open;
+    std::string tcsname = ( _tcs ? tcsdata.tcsname : "offline" );
+
+    if ( _tcs ) this->target.save_casangle( tcsdata.angle_scope );      // store in the Target class, required for acquisition
 
     // Compute FP offsets from TCS coordinates (SCOPE) to ACAM coodinates.
     // compute_offset() always wants degrees and get_coords() returns RA hours.
     // Results in degrees.
     //
-    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (telem.ra_scope_h*TO_DEGREES), telem.dec_scope_d, telem.angle_scope,
+    if ( _tcs ) this->fpoffsets.compute_offset( "SCOPE", "ACAM", (tcsdata.ra_scope_h*TO_DEGREES), tcsdata.dec_scope_d, tcsdata.angle_scope,
                                                                  ra_acam, dec_acam, angle_acam );
 
     // Get some info from the Andor::Information class,
@@ -5074,11 +5092,21 @@ logwrite( function, message.str() );
 
     this->camera.fitsinfo.fitskeys.addkey( "TCS",  tcsname, "" );
 
+    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", tcsdata.telfocus, "telescope focus (mm)" );
+    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",  tcsdata.airmass, "" );
+    this->camera.fitsinfo.fitskeys.addkey( "RA",       tcsdata.ra_scope_hms, "Telecscope Right Ascension" );
+    this->camera.fitsinfo.fitskeys.addkey( "DEC",      tcsdata.dec_scope_dms, "Telescope Declination" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELRA",    tcsdata.ra_scope_h, "Telecscope Right Ascension hours" );
+    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",   tcsdata.dec_scope_d, "Telescope Declination degrees" );
+    this->camera.fitsinfo.fitskeys.addkey( "RAOFFS",   tcsdata.offsetra, "Telescope RA offset" );
+    this->camera.fitsinfo.fitskeys.addkey( "DECLOFFS", tcsdata.offsetdec, "Telescope DEC offset" );
+    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE", tcsdata.angle_scope, "Cassegrain ring angle" );
+    }
+    // ---------- end scope lock tcsdata ----------
+
     this->camera.fitsinfo.fitskeys.addkey( "CREATOR",  "acamd", "file creator" );
     this->camera.fitsinfo.fitskeys.addkey( "INSTRUME", "NGPS", "name of instrument" );
     this->camera.fitsinfo.fitskeys.addkey( "TELESCOP", "P200", "name of telescope" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELFOCUS", telem.telfocus, "telescope focus (mm)" );
-    this->camera.fitsinfo.fitskeys.addkey( "AIRMASS",  telem.airmass, "" );
 
     // get parameters from FPOffsets, results are stored in the class
     //
@@ -5129,13 +5157,6 @@ logwrite( function, message.str() );
 
     this->camera.fitsinfo.fitskeys.addkey( "POSANG",    angle_acam, "" );
     this->camera.fitsinfo.fitskeys.addkey( "TARGET",    this->target.get_name(), "target name" );
-    this->camera.fitsinfo.fitskeys.addkey( "RA",        telem.ra_scope_hms, "Telecscope Right Ascension" );
-    this->camera.fitsinfo.fitskeys.addkey( "DEC",       telem.dec_scope_dms, "Telescope Declination" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELRA",     telem.ra_scope_h, "Telecscope Right Ascension hours" );
-    this->camera.fitsinfo.fitskeys.addkey( "TELDEC",    telem.dec_scope_d, "Telescope Declination degrees" );
-    this->camera.fitsinfo.fitskeys.addkey( "RAOFFS",    telem.offsetra, "Telescope RA offset" );
-    this->camera.fitsinfo.fitskeys.addkey( "DECLOFFS",  telem.offsetdec, "Telescope DEC offset" );
-    this->camera.fitsinfo.fitskeys.addkey( "CASANGLE",  telem.angle_scope, "Cassegrain ring angle" );
     this->camera.fitsinfo.fitskeys.addkey( "WCSAXES",   2, "" );
     this->camera.fitsinfo.fitskeys.addkey( "RADESYSA",  "ICRS", "" );
     this->camera.fitsinfo.fitskeys.addkey( "CTYPE1",    "RA---TAN", "" );
@@ -5157,7 +5178,7 @@ logwrite( function, message.str() );
 
     return NO_ERROR;
   }
-  /***** Acam::Interface::collect_header_info *********************************/
+  /***** Acam::Interface::assemble_header_info ********************************/
 
 
   /***** Acam::Interface::target_coords ***************************************/
@@ -5182,8 +5203,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::target_coords( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::target_coords";
-    std::stringstream message;
+    const char* function = "Acam::Interface::target_coords";
+    std::ostringstream message;
 
     double _ra=NAN, _dec=NAN, _angle=NAN;
     std::string _name;
@@ -5316,8 +5337,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::offset_cal( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::offset_cal";
-    std::stringstream message;
+    const char* function = "Acam::Interface::offset_cal";
+    std::ostringstream message;
 
     // Help
     //
@@ -5389,7 +5410,7 @@ logwrite( function, message.str() );
     // Form and send the acquire command.
     // This will change the target.acquire_mode to TARGET_ACQUIRE while it's acquiring.
     //
-    std::stringstream cmd;
+    std::ostringstream cmd;
     cmd << std::fixed << std::setprecision(6) << acam_ra << " " << acam_dec << " " << acam_angle << " acam";
     error = this->acquire( cmd.str(), retstring );
 
@@ -5461,8 +5482,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::offset_goal( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::offset_goal";
-    std::stringstream message;
+    const std::string function("Acam::Interface::offset_goal");
+    std::ostringstream message;
 
     if ( args.empty() ) {
       message << this->target.dRA << " " << this->target.dDEC;
@@ -5474,39 +5495,32 @@ logwrite( function, message.str() );
     //
     if ( args == "?" ) {
       retstring = ACAMD_OFFSETGOAL;
-      retstring.append( " [ <dRA> <dDEC> ]\n" );
+      retstring.append( " [ <dRA> <dDEC> [ fineguiding ] ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
       retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
+      retstring.append( "  'fineguiding' marks a slicecam fine-guiding correction (keeps the 60\" cap).\n" );
       return HELP;
     }
 
-    std::vector<std::string> tokens;
-    Tokenize( args, tokens, " " );
+    std::istringstream iss(args);
 
-    if ( tokens.size() != 2 ) {
-      logwrite( function, "ERROR expected <dRA> <dDEC>" );
+    double dRA=NAN, dDEC=NAN;
+    if (!(iss >> dRA >> dDEC) ||
+        (std::isnan(dRA) || std::isnan(dDEC)) ) {
+      logwrite( function, "ERROR expected <dRA> <dDEC> [ fineguiding ]" );
       retstring="invalid_argument";
       return ERROR;
     }
+    this->target.dRA  = dRA;
+    this->target.dDEC = dDEC;
 
-    // Convert the input string to double and save in the class
-    //
-    try {
-      double dRA  = std::stod( tokens.at(0) );
-      double dDEC = std::stod( tokens.at(1) );
-
-      if (std::isnan(dRA) || std::isnan(dDEC)) throw std::invalid_argument("NaN value encountered");
-
-      this->target.dRA  = dRA;
-      this->target.dDEC = dDEC;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing " << args << ": " << e.what();
-      logwrite( function, message.str() );
-      retstring="argument_exception";
-      return ERROR;
-    }
+    // optional fineguiding flag: marks a slicecam fine-guiding correction, which
+    // must stay within the ordinary 60" guiding cap. Its absence means a
+    // deliberate goal offset (put-on-slit, offset-star, end-of-fineacquire,
+    // pyGUI 'Offset') that may legitimately be larger.
+    std::string flag;
+    const bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
     // Apply any dRA, dDEC goal offsets from the "put on slit" action to
     // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
@@ -5521,14 +5535,22 @@ logwrite( function, message.str() );
     message.str(""); message << this->target.dRA << " " << this->target.dDEC;
     retstring = message.str();
 
+    // Applying an offset to the goal while guiding must never drop out of
+    // guiding -- there is no use case for re-acquiring on an offset. Stay in
+    // TARGET_GUIDE and reset the offset filter so the new goal takes effect
+    // quickly. This covers GUI "put on slit" and sequencer target offsets.
+    //
+    // This is a deliberate offset (put-on-slit, offset-star, end-of-fineacquire,
+    // or the pyGUI 'Offset' button) and may exceed the normal guiding cap, so
+    // allow the next correction up to ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. The
+    // allowance is one-shot: do_acquire consumes it when the offset is sent.
+    //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
-      this->target.acquire_mode = Acam::TARGET_ACQUIRE;
-      this->target.nacquired = 0;
-      this->target.attempts = 0;
-      this->target.sequential_failures = 0;
-      this->target.timeout_time = std::chrono::steady_clock::now()
-                                + std::chrono::duration<double>(this->target.timeout);
+      this->target.reset_offset_params();
+      if ( !is_fineguiding ) this->target.allow_large_offset.store(true);
     }
+
+    this->publish_status();
 
     return NO_ERROR;
   }
@@ -5544,8 +5566,8 @@ logwrite( function, message.str() );
    *
    */
   long Interface::put_on_slit( const std::string args, std::string &retstring ) {
-    std::string function = "Acam::Interface::put_on_slit";
-    std::stringstream message;
+    const char* function = "Acam::Interface::put_on_slit";
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -5659,7 +5681,7 @@ logwrite( function, message.str() );
         return;
       }
 
-      std::stringstream fn;
+      std::ostringstream fn;
       fn << path << "/" << basename << "_" << std::setfill('0') << std::setw(5) << npreserve << ".fits";
 
       // increment until a unique file is found so that it never overwrites

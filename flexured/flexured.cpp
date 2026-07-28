@@ -113,12 +113,27 @@ int main(int argc, char **argv) {
 
   // initialize the pub/sub handler
   //
-  if ( flexured.interface.init_pubsub({"tcsd"}) == ERROR ) {
+  if ( flexured.interface.init_pubsub({Topic::TCSD}) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     flexured.exit_cleanly();
   }
-  std::this_thread::sleep_for( std::chrono::milliseconds(500) );
-  flexured.interface.publish_snapshot();
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  // publish current state so the world knows I'm online
+  //
+  flexured.interface.publish_status( true );
+
+  // Ask tcsd for a current snapshot. On a restart the broker replays tcsd's
+  // last cached message, which tcs_info time-stamps on receipt, so without
+  // this request an old cached reading would look fresh for 10 seconds.
+  //
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  try {
+    flexured.interface.request_tcs_snapshot();
+  }
+  catch ( const std::exception &e ) {
+    logwrite( function, "ERROR requesting TCS snapshot: "+std::string(e.what()) );
+  }
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

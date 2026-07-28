@@ -316,12 +316,6 @@
     //
     double quad = std::sqrt( std::pow(ra_d,2) + std::pow(dec_d,2) );
     int to = static_cast<int>( std::max( 5000.0, ( 5000.0 + (quad / rate) * 1000.0 * 1.5 ) ) );
-    logwrite( function, "[DEBUG] ra_d="+std::to_string(ra_d)+
-                               " dec_d="+std::to_string(dec_d)+
-                               " rate="+std::to_string(rate)+
-                               " quad="+std::to_string(quad)+
-                               " to="+std::to_string(to) );
-    logwrite( function, "[DEBUG] sending "+tcscmd.str()+" with timeout="+std::to_string(to)+" ms" );
     if ( this->client.send( tcscmd.str(), tcsreply, to ) != NO_ERROR ) {
       logwrite( function, "ERROR sending guider offsets" );
       return ERROR;
@@ -556,11 +550,6 @@
       error = ERROR;
     }
 
-#ifdef LOGLEVEL_DEBUG  // this can be a little much when polling
-    message.str(""); message << "[DEBUG] from tcs_message \"" << tcs_message << "\" extracted value: " << value << " error=" << error;
-    logwrite( function, message.str() );
-#endif
-
     return error;
   }
   /***** TcsDaemonClient::extract_value ***************************************/
@@ -582,9 +571,6 @@
     std::vector<std::string> tokens;
 
     if ( value == TCS_SUCCESS ) {
-#ifdef LOGLEVEL_DEBUG
-      logwrite( function, "[DEBUG] TCS successful completion" );
-#endif
       return NO_ERROR;
     }
     else {

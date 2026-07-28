@@ -95,7 +95,7 @@ def seeingLambda(w ,FWHM ,pivot=500.*u.nm):
     '''Seeing law scaled to wavelength'''
     assert u.get_physical_type(w) == 'length', "w must have units of length"
     #pivot = 500.*u.nm
-    return FWHM*(w/pivot)**0.2
+    return (FWHM*(w/pivot)**0.2).to('arcsec')  # Force units to simplify
 
 def makeSource(args):
     ''' Load the source model, mix with astrophysics, normalize.
@@ -567,7 +567,7 @@ def applySlit(slitw, source_at_slit, sky_at_slit, throughput_slicerOptics, args 
     else:
         Npix_spatial = args.extended
 
-    if args.fastSNR: Npix_spatial = 2  # overrides extended source size
+    if args.fastSNR: Npix_spatial = 2*args.fastSNR  # overrides extended source size
 
     sharpness = { k : { s: 
         1./array([Npix_spatial]*len(binCenters[k])) if Npix_spatial is not None # 1/sharpness = [N, N, N...]
@@ -598,9 +598,10 @@ def applySlit(slitw, source_at_slit, sky_at_slit, throughput_slicerOptics, args 
             if POINTSOURCE:
                 spec = source_at_slit[k] * throughput_slicer[s]  # This applies slit loss and optics
 
-                # scale signal down to 2 center pixels
+                # scale signal down to 2N center pixels
                 if args.fastSNR:
-                    spec *= SpectralElement(Empirical1D, points=binCenters[k], lookup_table=2*profile_slit[k][s][0])
+                    spec *= 2*profile_slit[k][s][0:args.fastSNR].sum()
+                    #spec *= SpectralElement(Empirical1D, points=binCenters[k], lookup_table=2*profile_slit[k][s][0])
 
             else:
                 # extended source is normalized to mag/arcsec^2, so multiplying by arcsec^2/px gives signal in 1 pixel
@@ -633,7 +634,7 @@ def applySlit_extended(slitw, source_at_slit, sky_at_slit, throughput_slicerOpti
     if args.noslicer or args.fastSNR:   slicer_paths = ['center']
     else:                               slicer_paths = ['center','side']
 
-    if args.fastSNR: Npix_spatial = 2
+    if args.fastSNR: Npix_spatial = 2*args.fastSNR
     elif args.extended != None: Npix_spatial = args.extended
     else: Npix_spatial = None
 

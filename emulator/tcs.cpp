@@ -97,7 +97,7 @@ namespace TcsEmulator {
    * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "  (TcsEmulator::Server::doit) ";
     long  ret;
     std::stringstream message;
@@ -707,6 +707,19 @@ namespace TcsEmulator {
   /***** TcsEmulator::Telescope::mrates ***************************************/
 
 
+  /***** TcsEmulator::Telescope::parallactic **********************************/
+  /**
+   * @brief      perform the ?PARALLACTIC command, which returns a string
+   * @param[out] retstring  reference to string contains the return string
+   *
+   */
+  void Telescope::parallactic( std::string &retstring ) {
+    std::string function = "  (TcsEmulator::Telescope::parallactic) ";
+    retstring="PARALLACTIC = 0.00";
+  }
+  /***** TcsEmulator::Telescope::parallactic **********************************/
+
+
   /***** TcsEmulator::Telescope::weather **************************************/
   /**
    * @brief      perform the ?WEATHER command, which returns a long string
@@ -1106,6 +1119,10 @@ namespace TcsEmulator {
       }
     }
     else
+    if ( mycmd == "Z" ) {
+      retstring = "0";                 // successful completion
+    }
+    else
     if ( mycmd == "RET" ) {
       retstring = "0";                 // successful completion
     }
@@ -1138,6 +1155,11 @@ namespace TcsEmulator {
     else
     if ( mycmd == "?NAME" ) {
       retstring = this->telescope.name;
+      check_retval = false;
+    }
+    else
+    if ( mycmd == "?PARALLACTIC" ) {
+      this->telescope.parallactic(retstring);
       check_retval = false;
     }
     else

@@ -12,6 +12,7 @@
  */
 
 #include "sequence.h"
+#include "message_keys.h"
 
 namespace Sequencer {
 
@@ -21,7 +22,7 @@ namespace Sequencer {
   /**
    * @brief      publishes snapshot of my telemetry
    * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry info when the subscriber receives the "_snapshot"
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
    *             topic and the payload contains my daemon name.
    * @param[in]  jmessage_in  subscribed-received JSON message
    *
@@ -32,50 +33,193 @@ namespace Sequencer {
     if ( jmessage_in.contains( Sequencer::DAEMON_NAME ) ) {
       this->publish_snapshot();
     }
-    else
-    if ( jmessage_in.contains( "test" ) ) {
-      logwrite( "Sequencer::Sequence::handletopic_snapshot", jmessage_in.dump() );
-    }
   }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
 
 
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+  /**
+   * @brief      handles Topic::CAMERAD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_camerad(const nlohmann::json &jmessage) {
+    // when I write to the completed table I will write the actual EXPTIME
+    this->target.column_from_json<double>( "EXPTIME", Key::Camerad::SHUTTERTIME, jmessage );
+
+    std::lock_guard<std::mutex> lock(camerad_mtx);
+    if (jmessage.contains(Key::Camerad::READY)) {
+      int isready = jmessage[Key::Camerad::READY].get<bool>();
+      this->can_expose.store(isready);
+    }
+    this->camerad_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_camerad ****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slitd ******************************/
+  /**
+   * @brief      handles Topic::SLITD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slitd(const nlohmann::json &jmessage) {
+    this->target.column_from_json<double>( "SLITWIDTH",  Key::Slitd::SLITW, jmessage );
+    this->target.column_from_json<double>( "SLITOFFSET", Key::Slitd::SLITO, jmessage );
+
+    std::lock_guard<std::mutex> lock(slitd_mtx);
+    this->slitd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slitd ******************************/
+
+
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+  /**
+   * @brief      handles Topic::SLICECAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_slicecamd(const nlohmann::json &jmessage) {
+    const bool has_running = jmessage.contains( Key::Slicecamd::FINEACQUIRE_RUNNING );
+    const bool has_locked  = jmessage.contains( Key::Slicecamd::FINEACQUIRE_LOCKED );
+    if ( !has_running && !has_locked ) return;
+
+    // Parse JSON values before taking the lock (parsing may throw).
+    const bool running = has_running
+        ? jmessage[Key::Slicecamd::FINEACQUIRE_RUNNING].get<bool>() : false;
+    const bool locked = has_locked
+        ? jmessage[Key::Slicecamd::FINEACQUIRE_LOCKED].get<bool>() : false;
+
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires fineacquire_mtx inside fineacquire_cv.wait().
+    std::lock_guard<std::mutex> lock(this->fineacquire_mtx);
+    if ( has_running ) {
+      this->is_fineacquire_running.store( running );
+    }
+    if ( has_locked ) {
+      this->is_fineacquire_locked.store( locked );
+    }
+    this->fineacquire_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_slicecamd **************************/
+
+
+  /***** Sequencer::Sequence::handletopic_tcsd *******************************/
+  /**
+   * @brief      handles Topic::TCSD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_tcsd(const nlohmann::json &jmessage) {
+    // the completed target table contains TCS data now
+    this->target.column_from_json<std::string>( "TELRA",   Key::Tcsd::TELRA,    jmessage );
+    this->target.column_from_json<std::string>( "TELDECL", Key::Tcsd::TELDEC,   jmessage );
+    this->target.column_from_json<double>( "ALT",          Key::Tcsd::ALT,      jmessage );
+    this->target.column_from_json<double>( "AZ",           Key::Tcsd::AZ,       jmessage );
+    this->target.column_from_json<double>( "AIRMASS",      Key::Tcsd::AIRMASS,  jmessage );
+    this->target.column_from_json<double>( "CASANGLE",     Key::Tcsd::CASANGLE, jmessage );
+
+    std::lock_guard<std::mutex> lock(tcsd_mtx);
+    this->tcsd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_tcsd *******************************/
+
+
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
+  /**
+   * @brief      handles Topic::ACAMD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_acamd(const nlohmann::json &jmessage) {
+    // Parse JSON values before taking the lock (parsing may throw).
+    // extract_telemetry_value leaves its out-param unchanged on missing key
+    // or type mismatch, so default-initialize before the call.
+    bool acquired = false;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::IS_ACQUIRED, acquired );
+
+    // track whether acamd is actively trying to acquire (mode == "acquiring")
+    const bool has_mode = jmessage.contains( Key::Acamd::ACQUIRE_MODE );
+    const bool acquiring = has_mode
+        ? jmessage[Key::Acamd::ACQUIRE_MODE].get<std::string>() == "acquiring"
+        : false;
+
+    int64_t pubtime=0;
+    Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
+
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires acam_mtx inside acam_cv.wait().
+    std::lock_guard<std::mutex> lock(this->acam_mtx);
+    this->is_acam_guiding.store( acquired );
+    if ( has_mode ) {
+      this->is_acam_acquiring.store( acquiring );
+    }
+    this->acam_pubtime.store( pubtime );
+    this->acam_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_acamd ******************************/
+
+
   /***** Sequencer::Sequence::publish_snapshot *******************************/
   /**
-   * @brief      publishes snapshot of my telemetry
+   * @brief      publishes snapshot of all of my telemetry
    * @details    This publishes a JSON message containing a snapshot of my
    *             telemetry.
    *
    */
   void Sequence::publish_snapshot() {
-    std::string dontcare;
-    this->publish_snapshot(dontcare);
-  }
-  void Sequence::publish_snapshot(std::string &retstring) {
     this->publish_seqstate();
     this->publish_waitstate();
     this->publish_daemonstate();
+    this->publish_targetinfo( true );
   }
   /***** Sequencer::Sequence::publish_snapshot *******************************/
 
 
+  /***** Sequencer::Sequence::request_snapshot *******************************/
+  /**
+   * @brief      asks subscribed daemons to re-publish their current telemetry
+   * @details    Publishes a SNAPSHOT request listing each daemon whose topic
+   *             this sequencer subscribes to. Each named daemon responds by
+   *             re-publishing its own state, ensuring the sequencer receives
+   *             current telemetry even if the daemon published before the
+   *             sequencer subscribed.
+   *
+   */
+  void Sequence::request_snapshot() {
+    nlohmann::json jmessage;
+    jmessage[Daemon::CAMERAD]   = true;
+    jmessage[Daemon::ACAMD]     = true;
+    jmessage[Daemon::SLICECAMD] = true;
+    jmessage[Daemon::SLITD]     = true;
+    jmessage[Daemon::TCSD]      = true;
+    this->publisher->publish( jmessage, Topic::SNAPSHOT );
+  }
+  /***** Sequencer::Sequence::request_snapshot *******************************/
+
+
   /***** Sequencer::Sequence::publish_seqstate ********************************/
   /**
-   * @brief      publishes sequencer state with topic "seq_seqstate"
-   * @details    seqstate is a single string
+   * @brief      publishes sequencer state under Topic::SEQ_SEQSTATE
+   * @details    The payload carries the sequencer state (Key::Sequencer::SEQSTATE)
+   *             plus Key::Sequencer::SHOULD_FINEACQUIRE, which is a user-settable
+   *             sequencer config and so rides along on this topic.
    *
    */
   void Sequence::publish_seqstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // sequencer state
     std::string seqstate( this->seq_state_manager.get_set_states() );
     rtrim( seqstate );
-    jmessage_out["seqstate"]  = seqstate;
+    jmessage_out[Key::Sequencer::SEQSTATE] = seqstate;
+
+    // user-settable: should automatic fine acquisition run?
+    jmessage_out[Key::Sequencer::SHOULD_FINEACQUIRE] = this->should_fineacquire.load();
 
     try {
-      this->publisher->publish( jmessage_out, "seq_seqstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_seqstate",
@@ -96,7 +240,7 @@ namespace Sequencer {
    */
   void Sequence::publish_waitstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -106,7 +250,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_waitstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_WAITSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_waitstate",
@@ -126,7 +270,7 @@ namespace Sequencer {
    */
   void Sequence::publish_daemonstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of daemon state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -136,7 +280,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_daemonstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_DAEMONSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_daemonstate",
@@ -156,7 +300,7 @@ namespace Sequencer {
    */
   void Sequence::publish_threadstate() {
     nlohmann::json jmessage_out;
-    jmessage_out["source"]    = Sequencer::DAEMON_NAME;
+    jmessage_out[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
     // iterate through map of thread state bits, add each as a key in the JSON message,
     // and set true|false if the bit is set or not
@@ -166,7 +310,7 @@ namespace Sequencer {
     }
 
     try {
-      this->publisher->publish( jmessage_out, "seq_threadstate" );
+      this->publisher->publish( jmessage_out, Topic::SEQ_THREADSTATE );
     }
     catch ( const std::exception &e ) {
       logwrite( "Sequencer::Sequence::publish_threadstate",
@@ -180,23 +324,25 @@ namespace Sequencer {
   /***** Sequencer::Sequence::broadcast_daemonstate ***************************/
   /**
    * @brief      publishes daemonstate and can control seqstate
-   * @details    If not STARTING or STOPPING and not all daemons ready then
-   *             this ensures that the seqstate drops into NOTREADY.
+   * @details    Daemon-readiness changes may only force the sequencer into
+   *             NOTREADY when the current seqstate is itself READY or
+   *             NOTREADY. Lifecycle states (STARTING, STOPPING, RUNNING,
+   *             PAUSED, ABORTING, FAILED) are owned by the lifecycle
+   *             functions and are never overridden here. The one-hot
+   *             seqstate contract is preserved.
    *
    */
   void Sequence::broadcast_daemonstate() {
     // always publish daemonstate when called
     this->publish_daemonstate();
 
-    // If any daemon isn't ready then the sequencer can't be ready,
-    // but don't override STARTING or STOPPING, unless none are ready.
-    if ( daemon_manager.are_all_clear() ) {
-      seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
-    }
-    else
-    if ( ! seq_state_manager.is_set(SEQ_STARTING) &&
-         ! seq_state_manager.is_set(SEQ_STOPPING) &&
-         ! daemon_manager.are_all_set() ) {
+    // Only degrade seqstate to NOTREADY when the sequencer is currently
+    // READY or NOTREADY. Never override an active lifecycle transition
+    // (STARTING, STOPPING, RUNNING, PAUSED, ABORTING) or FAILED.
+    //
+    if ( ! daemon_manager.are_all_set() &&
+         seq_state_manager.are_any_set( Sequencer::SEQ_READY,
+                                        Sequencer::SEQ_NOTREADY ) ) {
       seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
     }
   }
@@ -205,31 +351,43 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
   /**
-   * @brief      writes string of seq_state to the async port
-   * @details    This broadcasts the seqstate as a string with the "SEQSTATE:"
-   *             message tag.
+   * @brief      publishes seq_state on the SEQ_SEQSTATE topic
+   * @details    Legacy UDP "SEQSTATE:" async strings have been removed.
+   *             Seqstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_seqstate() {
+    const std::string function("Sequencer::Sequence::broadcast_seqstate");
+
+    // publish the structured seqstate topic
+    //
     this->publish_seqstate();
-    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_seqstate",
-                                 "SEQSTATE: "+seq_state_manager.get_set_states() );
+    this->publish_targetinfo();   // targetinfo content is gated on seq_state (READY/RUNNING)
     this->cv.notify_all();
+
+    // emit a NOTICE on Topic::BROADCAST only when the lifecycle state has
+    // actually changed, so operators (and logs) get a breadcrumb trail of
+    // state transitions without noise from repeated identical callbacks.
+    //
+    std::string current( this->seq_state_manager.get_set_states() );
+    rtrim( current );
+    if ( current != this->last_seqstate_str ) {
+      this->last_seqstate_str = current;
+      this->broadcast.notice( function, "sequencer state: "+current );
+    }
   }
   /***** Sequencer::Sequence::broadcast_seqstate ******************************/
 
 
   /***** Sequencer::Sequence::broadcast_waitstate *****************************/
   /**
-   * @brief      writes string of all set wait_state bits to the asyn port
-   * @details    This broadcasts the seqstate as a string with the "WAITSTATE:"
-   *             message tag.
+   * @brief      publishes wait_state on the SEQ_WAITSTATE topic
+   * @details    Legacy UDP "WAITSTATE:" async strings have been removed.
+   *             Waitstate is now broadcast only via PUB-SUB.
    *
    */
   void Sequence::broadcast_waitstate() {
     this->publish_waitstate();
-    this->async.enqueue_and_log( "Sequencer::Sequence::broadcast_waitstate",
-                                 "WAITSTATE: "+wait_state_manager.get_set_states() );
     this->cv.notify_all();
   }
   /***** Sequencer::Sequence::broadcast_waitstate *****************************/
@@ -316,16 +474,6 @@ namespace Sequencer {
                                                 {Sequencer::SEQ_WAIT_EXPOSE} );     // clear EXPOSE
         }
 
-        // ---------------------------------------------
-        // clear READOUT flag on the end-of-frame signal
-        // ---------------------------------------------
-        //
-        if ( statstr.compare( 0, 10, "FRAMECOUNT" ) == 0 ) {                        // async message tag FRAMECOUNT
-          if ( seq.wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
-            seq.wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
-          }
-        }
-
         // ---------------------
         // process TEST messages
         // ---------------------
@@ -355,6 +503,45 @@ namespace Sequencer {
   }
 
 
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+  /**
+   * @brief      waits for the user to click a button, or cancel
+   * @details    Use this when you just want to slow things down or get a
+   *             cup of coffee instead of observing.
+   * @return     NO_ERROR on continue | ABORT on cancel
+   *
+   */
+  long Sequence::wait_for_user() {
+    const std::string function("Sequencer::Sequence::wait_for_user");
+    {
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+
+    this->broadcast.notice( function, "waiting for USER to send \"continue\" signal" );
+
+    while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
+      std::unique_lock<std::mutex> lock(cv_mutex);
+      this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+    }
+
+    this->broadcast.notice( function, "received "
+                                      +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
+                                      +" signal!" );
+    }  // end scope for wait_state = WAIT_USER
+
+    if ( this->cancel_flag.load() ) {
+      this->broadcast.notice( function, "sequence cancelled" );
+      return ABORT;
+    }
+
+    this->is_usercontinue.store(false);
+
+    this->broadcast.notice( function, "received USER continue signal!" );
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::wait_for_user ***********************************/
+
+
   /***** Sequencer::Sequence::sequence_start **********************************/
   /**
    * @brief      main sequence start thread
@@ -380,14 +567,14 @@ namespace Sequencer {
     // The Sequencer can only be started once
     //
     if ( thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
-      this->async.enqueue_and_log( function, "ERROR sequencer already running" );
+      this->broadcast.error( function, "sequencer already running" );
       return;
     }
 
     // The Sequencer can only be started when state is READY
     //
     if ( ! seq_state_manager.is_set( Sequencer::SEQ_READY ) ) {
-      this->async.enqueue_and_log( function, "ERROR cannot start: system not ready" );
+      this->broadcast.error( function, "cannot start: system not ready" );
       return;
     }
 
@@ -435,19 +622,24 @@ namespace Sequencer {
         this->dotype( "ONE" );                         // single-target mode must set dotype=ONE
       }
 
-      message.str(""); message << "NOTICE: " << targetstatus;
-      this->async.enqueue( message.str() );                                 // broadcast target status
+      logwrite(function, "targetstatus: "+targetstatus);
 
       if ( targetstate == TargetInfo::TARGET_FOUND ) {                      // target found, get the threads going
+
+        if (this->target.nexp==0) {                                         // skip target if nexp==0
+          message.str(""); message << "skipping target " << this->target.name;
+          logwrite(function, message.str());
+          continue;
+        }
 
         // If the TCS is not ready and the target contains TCS coordinates,
         // then we cannot proceed.
         //
         if ( ! this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) ) {
           if ( ! this->target.ra_hms.empty() || ! this->target.dec_dms.empty() ) {
-            message.str(""); message << "ERROR cannot move to target " << this->target.name
+            message.str(""); message << "cannot move to target " << this->target.name
                                      << " because TCS is not connected";
-            this->async.enqueue_and_log( function, message.str() );
+            this->broadcast.error( function, message.str() );
             this->thread_error_manager.set( THR_SEQUENCE_START );           // report error
             break;
           }
@@ -459,13 +651,7 @@ namespace Sequencer {
           break;
         }
 
-        // let the world know of the state change
-        //
-        message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
-        this->async.enqueue( message.str() );
-#ifdef LOGLEVEL_DEBUG
-        logwrite( function, "[DEBUG] target found, starting threads" );
-#endif
+        this->publish_targetinfo();   // publish the now-active target
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -474,7 +660,7 @@ namespace Sequencer {
       }
       else
       if ( targetstate == TargetInfo::TARGET_ERROR ) {                    // request stop on error
-        this->async.enqueue_and_log( function, "ERROR getting next target. stopping" );
+        this->broadcast.error( function, "getting next target. stopping" );
         break;
       }
 
@@ -495,10 +681,11 @@ namespace Sequencer {
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) } };
 
       }
+      else {
+
       // For any other pointmode (SLIT, or empty, which assumes SLIT), all
       // subsystems are readied.
       //
-      else {
         // set pointmode explicitly, in case it's empty
         this->target.pointmode = Acam::POINTMODE_SLIT;
 
@@ -511,7 +698,7 @@ namespace Sequencer {
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
-                                                 this->target.iscal ? Sequencer::VSM_DATABASE : Sequencer::VSM_ACQUIRE) }
+                                                 this->target.iscal ? Sequencer::VSM_EXPOSE : Sequencer::VSM_ACQUIRE) }
                          };
       }
 
@@ -528,11 +715,17 @@ namespace Sequencer {
       //
       for ( auto &[thr, future] : worker_futures) {
         try {
-          error |= future.get(); // wait for this worker to finish
-          logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+          long worker_error = future.get(); // wait for this worker to finish
+          error |= worker_error;
+          if ( worker_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+          }
+          else {
+            this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+          }
         }
         catch (const std::exception& e) {
-          logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" : "+std::string(e.what()) );
           return;
         }
       }
@@ -540,71 +733,83 @@ namespace Sequencer {
       logwrite(function, "DONE waiting on threads");
 
       if ( this->cancel_flag.load() ) {
-        this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
+        this->broadcast.notice( function, "sequence cancelled" );
         return;
       }
 
       // For pointmode ACAM, there is nothing to be done so get out
       //
       if ( this->target.pointmode == Acam::POINTMODE_ACAM ) {
-        this->async.enqueue_and_log( function, "NOTICE: target list processing has stopped" );
+        this->broadcast.notice( function, "target list processing has stopped" );
         break;
       }
 
-/*** 12/17/24 move acquisition elsewhere?
- *
- *    logwrite( function, "starting acquisition thread" );             ///< TODO @todo log to telemetry!
-
- *    this->seq_state.set( Sequencer::SEQ_WAIT_ACQUIRE );
- *    this->broadcast_seqstate();
- *    std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
- ***/
-
-      // If not a calibration target then introduce a pause for the user
-      // to make adjustments, send offsets, etc.
+      // If not a calibration target then acquire, first acam then slicecam
       //
       if ( !this->target.iscal ) {
 
-        // waiting for user signal (or cancel)
+        // during acam acquisition, enable slicecam autoexpose to try to get the
+        // exposure time set before fine acquisition starts.
         //
-        // The sequencer is effectively paused waiting for user input. This
-        // gives the user a chance to ensure the correct target is on the slit,
-        // select offset stars, etc.
-        //
-        {
-        ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_USER );
+        const bool dofine = this->should_fineacquire.load();
+        if ( dofine ) (void)this->do_slicecam_autoexpose( true );
 
-        this->async.enqueue_and_log( function, "NOTICE: waiting for USER to send \"continue\" signal" );
+        // start ACAM acquisition. If it fails then wait for user to continue or cancel.
+        const long acq_error = this->do_acam_acquire();
 
-        while ( !this->cancel_flag.load() && !this->is_usercontinue.load() ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( this->is_usercontinue.load() || this->cancel_flag.load() ); } );
+        // disable autoexpose no matter how ACAM finished
+        if ( dofine ) (void)this->do_slicecam_autoexpose( false );
+
+        if ( acq_error != NO_ERROR ) {
+          this->broadcast.warning( function, "acam acquisition failed" );
+          if (this->wait_for_user()==ABORT) {
+            this->broadcast.notice( function, "cancelled" );
+            return;
+          }
         }
+        else {  // ACAM success...
+          // start SLICECAM fine acquisition if enabled
+          long ret=NO_ERROR;
+          if ( dofine ) ret = this->do_slicecam_fineacquire();
+          if ( ret!=NO_ERROR ) this->broadcast.warning( function, "slicecam fine acquisition failed" );
 
-        this->async.enqueue_and_log( function, "NOTICE: received "
-                                               +(this->cancel_flag.load() ? std::string("cancel") : std::string("continue"))
-                                               +" signal!" );
-        }  // end scope for wait_state = WAIT_USER
-
-        if ( this->cancel_flag.load() ) {
-          this->async.enqueue_and_log( function, "NOTICE: sequence cancelled" );
-          return;
+          // wait for user if either fineacquire failed or wasn't turned on
+          if ( (!dofine || ret!=NO_ERROR) &&
+              this->wait_for_user()==ABORT) {
+            this->broadcast.notice( function, "cancelled" );
+            return;
+          }
         }
+      }
 
-        this->is_usercontinue.store(false);
-
-        this->async.enqueue_and_log( function, "NOTICE: received USER continue signal!" );
-
-        // Ensure slit offset is in "expose" position
-        //
-        auto slitset = std::async(std::launch::async, &Sequence::slit_set, this, Sequencer::VSM_EXPOSE);
+      if ( !this->target.iscal ) {
+        // send offsets only on fineacquire, otherwise user needs to fix things
+        if ( this->is_fineacquire_locked.load() &&
+            this->target_offset() == ERROR ) {
+          if (this->wait_for_user()==ABORT) {
+            this->broadcast.notice( function, "cancelled" );
+            return;
+          }
+        }
+        // ensure slit offset is in "expose" position when needed
         try {
-          error |= slitset.get();
+          error |= this->slit_set(Sequencer::VSM_EXPOSE);
         }
         catch (const std::exception& e) {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
           return;
         }
+      }
+
+      // The offset-star offset is applied asynchronously by the ACAM guide loop;
+      // ACAMD_OFFSETGOAL returns before the move lands. Wait so the target is on
+      // the slit before exposing. Skipped when the target has no offset.
+      if ( !this->target.iscal && this->is_fineacquire_locked.load() &&
+           ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) &&
+           this->offset_settle_sec > 0.0 ) {
+        logwrite( function, "NOTICE: waiting "+std::to_string(this->offset_settle_sec)+
+                            " sec for target offset to settle onto slit before exposing" );
+        std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -634,7 +839,7 @@ namespace Sequencer {
       // When an exposure is aborted then it will be marked as UNASSIGNED
       //
       if ( this->cancel_flag.load() ) {
-        this->async.enqueue_and_log( function, "NOTICE: exposure cancelled" );
+        this->broadcast.notice( function, "exposure cancelled" );
         error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
         message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
                                  << " id " << this->target.obsid << " order " << this->target.obsorder
@@ -643,20 +848,29 @@ namespace Sequencer {
         return;
       }
 
-      this->async.enqueue_and_log( function, "NOTICE: done waiting for expose" );
+      this->broadcast.notice( function, "done waiting for expose" );
       message.str(""); message << "exposure complete for target " << this->target.name
                                << " id " << this->target.obsid << " order " << this->target.obsorder;
       logwrite( function, message.str() );
 
-      // If not using frame transfer then wait for readout, too
+      // Wait for all N exposures to complete across all active channels.
+      // camerad publishes can_expose=true (READY key) only after the last channel
+      // of the last exposure finishes — the correct completion signal for both
+      // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
-        while ( !this->cancel_flag.load() && wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
-          std::unique_lock<std::mutex> lock(cv_mutex);
-          this->cv.wait( lock, [this]() { return( !wait_state_manager.is_set(SEQ_WAIT_READOUT) || this->cancel_flag.load() ); } );
+        std::unique_lock<std::mutex> lock(this->camerad_mtx);
+        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                            [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
+          logwrite( function, "waiting for readout — requesting snapshot" );
+          lock.unlock();
+          this->request_snapshot();
+          lock.lock();
         }
+        this->broadcast.notice( function, "done waiting for readout" );
       }
+      this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -667,21 +881,11 @@ namespace Sequencer {
         break;
       }
 
-      // before writing to the completed database table, get current
-      // telemetry from other daemons.
-      //
-      this->get_external_telemetry();
-
       // Update this target's state in the database
       //
       error = this->target.update_state( Sequencer::TARGET_COMPLETE );       // update the active target table
       if (error==NO_ERROR) error = this->target.insert_completed();          // insert into the completed table
       if (error!=NO_ERROR) this->thread_error_manager.set( THR_SEQUENCE_START );     // report any error
-
-      // let the world know of the state change
-      //
-      message.str(""); message << "TARGETSTATE:" << this->target.state << " TARGET:" << this->target.name << " OBSID:" << this->target.obsid;
-      this->async.enqueue( message.str() );
 
       // Check the "dotype" --
       // If this was "do one" then do_once is set and get out now.
@@ -723,12 +927,62 @@ namespace Sequencer {
     std::stringstream camcmd;
     long error=NO_ERROR;
 
-    logwrite( function, "setting camera parameters");
-
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CAMERA_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CAMERA );
 
+    // wait until camera is ready to expose
+    //
+    std::unique_lock<std::mutex> lock(this->camerad_mtx);
+    if (!this->can_expose.load()) {
+
+      this->broadcast.notice( function, "waiting for camera to be ready to expose");
+
+      while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                          [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
+        logwrite( function, "timeout waiting for camera ready — requesting snapshot" );
+        lock.unlock();
+        this->request_snapshot();
+        lock.lock();
+      }
+
+      if (this->cancel_flag.load()) {
+        logwrite(function, "sequence cancelled");
+        return NO_ERROR;
+      }
+    }
+
+    logwrite( function, "setting camera parameters");
+
     this->thread_error_manager.set( THR_CAMERA_SET );  // assume the worse, clear on success
+
+    // Controller activate states stored in Sequencer::CalibrationTarget::calinfo map,
+    // indexed by name. Calibration targets use target.name for the index, or
+    // use "SCIENCE" index for all science targets.
+    //
+    std::ostringstream activechans, deactivechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    // build up lists of (de)activate chans
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      (active ? activechans : deactivechans) << " " << chan;
+    }
+
+    // send two commands, one for each
+    if (!activechans.str().empty()) {
+      std::string cmd = CAMERAD_ACTIVATE + activechans.str();
+      if (this->camerad.send(cmd, reply, 12000)!=NO_ERROR) {
+        logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
+    if (!deactivechans.str().empty()) {
+      std::string cmd = CAMERAD_DEACTIVATE + deactivechans.str();
+      if (this->camerad.send(cmd, reply)!=NO_ERROR) {
+        logwrite( function, "ERROR sending \""+cmd+"\": "+reply);
+        throw std::runtime_error("camera returned "+reply);
+      }
+    }
 
     // send the EXPTIME command to camerad
     //
@@ -738,22 +992,20 @@ namespace Sequencer {
     long exptime_msec = (long)( this->target.exptime_req * 1000 );
     camcmd.str(""); camcmd << CAMERAD_EXPTIME << " " << exptime_msec;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
 
     // send binning parameters
-    // this is only good for I/R and will have to change to be more general
-    // because not all detectors will be oriented the same!
     //
-    camcmd.str(""); camcmd << CAMERAD_BIN << " row " << this->target.binspat;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spat " << this->target.binspat;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
-    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
+    camcmd.str(""); camcmd << CAMERAD_BIN << " spec " << this->target.binspect;
     if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
+      logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
     camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
@@ -816,12 +1068,10 @@ namespace Sequencer {
         break;
     }
 
-    this->async.enqueue( "NOTICE: moving slit to "+modestr+" position" );
-
-    logwrite( function, "moving slit to "+slitcmd.str()+" for "+modestr+"position" );
+    this->broadcast.notice(function, "moving slit to "+modestr+" position");
 
     if ( this->slitd.command_timeout( slitcmd.str(), reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR setting slit" );
+      logwrite( function, "ERROR setting slit" );
       this->thread_error_manager.set( THR_SLIT_SET );
       throw std::runtime_error("slit returned: "+reply);
     }
@@ -847,12 +1097,11 @@ namespace Sequencer {
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
     if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing power control" );
+      logwrite( function, "ERROR initializing power control" );
       throw std::runtime_error("could not initialize power control");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
-
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::power_init **************************************/
@@ -899,13 +1148,13 @@ namespace Sequencer {
     this->thread_error_manager.set( THR_SLIT_INIT );       // assume the worst, clear on success
 
     if ( this->set_power_switch(ON, POWER_SLIT, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering slit hardware" );
+      logwrite( function, "ERROR powering slit hardware" );
       throw std::runtime_error("could not power slit hardware");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->slitd, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR connecting to slit" );
+      logwrite( function, "ERROR connecting to slit" );
       throw std::runtime_error("could not open connection to slit hardware");
     }
 
@@ -914,7 +1163,7 @@ namespace Sequencer {
     bool ishomed=false;
     std::string reply;
     if ( this->slitd.command( SLITD_ISHOME, reply ) ) {
-      this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
+      logwrite( function, "ERROR communicating with slit hardware" );
       throw std::runtime_error("could not communicate with slit hardware: "+reply);
     }
     this->parse_state( function, reply, ishomed );
@@ -924,7 +1173,7 @@ namespace Sequencer {
     if ( !ishomed ) {
       logwrite( function, "sending home command" );
       if ( this->slitd.command_timeout( SLITD_HOME, reply, SLITD_HOME_TIMEOUT ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR communicating with slit hardware" );
+        logwrite( function, "ERROR communicating with slit hardware" );
         throw std::runtime_error("could not home slit hardware: "+reply);
       }
     }
@@ -934,7 +1183,7 @@ namespace Sequencer {
     if ( was_opened && !this->config_init["SLIT"].empty() ) {
       std::string cmd = SLITD_SET+" "+this->config_init["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
+        logwrite( function, "ERROR sending \""+cmd+"\" to slit" );
         throw std::runtime_error("slit "+cmd+" returned: "+reply);
       }
     }
@@ -988,7 +1237,7 @@ namespace Sequencer {
     if (error==NO_ERROR && !this->config_shutdown["SLIT"].empty() ) {
       std::string cmd = SLITD_SET+" "+this->config_shutdown["SLIT"];
       if ( this->slitd.command_timeout( cmd, reply, SLITD_SET_TIMEOUT ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to slit" );
+        logwrite( function, "ERROR sending \""+cmd+"\" to slit" );
         throw std::runtime_error(cmd+" returned: "+reply);
       }
     }
@@ -998,7 +1247,7 @@ namespace Sequencer {
     logwrite( function, "closing slit hardware" );
     error = this->slitd.command( SLITD_CLOSE, reply );
     if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR closing connection to slit hardware" );
+      logwrite( function, "ERROR closing connection to slit hardware" );
       throw std::runtime_error("closing slit connection returned: "+reply);
     }
 
@@ -1035,14 +1284,14 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_SLICECAM, std::chrono::seconds(10)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing slicecam control" );
+      logwrite( function, "ERROR initializing slicecam control" );
       throw std::runtime_error("could not power slicecam hardware");
     }
 
     // open connection is all that is needed, slicecamd takes care of everything
     //
     if ( this->open_hardware(this->slicecamd, SLICECAMD_OPEN, SLICECAMD_OPEN_TIMEOUT) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR starting slicecam" );
+      logwrite( function, "ERROR starting slicecam" );
       throw SlicecamException("could not start slicecam");
     }
 
@@ -1075,7 +1324,7 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_ACAM, std::chrono::seconds(10)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering acam hardware" );
+      logwrite( function, "ERROR powering acam hardware" );
       throw std::runtime_error("could not power acam hardware");
     }
 
@@ -1083,7 +1332,7 @@ namespace Sequencer {
     //
     bool was_opened=false;
     if ( this->open_hardware(this->acamd, ACAMD_OPEN, ACAMD_OPEN_TIMEOUT, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR opening acam camera" );
+      logwrite( function, "ERROR opening acam camera" );
       throw AcamException(ErrorCode::ERROR_ACAM_CAMERA, "could not open acam camera");
     }
 
@@ -1094,14 +1343,14 @@ namespace Sequencer {
       if ( ! this->config_init["ACAM_FILTER"].empty() ) {
         cmd = ACAMD_FILTER+" "+this->config_init["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_init["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_init["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
@@ -1150,14 +1399,14 @@ namespace Sequencer {
     }
 
     if ( (error=this->connect_to_daemon(this->slicecamd)) != NO_ERROR ) {
-      this->async.enqueue_and_log(function, "ERROR connecting to slicecamd");
+      logwrite( function, "ERROR connecting to slicecamd");
     }
 
     // close connections between slicecamd and the hardware with which it communicates
     //
     logwrite( function, "closing slicecam hardware" );
     if ( (error=this->slicecamd.command_timeout( SLICECAMD_SHUTDOWN, reply, SLICECAMD_SHUTDOWN_TIMEOUT )) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR closing connection to slicecam hardware" );
+      logwrite( function, "ERROR closing connection to slicecam hardware" );
     }
 
     // disconnect me from slicecamd, irrespective of any previous error
@@ -1168,7 +1417,7 @@ namespace Sequencer {
     // Turn off power to slicecam hardware.
     //
     if ( this->set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR switching off slicecam" );
+      logwrite( function, "ERROR switching off slicecam" );
       throw std::runtime_error("could not power off slicecam hardware");
     }
 
@@ -1208,14 +1457,14 @@ namespace Sequencer {
       if ( ! this->config_shutdown["ACAM_FILTER"].empty() ) {
         cmd = ACAMD_FILTER+" "+this->config_shutdown["ACAM_FILTER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
       if ( ! this->config_shutdown["ACAM_COVER"].empty() ) {
         cmd = ACAMD_COVER+" "+this->config_shutdown["ACAM_COVER"];
         if ( this->acamd.command_timeout( cmd, reply, ACAMD_MOVE_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
+          logwrite( function, "ERROR sending \""+cmd+"\" to acamd: "+reply );
           throw std::runtime_error("acam "+cmd+" returned: "+reply);
         }
       }
@@ -1228,7 +1477,7 @@ namespace Sequencer {
     if ( error==NO_ERROR ) {
       logwrite( function, "closing acam hardware" );
       error = this->acamd.command_timeout( ACAMD_SHUTDOWN, ACAMD_SHUTDOWN_TIMEOUT );
-      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR shutting down acam" );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR shutting down acam" );
     }
 
     // disconnect me from acamd, irrespective of any previous error
@@ -1239,7 +1488,7 @@ namespace Sequencer {
     // Turn off power to acam hardware.
     //
     if ( this->set_power_switch(OFF, POWER_ACAM, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR switching off acam" );
+      logwrite( function, "ERROR switching off acam" );
       throw std::runtime_error("could not switch off acam");
     }
 
@@ -1269,14 +1518,14 @@ namespace Sequencer {
 
     // make sure calib hardware is powered
     if ( this->set_power_switch(ON, POWER_CALIB, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering focus control" );
+      logwrite( function, "ERROR powering focus control" );
       throw std::runtime_error("could not power focus control");
     }
 
     // connect to calibd
     bool was_opened=false;
     if ( this->open_hardware(this->calibd, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing calib control" );
+      logwrite( function, "ERROR initializing calib control" );
       throw std::runtime_error("could not power calib control");
     }
 
@@ -1288,14 +1537,14 @@ namespace Sequencer {
       std::string reply;
       long error = this->calibd.command( CALIBD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+        logwrite( function, "ERROR communicating with calib hardware" );
         throw std::runtime_error("could not communicate with calib hardware: "+reply);
       }
       // home calib actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->calibd.command_timeout( CALIBD_HOME, reply, CALIBD_HOME_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR communicating with calib hardware" );
+          logwrite( function, "ERROR communicating with calib hardware" );
           throw std::runtime_error("could not communicate with calib hardware: "+reply);
         }
       }
@@ -1308,7 +1557,7 @@ namespace Sequencer {
         if ( !this->config_init["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_init["CALIB_DOOR"];
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+          logwrite( function, "ERROR moving calib door and/or cover" );
           throw std::runtime_error("could not move calib door and/or cover");
         }
       }
@@ -1345,7 +1594,7 @@ namespace Sequencer {
     //
     bool poweron=false;
     if ( check_power_switch(ON, POWER_CALIB, poweron ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR checking calib power switch" );
+      logwrite( function, "ERROR checking calib power switch" );
       throw std::runtime_error("checking calib power switch");
     }
 
@@ -1363,7 +1612,7 @@ namespace Sequencer {
         if ( !this->config_shutdown["CALIB_DOOR"].empty() )  cmd << " door="  << this->config_shutdown["CALIB_DOOR"];
         logwrite( function, "calib default: "+cmd.str() );
         if ( this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+          logwrite( function, "moving calib door and/or cover" );
           throw std::runtime_error("moving calib door and/or cover");
         }
       }
@@ -1376,7 +1625,7 @@ namespace Sequencer {
       std::string reply;
       logwrite( function, "closing calib hardware" );
       error = this->calibd.send( CALIBD_CLOSE, reply );
-      if ( error != NO_ERROR ) this->async.enqueue_and_log( function, "ERROR closing connection to calib hardware" );
+      if ( error != NO_ERROR ) logwrite( function, "ERROR closing connection to calib hardware" );
     }
 
     // disconnect me from calibd, irrespective of any previous error
@@ -1387,14 +1636,14 @@ namespace Sequencer {
     // Turn off power to calib hardware.
     //
     if ( this->set_power_switch(OFF, POWER_CALIB, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR switching off calib hardware" );
+      logwrite( function, "ERROR switching off calib hardware" );
       error=ERROR;
     }
 
     // always turn off power to lamps
     //
     if ( this->set_power_switch(OFF, POWER_LAMP, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering off lamps" );
+      logwrite( function, "EROR powering off lamps" );
       error=ERROR;
     }
 
@@ -1428,7 +1677,7 @@ namespace Sequencer {
     this->daemon_manager.clear( Sequencer::DAEMON_TCS );  // tcsd not ready
 
     if ( this->open_hardware(this->tcsd) != NO_ERROR ) {
-      this->async.enqueue_and_log( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
+      logwrite( "Sequencer::Sequence::tcs_init", "ERROR initializing TCS" );
       this->thread_error_manager.set( THR_TCS_INIT );
       throw std::runtime_error("could not initialize TCS");
     }
@@ -1472,7 +1721,7 @@ namespace Sequencer {
       std::string reply;
       error = this->tcsd.send( TCSD_CLOSE, reply );
       if ( error != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR: closing connection to TCS" );
+        logwrite( function, "ERROR closing connection to TCS" );
         throw std::runtime_error("closing TCS connection: "+reply);
       }
     }
@@ -1506,13 +1755,13 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_FLEXURE, std::chrono::seconds(21)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering flexure control" );
+      logwrite( function, "ERROR powering flexure control" );
       this->thread_error_manager.set( THR_FLEXURE_INIT );
       throw std::runtime_error("could not power flexure control");
     }
 
     if ( this->open_hardware(this->flexured) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing flexure control" );
+      logwrite( function, "ERROR initializing flexure control" );
       this->thread_error_manager.set( THR_FLEXURE_INIT );
       throw std::runtime_error("could not initialize flexure control");
     }
@@ -1559,7 +1808,7 @@ namespace Sequencer {
     }
 
     if ( this->connect_to_daemon(this->flexured) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR connecting to flexure hardware" );
+      logwrite( function, "ERROR connecting to flexure hardware" );
       error=ERROR;
     }
 
@@ -1568,7 +1817,7 @@ namespace Sequencer {
     //
     logwrite( function, "closing flexure hardware" );
     if (error==NO_ERROR && (error=this->flexured.command( FLEXURED_CLOSE, reply )) != NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR closing connection to flexure hardware" );
+      logwrite( function, "ERROR closing connection to flexure hardware" );
     }
 
     // disconnect me from flexured, irrespective of any previous error
@@ -1579,7 +1828,7 @@ namespace Sequencer {
     // Turn off power to flexure hardware.
     //
     if ( this->set_power_switch(OFF, POWER_FLEXURE, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR switching off flexure" );
+      logwrite( function, "ERROR switching off flexure" );
       throw std::runtime_error("switching off flexure hardware");
     }
 
@@ -1606,14 +1855,14 @@ namespace Sequencer {
     this->thread_error_manager.set( THR_FOCUS_INIT );       // assume failure, clear on success
 
     if ( this->set_power_switch(ON, POWER_FOCUS, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering focus control" );
+      logwrite( function, "ERROR powering focus control" );
       throw std::runtime_error("could not power focus control");
     }
 
     // connect to focusd
     bool was_opened=false;
     if ( this->open_hardware(this->focusd, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing focus control" );
+      logwrite( function, "ERROR initializing focus control" );
       throw std::runtime_error("could not open focus hardware");
     }
 
@@ -1625,14 +1874,14 @@ namespace Sequencer {
       std::string reply;
       long error = this->focusd.command( FOCUSD_ISHOME, reply );
       if ( error!=NO_ERROR || this->parse_state( function, reply, ishomed ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
+        logwrite( function, "ERROR communicating with focus hardware" );
         throw std::runtime_error("focus "+FOCUSD_ISHOME+" returned: "+reply);
       }
       // home focus actuators if not already homed
       if ( !ishomed ) {
         logwrite( function, "sending home command" );
         if ( this->focusd.command_timeout( FOCUSD_HOME, reply, FOCUSD_HOME_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR communicating with focus hardware" );
+          logwrite( function, "ERROR communicating with focus hardware" );
           throw std::runtime_error("focus "+FOCUSD_HOME+" returned: "+reply);
         }
       }
@@ -1642,7 +1891,7 @@ namespace Sequencer {
       for ( const auto &chan : chans ) {
         std::string command = "set " + chan + " nominal";
         if ( this->focusd.command_timeout( command, reply, FOCUSD_SET_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR setting focus "+chan );
+          logwrite( function, "ERROR setting focus "+chan );
           throw std::runtime_error("focus "+command+" returned: "+reply);
         }
       }
@@ -1688,7 +1937,7 @@ namespace Sequencer {
     }
 
     if ( this->connect_to_daemon(this->focusd) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR connecting to focus hardware" );
+      logwrite( function, "ERROR connecting to focus hardware" );
       error=ERROR;
     }
 
@@ -1697,7 +1946,7 @@ namespace Sequencer {
     //
     logwrite( function, "closing focus hardware" );
     if (error==NO_ERROR && (error=this->focusd.command( FOCUSD_CLOSE, reply )) != NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR closing connection to focus hardware" );
+      logwrite( function, "ERROR closing connection to focus hardware" );
     }
 
     // disconnect me from focusd, irrespective of any previous error
@@ -1708,7 +1957,7 @@ namespace Sequencer {
     // Turn off power to focus hardware.
     //
     if ( this->set_power_switch(OFF, POWER_FOCUS, std::chrono::seconds(0)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR switching off focus" );
+      logwrite( function, "ERROR switching off focus" );
       throw std::runtime_error("switching off focus hardware");
     }
 
@@ -1736,13 +1985,13 @@ namespace Sequencer {
     // make sure hardware is powered on
     //
     if ( this->set_power_switch(ON, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering camera" );
+      logwrite( function, "ERROR powering camera" );
       throw std::runtime_error("switching on camera");
     }
 
     bool was_opened=false;
     if ( this->open_hardware(this->camerad, "open", 12000, was_opened) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR initializing camera" );
+      logwrite( function, "ERROR initializing camera" );
       throw std::runtime_error("initializing camera");
     }
 
@@ -1752,15 +2001,22 @@ namespace Sequencer {
     if ( was_opened) {
       for ( const auto &cmd : this->camera_prologue ) {
         if ( this->camerad.command_timeout( cmd, reply, CAMERA_PROLOG_TIMEOUT ) != NO_ERROR ) {
-          this->async.enqueue_and_log( function, "ERROR sending \""+cmd+"\" to camera" );
+          logwrite( function, "ERROR sending \""+cmd+"\" to camera" );
           throw std::runtime_error("sending \""+cmd+"\" to camera");
         }
       }
     }
 
-    // Ask if all devices use frame transfer
+    // Ask if all devices use frame transfer. The reply is expected to be a
+    // "yes"/"no" token followed by " DONE". An empty or non-confirming reply
+    // would silently leave is_science_frame_transfer in the wrong state, which
+    // controls whether the readout wait is entered.
     //
-    this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply );
+    if ( this->camerad.send( CAMERAD_FRAMETRANSFER+" all", reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      logwrite( function, "ERROR querying frame transfer state: no confirmation (reply=\""+reply+"\")" );
+      throw std::runtime_error("querying camera frame transfer state");
+    }
     this->is_science_frame_transfer = ( reply.find("yes") != std::string::npos );
 
     this->thread_error_manager.clear( THR_CAMERA_INIT );   // success
@@ -1809,10 +2065,15 @@ namespace Sequencer {
       throw std::runtime_error("no connection to camera");
     }
 
-    // send all of the epilogue commands
+    // send all of the epilogue commands. Log but do not abort on failure:
+    // shutdown must continue regardless so power-off can complete.
     //
     for ( const auto &cmd : this->camera_epilogue ) {
-      this->camerad.command( cmd );
+      std::string reply;
+      if ( this->camerad.command( cmd, reply ) != NO_ERROR
+           || reply.find("DONE") == std::string::npos ) {
+        logwrite( function, "ERROR sending epilogue command \""+cmd+"\" (reply=\""+reply+"\")" );
+      }
     }
 
     // disconnect me from camerad, irrespective of any previous error
@@ -1823,7 +2084,7 @@ namespace Sequencer {
     // turn off power to camera hardware
     //
     if ( this->set_power_switch(OFF, POWER_CAMERA, std::chrono::seconds(5)) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR powering off camera" );
+      logwrite( function, "ERROR powering off camera" );
       throw std::runtime_error("switching off camera");
     }
 
@@ -1848,8 +2109,13 @@ namespace Sequencer {
     std::stringstream message;
     long error=NO_ERROR;
 
+    // no telescope moves for calibration targets
+    //
+    if ( this->target.iscal ) return NO_ERROR;
+
     ScopedState thr_state( thread_state_manager, Sequencer::THR_MOVE_TO_TARGET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCS );
+    ScopedState wait_moveto( wait_state_manager, Sequencer::SEQ_WAIT_MOVETO );
 
     // If RA and DEC fields are both empty then no telescope move
     //
@@ -1862,7 +2128,7 @@ namespace Sequencer {
     //
     if ( this->target.ra_hms == this->last_ra_hms &&
          this->target.dec_dms == this->last_dec_dms ) {
-      this->async.enqueue_and_log( function, "NOTICE: no move required for repeat target" );
+      this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
 
@@ -1886,7 +2152,7 @@ namespace Sequencer {
       if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
       if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
       message << " to decimal";
-      this->async.enqueue_and_log( function, "ERROR "+message.str() );
+      this->broadcast.error( function, message.str() );
       this->thread_error_manager.set( THR_MOVE_TO_TARGET );
       throw std::runtime_error(message.str());
     }
@@ -1904,10 +2170,22 @@ namespace Sequencer {
     double _solved_angle = ( angle_out < 0 ? angle_out + 360.0 : angle_out );
 
     if ( std::abs(_solved_angle) - std::abs(this->target.casangle) > 0.01 ) {
-      message.str(""); message << "NOTICE: Calculated angle " << angle_out
+      message.str(""); message << "Calculated angle " << angle_out
                                << " is not equivalent to casangle " << this->target.casangle;
-      this->async.enqueue_and_log( function, message.str() );
+      this->broadcast.notice( function, message.str() );
     }
+
+    // Before moving the telescope, disable guiding.
+    // Not a show-stopper if there's an error here so warn only.
+    //
+    if ( this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping fine acquisition");
+    }
+    if ( this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping guiding");
+    }
+
+    if ( this->cancel_flag.load() ) return NO_ERROR;
 
     // Send coordinates using TCS-native COORDS command.
     // TCS wants decimal hours for RA and fpoffsets.coords are always in degrees
@@ -1936,21 +2214,26 @@ namespace Sequencer {
       error  = this->tcsd.send( coords_cmd.str(), coords_reply );                  // send to the TCS
       // second failure return error
       if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-        message.str(""); message << "ERROR sending COORDS command. TCS reply: " << coords_reply;
-        this->async.enqueue_and_log( function, message.str() );
+        message.str(""); message << "sending COORDS command. TCS reply: " << coords_reply;
+        this->broadcast.error( function, message.str() );
         this->thread_error_manager.set( THR_MOVE_TO_TARGET );
         throw std::runtime_error("sending COORDS to TCS: "+coords_reply);
       }
     }
 
     // Send casangle using tcsd wrapper for RINGGO command
-    // do not wait for reply
+    // do not wait for reply — intentional: Cassegrain rotation can take tens of
+    // seconds and the sequence continues while the operator guides on-target.
+    //
+    // WATCH: tcsd still sends a CID-tagged reply that accumulates in the socket
+    // receive buffer unread.  DaemonClient::send() drains stale data before each
+    // new write, which prevents that orphaned reply from poisoning the next send.
     //
     {
     std::stringstream ringgo_cmd;
     std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
     ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
-    this->async.enqueue_and_log( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    this->broadcast.notice( function, "sending "+ringgo_cmd.str()+" to TCS" );
     error = this->tcsd.send( ringgo_cmd.str(), noreply );
     }
 
@@ -1958,25 +2241,21 @@ namespace Sequencer {
     {
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
 
-    this->async.enqueue_and_log( function, "NOTICE: waiting for TCS operator to send \"ontarget\" signal" );
+    this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
       this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
     }
 
-    this->async.enqueue_and_log( function, "NOTICE: received "
-                                           +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
-                                           +" signal!" );
+    this->broadcast.notice( function, "received "
+                                                 +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
+                                                 +" signal!" );
     }
 
     // If waiting for TCS operator was cancelled then don't continue
     //
     if ( this->cancel_flag.load() ) return NO_ERROR;
-
-    // if ontarget (not cancelled) then acquire target
-    //
-    if ( !this->cancel_flag.load() ) this->acamd.command( ACAMD_ACQUIRE );
 
     this->is_ontarget.store(false);
 
@@ -2120,52 +2399,39 @@ namespace Sequencer {
 
     this->thread_error_manager.set( THR_CALIBRATOR_SET );    // assume the worse, clear on success
 
-    // name will index the caltarget map
-    //
-    std::string name(this->target.name);
-
-    if ( this->target.iscal ) {
-      name = this->target.name;
-      this->async.enqueue_and_log( function, "NOTICE: configuring calibrator for "+name );
-    }
-    else {
-      this->async.enqueue_and_log( function, "NOTICE: disabling calibrator for science target "+name );
-      name="SCIENCE";  // override for indexing the map
-    }
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
 
     // Get the calibration target map.
     // This contains a map of all the required settings, indexed by target name.
     //
-    auto calinfo = this->caltarget.get_info(name);
-    if (!calinfo) {
-      logwrite( function, "ERROR unrecognized calibration target: "+name );
-      throw std::runtime_error("unrecognized calibration target: "+name);
-    }
+    const auto &calinfo = this->caltarget.get_info(calname);
+
+    this->broadcast.notice( function, "configuring calibrator for "+calname);
 
     // set the calib door and cover
     //
     std::stringstream cmd;
     cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo->caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo->calcover ? "open" : "close" );
+                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
 
     logwrite( function, "calib: "+cmd.str() );
     if ( !this->cancel_flag.load() &&
           this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR moving calib door and/or cover" );
+      this->broadcast.error( function, "moving calib door and/or cover" );
       throw std::runtime_error("moving calib door and/or cover");
     }
 
     // set the internal calibration lamps
     //
-    for ( const auto &[lamp,state] : calinfo->lamp ) {
+    for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
       logwrite( function, message.str() );
       std::string reply;
       if ( this->powerd.send( cmd.str(), reply ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR "+message.str() );
+        this->broadcast.error( function, message.str() );
         throw std::runtime_error("setting lamp "+message.str());
       }
     }
@@ -2174,7 +2440,7 @@ namespace Sequencer {
 //
 //  // set the dome lamps
 //  //
-//  for ( const auto &[lamp,state] : calinfo->domelamp ) {
+//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
 //    if ( this->cancel_flag.load() ) break;
 //    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
 //    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
@@ -2185,17 +2451,17 @@ namespace Sequencer {
 
     // set the lamp modulators
     //
-    for ( const auto &[mod,state] : calinfo->lampmod ) {
+    for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
       cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
+        this->broadcast.error( function, cmd.str() );
         throw std::runtime_error("setting lamp modulator "+cmd.str());
       }
     }
 
     if ( this->cancel_flag.load() ) {
-      this->async.enqueue_and_log( function, "NOTICE: abort may have left calib system partially set" );
+      this->broadcast.notice( function, "abort may have left calib system partially set" );
     }
 
     this->thread_error_manager.clear( THR_CALIBRATOR_SET );  // success
@@ -2207,12 +2473,34 @@ namespace Sequencer {
   /***** Sequencer::Sequence::abort_process *********************************/
   /**
    * @brief      tries to abort everything happening
+   * @details    Sets SEQ_ABORTING for the duration of the abort, then on exit
+   *             selects a one-hot terminal seqstate:
+   *               - aborting during STARTING or STOPPING sets SEQ_FAILED
+   *                 (indeterminate lifecycle state; requires startup/shutdown
+   *                  to clear)
+   *               - otherwise the terminal state reflects actual readiness:
+   *                 SEQ_READY when all daemons are ready, else SEQ_NOTREADY
    *
    */
   void Sequence::abort_process() {
     const std::string function("Sequencer::Sequence::abort_process");
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_ABORT_PROCESS );
+
+    // Decide post-abort seqstate before entering SEQ_ABORTING. These snapshots
+    // must be taken before any seqstate mutation below, because set_only()
+    // clears all other lifecycle bits.
+    //
+    const bool abort_during_run = this->seq_state_manager.are_any_set(
+                                    Sequencer::SEQ_RUNNING,
+                                    Sequencer::SEQ_PAUSED );
+    const bool abort_during_lifecycle = this->seq_state_manager.are_any_set(
+                                    Sequencer::SEQ_STARTING,
+                                    Sequencer::SEQ_STOPPING );
+
+    // Enter SEQ_ABORTING as a strict one-hot state.
+    //
+    this->seq_state_manager.set_only( {Sequencer::SEQ_ABORTING} );
 
     this->cancel_flag.store(false);
 
@@ -2226,17 +2514,70 @@ namespace Sequencer {
       logwrite( function, "ERROR stop_exposure exception: "+std::string(e.what()) );
     }
 
+    // aborts incomplete acquisitions in progress
+    //
+    if (this->wait_state_manager.is_set(Sequencer::SEQ_WAIT_FINEACQUIRE) &&
+        this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping fine acquisition");
+    }
+    if (this->wait_state_manager.is_set(Sequencer::SEQ_WAIT_ACAM_ACQUIRE) &&
+        this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning(function, "stopping guiding");
+    }
+
     // set the cancel flag to stop any cancel-able tasks
     //
     this->cancel_flag.store(true);
     this->cv.notify_all();
+    // Wake threads blocked on subsystem CVs so they can check cancel_flag.
+    { std::lock_guard<std::mutex> lock(this->acam_mtx);        this->acam_cv.notify_all();        }
+    { std::lock_guard<std::mutex> lock(this->fineacquire_mtx); this->fineacquire_cv.notify_all(); }
+    { std::lock_guard<std::mutex> lock(this->camerad_mtx);     this->camerad_cv.notify_all();     }
 
     // drop into do-one to prevent auto increment to next target
     //
     this->do_once.store(true);
 
-    this->async.enqueue_and_log( function, "NOTICE: cancel signal sent" );
+    this->broadcast.notice( function, "cancel signal sent" );
+
+    // Wait for sequence_start to fully exit before switching to SEQ_READY.
+    // Without this, we could have SEQ_READY set while THR_SEQUENCE_START is
+    // still set.  Workers just received cancel_flag + CV notifications above,
+    // so this loop exits after at most a few iterations.
+    //
+    if ( abort_during_run ) {
+      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
+              std::chrono::steady_clock::now() < drain_timeout ) {
+        std::this_thread::sleep_for( std::chrono::milliseconds(20) );
+      }
+      if ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) ) {
+        logwrite( function, "WARNING: sequence_start did not exit within drain timeout" );
+      }
+    }
+
+    // Exit SEQ_ABORTING to a strict one-hot terminal state. A lifecycle abort
+    // (STARTING/STOPPING) leaves hardware in an indeterminate state, so it must
+    // go to SEQ_FAILED (cleared only by a subsequent startup/shutdown).
+    // Otherwise the abort has only stopped activity, so the terminal state is
+    // the system's actual readiness: SEQ_READY when every subsystem is ready,
+    // else SEQ_NOTREADY. This mirrors the readiness contract used by startup()
+    // (the are_all_set gate) and broadcast_daemonstate(), so an abort issued
+    // while already READY with all daemons up returns to READY -- and one
+    // issued after a daemon dropped correctly settles on NOTREADY.
+    //
+    if ( abort_during_lifecycle ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+    }
+    else if ( this->daemon_manager.are_all_set() ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
+    }
+    else {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
+    }
   }
+  /***** Sequencer::Sequence::abort_process *********************************/
+
 
   /***** Sequencer::Sequence::stop_exposure *********************************/
   /**
@@ -2252,7 +2593,7 @@ namespace Sequencer {
     // This function is only used while exposing
     //
     if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-      this->async.enqueue_and_log( function, "NOTICE: not currently exposing" );
+      this->broadcast.notice(function, "not currently exposing");
       return;
     }
 
@@ -2269,12 +2610,12 @@ namespace Sequencer {
     else
     if ( error == NOTHING ) {
       // if not exposing, this is a way to ensure WAIT_EXPOSE bit can be cleared
-      this->async.enqueue_and_log( function, "NOTICE: not exposing" );
+      this->broadcast.notice(function, "not currently exposing");
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );
     }
     else
     if ( error == BUSY ) {
-      this->async.enqueue_and_log( function, "NOTICE: too late to stop exposure" );
+      this->broadcast.warning(function, "too late to stop exposure");
       // can't stop in the last 5 sec so wait that long and it should stop on its own
       std::this_thread::sleep_for(std::chrono::seconds(5));
     }
@@ -2300,7 +2641,7 @@ namespace Sequencer {
     // can only repeat when state is READY
     //
     if ( ! seq_state_manager.is_set( Sequencer::SEQ_READY ) ) {
-      this->async.enqueue_and_log( function, "ERROR cannot repeat: system not ready" );
+      this->broadcast.error(function, "cannot repeat: system not ready");
       return ERROR;
     }
 
@@ -2337,17 +2678,23 @@ namespace Sequencer {
     // wait for the threads to complete. these can be cancelled.
     for ( auto &[thr, future] : worker_futures) {
       try {
-        error |= future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+        long worker_error = future.get(); // wait for this worker to finish
+        error |= worker_error;
+        if ( worker_error != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+        }
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         return ERROR;
       }
     }
 
     if ( this->cancel_flag.load() ) {
-      this->async.enqueue_and_log( function, "NOTICE: cancelled repeat exposure" );
+      this->broadcast.notice(function, "cancelled repeat exposure");
       return NO_ERROR;
     }
 
@@ -2403,14 +2750,19 @@ namespace Sequencer {
 
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
-    logwrite( function, "[DEBUG] sending expose command" );
+    this->set_imgtype();
 
-    // Send the EXPOSE command to camera daemon on the non-blocking port and don't wait for reply
+    logwrite( function, "sending expose command" );
+
+    // Send the EXPOSE command to camera daemon and wait for the reply.
+    // Also verify the reply contains "DONE": command_timeout returns NO_ERROR
+    // whenever the reply does not contain "ERROR", including when the reply is
+    // empty because the socket was lost and no response was ever received.
     message.str(""); message << CAMERAD_EXPOSE << " " << this->target.nexp;
-//  if ( this->camerad.async( message.str() ) != NO_ERROR ) {
-//  if ( this->camerad.send( message.str(), reply ) != NO_ERROR ) {
-    if ( this->camerad.command_timeout( message.str(), reply, 12000 ) != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR sending camera "+message.str() );
+    if ( this->camerad.command_timeout( message.str(), reply, 30000 ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      message.str(""); message << "sending camera expose: no confirmation (reply=\"" << reply << "\")";
+      this->broadcast.error( function, message.str() );
       this->thread_error_manager.set( THR_TRIGGER_EXPOSURE );            // tell the world this thread had an error
       this->target.update_state( Sequencer::TARGET_PENDING );            // return the target state to pending
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_EXPOSE );      // clear EXPOSE bit
@@ -2448,7 +2800,7 @@ namespace Sequencer {
     // This function is only used while exposing
     //
     if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-      this->async.enqueue_and_log( function, "ERROR cannot update exposure time when not currently exposing" );
+      this->broadcast.error( function, "cannot update exposure time when not currently exposing" );
       error = ERROR;
     }
 
@@ -2470,153 +2822,42 @@ namespace Sequencer {
 
     if ( error==NO_ERROR ) {
       this->target.exptime_req = updated_exptime;
-      message.str(""); message << "NOTICE: updated exptime to " << updated_exptime << " sec";
-      this->async.enqueue_and_log( function, message.str() );
+      message.str(""); message << "updated exptime to " << updated_exptime << " sec";
+      this->broadcast.notice( function, message.str() );
     }
 
-    // announce the success or failure in an asynchronous broadcast message
-    //
-    message.str(""); message << "MODIFY_EXPTIME: " << this->target.exptime_req << ( error==NO_ERROR ? " DONE" : " ERROR" );
-    this->async.enqueue( message.str() );
+    // @TODO publish new exptime
 
     return;
   }
   /***** Sequencer::Sequence::modify_exptime **********************************/
 
 
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
+  /***** Sequencer::Sequence::set_imgtype *************************************/
   /**
-   * @brief      performs the acqusition sequence
-   * @details    this gets called by the move_to_target thread
-   *
-   * This function is spawned in a thread.
+   * @brief      set IMGTYPE FITS keyword in camerad before each exposure
+   * @details    Looks up the imgtype field from the CalibrationTarget config for
+   *             the current target and sends it to camerad as a key command.
+   * @return     ERROR|NO_ERROR
    *
    */
-  void Sequence::dothread_acquisition() {
-    const std::string function("Sequencer::Sequence::dothread_acquisition");
-    std::stringstream message;
-    std::stringstream cmd;
+  long Sequence::set_imgtype() {
+    const std::string function("Sequencer::Sequence::set_imgtype");
     std::string reply;
-    long error = NO_ERROR;
 
-    ScopedState thr_state( thread_state_manager, Sequencer::THR_ACQUISITION );
-    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_ACQUIRE );
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const std::string imgtype = this->caltarget.get_info(calname).imgtype;
 
-    // Before sending target coordinates to ACAM,
-    // convert them to decimal and to ACAM coordinates.
-    // (fpoffsets.coords_* are always in degrees)
-    //
-    double ra_in    = radec_to_decimal( this->target.ra_hms  ) * TO_DEGREES;
-    double dec_in   = radec_to_decimal( this->target.dec_dms );
-    double angle_in = this->target.slitangle;
-
-    // can't be NaN
-    //
-    bool ra_isnan  = std::isnan( ra_in  );
-    bool dec_isnan = std::isnan( dec_in );
-
-    if ( ra_isnan || dec_isnan ) {
-      message.str(""); message << "ERROR: converting";
-      if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
-      if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
-      message << " to decimal";
-      this->async.enqueue_and_log( function, message.str() );
-      this->thread_error_manager.set( THR_MOVE_TO_TARGET );
-      return;
+    const std::string cmd = CAMERAD_KEY + " IMGTYPE=" + imgtype
+                                        + (this->target.iscal ? "//Calibration" : "");
+    if ( this->camerad.send( cmd, reply ) != NO_ERROR ) {
+      logwrite( function, "ERROR sending '"+cmd+"': "+reply );
+      return ERROR;
     }
 
-//  // Before sending the target coords to the ACAM,
-//  // convert them from <pointmode> to ACAM coordinates.
-//  //
-//  double ra_out, dec_out, angle_out;
-//  error = this->target.fpoffsets.compute_offset( this->target.pointmode, "ACAM",
-//                                               ra_in, dec_in, angle_in,
-//                                               ra_out, dec_out, angle_out );
-//
-//  // Send the ACQUIRE command to acamd, which requires
-//  // the target coordinates (from the database).
-//  //
-//  message.str(""); message << "starting target acquisition " << ra_out    << " "
-//                                                             << dec_out   << " "
-//                                                             << angle_out << " "
-//                                                             << this->target.name;
-    message.str(""); message << "starting target acquisition " << ra_in    << " "
-                                                               << dec_in   << " "
-                                                               << angle_in << " "
-                                                               << this->target.name;
-    logwrite( function, message.str() );
-    cmd.str(""); cmd << ACAMD_ACQUIRE << " " << ra_in << " "
-                                             << dec_in << " "
-                                             << angle_in << " ";
-
-    error = this->acamd.command( cmd.str(), reply );
-
-/***** DONT CARE ABOUT ERRORS NOW -- NO CONDITION ON ACQ SUCCESS 
-    if ( error != NO_ERROR ) {
-      this->thread_error_manager.set( THR_ACQUISITION );               // report error
-      message.str(""); message << "ERROR acquiring target";
-      this->async.enqueue_and_log( function, message.str() );
-      this->seq_state.clear( Sequencer::SEQ_WAIT_ACQUIRE );            // clear ACQUIRE bit
-      this->broadcast_seqstate();
-      return;
-    }
-
-    // The reply contains the timeout.
-    // Acam's acquisition sequence uses that timeout but the Sequencer
-    // will also use it here, so that it knows when to stop asking acamd
-    // for its acquisition status.
-    //
-    double timeout;
-    try {
-      timeout = std::stod( reply );
-    } catch( std::out_of_range &e ) {
-      message.str(""); message << "ERROR parsing timeout \"" << reply << "\" from acam: " << e.what();
-      logwrite( function, message.str() );
-      this->thread_error_manager.set( THR_ACQUISITION );               // report any error
-      return;
-    }
-
-    auto timeout_time = std::chrono::steady_clock::now()
-                        + std::chrono::duration<double>(timeout);
-
-    reply.clear();
-
-    // Poll acamd while it is acquiring. Once finished, get the state.
-    //
-    bool acquiring = true;
-    do {
-      std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-      if (error==NO_ERROR) error = this->acamd.command( ACAMD_ACQUIRE, reply );
-      acquiring = ( reply.find("acquiring") != std::string::npos );
-    } while ( error==NO_ERROR &&
-              acquiring       &&
-              std::chrono::steady_clock::now() < timeout_time );
-
-    // Acquisition loop complete so get the state
-    //
-    error = this->acamd.command( ACAMD_ISACQUIRED, reply );
-    this->target.acquired = ( reply.find("true") != std::string::npos );
-
-    // set message
-    //
-    if ( std::chrono::steady_clock::now() >= timeout_time ) {        // Timeout
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR failed to acquire within timeout";
-    }
-    else
-    if ( error!=NO_ERROR ) {                                         // Error polling
-      this->thread_error_manager.set( THR_ACQUISITION );
-      message.str(""); message << "ERROR acquiring target";
-    }
-    else {                                                           // Success
-      message.str(""); message << "NOTICE: target " << ( this->target.acquired ? "acquired" : "not acquired" );
-    }
-
-    this->async.enqueue_and_log( function, message.str() );            // log message
-*****/
-
+    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::dothread_acquisition ****************************/
+  /***** Sequencer::Sequence::set_imgtype *************************************/
 
 
   /***** Sequencer::Sequence::startup *****************************************/
@@ -2630,10 +2871,12 @@ namespace Sequencer {
     std::stringstream message;
     long error=NO_ERROR;
 
-    if ( ! seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_NOTREADY ) ) {
-      message << "ERROR cannot perform system startup while "
+    if ( ! seq_state_manager.are_any_set( Sequencer::SEQ_READY,
+                                          Sequencer::SEQ_NOTREADY,
+                                          Sequencer::SEQ_FAILED ) ) {
+      message << "cannot perform system startup while "
               << seq_state_manager.get_set_states();
-      this->async.enqueue_and_log( function, message.str() );
+      this->broadcast.error( function, message.str() );
       return ERROR;
     }
 
@@ -2654,10 +2897,12 @@ namespace Sequencer {
     // so initialize the power control first.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    error = start_power.get();
-
-    if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR starting power control. Will try to continue (but don't hold your breath)" );
+    try {
+      start_power.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR intializing power control: "+std::string(e.what()) );
+      return ERROR;
     }
 
     // threads to start, pair their ThreadStatusBit with the function to call
@@ -2685,13 +2930,15 @@ namespace Sequencer {
       try {
         // wait for this worker to finish
         if ( future.get() != NO_ERROR ) {
-          logwrite( function, "ERROR from "+Sequencer::thread_names.at(thr));
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
           error = ERROR;
         }
-        else logwrite(function, Sequencer::thread_names.at(thr)+" success");
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" ready" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         error = ERROR;
         break;
       }
@@ -2710,6 +2957,7 @@ namespace Sequencer {
     long __error=NO_ERROR;  // keep track of the error just for this scope
     int attempt=1;
     while (attempt <= maxattempts) {
+      if ( this->cancel_flag.load() ) { __error=ERROR; break; }
       try {
         // launch slicecam_init async task and wait for result
         std::async(std::launch::async, &Sequence::slicecam_init, this).get();
@@ -2723,7 +2971,7 @@ namespace Sequencer {
         // restart the slicecam daemon, then loop to try again.
         if (attempt < maxattempts) {
           if ( set_power_switch(OFF, POWER_SLICECAM, std::chrono::seconds(5)) != NO_ERROR ) {
-            async.enqueue_and_log( function, "ERROR switching off slicecams" );
+            this->broadcast.error( function, "switching off slicecams" );
             __error=ERROR;
             break;
           }
@@ -2737,8 +2985,10 @@ namespace Sequencer {
           continue;
         }
         else {
-          async.enqueue_and_log( function, "ERROR exceeded max attempts starting slicecam" );
+          this->broadcast.error( function, "exceeded max attempts starting slicecam" );
           __error=ERROR;
+          this->slicecamd.disconnect();
+          break;
         }
       }
       catch (const std::exception &e) {
@@ -2753,7 +3003,7 @@ namespace Sequencer {
       }
     }  // end while
     if (__error == ERROR) {
-      async.enqueue_and_log( function, "ERROR slicecam not initialized" );
+      this->broadcast.error( function, "slicecam not initialized" );
       error=ERROR;
     }
     }
@@ -2763,6 +3013,7 @@ namespace Sequencer {
     long __error=NO_ERROR;  // keep track of the error just for this scope
     int attempt=1;
     while (attempt <= maxattempts) {
+      if ( this->cancel_flag.load() ) { __error=ERROR; break; }
       try {
         // launch acam_init async task and wait for result
         std::async(std::launch::async, &Sequence::acam_init, this).get();
@@ -2777,9 +3028,8 @@ namespace Sequencer {
         if (e.code == ErrorCode::ERROR_ACAM_CAMERA) {
           if (attempt < maxattempts) {
             if ( set_power_switch(OFF, POWER_ACAM_CAM, std::chrono::seconds(5)) != NO_ERROR ) {
-              async.enqueue_and_log( function, "ERROR switching off acam camera" );
+              this->broadcast.error( function, "switching off acam camera" );
               __error=ERROR;
-              break;
             }
             logwrite(function, "acam camera powered off");
 
@@ -2791,10 +3041,12 @@ namespace Sequencer {
             continue;
           }
           else {
-            async.enqueue_and_log( function, "ERROR exceeded max attempts starting acam" );
+            this->broadcast.error( function, "exceeded max attempts starting acam" );
             __error=ERROR;
+            this->acamd.disconnect();
           }
         }
+	break;
       }
       catch (const std::exception &e) {
         logwrite( function, "ERROR acam_init exception: "+std::string(e.what()) );
@@ -2808,7 +3060,7 @@ namespace Sequencer {
       }
     }  // end while
     if (__error == ERROR) {
-      async.enqueue_and_log( function, "ERROR acam not initialized" );
+      this->broadcast.error( function, "acam not initialized" );
       error=ERROR;
     }
     }
@@ -2816,9 +3068,11 @@ namespace Sequencer {
     // change state to READY if all daemons ready w/o error
     if ( error==NO_ERROR && daemon_manager.are_all_set() ) {
       seq_state_manager.set_only( {Sequencer::SEQ_READY} );
+      this->broadcast.notice( function, "startup complete" );
     }
     else {
-      seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
+      seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+      this->broadcast.error( function, "startup failed" );
     }
 
     return error;
@@ -2836,18 +3090,36 @@ namespace Sequencer {
    */
   long Sequence::shutdown() {
     const std::string function("Sequencer::Sequence::shutdown");
-    long error=ERROR;
+    long error=NO_ERROR;
+
+    // Reject if a conflicting lifecycle transition is already in progress.
+    // All other states (READY, NOTREADY, FAILED, RUNNING, PAUSED) are valid
+    // starting points for a shutdown.
+    //
+    if ( seq_state_manager.are_any_set( Sequencer::SEQ_STOPPING,
+                                        Sequencer::SEQ_STARTING,
+                                        Sequencer::SEQ_ABORTING ) ) {
+      std::stringstream message;
+      message << "cannot perform system shutdown while "
+              << seq_state_manager.get_set_states();
+      this->broadcast.error( function, message.str() );
+      return ERROR;
+    }
+
+    // stop everything first
+    //
+    this->abort_process();
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_SHUTDOWN );  // this thread is running
 
-    // set only STOPPING (and clear everything else)
-    ScopedState seq_state( seq_state_manager, Sequencer::SEQ_STOPPING, true );     // state=STOPPING (only)
-
-    seq_state.destruct_set( Sequencer::SEQ_NOTREADY );                             // set state=NOTREADY on exit
-
-    // stop everything
+    // Enter SEQ_STOPPING as a strict one-hot state. Explicit management (not
+    // ScopedState RAII) is used here because abort_process() below independently
+    // transitions seqstate, and an RAII destructor using set_and_clear would
+    // re-add NOTREADY on top of any FAILED bit left by abort_process, producing
+    // a non-one-hot state. The terminal transition is made explicitly before
+    // every return from this function.
     //
-    this->abort_process();
+    seq_state_manager.set_only( {Sequencer::SEQ_STOPPING} );
 
     // clear stop flags
     //
@@ -2863,12 +3135,17 @@ namespace Sequencer {
     // so make sure power control is initialized before continuing.
     //
     auto start_power = std::async(std::launch::async, &Sequence::power_init, this);
-    if ( start_power.get() != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR from power control. Will try to continue (but don't hold your breath)" );
+    try {
+      start_power.get();
+    }
+    catch (const std::exception& e) {
+      logwrite( function, "ERROR intializing power control: "+std::string(e.what()) );
+      return ERROR;
     }
 
     // container of shutdown threads to launch,
     // pair their ThreadStatusBit with the function to call
+    // (TCS is shut down after these complete; see below)
     //
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads = {
       { THR_ACAM_SHUTDOWN,     std::bind(&Sequence::acam_shutdown, this)     },
@@ -2876,9 +3153,8 @@ namespace Sequencer {
       { THR_CAMERA_SHUTDOWN,   std::bind(&Sequence::camera_shutdown, this)   },
       { THR_FLEXURE_SHUTDOWN,  std::bind(&Sequence::flexure_shutdown, this)  },
       { THR_FOCUS_SHUTDOWN,    std::bind(&Sequence::focus_shutdown, this)    },
-      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slit_shutdown, this)     },
-      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slicecam_shutdown, this) },
-      { THR_TCS_SHUTDOWN,      std::bind(&Sequence::tcs_shutdown, this)      }
+      { THR_SLICECAM_SHUTDOWN, std::bind(&Sequence::slicecam_shutdown, this) },
+      { THR_SLIT_SHUTDOWN,     std::bind(&Sequence::slit_shutdown, this)     }
     };
 
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::future<long>>> worker_futures;
@@ -2893,24 +3169,50 @@ namespace Sequencer {
     //
     for ( auto &[thr, future] : worker_futures) {
       try {
-        error=future.get(); // wait for this worker to finish
-        logwrite( function, "NOTICE: worker "+Sequencer::thread_names.at(thr)+" completed");
+        if ( future.get() != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(thr)+" failed" );
+          error = ERROR;
+        }
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(thr)+" shutdown complete" );
+        }
       }
       catch (const std::exception& e) {
-        logwrite( function, "ERROR: worker "+Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
+        this->broadcast.error( function, Sequencer::thread_names.at(thr)+" exception: "+std::string(e.what()) );
         error=ERROR;
       }
     }
 
-    std::stringstream message;
-    if (error==NO_ERROR) {
-      message << "NOTICE: instrument is shut down";
+    // TCS is shut down last so that any lingering guider pt_offsets from
+    // acamd during the slow cover-close above hit an open connection.
+    //
+    try {
+      if ( this->tcs_shutdown() != NO_ERROR ) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" failed" );
+        error = ERROR;
+      }
+      else {
+        this->broadcast.notice( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" shutdown complete" );
+      }
     }
-    else {
-      message << "ERROR occurred during shutdown and may not have completed";
+    catch (const std::exception& e) {
+      this->broadcast.error( function, Sequencer::thread_names.at(THR_TCS_SHUTDOWN)+" exception: "+std::string(e.what()) );
+      error=ERROR;
     }
 
-    this->async.enqueue_and_log( function, message.str() );
+    if (error==NO_ERROR) {
+      this->broadcast.notice(function, "instrument is shut down");
+    }
+    else {
+      this->broadcast.warning(function, "shut down may not be complete");
+    }
+
+    // Always end in NOTREADY regardless of worker errors. SEQ_FAILED is
+    // reserved for startup failures and aborted lifecycle transitions.
+    // Worker errors during shutdown are logged above but do not prevent
+    // the instrument from being considered shut down (not ready).
+    //
+    seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
 
     return error;
   }
@@ -3167,10 +3469,7 @@ namespace Sequencer {
 
     retstring = ( this->do_once.load() ? "ONE" : "ALL" );
 
-    // send an async message with the current type
-    //
-    message.str(""); message << "DOTYPE: " << retstring;
-    this->async.enqueue( message.str() );
+    // @TODO publish dotype
 
     return( error );
   }
@@ -3401,174 +3700,84 @@ namespace Sequencer {
    */
   long Sequence::target_offset() {
     const std::string function("Sequencer::Sequence::target_offset");
-    long error=NO_ERROR;
 
-    error  = this->tcsd.command( TCSD_ZERO_OFFSETS );
+    // nothing to do if both ra and dec offsets are zero
+    if (this->target.offset_ra  == 0.0 &&
+        this->target.offset_dec == 0.0) return NO_ERROR;
 
-    std::stringstream cmd;
-    cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+    // zero TCS offsets before applying target offset
+    long error = this->tcsd.command( TCSD_ZERO_OFFSETS );
 
-    error |= this->tcsd.command( cmd.str() );
+    // when ACAM is guiding, offsets are handled by changing his goal
+    if (error==NO_ERROR && this->is_acam_guiding.load()) {
+      // ACAMD_OFFSETGOAL expects degrees; target offsets are arcsec
+      const double dra_deg = this->target.offset_ra / 3600.0;
+      const double ddec_deg = this->target.offset_dec / 3600.0;
+      std::stringstream cmd;
+      cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << dra_deg << " " << ddec_deg;
+      error = this->acamd.command( cmd.str() );
+    }
+    else
+    // if ACAM is not guiding then I send the offsets directly to the TCS
+    if (error==NO_ERROR) {
+      std::ostringstream cmd;
+      cmd << TCSD_PTOFFSET << " " << this->target.offset_ra << " " << this->target.offset_dec;
+      error = this->tcsd.command( cmd.str() );
+    }
 
-    logwrite( function, "sent "+cmd.str() );
+    std::ostringstream oss;
+    oss << (error==NO_ERROR?"":"ERROR ") << "target offsets" << (error==NO_ERROR ? " " : " not ") << "applied";
+    logwrite(function, oss.str());
 
     return error;
   }
   /***** Sequencer::Sequence::target_offset ***********************************/
 
 
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
+   * @brief      publish target info on Topic::TARGETINFO, on change (or force)
+   * @details    Builds a JSON message of the current target and publishes it
+   *             only when it differs from the last published message, unless
+   *             force is set. The message is empty unless seq state is
+   *             READY or RUNNING.
+   * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
-  void Sequence::make_telemetry_message( std::string &retstring ) {
-    // assemble the telemetry I want to report into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
+  void Sequence::publish_targetinfo( bool force ) {
     nlohmann::json jmessage;
-    jmessage["messagetype"] = "targetinfo";
+    jmessage[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
-    // fill telemetry message only when READY or RUNNING
+    // fill telemetry only when READY or RUNNING; otherwise an empty (no-target) message
     //
     if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
-      // Store unconfigured values as NAN.
-      // NAN values are not logged to the database.
+      // unconfigured values are stored as NAN
       //
-      jmessage["OBS_ID"] = this->target.obsid < 0 ? NAN : this->target.obsid;           //  OBSERVATION_ID
-      jmessage["NAME"] = this->target.name;                                             //  NAME
-      jmessage["SLITA"] = this->target.slitangle;                                       // *OTMslitangle
-      jmessage["BINSPECT"] = this->target.binspect < 1 ? NAN : this->target.binspect;   // *BINSPECT
-      jmessage["BINSPAT"] = this->target.binspat < 1 ? NAN : this->target.binspat;      // *BINSPAT
-      jmessage["POINTMODE"] = this->target.pointmode;                                   // *POINTMODE
-      jmessage["RA"] = this->target.ra_hms;                                             // *RA
-      jmessage["DECL"] = this->target.dec_dms;                                          // *DECL
+      jmessage[Key::TargetInfo::OBS_ID]    = this->target.obsid < 0 ? NAN : this->target.obsid;
+      jmessage[Key::TargetInfo::NAME]      = this->target.name;
+      jmessage[Key::TargetInfo::SLITA]     = this->target.slitangle;
+      jmessage[Key::TargetInfo::BINSPECT]  = this->target.binspect < 1 ? NAN : this->target.binspect;
+      jmessage[Key::TargetInfo::BINSPAT]   = this->target.binspat < 1 ? NAN : this->target.binspat;
+      jmessage[Key::TargetInfo::POINTMODE] = this->target.pointmode;
+      jmessage[Key::TargetInfo::RA]        = this->target.ra_hms;
+      jmessage[Key::TargetInfo::DECL]      = this->target.dec_dms;
     }
 
-    retstring = jmessage.dump();  // serialize the json message into a string
-
-    retstring.append(JEOF);       // append JSON message terminator
-
-    return;
-  }
-  /***** Sequencer::Sequence::make_telemetry_message **************************/
-
-
-  /***** Sequencer::Sequence::get_external_telemetry **************************/
-  /**
-   * @brief      collect telemetry from other daemon(s)
-   * @details    This is used for any telemetry that I need to collect from
-   *             another daemon. Common::collect_telemetry() sends a command
-   *             to the daemon, which will respond with a JSON message. The
-   *             daemon(s) to contact are configured with the TELEM_PROVIDER
-   *             key in the config file.
-   *
-   */
-  void Sequence::get_external_telemetry() {
-    // Loop through each configured telemetry provider. This requests
-    // their telemetry which is returned as a serialized json string
-    // held in retstring.
+    // unless forced, only publish if the target info changed
     //
-    // handle_json_message() will parse the serialized json string.
-    //
-    std::string retstring;
-    for ( const auto &provider : this->telemetry_providers ) {
-      Common::collect_telemetry( provider, retstring );
-      handle_json_message(retstring);
-    }
-    return;
-  }
-  /***** Sequencer::Sequence::get_external_telemetry **************************/
-
-
-  /***** Sequencer::Sequence::handle_json_message *****************************/
-  /**
-   * @brief      parses incoming telemetry messages
-   * @details    Requesting telemetry from another daemon returns a serialized
-   *             JSON message which needs to be passed in here to parse it.
-   * @param[in]  message_in  incoming serialized JSON message (as a string)
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Sequence::handle_json_message( const std::string message_in ) {
-    const std::string function("Sequencer::Sequence::handle_json_message");
-    std::stringstream message;
-
-    if ( message_in.empty() ) {
-      logwrite( function, "ERROR empty JSON message" );
-      return ERROR;
-    }
+    std::lock_guard<std::mutex> lock( this->publish_targetinfo_mtx );  // guard check-then-act
+    if ( !force && jmessage == this->last_published_targetinfo ) return;
+    this->last_published_targetinfo = jmessage;
 
     try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-      std::string messagetype;
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") && jmessage["messagetype"].is_string() ) {
-          messagetype = jmessage["messagetype"];
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with missing or invalid messagetype" );
-          return ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        return ERROR;
-      }
-
-      // No errors, so disseminate the message contents based on the message type.
-      //
-      // column_from_json<T>( colname, jkey, jmessage ) will extract the value of
-      // expected type <T> with key jkey from json string jmessage, and assign it
-      // to this->target.external_telemetry[colname] map. It is expected that
-      // "colname" is the column name in the database.
-      //
-      if ( messagetype == "camerainfo" ) {
-        this->target.column_from_json<double>( "EXPTIME", "SHUTTIME_SEC", jmessage );
-      }
-      else
-      if ( messagetype == "slitinfo" ) {
-        this->target.column_from_json<double>( "SLITWIDTH", "SLITW", jmessage );
-        this->target.column_from_json<double>( "SLITOFFSET", "SLITO", jmessage );
-      }
-      else
-      if ( messagetype == "tcsinfo" ) {
-        this->target.column_from_json<std::string>( "TELRA", "TELRA", jmessage );
-        this->target.column_from_json<std::string>( "TELDECL", "TELDEC", jmessage );
-        this->target.column_from_json<double>( "ALT", "ALT", jmessage );
-        this->target.column_from_json<double>( "AZ", "AZ", jmessage );
-        this->target.column_from_json<double>( "AIRMASS", "AIRMASS", jmessage );
-        this->target.column_from_json<double>( "CASANGLE", "CASANGLE", jmessage );
-      }
-      else
-      if ( messagetype == "test" ) {
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        return ERROR;
-      }
-    }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
+      this->publisher->publish( jmessage, Topic::TARGETINFO );
     }
     catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      return ERROR;
+      logwrite( "Sequencer::Sequence::publish_targetinfo",
+                "ERROR publishing message: "+std::string(e.what()) );
     }
-
-    return NO_ERROR;
   }
-  /***** Sequencer::Sequence::handle_json_message *****************************/
+  /***** Sequencer::Sequence::publish_targetinfo *****************************/
 
 
   /***** Sequencer::Sequence::dothread_test_fpoffset **************************/
@@ -3644,7 +3853,7 @@ namespace Sequencer {
         cmd << " " << reqstatestr;
         logwrite( function, "switching plug "+plug+" "+reqstatestr );
         error = this->powerd.send( cmd.str(), reply );
-        if ( error != NO_ERROR || reply.find(" DONE") != std::string::npos ) {
+        if ( error != NO_ERROR || reply.find("DONE") == std::string::npos ) {
           logwrite( function, "ERROR switching plug: "+plug+" "+reqstatestr );
           continue;
         }
@@ -3737,7 +3946,7 @@ namespace Sequencer {
     }
     // connection failed too many times
     if (attempt > maxattempts) {
-      async.enqueue_and_log(function, "ERROR exceeded max attempts connecting to " + daemon.name);
+      logwrite( function, "ERROR exceeded max attempts connecting to " + daemon.name);
       return ERROR;
     }
 
@@ -3746,7 +3955,7 @@ namespace Sequencer {
     error |= daemon.send( "isopen", reply );
     error |= this->parse_state( function, reply, isopen );
     if ( error != NO_ERROR ) {
-      this->async.enqueue_and_log( function, "ERROR opening "+daemon.name+" hardware" );
+      logwrite( function, "ERROR opening "+daemon.name+" hardware" );
       return ERROR;
     }
 
@@ -3756,7 +3965,7 @@ namespace Sequencer {
       logwrite( function, "opening "+daemon.name+" hardware connections with "
                           +std::to_string(opentimeout)+" ms timeout" );
       if ( daemon.command_timeout( opencmd, reply, opentimeout ) != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR opening connection to "+daemon.name+" hardware" );
+        logwrite( function, "ERROR opening connection to "+daemon.name+" hardware" );
         return ERROR;
       }
       was_opened=true;
@@ -3785,7 +3994,7 @@ namespace Sequencer {
     if ( !daemon.socket.isconnected() ) {
       logwrite( function, "connecting to "+daemon.name+" daemon" );
       if ( daemon.connect() != NO_ERROR ) {
-        this->async.enqueue_and_log( function, "ERROR connecting to "+daemon.name );
+        logwrite( function, "ERROR connecting to "+daemon.name );
         return ERROR;
       }
     }
@@ -3843,6 +4052,47 @@ namespace Sequencer {
   /***** Sequencer::Sequence::daemon_restart **********************************/
 
 
+  /***** Sequencer::Sequence::fine_acquire ************************************/
+  /**
+   * @brief      enable or disable automatic fine acquisition step
+   * @param[in]  args       enable|disable
+   * @param[out] retstring  state {enabled|disabled}
+   * @return     ERROR|NO_ERROR|HELP
+   *
+   */
+  long Sequence::fine_acquire(std::string args, std::string &retstring) {
+    if (args=="help"||args=="?") {
+      retstring = SLICECAMD_FINEACQUIRE;
+      retstring.append( " [ enable | disable ]\n" );
+      retstring.append( "   enables or disables the automatic fine acquisition step\n" );
+      retstring.append( "   no arg returns state only\n" );
+      return HELP;
+    }
+
+    const bool prev = this->should_fineacquire.load();
+
+    if (args=="enable") this->should_fineacquire.store(true);
+    else
+    if (args=="disable") this->should_fineacquire.store(false);
+    else
+    if (!args.empty()) {
+      logwrite("Sequencer::Sequence::fineacquire",
+               "ERROR invalid '"+args+"' expected enable|disable");
+      return ERROR;
+    }
+
+    retstring = this->should_fineacquire.load() ? "enabled" : "disabled";
+
+    // publish on change
+    if ( this->should_fineacquire.load() != prev ) {
+      this->publish_seqstate();
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::fine_acquire ************************************/
+
+
   /***** Sequencer::Sequence::test ********************************************/
   /**
    * @brief      test routines
@@ -3896,10 +4146,10 @@ namespace Sequencer {
       retstring.append( "   fpoffset ? | <from> <to>\n" );
       retstring.append( "   getnext [ ? ]\n" );
       retstring.append( "   getobsid [ ? ]\n" );
-      retstring.append( "   gettelem [ ? ]\n" );
       retstring.append( "   isready [ ? ]\n" );
       retstring.append( "   moveto [ ? | <solverargs> ]\n" );
       retstring.append( "   notify [ ? ]\n" );
+      retstring.append( "   ping <daemon>\n" );
       retstring.append( "   pause [ ? ]\n" );
       retstring.append( "   pending [ ? ]\n" );
       retstring.append( "   targetinfo [ ? ]\n" );
@@ -3918,33 +4168,35 @@ namespace Sequencer {
     }
     else
 
-    // ----------------------------------------------------
-    // async -- queue an asynchronous message
-    // ----------------------------------------------------
-    //
-    if ( testname == "async" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test async [ <message> ]\n";
-        retstring.append( "  Queue and broadcast optional <message>. If <message> not supplied\n" );
-        retstring.append( "  then broadcast \"test\".\n" );
-        return HELP;
-      }
-      if ( tokens.size() > 1 ) {
-        bool first=true;
-        message.str("");
-        for ( const auto &word : tokens ) {
-          if ( first ) { first=false; continue; }  // skip the testname
-          message << word << " ";
-        }
-        logwrite( function, message.str() );
-        this->async.enqueue( message.str() );
-      }
-      else {
-        logwrite( function, "test" );
-        this->async.enqueue( "test" );
-      }
-    }
-    else
+/***
+ *  // ----------------------------------------------------
+ *  // async -- queue an asynchronous message
+ *  // ----------------------------------------------------
+ *  //
+ *  if ( testname == "async" ) {
+ *    if ( tokens.size() > 1 && tokens[1] == "?" ) {
+ *      retstring = "test async [ <message> ]\n";
+ *      retstring.append( "  Queue and broadcast optional <message>. If <message> not supplied\n" );
+ *      retstring.append( "  then broadcast \"test\".\n" );
+ *      return HELP;
+ *    }
+ *    if ( tokens.size() > 1 ) {
+ *      bool first=true;
+ *      message.str("");
+ *      for ( const auto &word : tokens ) {
+ *        if ( first ) { first=false; continue; }  // skip the testname
+ *        message << word << " ";
+ *      }
+ *      logwrite( function, message.str() );
+ *      this->async.enqueue( message.str() );
+ *    }
+ *    else {
+ *      logwrite( function, "test" );
+ *      this->async.enqueue( "test" );
+ *    }
+ *  }
+ *  else
+ ***/
 
     // ----------------------------------------------------
     // prologue -- show the camera prologue commands
@@ -3979,12 +4231,16 @@ namespace Sequencer {
       // write to the log (textually) which bits are set
       //
       retstring.clear();
-      message.str(""); message << "NOTICE: daemons ready: " << this->daemon_manager.get_set_states();
-      this->async.enqueue_and_log( function, message.str() );
+      message.str(""); message << "daemons ready: " << this->daemon_manager.get_set_states();
+      this->broadcast.notice( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "NOTICE: daemons not ready: " << this->daemon_manager.get_cleared_states();
-      this->async.enqueue_and_log( function, message.str() );
+      message.str(""); message << "daemons not ready: " << this->daemon_manager.get_cleared_states();
+      this->broadcast.notice( function, message.str() );
+      retstring.append( message.str() ); retstring.append( "\n" );
+
+      message.str(""); message << "camera ready to expose: " << (this->can_expose.load() ? "yes" : "no");
+      this->broadcast.notice( function, message.str() );
       retstring.append( message.str() );
 
       error = NO_ERROR;
@@ -4064,7 +4320,7 @@ namespace Sequencer {
       }
 
       message.str(""); message << "STATES: " << this->seq_state_manager.get_set_states();
-      this->async.enqueue( message.str() );
+      this->broadcast.notice( function, message.str() );
       logwrite( function, message.str() );
 
       message.str(""); message << "THREADS: " << this->thread_state_manager.get_set_states();
@@ -4171,8 +4427,7 @@ namespace Sequencer {
       }
       error = NO_ERROR;
 
-      message.str(""); message << "NOTICE: " << targetstatus;
-      this->async.enqueue( message.str() );                      // broadcast target status
+      this->broadcast.notice(function, targetstatus);
 
       if ( ret == TargetInfo::TargetState::TARGET_FOUND ) {
         rts << "name      obsid  order  ra  dec  casangle  slitangle  airmasslim\n";
@@ -4275,24 +4530,6 @@ namespace Sequencer {
       retstring = rts.str();
     }
     else
-    // ----------------------------------------------------
-    // gettelem -- get external telemetry
-    // ----------------------------------------------------
-    //
-    if ( testname == "gettelem" ) {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {
-        retstring = "test gettelem\n";
-        retstring.append( "  Get external telemetry from other daemons.\n" );
-        return HELP;
-      }
-      this->get_external_telemetry();
-      message.str("");
-      for ( const auto &[name,data] : this->target.external_telemetry ) {
-        message << "name=" << name << " valid=" << (data.valid?"T":"F") << " value=" << data.value << "\n";
-      }
-      retstring = message.str();
-    }
-    else
 
     // ----------------------------------------------------
     // addrow -- insert a (fixed, hard-coded) row into the database
@@ -4348,10 +4585,10 @@ namespace Sequencer {
 
       // let the world know of the state change
       //
-      message.str(""); message << "TARGETSTATE:" << this->target.state
-                               << " TARGET:"     << this->target.name
-                               << " OBSID:"      << this->target.obsid;
-      this->async.enqueue( message.str() );
+      message.str(""); message << this->target.state
+                               << " TARGET:" << this->target.name
+                               << " ("       << this->target.obsid << ")";
+      this->broadcast.notice( function, message.str() );
     }
     else
 
@@ -4379,10 +4616,10 @@ namespace Sequencer {
 
         // let the world know of the state change
         //
-        message.str(""); message << "TARGETSTATE:" << this->target.state
-                                 << " TARGET:"     << this->target.name
-                                 << " OBSID:"      << this->target.obsid;
-        this->async.enqueue( message.str() );
+        message.str(""); message << this->target.state
+                                 << " TARGET:" << this->target.name
+                                 << " ("       << this->target.obsid << ")";
+        this->broadcast.notice( function, message.str() );
       }
     }
     else
@@ -4489,9 +4726,9 @@ namespace Sequencer {
       else this->test_solver_args.clear();                              // clear previous solver args if not specified
 
       if ( !this->test_solver_args.empty() ) {
-        message.str(""); message << "NOTICE: test solver args: " << this->test_solver_args;
+        message.str(""); message << "test solver args: " << this->test_solver_args;
       }
-      this->async.enqueue_and_log( function, message.str() );
+      this->broadcast.notice( function, message.str() );
 
       // clear stop flags
       //
@@ -4545,19 +4782,19 @@ namespace Sequencer {
       bool cas_isnan = std::isnan( angle_in );
 
       if ( ra_isnan || dec_isnan || cas_isnan ) {
-        message.str(""); message << "ERROR: converting";
+        message.str(""); message << "converting";
         if ( ra_isnan  ) { message << " RA=\"" << this->target.ra_hms << "\""; }
         if ( dec_isnan ) { message << " DEC=\"" << this->target.dec_dms << "\""; }
         if ( cas_isnan ) { message << " CASS=\"" << cass_now << "\""; }
         message << " to decimal";
-        this->async.enqueue_and_log( function, message.str() );
+        this->broadcast.error( function, message.str() );
         return ERROR;
       }
 
       // Finally, spawn the acquisition thread
       //
-      logwrite( function, "spawning dothread_acquisition..." );
-      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::dothread_acquisition, this ).detach();
+      logwrite( function, "spawning do_acam_acquire..." );
+      if (error==NO_ERROR) std::thread( &Sequencer::Sequence::do_acam_acquire, this ).detach();
     }
     else
 
@@ -4784,6 +5021,63 @@ namespace Sequencer {
         std::thread( &Sequencer::Sequence::dothread_test_fpoffset, this ).detach();
         message.str(""); message << "spawned dothread_fpoffset: PyGILState=" << PyGILState_Check();
         logwrite( function, message.str() );
+      }
+    }
+    else
+
+    // ---------------------------------------------------------
+    // ping -- exercise inter-daemon communication round-trip
+    // ---------------------------------------------------------
+    //
+    if ( testname == "ping" ) {
+      if ( tokens.size() < 2 ) {
+        retstring = "usage: test ping <daemon>";
+        logwrite( function, "ERROR no daemon name provided" );
+        return ERROR;
+      }
+
+      const std::map<std::string, Common::DaemonClient*> daemon_map = {
+        { "acamd",     &this->acamd     },
+        { "calibd",    &this->calibd    },
+        { "camerad",   &this->camerad   },
+        { "flexured",  &this->flexured  },
+        { "focusd",    &this->focusd    },
+        { "powerd",    &this->powerd    },
+        { "slicecamd", &this->slicecamd },
+        { "slitd",     &this->slitd     },
+        { "tcsd",      &this->tcsd      }
+      };
+
+      auto daemon_it = daemon_map.find( tokens[1] );
+      if ( daemon_it == daemon_map.end() ) {
+        retstring = "unknown daemon: " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      Common::DaemonClient *daemon_ptr = daemon_it->second;
+
+      if ( this->connect_to_daemon( *daemon_ptr ) == ERROR ) {
+        retstring = "could not connect to " + tokens[1];
+        logwrite( function, "ERROR "+retstring );
+        return ERROR;
+      }
+
+      message.str(""); message << "sending \"isopen\" to " << tokens[1];
+      logwrite( function, message.str() );
+
+      std::string reply;
+      long send_error = daemon_ptr->send( "isopen", reply );
+
+      message.str(""); message << "reply from " << tokens[1] << ": \"" << reply << "\"";
+      logwrite( function, message.str() );
+
+      retstring = reply;
+
+      if ( send_error != NO_ERROR ) {
+        message.str(""); message << "ERROR sending \"isopen\" to " << tokens[1];
+        logwrite( function, message.str() );
+        return ERROR;
       }
     }
     else {

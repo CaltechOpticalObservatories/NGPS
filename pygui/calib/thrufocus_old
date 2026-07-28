@@ -1,0 +1,70 @@
+#!/usr/bin/bash -f
+#
+# Through-focus
+#
+# 1. Turn lamp off
+# 2. Set exposure time
+# 3. Take 3 darks
+# 4. Turn lamp on; wait a minute or two
+# 5. Put focus stage on the + side of the loop
+# 6. Loop over focus positions, take 2 (3?) illuminated exposures at each
+# 7. Turn off the lamp
+# 8. Take 3 darks
+# 9. Exit
+#
+# 
+#
+#
+# 1. Turn lamp off
+# Using Argon lamp.
+
+calib set door=open cover=close
+power lampthar on
+calib lampmod 6 1 1000
+
+
+
+# 2. Exposure time.
+camera exptime 10000
+#
+
+# 3. Camera BOI
+camera boi R 420 200
+camera boi I 580 200
+#
+
+# 4. Turn on lamp and wait
+fociI=( 4.4 4.5 4.6 4.7 4.8 4.9 5.0 5.1 5.2 5.3 5.4 5.5 )
+fociR=( 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.1 )
+focpos="1 2 3 4 5 6 7 8 9 10 11 12"
+echo $foci
+for fp in $focpos; do
+    # set the focus
+    #    focus set I $focus
+    echo " FOC I ${fociI[$fp]} R ${fociR[$fp]} No `camera imnum`"
+    focus set I  ${fociI[$fp]}
+    focus set R  ${fociR[$fp]}
+    echo
+    sleep 4
+    
+    exposen 1 
+done
+#
+# Turn off lamp
+# power 2 3 off
+#
+# ./goexpose
+# ./goexpose
+# ./goexpose
+#
+
+
+power lampthar off
+calib lampmod 6 0 1000
+calib set door=close
+
+# revert BOI
+camera boi R full
+camera boi I full
+
+echo "Done."

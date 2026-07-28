@@ -13,3 +13,9 @@ Config/*.py
 /GuiderGUI/buttons_guider.ans
 /GuiderGUI/buttons_slicev.ans
 
+docs/build/
+
+# Generated Doxygen/Exhale C++ API docs
+docs/source/cpp-api/
+docs/build/doxygen/
+EOF

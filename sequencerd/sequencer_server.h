@@ -114,6 +114,7 @@ namespace Sequencer {
       int blocking_socket;
 
       std::atomic<int> cmd_num;             ///< keep a running tally of number of commands received by sequencerd
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
       std::atomic<int> threads_active;   ///< number of blocking threads that exist
 
       NumberPool id_pool;                   ///< creates a number pool
@@ -145,7 +146,7 @@ namespace Sequencer {
       static void block_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> );    ///< main function for blocking connection thread
       static void thread_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock);  ///< main function for all non-blocked threads
       static void gui_main( Sequencer::Server &server, std::shared_ptr<Network::TcpSocket> sock );     ///< main function for gui threads
-      static void async_main( Sequencer::Server &server, Network::UdpSocket sock );    ///< asynchronous message sending thread
+//    static void async_main( Sequencer::Server &server, Network::UdpSocket sock );    ///< asynchronous message sending thread
 
       void handle_signal( int signo );
 

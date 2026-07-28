@@ -33,6 +33,7 @@
 #include "slitd_commands.h"
 #include "tcsd_commands.h"
 #include "sequencerd_commands.h"
+#include "message_keys.h"
 
 #include "tcs_constants.h"
 #include "acam_interface_shared.h"
@@ -124,6 +125,8 @@ namespace Sequencer {
     SEQ_STOPPING,            ///< set when sequencer is shutting down
     SEQ_PAUSED,              ///< set when sequencer is paused
     SEQ_STARTING,            ///< set when sequencer is starting up
+    SEQ_FAILED,              ///< set on a fatal/indeterminate failure; cleared only by startup or shutdown
+    SEQ_ABORTING,            ///< transitory; set/cleared via RAII in abort_process()
     NUM_SEQ_STATES
   };
 
@@ -133,7 +136,9 @@ namespace Sequencer {
     {SEQ_RUNNING,       "RUNNING"},
     {SEQ_STOPPING,      "STOPPING"},
     {SEQ_PAUSED,        "PAUSED"},
-    {SEQ_STARTING,      "STARTING"}
+    {SEQ_STARTING,      "STARTING"},
+    {SEQ_FAILED,        "FAILED"},
+    {SEQ_ABORTING,      "ABORTING"}
   };
 
   /**
@@ -152,7 +157,9 @@ namespace Sequencer {
     SEQ_WAIT_SLIT,           ///< set when waiting for slit
     SEQ_WAIT_TCS,            ///< set when waiting for tcs
     // states
-    SEQ_WAIT_ACQUIRE,        ///< set when waiting for acquire
+    SEQ_WAIT_MOVETO,         ///< set when waiting for move-to-target
+    SEQ_WAIT_ACAM_ACQUIRE,   ///< set when waiting for ACAM acquire
+    SEQ_WAIT_FINEACQUIRE,    ///< set when waiting for slicecam fineacquire
     SEQ_WAIT_EXPOSE,         ///< set when waiting for camera exposure
     SEQ_WAIT_READOUT,        ///< set when waiting for camera readout
     SEQ_WAIT_TCSOP,          ///< set when waiting specifically for tcs operator
@@ -162,21 +169,23 @@ namespace Sequencer {
 
   const std::map<size_t, std::string> wait_state_names = {
     // daemons
-    {SEQ_WAIT_ACAM,     "ACAM"},
-    {SEQ_WAIT_CALIB,    "CALIB"},
-    {SEQ_WAIT_CAMERA,   "CAMERA"},
-    {SEQ_WAIT_FLEXURE,  "FLEXURE"},
-    {SEQ_WAIT_FOCUS,    "FOCUS"},
-    {SEQ_WAIT_POWER,    "POWER"},
-    {SEQ_WAIT_SLICECAM, "SLICECAM"},
-    {SEQ_WAIT_SLIT,     "SLIT"},
-    {SEQ_WAIT_TCS,      "TCS"},
+    {SEQ_WAIT_ACAM,         "ACAM"},
+    {SEQ_WAIT_CALIB,        "CALIB"},
+    {SEQ_WAIT_CAMERA,       "CAMERA"},
+    {SEQ_WAIT_FLEXURE,      "FLEXURE"},
+    {SEQ_WAIT_FOCUS,        "FOCUS"},
+    {SEQ_WAIT_POWER,        "POWER"},
+    {SEQ_WAIT_SLICECAM,     "SLICECAM"},
+    {SEQ_WAIT_SLIT,         "SLIT"},
+    {SEQ_WAIT_TCS,          "TCS"},
     // states
-    {SEQ_WAIT_ACQUIRE,  "ACQUIRE"},
-    {SEQ_WAIT_EXPOSE,   "EXPOSE"},
-    {SEQ_WAIT_READOUT,  "READOUT"},
-    {SEQ_WAIT_TCSOP,    "TCSOP"},
-    {SEQ_WAIT_USER,     "USER"}
+    {SEQ_WAIT_MOVETO,       "MOVETO"},
+    {SEQ_WAIT_ACAM_ACQUIRE, "ACAM_ACQUIRE"},
+    {SEQ_WAIT_FINEACQUIRE,  "FINEACQUIRE"},
+    {SEQ_WAIT_EXPOSE,       "EXPOSE"},
+    {SEQ_WAIT_READOUT,      "READOUT"},
+    {SEQ_WAIT_TCSOP,        "TCSOP"},
+    {SEQ_WAIT_USER,         "USER"}
   };
 
   /**
@@ -280,12 +289,26 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
+      std::atomic<bool> can_expose;
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
+      std::atomic<bool> should_fineacquire{true};  ///< should I use fineacquire? (user-switchable)
+      std::atomic<bool> is_fineacquire_locked{false};   ///< is slicecam fine acquisition locked?
+      std::atomic<bool> is_fineacquire_running{false};  ///< is slicecam fine acquisition running?
+      std::atomic<bool> is_acam_guiding{false};    ///< is acam guiding (IS_ACQUIRED)?
+      std::atomic<bool> is_acam_acquiring{false};  ///< is acam in an acquire mode?
+      std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
+
+      /** @brief guard-band (us) subtracted from the acquire-command send time
+       *         when computing the freshness boundary in do_acam_acquire. Tolerates
+       *         jitter and the race between the command send and ACAM's forced publish.
+       *         Adjust here to tune.
+       */
+      static constexpr int64_t ACAM_FRESHNESS_GUARD_US = 500'000;
 
       /** @brief  safely runs function in a detached thread using lambda to catch exceptions
        */
@@ -307,6 +330,7 @@ namespace Sequencer {
       Sequence() :
           context(),
           ready_to_start(false),
+          can_expose(false),
           is_science_frame_transfer(false),
           notify_tcs_next_target(false),
           arm_readout_flag(false),
@@ -318,6 +342,7 @@ namespace Sequencer {
           tcs_settle_stable(1),
           tcs_domeazi_ready(1),
           tcs_preauth_time(0),
+          offset_settle_sec(3),
           do_once(false),
           tcs_which("real"),
           tcs_name("offline"),
@@ -334,8 +359,18 @@ namespace Sequencer {
             daemon_manager.set_callback([this](const std::bitset<NUM_DAEMONS>& states) { broadcast_daemonstate(); });
 
             topic_handlers = {
-              { "_snapshot", std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+              { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+              { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+              { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slicecamd(msg); } ) },
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
+              { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
           }
 
@@ -365,8 +400,6 @@ namespace Sequencer {
 
       inline void reset_cancel_flag() { this->cancel_flag.store(false); }
 
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
-
       double acquisition_timeout; ///< timeout for target acquisition (in sec) set by configuration parameter ACAM_ACQUIRE_TIMEOUT
       int acquisition_max_retrys; ///< max number of acquisition loop attempts
       double tcs_offsetrate_ra;   ///< TCS offset rate RA ("MRATE") in arcsec per second
@@ -375,10 +408,21 @@ namespace Sequencer {
       double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
+      double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
 
+      std::mutex fineacquire_mtx;
+      std::condition_variable fineacquire_cv;
+      std::mutex acam_mtx;
+      std::condition_variable acam_cv;
+      std::mutex camerad_mtx;
+      std::condition_variable camerad_cv;
+      std::mutex slitd_mtx;
+      std::condition_variable slitd_cv;
+      std::mutex tcsd_mtx;
+      std::condition_variable tcsd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -388,9 +432,6 @@ namespace Sequencer {
       std::vector<int> sequence_state_bits;
 
       std::atomic<bool> do_once;            ///< set if "do one" selected, clear if "do all" selected
-
-      std::mutex seqstate_mtx;
-      std::condition_variable seqstate_cv;
 
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_THREAD_STATES)> thread_error_manager{ Sequencer::thread_names };
       ImprovedStateManager<static_cast<size_t>(Sequencer::NUM_SEQ_STATES)>    seq_state_manager{Sequencer::seq_state_names};
@@ -417,8 +458,6 @@ namespace Sequencer {
       std::string test_solver_args;   ///< optional solver args that can be passed in with a test command
 
       std::string daemon_control;     ///< daemon control script
-
-      Common::Queue async;            ///< asynchronous message queue
 
       // Here are all the daemon client objects that the Sequencer connects to.
       //
@@ -448,8 +487,13 @@ namespace Sequencer {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_camerad( const nlohmann::json &jmessage );
+      void handletopic_acamd( const nlohmann::json &jmessage );
+      void handletopic_slicecamd( const nlohmann::json &jmessage );
+      void handletopic_slitd( const nlohmann::json &jmessage );
+      void handletopic_tcsd( const nlohmann::json &jmessage );
       void publish_snapshot();
-      void publish_snapshot(std::string &retstring);
+      void request_snapshot();
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();
@@ -479,8 +523,14 @@ namespace Sequencer {
 ///   void set_seqstate_bit( uint32_t mb );     ///< set the specified masked bit in the seqstate word
       void broadcast_daemonstate();             ///<
       void broadcast_threadstate();             ///<
-      void broadcast_seqstate();                ///< writes the seqstate string to the async port
-      void broadcast_waitstate();               ///< writes the waitstate string to the async port
+      void broadcast_seqstate();                ///< publishes the seqstate on the seq_seqstate topic
+      void broadcast_waitstate();               ///< publishes the waitstate on the seq_waitstate topic
+
+      Common::Broadcaster broadcast { this->publisher, Sequencer::DAEMON_NAME };  ///< logs and publishes a narrative message on Topic::BROADCAST
+
+      std::string last_seqstate_str;            ///< last seqstate string announced via broadcast_seqstate() (for change detection)
+      nlohmann::json last_published_targetinfo; ///< last published targetinfo (for change detection)
+      std::mutex publish_targetinfo_mtx;        ///< guards last_published_targetinfo check-then-act
 
       uint32_t get_reqstate();                  ///< get the reqstate word
 
@@ -497,6 +547,7 @@ namespace Sequencer {
       long parse_calibration_target();
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
+      long fine_acquire( std::string args, std::string &retstring );           ///< enable|disable fineacquisition step
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply
@@ -517,9 +568,7 @@ namespace Sequencer {
       long get_tcs_cass( double &cass );
       long target_offset();
 
-      void make_telemetry_message( std::string &retstring );        ///< assembles my telemetry message
-      void get_external_telemetry();                                ///< collect telemetry from another daemon
-      long handle_json_message( const std::string message_in );     ///< parses incoming telemetry messages
+      void publish_targetinfo( bool force=false );                  ///< publish target info on change (or force)
 
       long set_power_switch( PowerState state, const std::string which, std::chrono::seconds delay );
       long check_power_switch( PowerState checkstate, const std::string which, bool &is_set );
@@ -534,13 +583,14 @@ namespace Sequencer {
       // These are various jobs that are done in their own threads
       //
       long trigger_exposure();       ///< trigger and wait for exposure
+      long set_imgtype();            ///< set IMGTYPE
       void abort_process();          ///< tries to abort everything
       void stop_exposure();          ///< stop exposure timer in progress
       long repeat_exposure();        ///< repeat the last exposure
       void modify_exptime( double exptime_in );  ///< modify exptime while exposure running
-      void dothread_acquisition();            /// performs the acquisition sequence when signalled
 
       void dothread_test();
+      long wait_for_user();          ///< wait for the user or cancel
       void sequence_start(std::string obsid_in);         ///< main sequence start thread. optional obsid_in for single target obs
       long calib_set();              ///< sets calib according to target entry params
       long camera_set();             ///< sets camera according to target entry params
@@ -549,6 +599,16 @@ namespace Sequencer {
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
+
+      /**
+       * these are in sequence_acquisition.cpp
+       */
+      long do_acam_acquire();
+      long do_acam_stop();
+      long do_slicecam_fineacquire();
+      long do_slicecam_stop();
+      long do_slicecam_autoexpose( bool enable );
+
 
       long acam_init();                                        ///< initializes connection to acamd
       long calib_init();                                       ///< initializes connection to calibd

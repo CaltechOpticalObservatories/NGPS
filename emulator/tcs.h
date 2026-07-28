@@ -109,6 +109,7 @@ namespace TcsEmulator {
       static void do_ringgo( TcsEmulator::Telescope &telescope, double newring );    ///< "moves" the cass rotator
       static void do_coords( TcsEmulator::Telescope &telescope, std::string args );  ///< "moves" the telescope
       static void do_pt( TcsEmulator::Telescope &telescope, std::string args );      ///< "offsets" the telescope
+      void parallactic( std::string &retstring );
       void weather( std::string &retstring );
       void reqstat( std::string &retstring );
       void reqpos( std::string &retstring );

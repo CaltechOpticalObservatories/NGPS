@@ -71,8 +71,8 @@ parser.add_argument('-binspat', type=posint, default=1, help=help)
 help = 'Only use flux from the center slit, not side slices'
 parser.add_argument('-noslicer', action='store_true', help=help)
 
-help = 'Assume astronomer only uses 2 brightest pixels in center slice for SNR'
-parser.add_argument('-fastSNR', action='store_true', help=help)
+help = 'Assume astronomer computes SNR by summing 2N brightest pixels of profile in center slice (symmetric profile, N on 1 side of peak)'
+parser.add_argument('-fastSNR', type=int, default=None, help=help)
 
 help = 'Plot SNR vs. wavelength for the solution'
 parser.add_argument('-plotSNR', action='store_true', help=help)

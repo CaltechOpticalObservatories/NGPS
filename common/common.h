@@ -24,6 +24,7 @@
 
 #include "logentry.h"
 #include "network.h"
+#include "message_keys.h"
 
 const long NOTHING = -1;
 const long NO_ERROR = 0;
@@ -36,8 +37,11 @@ const long ABORT = 6;
 const long EXIT = 999;
 
 const std::string JEOF = "EOF\n";              ///< used to terminate JSON messages
-const std::string TELEMREQUEST = "sendtelem";  ///< common daemon command used to request telemetry
 const std::string SNAPSHOT = "snapshot";       ///< common daemon command forces publish of telemetry
+
+const std::string CID_PREFIX = "#cid:";        ///< correlation ID marker for inter-daemon commands
+constexpr size_t CID_HEX_LEN = 8;              ///< number of hex chars in a correlation ID
+constexpr size_t CID_HEADER_LEN = 5 + CID_HEX_LEN + 1;  ///< total prefix length: "#cid:" + 8 hex + 1 space
 
 constexpr bool EXT = true;   ///< constant for use_extension arg of Common::Header::add_key()
 constexpr bool PRI = !EXT;   ///< constant for use_extension arg of Common::Header::add_key()
@@ -67,6 +71,8 @@ namespace Common {
     private:
       zmqpp::context &_context;
       zmqpp::socket _socket;
+      zmqpp::poller _poller;             ///< persistent poller — avoids per-call reconstruction
+      mutable std::mutex _publish_mtx;   ///< zmqpp sockets are NOT thread-safe. Serializes concurrent publish callers
       Mode _mode;                        ///< publisher or subscriber?
       std::string _topic;                ///< publisher topic
       std::vector<std::string> _topics;  ///< list of subscriber topics
@@ -78,17 +84,23 @@ namespace Common {
       PubSub( zmqpp::context &context, Mode mode )
         : _context(context),
           _socket(context, (mode==Mode::PUB ? zmqpp::socket_type::publish : zmqpp::socket_type::subscribe)),
-          _mode(mode) { }
+          _mode(mode)
+      {
+        _socket.set( zmqpp::socket_option::linger,               0 );
+        _socket.set( zmqpp::socket_option::send_high_water_mark,    0 );
+        _socket.set( zmqpp::socket_option::receive_high_water_mark, 0 );
+        _poller.add( _socket, zmqpp::poller::poll_in );
+      }
 
       ~PubSub() { _socket.close(); }
 
       /**
-       * @brief       publishers bind to a socket endpoint (not for brokers)
+       * @brief      poll for a waiting message
+       * @param[in]  timeout_ms  poll timeout in milliseconds (default 100, 0 = non-blocking)
+       * @return     true if at least one message is ready to receive
        */
-      bool has_message() {
-        zmqpp::poller poller;
-        poller.add(_socket, zmqpp::poller::poll_in);
-        return ( poller.poll(100) > 0 );
+      bool has_message( int timeout_ms = 100 ) {
+        return ( _poller.poll(timeout_ms) > 0 );
       }
 
       /**
@@ -180,6 +192,7 @@ namespace Common {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
         }
+        std::lock_guard<std::mutex> lock( _publish_mtx );  // serialize the non-thread-safe socket
         zmqpp::message message_zmq;
         // Publish to either class default _topic or topic specified as
         // optional arg.
@@ -212,11 +225,11 @@ namespace Common {
           return ERROR;
         }
 
-        // Initialize the message subscriber. All daemons minimally subscribe to "_snapshot"
+        // Initialize the message subscriber. All daemons minimally subscribe to Topic::SNAPSHOT
         // which causes them to publish their current status.
         //
         iface.subscriber_topics.clear();
-        iface.subscriber_topics.push_back("_snapshot");
+        iface.subscriber_topics.push_back(Topic::SNAPSHOT);
 
         for ( const auto &topic : topics ) {
           iface.subscriber_topics.push_back(topic);
@@ -248,6 +261,7 @@ namespace Common {
                              +" with default topic " +iface.publisher_topic );
           iface.publisher = std::make_unique<Common::PubSub>( context, Common::PubSub::Mode::PUB );
           iface.publisher->connect_to_broker( iface.publisher_address, iface.publisher_topic );
+          std::this_thread::sleep_for( std::chrono::milliseconds(100) );  // publisher slow-joiner settle
         }
         catch ( const zmqpp::zmq_internal_exception &e ) {
           logwrite( function, "ERROR initializing message handler: "+std::string(e.what()) );
@@ -298,13 +312,17 @@ namespace Common {
 
         BoolState thread_running( iface.is_subscriber_thread_running );
 
-        // listen for published messages and handle them
+        // listen for published messages and handle them.
+        // drain all pending messages per poll wake-up to avoid per-message 100ms stalls
+        // when several daemons publish simultaneously (e.g. after request_snapshot()).
         //
         while ( iface.should_subscriber_thread_run ) {
           try {
             if ( iface.subscriber->has_message() ) {
-              auto [topic,payload] = iface.subscriber->receive();
-              process_incoming_message(iface, topic, payload);
+              do {
+                auto [topic,payload] = iface.subscriber->receive();
+                process_incoming_message(iface, topic, payload);
+              } while ( iface.subscriber->has_message(0) );
             }
           }
           catch ( const std::exception &e ) {
@@ -378,7 +396,74 @@ namespace Common {
   };
 
 
-  void collect_telemetry(const std::pair<std::string,int> &provider, std::string &retstring);
+  /**************** Common::Broadcaster ***************************************/
+  /**
+   * @class   Broadcaster
+   * @brief   logs a narrative message and publishes it on Topic::BROADCAST
+   * @details Captures a reference to a publisher and the source daemon name
+   *          at construction time so that call sites need only supply the
+   *          caller function name and message (and severity, for emit).
+   *          The publisher reference is to the daemon's Common::PubSub, which
+   *          may be null at the time this Broadcaster is constructed and gets
+   *          populated later by init_pubsub.
+   *
+   */
+  class Broadcaster {
+    private:
+      const std::unique_ptr<Common::PubSub> &publisher;  ///< reference to owner's publisher
+      std::string source;                                ///< source daemon name
+
+    public:
+      Broadcaster( const std::unique_ptr<Common::PubSub> &publisher,
+                   std::string source )
+        : publisher(publisher), source(std::move(source)) { }
+
+      /**
+       * @brief  publish a NOTICE severity broadcast
+       */
+      inline void notice( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::NOTICE, message );
+      }
+
+      /**
+       * @brief  publish a WARNING severity broadcast
+       */
+      inline void warning( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::WARNING, message );
+      }
+
+      /**
+       * @brief  publish an ERROR severity broadcast
+       */
+      inline void error( const std::string &function, const std::string &message ) {
+        this->emit( function, Severity::ERROR, message );
+      }
+
+      void emit( const std::string &function,
+                 const std::string &severity,
+                 const std::string &message );
+  };
+  /**************** Common::Broadcaster ***************************************/
+
+
+  /***** Common::extract_correlation_id ***************************************/
+  /**
+   * @brief      detect and strip a correlation ID prefix from an inter-daemon message
+   * @details    The wire format for a tagged message is:
+   *                "#cid:HHHHHHHH <payload>"
+   *             where HHHHHHHH is exactly CID_HEX_LEN lowercase hex digits and is
+   *             followed by a single space. Untagged messages (e.g. CLI users)
+   *             are left untouched and the function returns false.
+   * @param[in]  input        full message as received from the wire
+   * @param[out] id_out       extracted ID on success; unchanged otherwise
+   * @param[out] payload_out  message with the prefix stripped on success; copy of input otherwise
+   * @return     true if a well-formed correlation ID prefix was found, false otherwise
+   *
+   */
+  bool extract_correlation_id( const std::string &input,
+                               std::string       &id_out,
+                               std::string       &payload_out );
+
 
   /***** Common::extract_telemetry_value **************************************/
   /**
@@ -433,7 +518,8 @@ namespace Common {
       }
       else
       if constexpr ( std::is_same<T, int16_t>::value || std::is_same<T, int32_t>::value || std::is_same<T, int64_t>::value ) {
-        if ( jvalue.type() == json::value_t::number_unsigned ) {
+        if ( jvalue.type() == json::value_t::number_integer ||
+             jvalue.type() == json::value_t::number_unsigned ) {
           value = jvalue.template get<T>();
         }
       }
@@ -653,15 +739,24 @@ namespace Common {
       template <class T> long addkey( const std::string &key, T tval, const std::string &comment, int prec ) {
         return do_addkey( key, tval, comment, prec, "" );
       }
-      template <class T> long do_addkey( const std::string &key,
+      template <class T> long do_addkey( const std::string &keyin,
                                          T tval,
                                          const std::string &comment,
                                          int prec,
                                          std::string type_in ) {
+        const std::string function("Common::FitsKeys::do_addkey");
         std::stringstream val;
-        std::string type, value;
+        std::string key, type, value;
 
-        if ( key.empty() || ( key.find(" ") != std::string::npos ) ) return NO_ERROR;
+        if ( keyin.empty() || ( keyin.find(" ") != std::string::npos ) ) return NO_ERROR;
+
+        // truncate keywords to max allowed 8 characters
+        //
+        if (keyin.length() > 8) {
+          key = keyin.substr(0,8);
+          logwrite(function, "NOTICE: keyword '"+keyin+"' truncated to '"+key+"'");
+        }
+        else key = keyin;
 
         // this determines the type based on the templated tval
         // and formats the value if needed (for floating point precision)
@@ -732,6 +827,34 @@ namespace Common {
           this->keydb.erase( vec );
         }
         return;
+      }
+
+      template <typename T>
+      T get_key(const std::string &keyname) const {
+        auto it = this->keydb.find(keyname);
+        if (it == this->keydb.end()) {
+          throw std::out_of_range("FitsKeys::get_key '"+keyname+"' not found");
+        }
+        const std::string &val = it->second.keyvalue;
+
+        try {
+          if constexpr(std::is_same_v<T,double>)      return std::stod(val);
+          else
+          if constexpr(std::is_same_v<T,float>)       return std::stof(val);
+          else
+          if constexpr(std::is_same_v<T,int>)         return std::stoi(val);
+          else
+          if constexpr(std::is_same_v<T,long>)        return std::stol(val);
+          else
+          if constexpr(std::is_same_v<T,bool>)        return (val=="T"||val=="true"||val=="1");
+          else
+          if constexpr(std::is_same_v<T,std::string>) return val;
+          else
+          static_assert(std::is_same_v<T,void>, "FitsKeys::get_key unsupported type");
+        }
+        catch (const std::exception &e) {
+          throw std::runtime_error("FitsKeys::get_key '"+keyname+"' could not convert '"+val+"'");
+        }
       }
   };
   /**************** Common::FitsKeys ******************************************/
@@ -889,9 +1012,13 @@ namespace Common {
        * @brief      template class adds key,value,comment to indicated keydb from json message
        * @details    This extracts the value from a JSON message and uses add_key to add the
        *             keyword to the indicated database map.
-       * @param[in]  type      reference to FitsKeys database object
-       * @param[in]  jmessage  JSON message is the source of the value
-       * @param[in]  comment   comment string for header keyword
+       * @param[in]  jmessage       JSON message is the source of the value
+       * @param[in]  jkey           key to index jmessage
+       * @param[in]  keyword        FITS header keyword
+       * @param[in]  comment        comment string for header keyword
+       * @param[in]  type           type of key can be optionally specified
+       * @param[in]  use_extension  extension or primary
+       * @param[in]  chan           channel selects keyword db
        *
        */
       void add_json_key( const json &jmessage,
@@ -1103,6 +1230,42 @@ namespace Common {
   /**************** Common::Queue *********************************************/
 
 
+  /***** Common::CorrIdCache **************************************************/
+  /**
+   * @class   CorrIdCache
+   * @brief   bounded TTL cache of recent inter-daemon replies, keyed by correlation ID
+   * @details Used by daemons to make command retries idempotent: when a tagged
+   *          command is received whose correlation ID matches a cached entry,
+   *          the previously-computed reply is replayed verbatim and the
+   *          underlying handler is NOT re-invoked. Entries expire after
+   *          TTL_SECONDS or when the cache reaches MAX_ENTRIES, whichever
+   *          comes first. The cache is intentionally small and bounded; it
+   *          guards only against same-second retries by DaemonClient::send.
+   *
+   *          The stored reply is the daemon's bare retstring as it would have
+   *          been written to the wire WITHOUT any correlation ID prefix; the
+   *          caller is responsible for prepending the prefix on replay.
+   *
+   */
+  class CorrIdCache {
+    public:
+      static constexpr size_t MAX_ENTRIES  = 64;   ///< max cached replies per server
+      static constexpr int    TTL_SECONDS  = 60;   ///< per-entry lifetime in seconds
+
+      bool lookup( const std::string &id, std::string &reply_out );
+      void insert( const std::string &id, const std::string &reply );
+
+    private:
+      struct Entry {
+        std::string reply;
+        std::chrono::steady_clock::time_point expires;
+      };
+      std::map<std::string, Entry> cache;
+      std::mutex mtx;
+  };
+  /**************** Common::CorrIdCache ***************************************/
+
+
   /***** Common::DaemonClient *********************************************************/
   /**
    * @class   DaemonClient
@@ -1113,7 +1276,8 @@ namespace Common {
    */
   class DaemonClient {
     private:
-      std::mutex client_access;
+      std::recursive_mutex client_access;  // recursive: command() takes it across connect+send+close
+
       char term_write;            ///< send adds this char on Writes
       char term_read;             ///< send looks for this char on Reads (if reply requested)
       std::string term_str_write; ///< optional terminating string for writes

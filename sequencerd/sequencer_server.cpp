@@ -27,13 +27,10 @@ namespace Sequencer {
       case SIGTERM:
       case SIGINT:
         logwrite(function, "received termination signal");
-        message << "NOTICE:" << Sequencer::DAEMON_NAME << " exit";
-        Server::instance->sequence.async.enqueue( message.str() );
         Server::instance->exit_cleanly();                      // shutdown the daemon
         break;
       case SIGHUP:  // TODO reconfigure?
-        Server::instance->sequence.async.enqueue_and_log( function,
-          "ERROR: caught unhandled HUP signal" );
+        logwrite( function, "ERROR: caught unhandled HUP signal" );
         break;
       case SIGPIPE:
         logwrite(function, "ignored SIGPIPE");
@@ -41,8 +38,6 @@ namespace Sequencer {
       default:
         message << "received unknown signal " << strsignal(signo);
         logwrite( function, message.str() );
-        message.str(""); message << "NOTICE:" << Sequencer::DAEMON_NAME << " exit";
-        Server::instance->sequence.async.enqueue( message.str() );
         break;
     }
     return;
@@ -58,6 +53,7 @@ namespace Sequencer {
   void Server::exit_cleanly(void) {
     std::string function = "Sequencer::Server::exit_cleanly";
     logwrite( function, "exiting" );
+    Server::instance->sequence.broadcast.notice(function, "sequencerd terminated");
 
     exit(EXIT_SUCCESS);
   }
@@ -90,14 +86,9 @@ namespace Sequencer {
       catch (const std::exception &e) {   // should be impossible
         message.str(""); message << "ERROR parsing entry " << entry << " of " << this->config.n_entries
                                  << ": " << e.what();
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         return ERROR;
       }
-
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] configkey " << configkey << "=" << configval;
-      logwrite( function, message.str() );
-#endif
 
       // NBPORT
       if ( configkey == "NBPORT" ) {
@@ -106,11 +97,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing NBPORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -121,11 +112,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing BLKPORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -136,11 +127,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing ASYNCPORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -151,11 +142,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing MESSAGEPORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -163,7 +154,7 @@ namespace Sequencer {
       if (config.param[entry] == "MESSAGEGROUP") {
         this->messagegroup = config.arg[entry];
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -172,7 +163,7 @@ namespace Sequencer {
       if ( config.param[entry] == "PUB_ENDPOINT" ) {
         this->sequence.publisher_address = config.arg[entry];
         this->sequence.publisher_topic = DAEMON_NAME;
-        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        logwrite(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
         applied++;
       }
 
@@ -180,14 +171,14 @@ namespace Sequencer {
       //
       if ( config.param[entry] == "SUB_ENDPOINT" ) {
         this->sequence.subscriber_address = config.arg[entry];
-        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        logwrite(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
         applied++;
       }
 
       // DAEMON_CONTROL_SCRIPT
       if (config.param[entry] == "DAEMON_CONTROL_SCRIPT") {
         this->sequence.daemon_control = config.arg[entry];
-        this->sequence.async.enqueue_and_log(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
+        logwrite(function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry]);
         applied++;
       }
 
@@ -198,11 +189,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing ACAMD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -213,11 +204,11 @@ namespace Sequencer {
         }
         catch (const std::invalid_argument &e) {
           message.str(""); message << "ERROR parsing CAMERAD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -228,11 +219,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing CAMERAD_NBPORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -243,11 +234,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing FLEXURED_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -258,11 +249,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing POWERD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -273,11 +264,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing SLICECAMD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -288,11 +279,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing SLITD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -303,11 +294,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing TCSD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -318,11 +309,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing CALIBD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -333,11 +324,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing FILTERD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -348,11 +339,11 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing FOCUSD_PORT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -363,11 +354,26 @@ namespace Sequencer {
         }
         catch (const std::exception &e) {
           message.str(""); message << "ERROR parsing ACQUIRE_TIMEOUT: " << e.what();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return ERROR;
         }
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      // OFFSET_SETTLE_SEC
+      if (config.param[entry] == "OFFSET_SETTLE_SEC") {
+        try {
+          this->sequence.offset_settle_sec = std::stod( config.arg[entry] );
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing OFFSET_SETTLE_SEC: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -379,27 +385,27 @@ namespace Sequencer {
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ACQUIRE_RETRYS: unable to convert " << config.arg[entry] << " to integer. retry limit disabled.";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           this->sequence.acquisition_max_retrys = -1;
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ACQUIRE_RETRYS number out of integer range. retry limit disabled." );
+          logwrite( function, "ACQUIRE_RETRYS number out of integer range. retry limit disabled." );
           this->sequence.acquisition_max_retrys = -1;
         }
         this->sequence.acquisition_max_retrys = rt;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
       // TCS_WHICH -- which TCS to connect to, defults to real if not specified
       if ( config.param[entry] == "TCS_WHICH" ) {
         if ( config.arg[entry] != "sim" && config.arg[entry] != "real" ) {
-          this->sequence.async.enqueue_and_log( function, "ERROR TCS_WHICH expected { sim real }" );
+          logwrite( function, "ERROR TCS_WHICH expected { sim real }" );
           return ERROR;
         }
         this->sequence.tcs_which = config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry] );
+        logwrite( function, "SEQUENCERD:config:"+config.param[entry]+"="+config.arg[entry] );
         applied++;
       }
 
@@ -410,22 +416,22 @@ namespace Sequencer {
           mrate = std::stod( config.arg[entry] );
           if ( mrate < 0 || mrate > 60 ) {
             message.str(""); message << "ERROR: TCS_OFFSET_RATE_RA " << mrate << " out of range {0:60}";
-            this->sequence.async.enqueue_and_log( function, message.str() );
+            logwrite( function, message.str() );
             return( ERROR );
           }
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: bad TCS_OFFSET_RATE_RA: unable to convert " << config.arg[entry] << " to double";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_OFFSET_RATE_RA number out of double range" );
+          logwrite( function, "ERROR: TCS_OFFSET_RATE_RA number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_ra = mrate;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -436,22 +442,22 @@ namespace Sequencer {
           mrate = std::stod( config.arg[entry] );
           if ( mrate < 0 || mrate > 60 ) {
             message.str(""); message << "ERROR: TCS_OFFSET_RATE_DEC " << mrate << " out of range {0:60}";
-            this->sequence.async.enqueue_and_log( function, message.str() );
+            logwrite( function, message.str() );
             return( ERROR );
           }
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: bad TCS_OFFSET_RATE_DEC: unable to convert " << config.arg[entry] << " to double";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_OFFSET_RATE_DEC number out of double range" );
+          logwrite( function, "ERROR: TCS_OFFSET_RATE_DEC number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_offsetrate_dec = mrate;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -463,16 +469,16 @@ namespace Sequencer {
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: bad TCS_SETTLE_TIMEOUT: unable to convert " << config.arg[entry] << " to double";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_SETTLE_TIMEOUT number out of double range" );
+          logwrite( function, "ERROR: TCS_SETTLE_TIMEOUT number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_settle_timeout = to;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -484,16 +490,16 @@ namespace Sequencer {
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: bad TCS_SETTLE_STABLE: unable to convert " << config.arg[entry] << " to double";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_SETTLE_STABLE number out of double range" );
+          logwrite( function, "ERROR: TCS_SETTLE_STABLE number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_settle_stable = stablet;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -505,16 +511,16 @@ namespace Sequencer {
         }
         catch (std::invalid_argument &) {
           message.str(""); message << "ERROR: bad TCS_DOMEAZI_READY: unable to convert " << config.arg[entry] << " to double";
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_DOMEAZI_READY number out of double range" );
+          logwrite( function, "ERROR: TCS_DOMEAZI_READY number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_domeazi_ready = domeazi;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -525,16 +531,16 @@ namespace Sequencer {
           to = std::stod( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad TCS_PREAUTH_TIME: unable to convert to double" );
+          logwrite( function, "ERROR: bad TCS_PREAUTH_TIME: unable to convert to double" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: TCS_PREAUTH_TIME number out of double range" );
+          logwrite( function, "ERROR: TCS_PREAUTH_TIME number out of double range" );
           return(ERROR);
         }
         this->sequence.tcs_preauth_time = to;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -545,16 +551,16 @@ namespace Sequencer {
           offset = std::stod( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_OFFSET_THRESHOLD: unable to convert to double" );
+          logwrite( function, "ERROR: bad ACQUIRE_OFFSET_THRESHOLD: unable to convert to double" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_OFFSET_THRESHOLD number out of double range" );
+          logwrite( function, "ERROR: ACQUIRE_OFFSET_THRESHOLD number out of double range" );
           return(ERROR);
         }
         this->sequence.target.offset_threshold = offset;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -565,16 +571,16 @@ namespace Sequencer {
           repeat = std::stoi( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_MIN_REPEAT: unable to convert to int" );
+          logwrite( function, "ERROR: bad ACQUIRE_MIN_REPEAT: unable to convert to int" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_MIN_REPEAT number out of int range" );
+          logwrite( function, "ERROR: ACQUIRE_MIN_REPEAT number out of int range" );
           return(ERROR);
         }
         this->sequence.target.min_repeat = repeat;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -585,16 +591,16 @@ namespace Sequencer {
           offset = std::stod( config.arg[entry] );
         }
         catch (std::invalid_argument &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: bad ACQUIRE_TCS_MAX_OFFSET: unable to convert to double" );
+          logwrite( function, "ERROR: bad ACQUIRE_TCS_MAX_OFFSET: unable to convert to double" );
           return(ERROR);
         }
         catch (std::out_of_range &) {
-          this->sequence.async.enqueue_and_log( function, "ERROR: ACQUIRE_TCS_MAX_OFFSET number out of double range" );
+          logwrite( function, "ERROR: ACQUIRE_TCS_MAX_OFFSET number out of double range" );
           return(ERROR);
         }
         this->sequence.target.max_tcs_offset = offset;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         applied++;
       }
 
@@ -609,7 +615,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_HOST, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -618,7 +624,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_PORT, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -627,7 +633,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_USER, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -636,7 +642,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_PASS, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -645,7 +651,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_SCHEMA, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -654,7 +660,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_ACTIVE, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -663,7 +669,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_COMPLETED, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -672,7 +678,7 @@ namespace Sequencer {
         if ( this->sequence.target.configure_db( DB_SETS, config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -681,7 +687,7 @@ namespace Sequencer {
         this->sequence.camera_prologue.push_back( this->config.arg[entry] );
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
       }
 
       // CAMERA_EPILOGUE
@@ -689,7 +695,7 @@ namespace Sequencer {
         this->sequence.camera_epilogue.push_back( this->config.arg[entry] );
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
       }
 
       // *__INIT
@@ -701,7 +707,7 @@ namespace Sequencer {
         this->sequence.config_init[key] = this->config.arg[entry];
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
       }
 
       // *__SHUTDOWN
@@ -713,7 +719,7 @@ namespace Sequencer {
         this->sequence.config_shutdown[key] = this->config.arg[entry];
         applied++;
         message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
       }
 
       // VIRTUAL_SLITW_ACQUIRE
@@ -755,7 +761,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_LAMP].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -764,7 +770,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_SLIT].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -773,7 +779,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_CAMERA].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -782,7 +788,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_CALIB].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -791,7 +797,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_FLEXURE].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -800,7 +806,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_FILTER].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -809,7 +815,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_FOCUS].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -818,7 +824,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_TELEM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -827,7 +833,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_THERMAL].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -836,7 +842,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_ACAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -845,7 +851,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_ACAM_CAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -854,7 +860,7 @@ namespace Sequencer {
         if ( this->sequence.power_switch[POWER_SLICECAM].configure( this->config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
       }
 
@@ -863,33 +869,8 @@ namespace Sequencer {
         if ( this->sequence.caltarget.configure( config.arg[entry] ) == NO_ERROR ) {
           applied++;
           message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->sequence.async.enqueue_and_log( function, message.str() );
-        }
-      }
-
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
-      //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->sequence.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
-          }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
-          return ERROR;
         }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->sequence.async.enqueue_and_log( "SEQUENCERD", function, message.str() );
-        applied++;
       }
 
     } // end loop through the entries in the configuration file
@@ -926,7 +907,14 @@ namespace Sequencer {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Sequencer::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Sequencer::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Sequencer::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -1020,7 +1008,7 @@ namespace Sequencer {
 
   /***** Server::async_main ***************************************************/
   /**
-   * @brief      asynchronous message sending thread
+   * @brief      [obsolete] asynchronous message sending thread
    * @param[in]  seq   reference to Sequencer::Server object
    * @param[in]  sock  Network::udpSocket socket object
    *
@@ -1028,36 +1016,38 @@ namespace Sequencer {
    * sent out via multi-cast UDP datagram.
    *
    */
-  void Server::async_main( Sequencer::Server &seq, Network::UdpSocket sock ) {
-    std::string function = "Sequencer::Server::async_main";
-    std::stringstream message;
-    int retval;
-
-    retval = sock.Create();                                   // create the UDP socket
-    if (retval < 0) {
-      logwrite(function, "error creating UDP multicast socket for asynchronous messages");
-      seq.exit_cleanly();                                     // do not continue on error
-    }
-    if (retval==1) {                                          // exit this thread but continue with daemon
-      logwrite(function, "asyncrhonous message port disabled by request");
-    }
-
-    while (1) {
-      std::string message = seq.sequence.async.dequeue();     // get the latest message from the queue (blocks)
-      retval = sock.Send(message);                            // transmit the message
-      if (retval < 0) {
-        std::stringstream errstm;
-        errstm << "error sending UDP message: " << message;
-        logwrite(function, errstm.str());
-      }
-      if (message=="exit") {                                  // terminate this thread
-        sock.Close();
-        return;
-      }
-    }
-    
-    return;
-  }
+/***
+ *void Server::async_main( Sequencer::Server &seq, Network::UdpSocket sock ) {
+ *  std::string function = "Sequencer::Server::async_main";
+ *  std::stringstream message;
+ *  int retval;
+ *
+ *  retval = sock.Create();                                   // create the UDP socket
+ *  if (retval < 0) {
+ *    logwrite(function, "error creating UDP multicast socket for asynchronous messages");
+ *    seq.exit_cleanly();                                     // do not continue on error
+ *  }
+ *  if (retval==1) {                                          // exit this thread but continue with daemon
+ *    logwrite(function, "asyncrhonous message port disabled by request");
+ *  }
+ *
+ *  while (1) {
+ *    std::string message = seq.sequence.async.dequeue();     // get the latest message from the queue (blocks)
+ *    retval = sock.Send(message);                            // transmit the message
+ *    if (retval < 0) {
+ *      std::stringstream errstm;
+ *      errstm << "error sending UDP message: " << message;
+ *      logwrite(function, errstm.str());
+ *    }
+ *    if (message=="exit") {                                  // terminate this thread
+ *      sock.Close();
+ *      return;
+ *    }
+ *  }
+ *  
+ *  return;
+ *}
+ ***/
   /***** Server::async_main ***************************************************/
 
 
@@ -1081,12 +1071,14 @@ namespace Sequencer {
 
     bool connection_open=true;
 
-    message.str(""); message << "thread " << sock.id << " accepted "
+#ifdef LOGLEVEL_DEBUG
+    message.str(""); message << "[DEBUG] thread " << sock.id << " accepted "
                              << (sock.isasync() ? "ASYNC " : "" )
                              << (sock.isblocking() ? "BLOCKING " : "NON-BLOCKING " )
                              << "connection on fd " << sock.getfd()
                              << " port " << sock.getport();
     logwrite( function, message.str() );
+#endif
 
     while ( connection_open ) {
 
@@ -1096,11 +1088,11 @@ namespace Sequencer {
       if ( ( pollret=sock.Poll() ) <= 0 ) {
         if (pollret==0) {
           message.str(""); message << "ERROR: Poll timeout on fd " << sock.getfd() << " thread " << sock.id;
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
         if ( pollret <0 && errno ) {
           message.str(""); message << "ERROR: Poll error on fd " << sock.getfd() << " thread " << sock.id << ": " << strerror(errno);
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
         break;                      // this will close the connection
       }
@@ -1116,11 +1108,11 @@ namespace Sequencer {
 #endif
         if ( ret<0 && errno ) {     // could be an actual read error
           message.str(""); message << "ERROR: Read error on fd " << sock.getfd() << ": " << strerror(errno);
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
         if (ret==-2) {              // or a timeout
           message.str(""); message << "ERROR: timeout reading from fd " << sock.getfd();
-          this->sequence.async.enqueue_and_log( function, message.str() );
+          logwrite( function, message.str() );
         }
         break;                      // Breaking out of the while loop will close the connection.
                                     // This probably means that the client has terminated abruptly, 
@@ -1133,6 +1125,31 @@ namespace Sequencer {
       //
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
+
+      // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+      // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+      // can be rejected by the client. CLI users send no prefix and corr_id is
+      // left empty; the server then echoes no prefix on reply.
+      //
+      std::string corr_id;
+      {
+        std::string payload;
+        Common::extract_correlation_id( buf, corr_id, payload );
+        buf = std::move( payload );
+      }
+
+      // Replay a cached reply if this command's ID matches a recent one.
+      // This makes DaemonClient retries idempotent: the underlying handler
+      // is invoked at most once per correlation ID within the cache TTL.
+      //
+      if ( !corr_id.empty() ) {
+        std::string cached_reply;
+        if ( this->corr_cache.lookup( corr_id, cached_reply ) ) {
+          std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+          if ( sock.Write( out ) < 0 ) connection_open=false;
+          continue;
+        }
+      }
 
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
@@ -1159,12 +1176,12 @@ namespace Sequencer {
       catch ( std::runtime_error &e ) {
         std::stringstream errstream; errstream << e.what();
         message.str(""); message << "ERROR: parsing arguments: " << errstream.str();
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         ret = -1;
       }
       catch ( ... ) {
         message.str(""); message << "ERROR: unknown error parsing arguments: " << args;
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         ret = -1;
       }
 
@@ -1184,6 +1201,10 @@ namespace Sequencer {
       else
       if ( cmd == SEQUENCERD_EXIT ) {
                   this->exit_cleanly();                        // shutdown the sequencer
+      }
+      else
+      if ( cmd == SEQUENCERD_FINEACQUIRE ) {
+                  this->sequence.fine_acquire(args, retstring);
       }
       else
 
@@ -1397,7 +1418,7 @@ namespace Sequencer {
       //
       if ( cmd == SEQUENCERD_REPEAT ) {
                   if ( !this->sequence.seq_state_manager.is_set( Sequencer::SEQ_READY ) ) {
-                    this->sequence.async.enqueue_and_log( function, "ERROR cannot start exposure: not ready" );
+                    this->sequence.broadcast.error( function, "cannot start exposure: not ready" );
                     ret = ERROR;
                   }
                   else {
@@ -1493,7 +1514,7 @@ namespace Sequencer {
       if ( cmd == SEQUENCERD_TARGETSET ) {
                   ret= this->sequence.target.targetset( args, retstring );
                   message.str(""); message << "TARGETSET: " << retstring;
-                  this->sequence.async.enqueue( message.str() );
+                  logwrite(function, message.str());
                   retstring.append( " " );
       }
       else
@@ -1503,15 +1524,15 @@ namespace Sequencer {
       if ( cmd == SEQUENCERD_PAUSE ) {
                   // Can only pause during an exposure
                   //
-                  if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
-                    this->sequence.async.enqueue_and_log( function, "ERROR: can only pause during an active exposure" );
+                  if ( ! this->sequence.wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+                    this->sequence.broadcast.error( function, "can only pause during an active exposure" );
                     ret = ERROR;
                   }
                   else
                   // Can't already be paused
                   //
                   if ( this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSED ) ) {
-                    this->sequence.async.enqueue_and_log( function, "ERROR: already paused" );
+                    this->sequence.broadcast.error( function, "already paused" );
                     ret = ERROR;
                   }
                   else {
@@ -1530,7 +1551,7 @@ namespace Sequencer {
                       // Can only resume when paused
                       //
                       if ( ! this->sequence.seq_state_manager.is_set( Sequencer::SEQ_PAUSED ) ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: can only resume when paused" );
+                        this->sequence.broadcast.error( function, "can only resume when paused" );
                         ret = ERROR;
                       }
                       else {
@@ -1557,7 +1578,7 @@ namespace Sequencer {
       if ( cmd.compare( SEQUENCERD_MODEXPTIME ) == 0 ) {
                       Tokenize( args, tokens, " " );
                       if ( tokens.size() != 1 ) {
-                        this->sequence.async.enqueue_and_log( function, "ERROR: expected MODEXPTIME <exptime>" );
+                        logwrite( function, "ERROR expected MODEXPTIME <exptime>" );
                         ret = ERROR;
                       }
                       else {
@@ -1566,13 +1587,13 @@ namespace Sequencer {
                         double exptime_req=0;
                         try { exptime_req = std::stod( tokens.at(0) ); }
                         catch( std::out_of_range &e ) {
-                          message.str(""); message << "ERROR: out of range parsing args " << args << ": " << e.what();
-                          this->sequence.async.enqueue_and_log( function, message.str() );
+                          message.str(""); message << "ERROR out of range parsing args " << args << ": " << e.what();
+                          logwrite( function, message.str() );
                           ret = ERROR;
                         }
                         catch( std::invalid_argument &e ) {
-                          message.str(""); message << "ERROR: invalid argument parsing args " << args << ": " << e.what();
-                          this->sequence.async.enqueue_and_log( function, message.str() );
+                          message.str(""); message << "ERROR invalid argument parsing args " << args << ": " << e.what();
+                          logwrite( function, message.str() );
                           ret = ERROR;
                         }
 
@@ -1592,28 +1613,11 @@ namespace Sequencer {
                       if ( ret != NO_ERROR ) logwrite(function, "ERROR: unable to load config file");
                       else ret = this->configure_sequencer();
       }
-      else
-
-      // send my telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->sequence.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-
       // Unknown commands generate an error
       //
       else {
-        message.str(""); message << "ERROR: unknown command: " << cmd;
-        this->sequence.async.enqueue_and_log( function, message.str() );
+        message.str(""); message << "ERROR unknown command: " << cmd;
+        logwrite( function, message.str() );
         ret = ERROR;
       }
 
@@ -1646,6 +1650,22 @@ namespace Sequencer {
           }
         }
         else retstring.append( "\n" );
+
+        // Cache the bare reply (without prefix) so retries with the same
+        // correlation ID can be replayed without re-running the handler.
+        //
+        if ( !corr_id.empty() ) {
+          this->corr_cache.insert( corr_id, retstring );
+        }
+
+        // Echo the correlation ID back to inter-daemon clients so they can
+        // verify the reply belongs to the command they just sent. CLI users
+        // sent no prefix, so corr_id is empty and nothing is prepended.
+        //
+        if ( !corr_id.empty() ) {
+          retstring = CID_PREFIX + corr_id + " " + retstring;
+        }
+
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
 

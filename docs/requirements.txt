@@ -1,0 +1,6 @@
+sphinx
+shibuya
+myst-parser
+sphinxcontrib-mermaid
+breathe
+exhale

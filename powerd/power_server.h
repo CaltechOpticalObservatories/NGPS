@@ -81,6 +81,7 @@ namespace Power {
       int blocking_socket;
 
       std::atomic<int> cmd_num;
+      Common::CorrIdCache corr_cache;       ///< dedup cache for tagged inter-daemon commands
 
       bool open_on_start;                   ///< should daemon automatically open connection on startup?
 
@@ -97,7 +98,7 @@ namespace Power {
 
       void exit_cleanly(void);              ///< exit
       long configure_powerd();              ///< read and apply the configuration file
-      void doit(Network::TcpSocket sock);   ///< the workhorse of each thread connetion
+      void doit(Network::TcpSocket &sock);  ///< the workhorse of each thread connetion
 
       void handle_signal( int signo );
 

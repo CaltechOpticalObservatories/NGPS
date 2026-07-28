@@ -100,9 +100,9 @@ PUSH_GUIDER_MESSAGE=/home/developer/Software/GuiderGUI/message.sh
 # For acamd, one controller must be named "filter" and the other must be named "cover"
 #
 MOTOR_CONTROLLER="filter @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 1 1"
-MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
+#MOTOR_CONTROLLER="cover  @IP_ETS8P@ @ETS8P_ACAM_MOTION@ 2 1"
 #MOTOR_CONTROLLER="filter localhost @ACAMD_EMULATOR@ 1 1"     # emulator
-#MOTOR_CONTROLLER="cover  localhost @ACAMD_EMULATOR@ 2 1"     # emulator
+MOTOR_CONTROLLER="cover  localhost @ACAMD_EMULATOR@ 2 1"     # emulator
 
 # For each actuator's controller specify:
 # MOTOR_AXIS="<name> <axis> <min> <max> <zero> <ref>"
@@ -159,7 +159,8 @@ ACQUIRE_TIMEOUT=90            # seconds before ACAM acquisition sequence aborts 
 ACQUIRE_RETRYS=5              # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5  # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2          # minimum number of sequential successful acquires
-ACQUIRE_TCS_MAX_OFFSET=60     # the maximum allowable offset sent to the TCS, in arcsec
+ACQUIRE_TCS_MAX_OFFSET=60     # max offset (arcsec) for an ordinary guiding correction sent to the TCS
+ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET=300  # max offset (arcsec) for a deliberate goal offset (put-on-slit, offset-star, end-of-fineacquire, pyGUI 'Offset') applied while guiding
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer
@@ -169,14 +170,11 @@ ACQUIRE_TCS_MAX_OFFSET=60     # the maximum allowable offset sent to the TCS, in
 SKYSIM_IMAGE_SIZE=1024
 
 # -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
+# SUBSCRIBE_TO=( <name> <endpoint> )
 #
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
+# This is a list of pub/sub sources to subscribe to, where <name> is the daemon
+# name and <endpoint> is its ZeroMQ publish endpoint.
 # Provide one per line.
-#
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
 #
 SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
 SUBSCRIBE_TO=(sequencerd "tcp://127.0.0.1:@SEQUENCERD_PUB_PORT@")

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <optional>
 #include <future>
 #include <cmath>
 #include <cpython.h>
@@ -24,6 +25,9 @@
 #include "acamd_commands.h"
 #include "tcsd_client.h"
 #include "skyinfo.h"
+#include "slicecam_camera.h"
+#include "slicecam_math.h"
+#include "message_keys.h"
 
 #define PYTHON_PATH "/home/developer/Software/Python:/home/developer/Software/Python/acam_skyinfo"
 #define PYTHON_ASTROMETRY_MODULE "astrometry"
@@ -36,6 +40,8 @@
 #else
 #include "andor.h"
 #endif
+
+#include "guimanager.h"
 
 /***** Slicecam ***************************************************************/
 /**
@@ -53,170 +59,62 @@ namespace Slicecam {
 
   class Interface;  // forward declaration
 
-  /***** Slicecam::Camera *****************************************************/
+  /***** Slicecam::FineAcqState ***********************************************/
   /**
-   * @class  Camera
-   * @brief  Camera class
+   * @brief  Persistent state for the fine-acquisition per-frame state machine
    *
-   * This class is used for communicating with the slicecam camera directly (which is an Andor)
-   *
+   * @details
+   *   which       - which camera to use ("L" or "R")
+   *   aimpoint    - desired star location on the chip, FITS 1-based pixels.
+   *                 This is the pixel analogue of CF's --goal-x / --goal-y.
+   *                 The star is driven toward this pixel, not toward an ra/dec.
+   *   bg_region   - background estimation ROI, 1-based inclusive.
+   *                 Matches the --bg-x1/x2/y1/y2 defaults in slicecamd.cfg.
+   *   dra_samp    - accumulated dRA*cos(dec) samples in degrees
+   *   ddec_samp   - accumulated dDEC samples in degrees
+   *   max_samples - samples to gather before evaluating a move
+   *   goal_arcsec - convergence threshold; loop stops when median offset
+   *                 magnitude falls below this value
+   *   gain        - fraction of the median offset commanded each cycle (0..1)
+   *   settle_count  - configured frames to discard after each commanded move
+   *   settle_frames - runtime countdown; decremented to zero before resuming
    */
-  class Camera {
-    private:
-      uint16_t* image_data;
-      int simsize;      /// for the sky simulator
-      std::map<at_32, at_32> handlemap;
+  struct FineAcqState {
+    std::string which;
+    Point       aimpoint { NAN, NAN };  ///< 1-based pixel aim point; NAN until configured
+    Rect        bg_region;          ///< background ROI (1-based)
+    std::vector<double> dra_samp;   ///< dRA*cos(dec) samples, degrees
+    std::vector<double> ddec_samp;  ///< dDEC samples, degrees
+    int    max_samples  = 10;       ///< samples before evaluating a move
+    int    min_samples  = 3;        ///< minimum samples before scatter-gated early exit
+    double prec_arcsec  = 0.1;      ///< MAD scatter threshold per axis for early exit (arcsec)
+    double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
+    double gain         = 0.7;      ///< gain applied when offset <= gain_threshold_arcsec
+    double gain_large   = 1.0;      ///< gain applied when offset > gain_threshold_arcsec
+    double gain_threshold_arcsec = 2.0; ///< offset above which gain_large is used
+    int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
+    int    settle_count  = 2;       ///< configured: frames to discard after each move
+    int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
+    // exposure compensation (shared by the reactive trim and, later, autoexpose)
+    double exptime_min     = 0.1;   ///< clamp: minimum auto-adjusted exposure (sec)
+    double exptime_max     = 15.0;  ///< clamp: maximum auto-adjusted exposure (sec)
+    double saturation      = NAN;   ///< raw-peak saturation ceiling; NAN disables the guard
+    double counts_faint       = NAN;   ///< below this (top-10%-mean) raise toward counts_faint_goal
+    double counts_faint_goal  = NAN;   ///< faint-mode brightness goal
+    double counts_bright      = NAN;   ///< above this lower toward counts_bright_goal
+    double counts_bright_goal = NAN;   ///< bright-mode brightness goal
+    double min_snr            = NAN;   ///< peak SNR at/above which faint raises are vetoed; NAN disables
+    int    autoexpose_window = 2;      ///< frames per pre-acquisition auto-exposure decision
+    std::vector<double> top10_samp;    ///< per-frame top-10%-mean brightness samples, parallel to dra_samp
+    std::vector<double> snr_samp;      ///< per-frame peak-SNR samples, parallel to top10_samp
 
-    public:
-      Camera() : image_data( nullptr ), simsize(1024) { };
-
-      FITS_file fits_file;        /// instantiate a FITS container object
-      FitsInfo  fitsinfo;
-
-      std::mutex framegrab_mutex;
-
-      std::map<std::string, std::unique_ptr<Andor::Interface>> andor;     ///< container for Andor::Interface objects
-
-      std::map<std::string, Andor::DefaultValues> default_config;         ///< container to hold defaults for each camera
-
-      inline void copy_info() { fits_file.copy_info( fitsinfo ); }
-      inline void set_simsize( int val )     { if ( val > 0 ) this->simsize = val;  else throw std::out_of_range("simsize must be greater than 0");  }
-
-      inline long init_handlemap() {
-        this->handlemap.clear();
-        return this->andor.begin()->second->get_handlemap( this->handlemap );
-      }
-
-      long emulator( std::string args, std::string &retstring );
-      long open( std::string which, std::string args );
-      long close();
-      long get_frame();
-      long write_frame( std::string source_file, std::string &outfile, const bool _tcs_online );
-      long bin( const int hbin, const int vbin );
-      long set_fan( std::string which, int mode );
-      long imflip( std::string args, std::string &retstring );
-      long imrot( std::string args, std::string &retstring );
-      long set_gain( int &gain );
-      long set_gain( std::string which, int &gain );
-      long set_gain( int &&gain );
-      long set_gain( std::string which, int &&gain );
-      long set_exptime( float &val );
-      long set_exptime( std::string which, float &val );
-      long set_exptime( float &&val );
-      long set_exptime( std::string which, float &&val );
-      long speed( std::string args, std::string &retstring );
-      long temperature( std::string args, std::string &retstring );
+    void reset() { dra_samp.clear(); ddec_samp.clear(); top10_samp.clear(); snr_samp.clear();
+                   settle_frames = 0; consecutive_centroid_failures = 0; }
+    bool is_valid() const noexcept {
+      return !which.empty() && aimpoint.is_valid() && bg_region.is_valid();
+    }
   };
-  /***** Slicecam::Camera *****************************************************/
-
-
-  /***** Slicecam::GUIManager *************************************************/
-  /**
-   * @class  GUIManager
-   * @brief  defines functions and settings for the display GUI
-   *
-   */
-  class GUIManager {
-    private:
-      const std::string camera_name = "slicev";
-      std::atomic<bool> update;  ///<! set if the menus need to be updated
-      std::string push_settings; ///<! name of script to push settings to GUI
-      std::string push_image;    ///<! name of script to push an image to GUI
-
-    public:
-      GUIManager() : update(false), exptime(NAN), gain(-1), bin(-1), navg(NAN) { }
-
-      // These are the GUIDER GUI settings
-      //
-      float exptime;
-      int gain;
-      int bin;
-      float navg;
-
-      // sets the private variable push_settings, call on config
-      inline void set_push_settings( std::string sh ) { this->push_settings=sh; }
-
-      // sets the private variable push_image, call on config
-      inline void set_push_image( std::string sh ) { this->push_image=sh; }
-
-      // sets the update flag true
-      inline void set_update() { this->update.store( true ); return; }
-
-      /**
-       * @fn         get_update
-       * @brief      returns the update flag then clears it
-       * @return     boolean true|false
-       */
-      inline bool get_update() { return this->update.exchange( false ); }
-
-      /**
-       * @fn         get_message_string
-       * @brief      returns a formatted message of all gui settings
-       * @details    This message is the return string to guideset command.
-       * @return     string in form of <exptime> <gain> <bin>
-       */
-      std::string get_message_string() {
-        std::stringstream message;
-        if ( this->exptime < 0 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->exptime; }
-        message << " ";
-        if ( this->gain < 1 ) message << "ERR"; else { message << std::fixed << std::setprecision(3) << this->gain; }
-        message << " ";
-        if ( this->bin < 1 ) message << "x"; else { message << std::fixed << std::setprecision(3) << this->bin; }
-        message << " ";
-        if ( std::isnan(this->navg) ) message << "NaN"; else { message << std::fixed << std::setprecision(2) << this->navg; }
-        return message.str();
-      }
-
-      /**
-       * @brief      calls the push_settings script with the formatted message string
-       * @details    the script pushes the settings to the Guider GUI
-       */
-      void push_gui_settings() {
-        std::string function = "Slicecam::GUIManager::push_gui_settings";
-        std::stringstream cmd;
-        cmd << push_settings << " "
-            << ( get_update() ? "true" : "false" ) << " "
-            << get_message_string();
-
-        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
-          logwrite( function, "ERROR updating GUI" );
-        }
-
-        return;
-      }
-
-      void send_fifo_warning(const std::string &message) {
-        const std::string fifo_name("/tmp/.slicev_warning.fifo");
-        std::ofstream fifo(fifo_name);
-        if (!fifo.is_open()) {
-          logwrite("Slicecam::GUIManager::send_fifo_warning", "failed to open " + fifo_name + " for writing");
-        }
-        else {
-          fifo << message << std::endl;
-          fifo.close();
-        }
-      }
-
-      /**
-       * @brief      calls the push_image script with the formatted message string
-       * @details    the script pushes the indicated file to the Guider GUI display
-       * @param[in]  filename  fits file to send
-       */
-      void push_gui_image( std::string_view filename ) {
-        std::string function = "Slicecam::GUIManager::push_gui_image";
-        std::stringstream cmd;
-        cmd << push_image << " "
-            << camera_name << " "
-            << filename;
-
-        if ( std::system( cmd.str().c_str() ) && errno!=ECHILD ) {
-          logwrite( function, "ERROR pushing image to GUI" );
-        }
-
-        return;
-      }
-  };
-  /***** Slicecam::GUIManager *************************************************/
+  /***** Slicecam::FineAcqState ***********************************************/
 
 
   /***** Slicecam::Interface **************************************************/
@@ -240,6 +138,39 @@ namespace Slicecam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      std::mutex acam_mtx;                 ///< guards waiters on acam_cv
+      std::condition_variable acam_cv;     ///< notified when cached ACAM state updates
+
+      FineAcqState fineacquire_state;
+
+      // Per-run accumulators for the ACAM->slit residual, summed over a fine-acquire
+      // run and logged once at lock (the [ACQMODEL] line) to build a flexure model of
+      // the ACAM->slit pointing offset vs geometry over time. Touched only from the
+      // single framegrab thread, so plain doubles are sufficient.
+      double fineacq_total_dra  = 0.0;     ///< sum of applied dRA corrections this run [arcsec]
+      double fineacq_total_ddec = 0.0;     ///< sum of applied dDEC corrections this run [arcsec]
+      double fineacq_goal_ra    = NAN;     ///< per-run snapshot of goal RA  [deg], taken at fineacquire start, logged at lock
+      double fineacq_goal_dec   = NAN;     ///< per-run snapshot of goal DEC [deg], taken at fineacquire start, logged at lock
+
+      /// per-frame auto-exposure runtime (ACAM-window pre-tuning). Brightness is
+      /// sampled over a window of frames; a high percentile (near-max) is used
+      /// because telescope motion only smears light out (lowering brightness),
+      /// so the brightest frames are the most stationary and most trustworthy.
+      struct AutoExpState {
+        std::vector<double> top10_window;  ///< per-frame top-10%-mean values in the window
+        double max_peak_raw    = 0.0;      ///< max raw peak in the window (saturation)
+        double max_snr         = 0.0;      ///< max peak-SNR in the window
+        int    detect_count    = 0;        ///< detections in the window
+        int    frames_seen     = 0;        ///< frames accumulated in the window
+        int    no_detect_count = 0;        ///< consecutive empty windows
+        int    settle_frames   = 0;        ///< skip stale frames after an exptime change
+        void start_window() { top10_window.clear(); max_peak_raw = 0.0; max_snr = 0.0; detect_count = 0; frames_seen = 0; }
+        void reset() { start_window(); no_detect_count = 0; settle_frames = 0; }
+      } autoexpose_state;
+
+      std::string default_which;                    ///< configured default camera for fineacquire
+      Point       default_aimpoint { NAN, NAN };    ///< configured default aimpoint for fineacquire
+
     public:
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint
@@ -255,6 +186,32 @@ namespace Slicecam {
 
       std::atomic<bool> should_framegrab_run;  ///< set if framegrab loop should run
       std::atomic<bool> is_framegrab_running;  ///< set if framegrab loop is running
+      std::atomic<bool> is_fineacquire_running;  ///< set if fine target acquisition is running
+      std::atomic<bool> is_fineacquire_locked;   ///< set when fine acquire target acquired
+      std::atomic<bool> is_autoexpose_running;    ///< set if pre-acquisition auto-exposure is running
+      std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
+
+      std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
+
+      // Latest target (goal) coords published on Topic::TARGETINFO
+      // NAN until a TARGETINFO arrives, so manual runs with no sequencer target log nan.
+      //
+      std::atomic<double> targetinfo_ra_deg{NAN};   ///< latest goal RA  [deg] from TARGETINFO
+      std::atomic<double> targetinfo_dec_deg{NAN};  ///< latest goal DEC [deg] from TARGETINFO
+
+      /// Max acceptable age (us) for cached ACAM status used by fineacquire.
+      static constexpr int64_t ACAM_STATUS_MAX_AGE_US = 10'000'000;
+
+      /// Max time (us) fineacquire() will wait for a fresh, guiding ACAM status before failing.
+      static constexpr int64_t ACAM_WAIT_TIMEOUT_US = 2'000'000;
+
+      bool is_acam_status_fresh() const;
+
+      /// scale exposure toward target brightness; sqrt-law, factor-clamped, exptime-clamped
+      double tuned_exptime( double cur, double measured, double target ) const;
+      /// two-band exposure: raise toward faint_goal below counts_faint, lower toward
+      /// bright_goal above counts_bright, unchanged in band. Returns cur when in band/disabled.
+      double banded_exptime( double cur, double metric ) const;
 
       /** these are set by Interface::saveframes()
        */
@@ -281,6 +238,12 @@ namespace Slicecam {
       std::mutex snapshot_mtx;
       std::unordered_map<std::string, bool> snapshot_status;
 
+      struct {
+        bool is_fineacquire_running=false;
+        bool is_fineacquire_locked=false;
+        bool is_autoexpose_running=false;
+      } last_status;
+
       GUIManager gui_manager;
 
       Interface()
@@ -292,17 +255,27 @@ namespace Slicecam {
           should_subscriber_thread_run(false),
           should_framegrab_run(false),
           is_framegrab_running(false),
+          is_fineacquire_running(false),
+          is_fineacquire_locked(false),
+          is_autoexpose_running(false),
+          is_acam_guiding(false),
           nsave_preserve_frames(0),
           nskip_preserve_frames(0),
-          snapshot_status { { "slitd", false }, {"tcsd", false} }
+          snapshot_status { { Topic::SLITD, false },
+	                    { Topic::TCSD, false },
+	                    { Topic::ACAMD, false } }
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-          { "tcsd", std::function<void(const nlohmann::json&)>(
+          { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_acamd(msg); } ) },
+          { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                      [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-          { "slitd", std::function<void(const nlohmann::json&)>(
-                     [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
+          { Topic::SLITD, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
+          { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
+                     [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) }
         };
       }
 
@@ -339,11 +312,20 @@ namespace Slicecam {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void handletopic_acamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_targetinfo( const nlohmann::json &jmessage );
+      void publish_status(bool force=false);
       void publish_snapshot();
+      void publish_temperature();                ///< publish only the andor temperatures on Topic::SLICECAMD (periodic)
       void request_snapshot();
       bool wait_for_snapshots();
+
+      long fineacquire(std::string args, std::string &retstring);
+      void do_fineacquire();
+      long autoexpose(std::string args, std::string &retstring);
+      void do_autoexpose();
 
       long avg_frames( std::string args, std::string &retstring );
       long bin( std::string args, std::string &retstring );
@@ -354,6 +336,7 @@ namespace Slicecam {
       void close();
       long close( std::string args, std::string &retstring );
       long tcs_init( std::string args, std::string &retstring );  /// initialize connection to TCS
+      long acamd_init();
       long saveframes( std::string args, std::string &retstring );
       void alert_framegrabbing_stopped(const int &waitms);
       long framegrab( std::string args );                            /// wrapper to control Andor frame grabbing
@@ -365,12 +348,13 @@ namespace Slicecam {
       long gui_settings_control();          /// get gui settings and push to Guider GUI display
       long gui_settings_control( std::string args, std::string &retstring );  /// set or get and push to Guider GUI display
       long shutdown( std::string args, std::string &retstring );
+      long shutter(const std::string args, std::string &retstring);
       long test( std::string args, std::string &retstring );
       long exptime( std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
 
-      long get_acam_guide_state( bool &is_guiding );
+      long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt);
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 

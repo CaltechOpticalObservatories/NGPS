@@ -126,8 +126,10 @@ int main(int argc, char **argv) {
   }
   std::this_thread::sleep_for( std::chrono::milliseconds(500) );
 
-  // publish snapshot of my telemetry so the world knows I'm online
-  powerd.interface.publish_snapshot();
+  // read current state, then force-publish so the world knows I'm online
+  std::string dontcare;
+  powerd.interface.get_status( "", dontcare );
+  powerd.interface.publish_status( true );
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

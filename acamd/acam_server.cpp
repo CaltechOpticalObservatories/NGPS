@@ -58,6 +58,8 @@ namespace Acam {
    *
    */
   void Server::exit_cleanly(void) {
+    std::string dontcare;
+    Server::instance->interface.acquire( "stop", dontcare );
     Server::instance->interface.close();
     Server::instance->interface.stop_subscriber_thread();
     logwrite( "Acam::Server::exit_cleanly", "exiting" );
@@ -363,30 +365,6 @@ namespace Acam {
         applied++;
       }
 
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
-      // (these don't get counted with "applied++")
-      //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
-          }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
-            return ERROR;
-          }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-      }
 
     } // end loop through the entries in the configuration file
 
@@ -424,7 +402,14 @@ namespace Acam {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Acam::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -540,7 +525,7 @@ namespace Acam {
    * Valid commands are listed in acamd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Acam::Server::doit";
     long  ret;
     std::stringstream message;
@@ -589,6 +574,31 @@ namespace Acam {
       //
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
+
+      // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+      // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+      // can be rejected by the client. CLI users send no prefix and corr_id is
+      // left empty; the server then echoes no prefix on reply.
+      //
+      std::string corr_id;
+      {
+        std::string payload;
+        Common::extract_correlation_id( buf, corr_id, payload );
+        buf = std::move( payload );
+      }
+
+      // Replay a cached reply if this command's ID matches a recent one.
+      // This makes DaemonClient retries idempotent: the underlying handler
+      // is invoked at most once per correlation ID within the cache TTL.
+      //
+      if ( !corr_id.empty() ) {
+        std::string cached_reply;
+        if ( this->corr_cache.lookup( corr_id, cached_reply ) ) {
+          std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+          if ( sock.Write( out ) < 0 ) connection_open=false;
+          continue;
+        }
+      }
 
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
@@ -903,6 +913,7 @@ namespace Acam {
       if ( cmd == ACAMD_FILTER ) {
                       ret = this->interface.motion.filter( args, retstring );
          if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
+         if (ret==NO_ERROR) this->interface.publish_status();                   // push filter change to subscribers
       }
       else
 
@@ -910,6 +921,7 @@ namespace Acam {
       //
       if ( cmd == ACAMD_COVER ) {
                       ret = this->interface.motion.cover( args, retstring );
+         if (ret==NO_ERROR) this->interface.publish_status();                   // push cover change to subscribers
       }
       else
 
@@ -960,6 +972,21 @@ namespace Acam {
           retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
+        }
+
+        // Cache the bare reply (without prefix) so retries with the same
+        // correlation ID can be replayed without re-running the handler.
+        //
+        if ( !corr_id.empty() ) {
+          this->corr_cache.insert( corr_id, retstring );
+        }
+
+        // Echo the correlation ID back to inter-daemon clients so they can
+        // verify the reply belongs to the command they just sent. CLI users
+        // sent no prefix, so corr_id is empty and nothing is prepended.
+        //
+        if ( !corr_id.empty() ) {
+          retstring = CID_PREFIX + corr_id + " " + retstring;
         }
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;

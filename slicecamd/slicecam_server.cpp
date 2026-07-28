@@ -230,7 +230,14 @@ namespace Slicecam {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Slicecam::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Slicecam::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Slicecam::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -346,7 +353,7 @@ namespace Slicecam {
    * Valid commands are listed in slicecamd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Slicecam::Server::doit";
     long  ret;
     std::stringstream message;
@@ -395,6 +402,31 @@ namespace Slicecam {
       //
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
+
+      // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+      // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+      // can be rejected by the client. CLI users send no prefix and corr_id is
+      // left empty; the server then echoes no prefix on reply.
+      //
+      std::string corr_id;
+      {
+        std::string payload;
+        Common::extract_correlation_id( buf, corr_id, payload );
+        buf = std::move( payload );
+      }
+
+      // Replay a cached reply if this command's ID matches a recent one.
+      // This makes DaemonClient retries idempotent: the underlying handler
+      // is invoked at most once per correlation ID within the cache TTL.
+      //
+      if ( !corr_id.empty() ) {
+        std::string cached_reply;
+        if ( this->corr_cache.lookup( corr_id, cached_reply ) ) {
+          std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+          if ( sock.Write( out ) < 0 ) connection_open=false;
+          continue;
+        }
+      }
 
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
@@ -531,6 +563,14 @@ namespace Slicecam {
                       ret = this->interface.fan_mode( args, retstring );
       }
       else
+      if ( cmd == SLICECAMD_FINEACQUIRE ) {
+                      ret = this->interface.fineacquire( args, retstring );
+      }
+      else
+      if ( cmd == SLICECAMD_AUTOEXPOSE ) {
+                      ret = this->interface.autoexpose( args, retstring );
+      }
+      else
       if ( cmd == SLICECAMD_GAIN ) {
                       ret  = this->interface.gain( args, retstring );            // set gain
           if (ret==NO_ERROR) this->interface.gui_settings_control();             // update GUI display igores ret
@@ -594,6 +634,10 @@ namespace Slicecam {
                       ret = NO_ERROR;  // init_names() returns void, never fails
       }
       else
+      if ( cmd == SLICECAMD_SHUTTER ) {
+                      ret = this->interface.shutter(args, retstring);
+      }
+      else
 
       // shutdown
       //
@@ -634,6 +678,21 @@ namespace Slicecam {
           retstring.append( "\n" );
           message.str(""); message << "command (" << this->cmd_num << ") reply: " << retstring;
           logwrite( function, message.str() );
+        }
+
+        // Cache the bare reply (without prefix) so retries with the same
+        // correlation ID can be replayed without re-running the handler.
+        //
+        if ( !corr_id.empty() ) {
+          this->corr_cache.insert( corr_id, retstring );
+        }
+
+        // Echo the correlation ID back to inter-daemon clients so they can
+        // verify the reply belongs to the command they just sent. CLI users
+        // sent no prefix, so corr_id is empty and nothing is prepended.
+        //
+        if ( !corr_id.empty() ) {
+          retstring = CID_PREFIX + corr_id + " " + retstring;
         }
 
         if ( sock.Write( retstring ) < 0 ) connection_open=false;

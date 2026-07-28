@@ -19,6 +19,7 @@
 #include <map>
 #include <condition_variable>
 #include <atomic>
+#include <cmath>
 
 #define FLEXURE_MOVE_TIMEOUT      1000       ///< timeout in msec for moves
 #define FLEXURE_POSNAME_TOLERANCE    0.0001  ///< tolerance to determine posname from position
@@ -48,6 +49,28 @@ namespace Flexure {
       size_t numdev;
       bool class_initialized;
 
+      /**
+       * @struct Status
+       * @brief  published flexure state: actuator position (um) by FLX<axis>_<chan> key; NaN if unavailable
+       */
+      struct Status {
+        std::map<std::string,double> positions;
+        bool operator==(const Status &o) const {
+          if ( positions.size() != o.positions.size() ) return false;
+          for ( const auto &[k,v] : positions ) {
+            auto it = o.positions.find(k);
+            if ( it == o.positions.end() ) return false;
+            if ( std::isnan(v) && std::isnan(it->second) ) continue;  // NaN==NaN treated equal
+            if ( v != it->second ) return false;
+          }
+          return true;
+        }
+        bool operator!=(const Status &o) const { return !(*this == o); }
+      };
+      Status status;                                   ///< current flexure state
+      Status last_published_status;                    ///< last published flexure state
+      std::mutex publish_mutex;                        ///< serializes publish-on-change; held over get_status() — @TODO revisit
+
     public:
       Interface() :
         context(),
@@ -61,9 +84,9 @@ namespace Flexure {
         compensator(tcs_info)
       {
         topic_handlers = {
-          { "_snapshot", std::function<void(const nlohmann::json&)>(
+          { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-          { "tcsd", std::function<void(const nlohmann::json&)>(
+          { Topic::TCSD, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) }
         };
       }
@@ -95,14 +118,13 @@ namespace Flexure {
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
-      void handletopic_snapshot( const nlohmann::json &jmessage );
-      void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_snapshot( const nlohmann::json &jmessage );  ///< respond to a snapshot request
+      void handletopic_tcsd( const nlohmann::json &jmessage );      ///< store TCS telemetry published by tcsd
+      void get_status();                                            ///< refresh status from hardware
+      void publish_status( bool force=false );                      ///< publish flexure state on change (or force)
 
-      void publish_snapshot();
-      void request_tcs_snapshot();
-      bool wait_for_tcs_snapshot();
-
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
+      void request_tcs_snapshot();               ///< ask tcsd to publish a snapshot of its telemetry
+      bool wait_for_tcs_snapshot();              ///< wait for that snapshot to be received
 
       Common::Queue async;
 
@@ -123,9 +145,6 @@ namespace Flexure {
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
       long send_command( const std::string &name, std::string cmd, std::string &retstring );                 ///< writes command?, reads reply
-      void make_telemetry_message( std::string &retstring );  ///< assembles a telemetry message
-      void get_external_telemetry();                          ///< collect telemetry from other daemon(s)
-      long parse_incoming_telemetry( std::string message_in );     ///< parses incoming telemetry messages
       long test( std::string args, std::string &retstring );                 ///< test routines
 
       std::mutex pi_mutex;                       ///< mutex to protect multi-threaded access to PI controller

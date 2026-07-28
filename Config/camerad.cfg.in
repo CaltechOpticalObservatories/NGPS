@@ -15,6 +15,13 @@ ASYNCGROUP=239.1.1.234            # or set to NONE if not using ASYNC messaging
 DAEMON=no                        # run as a daemon? {yes,no}
 PUBLISHER_PORT="tcp://127.0.0.1:@CAMERAD_PUB_PORT@"  # my zeromq pub port
 
+# Message pub/sub
+# PUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+# SUB_ENDPOINT=tcp://127.0.0.1:<PORT>
+#
+PUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_SUB_PORT@"
+SUB_ENDPOINT="tcp://127.0.0.1:@MESSAGE_BROKER_PUB_PORT@"
+
 # -----------------------------------------------------------------------------
 # The following are for simulated ARC controllers
 ARCSIM_NUMDEV=0
@@ -31,48 +38,44 @@ ARCSIM_NUMDEV=0
 #
 #CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/sg2-20241115.lod U2)
 #CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/engg-20241115.lod U1)
-CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/28-1458/sg2.lod U2)
-CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/28-1458/engg.lod U1)
+CONTROLLER=(0 I sg2 yes /home/developer/Software/DSP/lod/260127-1318/sg2.lod U2)
+CONTROLLER=(1 R engg yes /home/developer/Software/DSP/lod/260127-1318/engg.lod U1)
+CONTROLLER=(2 G dbspr yes /home/developer/Software/DSP/lod/260127-1318/dbspr.lod L1)
+CONTROLLER=(3 U dbspb no /home/developer/Software/DSP/DBSP-blue/tim.lod U1)
 
 # -----------------------------------------------------------------------------
-# This defines the default image size and binning for each controller.
+# This defines the detector geometry for each controller.
 #
-# IMAGE_SIZE=(CHAN ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
+# DETECTOR_GEOMETRY=(CHAN PHYSSPAT PHYSSPEC ROWS COLS OSROWS OSCOLS BINROWS BINCOLS)
 #
 # where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       ROWS      number of rows in image
-#       COLS      number of columns in image
-#       OSROWS    number of overscan rows
-#       OSCOLS    number of overscan columns
-#       BINROWS   bin factor rows
-#       BINCOLS   bin factor cols
+#       PHYSSPAT  physical spatial axis {ROW|COL}
+#       PHYSSPEC  physical spectral axis {ROW|COL}
+#       SPAT      size in spatial dimension
+#       SPEC      size in spectral dimension
+#       OSSPAT    number of spatial overscans
+#       OSSPEC    number of spectral overscans
+#       BINSPAT   spatial bin factor
+#       BINSPEC   spectral bin factor
+# For the PHYSSPAT and PHYSSPEC parameters, ROW|COL refers to the spatial and
+# spectral alignment with the physical readout, I.E. ROW=parallel, COL=serial
 #
-IMAGE_SIZE=(I 1220 4114 0 100 1 1)
-IMAGE_SIZE=(R 1220 4114 0 100 1 1)
-
-# -----------------------------------------------------------------------------
-# Detector orientation of ROWS/COLS with respect to X,Y axes
-# DET_ORIENTATION=(CHAN X Y)
-# where CHAN      must correspond to a CHAN defined in CONTROLLER key above
-#       X         is {ROW,COL} for the x-axis
-#       Y         is {ROW,COL} for the y-axis
-#
-DET_ORIENTATION=(I COL ROW)
-DET_ORIENTATION=(R COL ROW)
-DET_ORIENTATION=(G COL ROW)
-DET_ORIENTATION=(U ROW COL)
+DETECTOR_GEOMETRY=(I ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(R ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(G ROW COL 1220 4114 0 100 1 1)
+DETECTOR_GEOMETRY=(U COL ROW 2048 4102 0 100 1 1)
 
 # -----------------------------------------------------------------------------
 # Spectral Information configuration
 # These configuration keys must follow CONTROLLER which must have an
 # associated CHAN.
 #
-# SPECT_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
+# SPEC_INFO=(CHAN DISPERSION MIN_WAVELENGTH)
 #
-SPECT_INFO=(I 0.69 7560)
-SPECT_INFO=(R 0.57 5610)
-SPECT_INFO=(G 0.42 4170)
-SPECT_INFO=(U 0.31 3200)
+SPEC_INFO=(I 0.69 7560)
+SPEC_INFO=(R 0.57 5610)
+SPEC_INFO=(G 0.42 4170)
+SPEC_INFO=(U 0.31 3200)
 
 # -----------------------------------------------------------------------------
 # Optional axis labels. If not specified then the x-axis is named "X"
@@ -140,21 +143,23 @@ CONSTKEY_EXT=(SPECTPART WHOLE)  # fixed only because we're writing single-channe
 #
 USERKEYS_PERSIST=yes
 
+# ACTIVATE_COMMANDS=(CHAN CMD [, CMD, CMD ...])
+# commands sent to activate channel after de-activation
+# CHAN is space-delimited from a comma-delimited list of one or more commands
+# and must have been first configured by CONTROLER=
+# commands that contain a space must be enclosed by double quotes
+#
+ACTIVATE_COMMANDS=(I PON, ERS 1000 1000, EPG 500, CLR)
+ACTIVATE_COMMANDS=(R PON, ERS 1000 1000, EPG 500, CLR)
+ACTIVATE_COMMANDS=(G PON, ERS 1000 1000, EPG 500, CLR)
+ACTIVATE_COMMANDS=(U PON, CLR)
+
 # -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
+# SUBSCRIBE_TO=( <name> <endpoint> )
 #
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request. These are the
-# sources for telemetry information for FITS headers. Provide one per line.
-#
-TELEM_PROVIDER=(calibd     @CALIBD_NB_PORT@)
-TELEM_PROVIDER=(flexured   @FLEXURED_NB_PORT@)
-TELEM_PROVIDER=(focusd     @FOCUSD_NB_PORT@)
-TELEM_PROVIDER=(powerd     @POWERD_NB_PORT@)
-TELEM_PROVIDER=(sequencerd @SEQUENCERD_NB_PORT@)
-TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(thermald   @THERMALD_NB_PORT@)
+# This is a list of pub/sub sources to subscribe to, where <name> is the daemon
+# name and <endpoint> is its ZeroMQ publish endpoint. These are the sources for
+# telemetry information for FITS headers. Provide one per line.
 #
 SUBSCRIBE_TO=(calibd     "tcp://127.0.0.1:@CALIBD_PUB_PORT@")
 SUBSCRIBE_TO=(flexured   "tcp://127.0.0.1:@FLEXURED_PUB_PORT@")

@@ -53,18 +53,27 @@ CAMERA_PROLOGUE=open
 CAMERA_PROLOGUE=load
 CAMERA_PROLOGUE=(native CSH)
 CAMERA_PROLOGUE=(native PON)
-CAMERA_PROLOGUE=(native ERS 1000 1000)
+CAMERA_PROLOGUE=(native I ERS 1000 1000)
+CAMERA_PROLOGUE=(native R ERS 1000 1000)
+CAMERA_PROLOGUE=(native G ERS 1000 1000)
 CAMERA_PROLOGUE=(imsize I 1220 4114 0 100 1 1)
 CAMERA_PROLOGUE=(imsize R 1220 4114 0 100 1 1)
-CAMERA_PROLOGUE=(bin row 2)
-CAMERA_PROLOGUE=(native WRM 0x400004 2040)
+CAMERA_PROLOGUE=(imsize G 1220 4114 0 100 1 1)
+CAMERA_PROLOGUE=(imsize U 2198 4202 0 100 1 1)
+CAMERA_PROLOGUE=(bin spat 2)
+CAMERA_PROLOGUE=(native I WRM 0x400004 2040)
+CAMERA_PROLOGUE=(native R WRM 0x400004 2040)
+CAMERA_PROLOGUE=(native G WRM 0x400004 2040)
 CAMERA_PROLOGUE=(exptime 0)
 CAMERA_PROLOGUE=(readout I U2)
 CAMERA_PROLOGUE=(readout R U1)
+CAMERA_PROLOGUE=(readout G L1)
 CAMERA_PROLOGUE=(useframes false)
 CAMERA_PROLOGUE=(mex true)
 CAMERA_PROLOGUE=(shutter enable)
-CAMERA_PROLOGUE=(native EPG 500)
+CAMERA_PROLOGUE=(native I EPG 500)
+CAMERA_PROLOGUE=(native R EPG 500)
+CAMERA_PROLOGUE=(native G EPG 500)
 CAMERA_PROLOGUE=(fitsnaming number)
 CAMERA_PROLOGUE=(basename ngps)
 
@@ -78,7 +87,7 @@ CAMERA_EPILOGUE=(close)
 # slit init and shutdown states
 # formatted as (width offset)
 #
-SLIT__INIT=(0.5 3.0)
+SLIT__INIT=(0.4 3.0)
 SLIT__SHUTDOWN=
 
 # ACAM init and shutdown states
@@ -98,7 +107,7 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITW_ACQUIRE=0.4   # slit width during acquire
 VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
 VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
@@ -111,12 +120,12 @@ VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 # The names used here must have a matching NPS_PLUG name defined in power.cfg
 #
 POWER_SLIT=SLIT
-POWER_CAMERA=(SHUTTER LEACH_R LEACH_I)
+POWER_CAMERA=(SHUTTER LEACH_R LEACH_I LEACH_U LEACH_G)
 POWER_CALIB=(CAL_MOT LAMP_MOD)
 POWER_LAMP=(LAMPTHAR LAMPFEAR LAMPBLUC LAMPREDC)
-POWER_FLEXURE=(FLEX_I FLEX_R)
+POWER_FLEXURE=(FLEX_I FLEX_R FLEX_U FLEX_G)
 POWER_FILTER=ACAM_MOT
-POWER_FOCUS=(FOCUS_IR)
+POWER_FOCUS=(FOCUS_IR FOCUS_G FOCUS_U)
 POWER_TELEM=CR1000
 POWER_THERMAL=(LKS_IG LKS_UR CR1000)
 POWER_ACAM=(ACAM ACAM_MOT)
@@ -150,43 +159,39 @@ ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence 
 ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
+OFFSET_SETTLE_SEC=3                  # sec to wait after an offset-star target offset before exposing (0 disables; only delays targets with a non-zero offset)
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
 # Calibration Settings
-# CAL_TARGET=(name caldoor calcover lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
+# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6 imgtype)
 #
 # where name must be "DEFAULT" or start with "CAL_"
 #       caldoor  = open | close
 #       calcover = open | close
-#       lamp* = on | off
-#       mod*  = on | off
-# for a total of 15 required parameters
+#       U,G,R,I = on | off        # indicates which channels to enable/disable
+#       lamp* = on | off          # lamp power
+#       mod*  = on | off          # lamp modulator
+#       imgtype = <imgtype>       # FITS IMGTYPE keyword
+# for a total of 20 required parameters
 # name=SCIENCE defines science target operation
 #
-CAL_TARGET=(CAL_THAR   open  close on  off off off off off off off off off off on )
-CAL_TARGET=(CAL_FEAR   open  close off off on  off off off on  off off off off off)
-CAL_TARGET=(CAL_CONT   open  close off off off on  off off off off off on  off off)
-CAL_TARGET=(CAL_ETALON open  close off off off on  off off off off on  off off off)
-CAL_TARGET=(CAL_DOME   close open  off off off off off on  off off off off off off)
-CAL_TARGET=(CAL_BIAS   close close off off off off off off off off off off off off)
-CAL_TARGET=(CAL_DARK   close close off off off off off off off off off off off off)
-CAL_TARGET=(SCIENCE    close open  off off off off off off off off off off off off)
+#           name        door  cover U   G   R   I   thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6 imgtype
+CAL_TARGET=(CAL_THAR    open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR    open  close on  on  on  on  on   on   on   on   off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_THAR_UG open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR_UG open  close on  on  off off on   on   on   on   off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_CONTR   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  on   off  off  CONT    )
+CAL_TARGET=(CAL_CONTB   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  on   off  CONT    )
+CAL_TARGET=(CAL_DOME    close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_DOME_UG close open  on  on  off off off  off  off  off  off  on   off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_BIAS    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  BIAS    )
+CAL_TARGET=(CAL_DARK    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  DARK    )
+CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  SCI     )
 
 # miscellaneous
 #
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
 
-# -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
-#
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
-# Provide one per line.
-#
-TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(camerad    @CAMERAD_NB_PORT@)
-#
 SUBSCRIBE_TO=(slitd      "tcp://127.0.0.1:@SLITD_PUB_PORT@")
 SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
 SUBSCRIBE_TO=(camerad    "tcp://127.0.0.1:@CAMERAD_PUB_PORT@")

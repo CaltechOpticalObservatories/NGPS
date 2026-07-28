@@ -7,20 +7,21 @@ Assumes regions are labeled in the format "SLICE_FEATURE" e.g. "A_1" or "CENTER_
 
 No image processing - assumes 1 FITS file per focus position
 '''
-
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 rcParams.update({'font.size': 12})
 
-import argparse, sys
+import argparse, subprocess, sys
 import numpy as np
 import astropy.io.fits as pf
 from pandas.api.types import is_numeric_dtype
 
 from FITS_tools.organize_headers import all_headers_to_df
 from FITS_tools.regions import make_region_dict
+
+LOGFILE = '/data/logs/internal_focus.log'
 
 
 help = 'Script to plot the focus metric from a series of NGPS spectrum images.'
@@ -81,12 +82,14 @@ GROUPBY_SLICE = not args.groupby_feature  # Group plots by slice (true) or spect
 df = all_headers_to_df(args.flist)
 focuskey = args.focuskey
 imnumkey = 'IMNUM'
-datekey = 'DATE'
 
-# Make a timestamp from the first file
-timestamp = df.iloc[0][datekey]
-timestamp = timestamp.split(':')[:-1] # E.g. 2025-01-02T22:30:13.455 --> take day, hour, minutes
-timestamp = ''.join(timestamp)  # join with no colons, 2025-01-02T2230
+# Loop through channels and verify if SPEC_ID and images are found
+if 'SPEC_ID' in df.columns:
+    df = df[df['SPEC_ID'].isin(['R', 'I', 'G'])]
+    if df.empty:
+        sys.exit('No R or I channel images found in input files.')
+else:
+    sys.exit('SPEC_ID column not found in headers.')
 
 # Check which channels are used and whether they have region files
 channels_detected = [s for s in df['SPEC_ID'].unique() if isinstance(s, str)]
@@ -99,9 +102,25 @@ for k in channels_detected:
 # image number is before the dot, after the last '_': basename_00000.fits
 df['IMNUM_HACK'] = [int(fname.split('.')[0].split('_')[-1]) for fname in df['FILENAME']]
 
-if focuskey not in df.columns: sys.exit('Focus keyword not found: '+focuskey)
-if not is_numeric_dtype(df[focuskey]): sys.exit('Focus keyword has missing/non-numeric values: '+focuskey)
-if df[focuskey].isnull().values.any(): sys.exit('Focus keyword has missing/non-numeric values: '+focuskey)
+# Column must exist at all
+if focuskey not in df.columns:
+    sys.exit('Focus keyword not found: ' + focuskey)
+
+# Column must be numeric dtype overall
+if not is_numeric_dtype(df[focuskey]):
+    sys.exit('Focus keyword has non-numeric values: ' + focuskey)
+
+# Instead of exiting if *any* missing, drop just those rows
+n_before = len(df)
+df = df[~df[focuskey].isnull()]
+n_after = len(df)
+n_skipped = n_before - n_after
+
+if n_skipped > 0:
+    print(f"Warning: skipped {n_skipped} file(s) with missing {focuskey}")
+
+if df.empty:
+    sys.exit('No usable files: all values for focus keyword are missing: ' + focuskey)
 
 # Filter by image number
 if args.range:
@@ -139,11 +158,13 @@ df['std_dict'] = df.apply(lambda row: get_stds_from_row(row, focus_axis=args.foc
 
 # PLOTTING -- 1 file per channel, 1 axis per group
 
+best_focus = {}
+
 for ch in regdict:
 
     plt.figure()
         
-    df_ch = df[df['SPEC_ID']==ch].copy()
+    df_ch = df[df['SPEC_ID']==ch]
     ROInames = list(regdict[ch].keys())
     sliceTags = np.unique([rn.split('_')[0] for rn in ROInames])
     featureTags = np.unique([rn.split('_')[1] for rn in ROInames])
@@ -169,8 +190,12 @@ for ch in regdict:
 
             x = df_ch[focuskey]
             y = df_ch.apply(lambda row: row['std_dict'][rn], axis=1)
-            ax.plot(x, y/y.max(), label="%s"%(c))
 
+            # breakpoint()
+
+            best_focus[ch+'_'+rn] = x.values[y.argmax()]
+
+            ax.plot(x, y/y.max(), label="%s"%(c))
             ax.tick_params(top=True, labeltop=True, bottom=True, labelbottom=True)
             ax.tick_params(axis="x",direction="in", pad=-17)
 
@@ -182,21 +207,22 @@ for ch in regdict:
     axes_g[0].legend(bbox_to_anchor=(1.02, 1.02), loc='upper left', borderaxespad=0, prop={'size': 10}, title=legendTitle)
     plt.tight_layout()
 
-    # Save time-tagged (for archive) and non-tagged version (for display)
-    for tag in ('_'+timestamp, ''):
+    outname = 'focus_spec_%s.png'%ch
+    plt.savefig(outname)
+    print(outname)
 
-        basename = 'focus_spec_'+ch+tag
+# Logging
+printline = ['DATETIME='+df.DATE.iloc[0].split('.')[0]]  # time of first exposure of series, remove decimal seconds
+printline += [ k+'='+str(v.round(2)) for k,v in best_focus.items() ]  # best focus for each region
 
-        outname = basename+'.png'
-        plt.savefig(outname)
-        print(outname)
+temps = subprocess.run(['thermal', 'show'], stdout=subprocess.PIPE).stdout.decode('utf-8') # dump of all thermal data in form "k = v"
+temps = [ s.replace(" ", "")  for s in temps.split('\n') if s.startswith('T') ] # only temperatures; reduce to "k=v"; split into list
+printline += temps
+print(','.join(printline))
 
-        # Save the data as CSV file
-        outkeys = df_ch.iloc[0]['std_dict'].keys() 
-        for k in outkeys: 
-            df_ch[k] = df_ch.apply(lambda row: row['std_dict'][k], axis=1)
-
-        outname = basename+'.csv'
-        df_ch[[focuskey]+[*outkeys]].to_csv(outname, index=False)
-        print(outname)
-
+# Add one line to the logfile
+try:
+    with open(LOGFILE, 'a') as file:
+        file.write(','.join(printline))
+except Exception as e:
+    print(e)

@@ -43,7 +43,7 @@ ACAMD_PORT=@ACAMD_BLK_PORT@
 #ANDOR=(L emulate 1002 0.06 1 1 none 0 4 4)
 #ANDOR=(R emulate 1003 0.06 1 1 none 0 4 4)
 ANDOR=(L 14223 0.06 1 1 none -60 4 4)
-ANDOR=(R 10333 0.06 0 0 none -60 4 4)  # from DBSP
+ANDOR=(R  9695 0.06 0 0 none -60 4 4)
 #ANDOR=(R 13452 0.06 0 0 none -60 4 4) # s/n for ACAM
 
 # PUSH_GUI_SETTINGS=<file>
@@ -57,6 +57,112 @@ PUSH_GUI_SETTINGS=/home/developer/Software/GuiderGUI/push_settings_slicev.sh
 # SAOimage GUI display.
 #
 PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
+
+# FINE_ACQUIRE_AIMPOINT=( <which> <x> <y> )
+# camera and location of aimpoint for fine acquisition
+#   <which>  which camera must be { L R }
+#   <x>      x-coordinate (col)
+#   <y>      y-coordinate (row)
+# aimpoint x,y may be fractional
+#
+FINE_ACQUIRE_AIMPOINT=(L 150.0 115.5)
+
+# FINE_ACQUIRE_BACKGROUND=(<x1> <x2> <y1> <y2>)
+# defines the bounds of the region for background coorection
+# for fine acquisition centroiding
+#   <x1>  x-coordinate lower left
+#   <x2>  x-coordinate lower right
+#   <y1>  y-coordinate upper left
+#   <y2>  y-coordinate upper right
+#
+FINE_ACQUIRE_BACKGROUND=(80 165 30 210)
+
+# FINE_ACQUIRE_MIN_SAMPLES=<n>
+# Minimum centroid samples <n> before scatter-gated early exit is evaluated.
+# Once this many samples are collected and the MAD scatter per axis is below
+# the precision threshold, a correction is issued without waiting for MAX_SAMPLES.
+#
+FINE_ACQUIRE_MIN_SAMPLES=3
+
+# FINE_ACQUIRE_SETTLE_FRAMES=<n>
+# <n> frames discarded after each telescope move to allow settling before
+# centroid measurements resume.
+#
+FINE_ACQUIRE_SETTLE_FRAMES=2
+
+# FINE_ACQUIRE_GAIN=<g>
+# Proportional gain <g> = {0..1} applied to the commanded offset when the residual
+# is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.
+#
+FINE_ACQUIRE_GAIN=0.7
+
+# FINE_ACQUIRE_GAIN_LARGE=<g>
+# Proportional gain <g> applied when the residual exceeds FINE_ACQUIRE_GAIN_THRESHOLD.
+# Set to 1.0 for a full-correction step on large offsets to reduce
+# the number of correction cycles needed. Set equal to FINE_ACQUIRE_GAIN to
+# disable gain scheduling.
+#
+FINE_ACQUIRE_GAIN_LARGE=1.0
+
+# FINE_ACQUIRE_GAIN_THRESHOLD=<arcsec>
+# Offset magnitude (arcsec) above which FINE_ACQUIRE_GAIN_LARGE is used instead
+# of FINE_ACQUIRE_GAIN. Set to 0 to disable gain scheduling (GAIN is used for
+# all corrections.
+#
+FINE_ACQUIRE_GAIN_THRESHOLD=2.0
+
+# FINE_ACQUIRE_EXPTIME_MIN / _MAX = <sec>
+# Clamp range for auto-adjusted fine-acquisition exposure time.
+#
+FINE_ACQUIRE_EXPTIME_MIN=0.1
+FINE_ACQUIRE_EXPTIME_MAX=15.0
+
+# Exposure-compensation band (two-band model). FAINT/BRIGHT are the trip points
+# that decide WHETHER to adjust; the _GOAL values are what the exposure is scaled
+# toward once it does. Within [FAINT, BRIGHT] the source is adequately exposed and
+# the exposure is left unchanged.
+#
+# REQUIRED ORDERING (enforced at config time -- slicecamd will refuse to start if
+# violated): FAINT <= FAINT_GOAL <= BRIGHT  and  FAINT <= BRIGHT_GOAL <= BRIGHT,
+# with FAINT, BRIGHT > 0. A goal left unset defaults to its own threshold. A goal
+# outside its band edge would make the correction scale the WRONG way (e.g. a
+# BRIGHT_GOAL above BRIGHT drives the source brighter and never re-enters the band).
+#
+# FINE_ACQUIRE_COUNTS_FAINT / _FAINT_GOAL = <counts>
+# Below COUNTS_FAINT (top-10%-mean of background-subtracted pixels) the source is
+# under-exposed: raise exposure toward COUNTS_FAINT_GOAL. Leave both unset to
+# disable exposure compensation.
+#
+FINE_ACQUIRE_COUNTS_FAINT=250
+FINE_ACQUIRE_COUNTS_FAINT_GOAL=1500
+
+# FINE_ACQUIRE_SATURATION=<counts>
+# Raw-peak ceiling. A source is treated as saturated at or above this value.
+#
+FINE_ACQUIRE_SATURATION=55000
+
+# FINE_ACQUIRE_COUNTS_BRIGHT / _BRIGHT_GOAL = <counts>
+# Above COUNTS_BRIGHT the source is over-exposed: lower exposure toward
+# COUNTS_BRIGHT_GOAL. Between FAINT and BRIGHT the exposure is left unchanged
+# (the source is adequately exposed).
+#
+FINE_ACQUIRE_COUNTS_BRIGHT=10000
+FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=2500
+
+# FINE_ACQUIRE_MIN_SNR=<snr>
+# Peak signal-to-noise (background-subtracted peak / background sigma) at or above
+# which a source is considered well enough defined to centroid reliably. Above this
+# fine-acquire and autoexpose stop RAISING the exposure even if the source is still
+# below FINE_ACQUIRE_COUNTS_FAINT.
+# Must be >=2 if set, or leave unset to disable SNR requirement and use only count band.
+#
+FINE_ACQUIRE_MIN_SNR=3
+
+# FINE_ACQUIRE_AUTOEXPOSE_WINDOW=<n>
+# Number of frames the pre-acquisition auto-exposure averages before each
+# decision.
+#
+FINE_ACQUIRE_AUTOEXPOSE_WINDOW=2
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer

@@ -174,7 +174,9 @@ int main(int argc, char **argv) {
 
   // initialize the pub/sub handler and give it time to start
   //
-  if ( acamd.interface.init_pubsub( {"tcsd", "targetinfo", "slitd"} ) == ERROR ) {
+  if ( acamd.interface.init_pubsub( { Topic::TCSD,
+                                      Topic::TARGETINFO,
+                                      Topic::SLITD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     acamd.exit_cleanly();
   }
@@ -182,6 +184,19 @@ int main(int argc, char **argv) {
 
   // publish snapshot of my telemetry so the world knows I'm online
   acamd.interface.publish_snapshot();
+
+  std::this_thread::sleep_for( std::chrono::milliseconds(250) );
+  acamd.interface.request_snapshot();
+
+  // publish the andor CCD temperature on a fixed 60-second interval
+  // (temperature varies continuously, so it is not published on change)
+  //
+  std::thread( []( Acam::Interface &iface ) {
+    while ( true ) {
+      iface.publish_temperature();
+      std::this_thread::sleep_for( std::chrono::seconds(60) );
+    }
+  }, std::ref(acamd.interface) ).detach();
 
   // This will pre-thread N_THREADS threads.
   // There will be N_THREADS-1 non-blocking threads, then
