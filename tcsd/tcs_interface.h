@@ -116,8 +116,11 @@ namespace TCS {
         domeazimuth=NAN;
         airmass=NAN;
         focus=NAN;
+        offsetra=NAN;
+        offsetdec=NAN;
         offsetrate=NAN;
         cassangle=NAN;
+        pa=NAN;
         domeshutters=-1;
         for (auto &[name,info] : lampinfo) { info.state=-1; }
       }

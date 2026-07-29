@@ -158,47 +158,56 @@ namespace TCS {
    */
   long Interface::get_tcs_info() {
     long error = NO_ERROR;
-    std::string retstring;
+    std::string reqpos, reqstat, weather, parallactic, motion, lamps;
 
+    // Serialize pollers. Held across the I/O so two overlapping calls can't have
+    // the slower one commit older data over the newer, but this blocks only other
+    // pollers -- readers of tcs_info are never delayed by it. Lock order is
+    // query_mtx then tcs_info_mtx.
+    //
+    std::lock_guard<std::mutex> qlock(query_mtx);
+
+    // Call the native functions to read everything from the TCS into local
+    // buffers, without holding the lock that protects tcs_info. Each command
+    // gets its own buffer so that a command which returns early can't leave the
+    // previous command's reply to be parsed by the next one.
+    //
+    error |= this->send_command( "REQPOS", reqpos, TCS::FAST_RESPONSE );
+    std::replace( reqpos.begin(), reqpos.end(), '\n', ',');
+
+    error |= this->send_command( "REQSTAT", reqstat, TCS::FAST_RESPONSE );
+    std::replace( reqstat.begin(), reqstat.end(), '\n', ',');
+
+    error |= this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE );
+    std::replace( weather.begin(), weather.end(), '\n', ',');
+
+    error |= this->send_command( "?PARALLACTIC", parallactic, TCS::FAST_RESPONSE );
+    std::replace( parallactic.begin(), parallactic.end(), '\n', ',');
+
+    error |= this->send_command( "?MOTION", motion, TCS::FAST_RESPONSE );
+    std::replace( motion.begin(), motion.end(), '\n', ',');
+
+    error |= this->send_command( "LAMPS?", lamps, TCS::FAST_RESPONSE );
+    std::replace( lamps.begin(), lamps.end(), '\n', ',');
+
+    // Erase the class and parse everything into it in a single critical section,
+    // because it's all or nothing. If something failed partway through, we don't
+    // want to mix values from a command now with values from an earlier command.
+    // E.G. if reqpos fails here but reqstat and weather succeed, we don't want
+    // the class to contain values from this reqstat and an earlier call to
+    // reqpos. Committing all at once also means no reader can observe a poll in
+    // progress.
+    //
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
 
-    // erase the class because it's all or nothing. If something fails partway
-    // through, we don't want to mix values from a command now with values from
-    // an earlier command. E.G. if reqpos fails here but reqstat and weather
-    // succeed, we don't want the class to contain values from this reqstat and
-    // an earlier call to reqpos.
-    //
     this->tcs_info.init();
 
-    // Call the three native functions and the associated parsing function,
-    // which will populate the tcs_info class.
-    //
-    error |= this->send_command( "REQPOS", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_reqpos( retstring );
-
-    error |= this->send_command( "REQSTAT", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_reqstat( retstring );
-
-    error |= this->send_command( "?WEATHER", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_weather( retstring );
-
-    error |= this->send_command( "?PARALLACTIC", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_pa( retstring );
-
-    error |= this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.motion = retstring;
-
-    error |= this->send_command( "LAMPS?", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    {
-    std::lock_guard<std::mutex> lock(tcs_info_mtx);
-    this->tcs_info.parse_lamps( retstring );
-    }
+    this->tcs_info.parse_reqpos( reqpos );
+    this->tcs_info.parse_reqstat( reqstat );
+    this->tcs_info.parse_weather( weather );
+    this->tcs_info.parse_pa( parallactic );
+    this->tcs_info.motion = motion;
+    this->tcs_info.parse_lamps( lamps );
 
     return error;
   }
@@ -1183,14 +1192,16 @@ namespace TCS {
       return ERROR;
     }
 
-    // parse the reply which stores it in the TcsInfo class
+    // Parse the reply into a local TcsInfo. get_tcs_info() refreshes the shared
+    // tcs_info.pa on every poll, so this query must not write to it -- that would
+    // put a pa into the published record which was sampled at a different time
+    // than everything else in it.
     //
+    TcsInfo info;
+    info.parse_pa(tcsreply);
+
     std::ostringstream oss;
-    this->tcs_info.parse_pa(tcsreply);
-    {
-    std::lock_guard<std::mutex> lock(tcs_info_mtx);
-    oss << this->tcs_info.pa;
-    }
+    oss << info.pa;
     retstring = oss.str();
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
@@ -1294,7 +1305,13 @@ namespace TCS {
     // continuously (sequencerd, targetcontrol GUI) don't flood the log
     // with ERROR on every call after a shutdown.
     //
-    if ( ! this->tcs_info.isopen ) {
+    bool isopen;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    isopen = this->tcs_info.isopen;
+    }
+
+    if ( ! isopen ) {
       retstring = "not_connected";
       return NO_ERROR;
     }
