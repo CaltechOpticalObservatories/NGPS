@@ -983,17 +983,17 @@ namespace Slicecam {
     }
     // extract and store values in the class
     //
-    Common::extract_telemetry_value( jmessage, "TCSNAME",    telem.tcsname );
-    Common::extract_telemetry_value( jmessage, "ISOPEN",     telem.is_tcs_open );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TCSNAME,  telem.tcsname );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::ISOPEN,   telem.is_tcs_open );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, telem.angle_scope );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    telem.ra_scope_hms );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   telem.dec_scope_dms );
-    Common::extract_telemetry_value( jmessage, "RA",         telem.ra_scope_h );
-    Common::extract_telemetry_value( jmessage, "DEC",        telem.dec_scope_d );
-    Common::extract_telemetry_value( jmessage, "RAOFFSET",   telem.offsetra );
-    Common::extract_telemetry_value( jmessage, "DECLOFFS",   telem.offsetdec );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA_H,  telem.ra_scope_h );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC_D, telem.dec_scope_d );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::RAOFFSET, telem.offsetra );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::DECLOFFS, telem.offsetdec );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::AZ,       telem.az );
-    Common::extract_telemetry_value( jmessage, "TELFOCUS",   telem.telfocus );
+    Common::extract_telemetry_value( jmessage, Key::Tcsd::TELFOCUS, telem.telfocus );
     Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  telem.airmass );
   }
   /***** Slicecam::Interface::handletopic_tcsd ********************************/

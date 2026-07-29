@@ -59,7 +59,7 @@ namespace Flexure {
     double zenangle, casangle, parallactic;
     Common::extract_telemetry_value(jmessage, Key::Tcsd::CASANGLE, casangle);
     Common::extract_telemetry_value(jmessage, Key::Tcsd::ZENANGLE, zenangle);
-    Common::extract_telemetry_value(jmessage, "PA", parallactic);
+    Common::extract_telemetry_value(jmessage, Key::Tcsd::PA, parallactic);
     this->tcs_info.store(zenangle, casangle, parallactic);
   }
   /***** Flexure::Interface::handletopic_tcsd *********************************/

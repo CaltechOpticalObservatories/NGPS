@@ -92,12 +92,15 @@ namespace FitsHeaderKeys {
   };
 
   const Primary TcsInfoKeys[] = {
+    { Key::Tcsd::PA.c_str(),       "", "position angle in deg" },
     { Key::Tcsd::CASANGLE.c_str(), "", "TCS reported Cassegrain angle in deg", "FLOAT" },
     { Key::Tcsd::HA.c_str(),       "", "hour angle" },
     { Key::Tcsd::RAOFFSET.c_str(), "", "offset Right Ascension" },
     { Key::Tcsd::DECLOFFS.c_str(), "", "offset Declination" },
     { Key::Tcsd::TELRA.c_str(),    "", "TCS reported Right Ascension" },
     { Key::Tcsd::TELDEC.c_str(),   "", "TCS reported Declination" },
+    { Key::Tcsd::TELRA_H.c_str(),  "", "TCS reported RA in decimal hours", "DOUBLE" },
+    { Key::Tcsd::TELDEC_D.c_str(), "", "TCS reported DEC in decimal deg", "DOUBLE" },
     { Key::Tcsd::AZ.c_str(),       "", "TCS reported azimuth" },
     { Key::Tcsd::ZENANGLE.c_str(), "", "TCS reported Zenith angle", "FLOAT" },
     { Key::Tcsd::DOMEAZ.c_str(),   "", "TCS reported dome azimuth", "FLOAT" },
