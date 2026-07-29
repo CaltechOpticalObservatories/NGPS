@@ -466,7 +466,7 @@ namespace Flexure {
 
     // new positions
     float newposition_x = nominal_x + delta.first;
-    float newposition_y = nominal_y - delta.second;
+    float newposition_y = nominal_y + delta.second;
 
     // dryrun only logs what it would have done
     if ( is_dryrun ) {
