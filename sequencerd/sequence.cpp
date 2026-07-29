@@ -2369,12 +2369,25 @@ namespace Sequencer {
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
 
+    // build up list of activate chans
+    std::ostringstream activechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      if (active) activechans << " " << chan;
+    }
+
+    std::ostringstream comp;
+    comp << FLEXURED_COMPENSATE << activechans.str();
+
     if ( !this->cancel_flag.load() &&
-          this->flexured.command( FLEXURED_COMPENSATE ) != NO_ERROR ) {
+          this->flexured.command( comp.str() ) != NO_ERROR ) {
       this->broadcast.error( function, "setting flexure compensator" );
-      this->thread_error_manager.set( THR_CALIBRATOR_SET );
+      this->thread_error_manager.set( THR_FLEXURE_SET );
       throw std::runtime_error("setting flexure compensator");
     }
+
+    this->broadcast.notice( function, "set flexure compensator for "+activechans.str());
 
     return NO_ERROR;
   }
