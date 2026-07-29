@@ -111,7 +111,7 @@ namespace Sequencer {
    *
    */
   void Sequence::handletopic_tcsd(const nlohmann::json &jmessage) {
-    // the completed target table contains TCS data now
+    // load the completed target table with TCS telemetry
     this->target.column_from_json<std::string>( "TELRA",   Key::Tcsd::TELRA,    jmessage );
     this->target.column_from_json<std::string>( "TELDECL", Key::Tcsd::TELDEC,   jmessage );
     this->target.column_from_json<double>( "ALT",          Key::Tcsd::ALT,      jmessage );
@@ -119,10 +119,41 @@ namespace Sequencer {
     this->target.column_from_json<double>( "AIRMASS",      Key::Tcsd::AIRMASS,  jmessage );
     this->target.column_from_json<double>( "CASANGLE",     Key::Tcsd::CASANGLE, jmessage );
 
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires tcsd_mtx inside tcsd_cv.wait().
     std::lock_guard<std::mutex> lock(tcsd_mtx);
+    this->tcsinfo.store( jmessage );
     this->tcsd_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_tcsd *******************************/
+
+
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+  /**
+   * @brief      handles Topic::CALIBD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_calibd(const nlohmann::json &jmessage) {
+    std::lock_guard<std::mutex> lock(calibd_mtx);
+    this->calibinfo.store( jmessage );
+    this->calibd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
+  /**
+   * @brief      handles Topic::POWERD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_powerd(const nlohmann::json &jmessage) {
+    std::lock_guard<std::mutex> lock(powerd_mtx);
+    this->powerinfo.store( jmessage );
+    this->powerd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
 
 
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
@@ -193,6 +224,8 @@ namespace Sequencer {
     jmessage[Daemon::SLICECAMD] = true;
     jmessage[Daemon::SLITD]     = true;
     jmessage[Daemon::TCSD]      = true;
+    jmessage[Daemon::CALIBD]    = true;
+    jmessage[Daemon::POWERD]    = true;
     this->publisher->publish( jmessage, Topic::SNAPSHOT );
   }
   /***** Sequencer::Sequence::request_snapshot *******************************/
@@ -1089,12 +1122,21 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
+    // Discard the cached power state. powerd publishes only when its state
+    // changes, so nothing else would tell me that what I have is no longer
+    // current. request_snapshot() below refills it.
+    {
+    std::lock_guard<std::mutex> lock(this->powerd_mtx);
+    this->powerinfo.invalidate();
+    }
+
     if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
       logwrite( function, "ERROR initializing power control" );
       throw std::runtime_error("could not initialize power control");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
+    this->request_snapshot();
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::power_init **************************************/
@@ -1504,6 +1546,14 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
+    // Discard the cached calib state. calibd publishes only when its state
+    // changes, so nothing else would tell me that what I have is no longer
+    // current. request_snapshot() below refills it.
+    {
+    std::lock_guard<std::mutex> lock(this->calibd_mtx);
+    this->calibinfo.invalidate();
+    }
+
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIB_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
@@ -1558,6 +1608,7 @@ namespace Sequencer {
 
     // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
+    this->request_snapshot();
 
     this->thread_error_manager.clear( THR_CALIB_INIT );
 
@@ -2419,24 +2470,48 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "configuring calibrator for "+calname);
 
-    // set the calib door and cover
+    // set the calib door and cover if needed. CALIBD_SET moves both in one
+    // command, so this can only be skipped when both are already set.
     //
-    std::stringstream cmd;
-    cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
-
-    logwrite( function, "calib: "+cmd.str() );
-    if ( !this->cancel_flag.load() &&
-          this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-      this->broadcast.error( function, "moving calib door and/or cover" );
-      throw std::runtime_error("moving calib door and/or cover");
+    bool doorcover_isset = false;
+    {
+    std::lock_guard<std::mutex> lock(this->calibd_mtx);
+    doorcover_isset = ( this->calibinfo.is_valid() &&
+                        this->calibinfo.caldoor  == (calinfo.caldoor?1:0) &&
+                        this->calibinfo.calcover == (calinfo.calcover?1:0) );
     }
 
-    // set the internal calibration lamps
+    std::stringstream cmd;
+    if ( doorcover_isset ) {
+      logwrite( function, "calib door and cover already set" );
+    }
+    else {
+      cmd.str(""); cmd << CALIBD_SET
+                       << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                       << " cover=" << ( calinfo.calcover ? "open" : "close" );
+
+      logwrite( function, "calib: "+cmd.str() );
+      if ( !this->cancel_flag.load() &&
+            this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+        this->broadcast.error( function, "moving calib door and/or cover" );
+        throw std::runtime_error("moving calib door and/or cover");
+      }
+    }
+
+    // set the internal calibration lamps if needed
     //
     for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
+      // skip if lamp is already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->powerd_mtx);
+      if (this->powerinfo.is_valid() &&
+          this->powerinfo.plug_state(lamp) == (state?1:0)) {
+        logwrite(function, "cal lamp "+lamp+" already "+(state?"on":"off"));
+        continue;
+      }
+      }
+      // otherwise send the command
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
       logwrite( function, message.str() );
@@ -2447,10 +2522,20 @@ namespace Sequencer {
       }
     }
 
-    // set the dome lamps
+    // set the dome lamps if needed
     //
     for ( const auto &[lampname,state] : calinfo.domelamp ) {
       if ( this->cancel_flag.load() ) break;
+      // skip if lamp is already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->tcsd_mtx);
+      if (this->tcsinfo.is_fresh() &&
+          this->tcsinfo.domelamp_state(lampname) == (state?1:0)) {
+        logwrite(function, "dome lamp "+lampname+" already "+(state?"on":"off"));
+        continue;
+      }
+      }
+      // otherwise send command to tcsd
       cmd.str(""); cmd << TCSD_LAMP << " " << lampname << " " << (state==1?"on":"off");
       if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
         logwrite(function, "ERROR "+cmd.str());
@@ -2458,11 +2543,27 @@ namespace Sequencer {
       }
     }
 
-    // set the lamp modulators
+    // set the lamp modulators if needed
     //
     for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
-      cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
+      // skip if already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->calibd_mtx);
+      if (this->calibinfo.is_valid() &&
+          this->calibinfo.lampmod_state(mod) == (state?1:0)) {
+        logwrite(function, "lamp modulator "+mod+" already "+(state?"on":"off"));
+        continue;
+      }
+      }
+      // otherwise send the command. calibd publishes modulators by name but
+      // takes the channel number, which comes from the shared table.
+      const auto *dev = CalibDefs::find( CalibDefs::modulators(), mod );
+      if ( dev == nullptr ) {
+        this->broadcast.error( function, "unknown lamp modulator "+mod );
+        throw std::runtime_error("unknown lamp modulator "+mod);
+      }
+      cmd.str(""); cmd << CALIBD_LAMPMOD << " " << dev->num << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
         this->broadcast.error( function, cmd.str() );
         throw std::runtime_error("setting lamp modulator "+cmd.str());

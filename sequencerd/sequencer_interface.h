@@ -23,6 +23,7 @@
 #include <mysqlx/devapi/collection_crud.h>
 
 #include "acam_interface_shared.h"
+#include "calib_defs.h"
 
 #define ERROR_TARGETLIST_BAD_HEADER 1001  ///< TODO change this
 
@@ -83,6 +84,17 @@ namespace Sequencer {
   const std::string IMGTYPE_DARK="DARK";
   const std::string IMGTYPE_SCI="SCI";
 
+  namespace Chan {
+    inline const std::string U = "U";
+    inline const std::string G = "G";
+    inline const std::string R = "R";
+    inline const std::string I = "I";
+  }
+
+  // The calibration lamp, dome lamp and modulator names are shared with tcsd,
+  // calibd and powerd, so they live in common/calib_defs.h as Lamp::Cal,
+  // Lamp::Dome and Lamp::Mod.
+
 
   /***** Sequencer::PowerSwitch ***********************************************/
   /**
@@ -132,9 +144,7 @@ namespace Sequencer {
   class CalibrationTarget {
     public:
       CalibrationTarget() :
-        chans { "U", "G", "R", "I" },
-        lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
-        domelampnames { "LO", "HI", "ARC", "ULTRA" } { }  // this is how they are ordered in the TCS
+        chans { Chan::U, Chan::G, Chan::R, Chan::I } { }
 
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
@@ -143,9 +153,9 @@ namespace Sequencer {
         std::map<std::string, bool> channel_active;  // true=on
         bool caldoor;                      // true=open
         bool calcover;                     // true=open
-        std::map<std::string, bool> lamp;  // true=on
-        std::map<std::string, bool> domelamp;  // true=on
-        std::map<int, bool> lampmod;       // true=on
+        std::map<std::string, bool> lamp;      // true=on, indexed by Lamp::Cal name
+        std::map<std::string, bool> domelamp;  // true=on, indexed by Lamp::Dome name
+        std::map<std::string, bool> lampmod;   // true=on, indexed by Lamp::Mod name
       } calinfo_t;
 
       ///< parses config file
@@ -166,10 +176,359 @@ namespace Sequencer {
     private:
       std::unordered_map<std::string, calinfo_t> calmap;
       std::vector<std::string> chans;
-      std::vector<std::string> lampnames;
-      std::vector<std::string> domelampnames;
   };
   /***** Sequencer::CalibrationTarget *****************************************/
+
+
+  /***** Sequencer::TcsInfo ***************************************************/
+  /**
+   * @class  TcsInfo
+   * @brief  holds the most recently published tcsd telemetry
+   *
+   * There is one member here for each key published by
+   * TCS::Interface::publish_snapshot. Written by the subscriber thread and read
+   * by the sequence threads; all access is serialized by the caller under
+   * Sequence::tcsd_mtx.
+   *
+   */
+  class TcsInfo {
+    public:
+      TcsInfo() {
+        // the lamp names and their message keys are defined in calib_defs.h
+        //
+        for ( const auto &dev : CalibDefs::domelamps() ) {
+          this->domelamp[dev.name] = -1;
+        }
+        this->init();
+      }
+
+      bool isopen;               ///< is tcsd's connection to the TCS open?
+      std::string tcsname;       ///< name of connected TCS { real sim }
+      std::string motion;        ///< one of the TCS_MOTION*_STRs from tcs_constants.h
+      std::string ha;            ///< hh:mm:ss.s
+      std::string ra_hms;        ///< hh:mm:ss.ss
+      std::string dec_dms;       ///< dd:mm:ss.ss
+      std::string domeshutters;  ///< { open closed }
+
+      double ra_h;               ///< h.hhhhh (decimal hours)
+      double dec_d;              ///< d.ddddd (decimal degrees)
+      double azimuth;
+      double alt;
+      double zenithangle;
+      double domeazimuth;
+      double airmass;
+      double focus;
+      double offsetra;
+      double offsetdec;
+      double cassangle;
+      double pa;
+
+      int64_t pubtime;           ///< time (usec) that tcsd published this state
+
+      std::map<std::string, int> domelamp;  ///< 1=on 0=off -1=undefined, indexed by Lamp::Dome name
+
+      /**
+       * @brief  initialize all class member variables to "non-values"
+       */
+      void init() {
+        isopen=false;
+        tcsname.clear();
+        motion.clear();
+        ha.clear();
+        ra_hms.clear();
+        dec_dms.clear();
+        domeshutters.clear();
+        ra_h=NAN;
+        dec_d=NAN;
+        azimuth=NAN;
+        alt=NAN;
+        zenithangle=NAN;
+        domeazimuth=NAN;
+        airmass=NAN;
+        focus=NAN;
+        offsetra=NAN;
+        offsetdec=NAN;
+        cassangle=NAN;
+        pa=NAN;
+        pubtime=0;
+        for ( auto &[name,state] : domelamp ) { state=-1; }
+      }
+
+      /***** Sequencer::TcsInfo::store ****************************************/
+      /**
+       * @brief      store a received tcsd telemetry message
+       * @details    Everything is erased first because a snapshot is all or
+       *             nothing; a key missing from this message must not leave the
+       *             value from an earlier one behind. extract_telemetry_value
+       *             leaves its out-param alone on a missing key, a type
+       *             mismatch, or a null (which is how a NAN arrives), so the
+       *             non-values set by init() survive those cases.
+       * @param[in]  jmessage  subscribed-received JSON message
+       *
+       */
+      void store( const nlohmann::json &jmessage ) {
+        this->init();
+
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::ISOPEN,   this->isopen );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TCSNAME,  this->tcsname );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::MOTION,   this->motion );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::HA,       this->ha );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA,    this->ra_hms );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC,   this->dec_dms );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::DOMESHUT, this->domeshutters );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TELRA_H,  this->ra_h );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TELDEC_D, this->dec_d );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::AZ,       this->azimuth );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::ALT,      this->alt );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::ZENANGLE, this->zenithangle );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::DOMEAZ,   this->domeazimuth );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::AIRMASS,  this->airmass );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::TELFOCUS, this->focus );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::RAOFFSET, this->offsetra );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::DECLOFFS, this->offsetdec );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::CASANGLE, this->cassangle );
+        Common::extract_telemetry_value( jmessage, Key::Tcsd::PA,       this->pa );
+        Common::extract_telemetry_value( jmessage, Key::PUBTIME,        this->pubtime );
+
+        for ( const auto &dev : CalibDefs::domelamps() ) {
+          Common::extract_telemetry_value( jmessage, dev.jkey, this->domelamp[dev.name] );
+        }
+      }
+      /***** Sequencer::TcsInfo::store ****************************************/
+
+      /***** Sequencer::TcsInfo::is_fresh *************************************/
+      /**
+       * @brief      is the cached telemetry recent enough to act on?
+       * @details    tcsd publishes a snapshot every second while its connection
+       *             to the TCS is open, so an age check is meaningful here and
+       *             also covers the not-connected case: publishing stops and the
+       *             cache simply ages out.
+       * @return     true|false
+       *
+       */
+      bool is_fresh() const {
+        if ( this->pubtime == 0 ) return false;    // nothing received yet
+        return ( get_time_us() - this->pubtime ) <= TCS_STATUS_MAX_AGE_US;
+      }
+      /***** Sequencer::TcsInfo::is_fresh *************************************/
+
+      /**
+       * @brief      cached state of the named dome lamp
+       * @param[in]  name  Lamp::Dome name
+       * @return     1=on 0=off -1=undefined or unknown lamp
+       */
+      int domelamp_state( const std::string &name ) const {
+        auto it = this->domelamp.find(name);
+        return ( it == this->domelamp.end() ? -1 : it->second );
+      }
+
+    private:
+      /** @brief  how old tcsd telemetry may be and still be acted on */
+      static constexpr int64_t TCS_STATUS_MAX_AGE_US = 5'000'000;
+  };
+  /***** Sequencer::TcsInfo ***************************************************/
+
+
+  /***** Sequencer::CalibInfo *************************************************/
+  /**
+   * @class  CalibInfo
+   * @brief  holds the most recently published calibd telemetry
+   *
+   * Written by the subscriber thread and read by the sequence threads; all
+   * access is serialized by the caller under Sequence::calibd_mtx.
+   *
+   */
+  class CalibInfo {
+    public:
+      CalibInfo() {
+        // the modulator names and their message keys are defined in calib_defs.h
+        //
+        for ( const auto &dev : CalibDefs::modulators() ) {
+          this->lampmod[dev.name] = -1;
+        }
+        this->init();
+      }
+
+      int caldoor;   ///< 1=open 0=closed -1=undefined
+      int calcover;  ///< 1=open 0=closed -1=undefined
+
+      std::map<std::string, int> lampmod;  ///< 1=on 0=off -1=undefined, indexed by Lamp::Mod name
+
+      /**
+       * @brief  initialize all class member variables to "non-values"
+       */
+      void init() {
+        caldoor=-1;
+        calcover=-1;
+        for ( auto &[name,state] : lampmod ) { state=-1; }
+      }
+
+      /***** Sequencer::CalibInfo::store **************************************/
+      /**
+       * @brief      store a received calibd telemetry message
+       * @details    calibd publishes everything as a string: the actuators as a
+       *             position name, and the modulators as "<pow> <dut> <per>".
+       *             Both are reduced to a tri-state here so that comparing
+       *             against a desired state is uniform.
+       * @param[in]  jmessage  subscribed-received JSON message
+       *
+       */
+      void store( const nlohmann::json &jmessage ) {
+        this->init();
+
+        std::string value;
+
+        value.clear();
+        Common::extract_telemetry_value( jmessage, Key::Calibd::CALDOOR, value );
+        this->caldoor = open_state( value );
+
+        value.clear();
+        Common::extract_telemetry_value( jmessage, Key::Calibd::CALCOVER, value );
+        this->calcover = open_state( value );
+
+        for ( const auto &dev : CalibDefs::modulators() ) {
+          value.clear();
+          Common::extract_telemetry_value( jmessage, dev.jkey, value );
+          this->lampmod[dev.name] = power_state( value );
+        }
+
+        this->received=true;
+      }
+      /***** Sequencer::CalibInfo::store **************************************/
+
+      /***** Sequencer::CalibInfo::is_valid ***********************************/
+      /**
+       * @brief      is there cached telemetry to act on?
+       * @details    Deliberately not an age check, unlike TcsInfo::is_fresh().
+       *             calibd publishes only when its state changes, plus a forced
+       *             publish at startup and on request, so telemetry that is
+       *             minutes or hours old is still current and an age check would
+       *             reject all of it. Anything that could invalidate the cache
+       *             without calibd publishing has to clear it explicitly.
+       * @return     true|false
+       *
+       */
+      bool is_valid() const { return this->received; }
+      /***** Sequencer::CalibInfo::is_valid ***********************************/
+
+      /** @brief  discard the cache, e.g. when calibd is known to have restarted */
+      void invalidate() { this->received=false; this->init(); }
+
+      /**
+       * @brief      cached state of the named modulator
+       * @param[in]  name  Lamp::Mod name
+       * @return     1=on 0=off -1=undefined or unknown modulator
+       */
+      int lampmod_state( const std::string &name ) const {
+        auto it = this->lampmod.find(name);
+        return ( it == this->lampmod.end() ? -1 : it->second );
+      }
+
+    private:
+      bool received=false;  ///< has any telemetry been received?
+
+      /** @brief  actuator position name as 1=open, 0=closed, -1=anything else */
+      static int open_state( const std::string &value ) {
+        if ( value == "open"  ) return 1;
+        if ( value == "close" ) return 0;
+        return -1;
+      }
+
+      /** @brief  first token of calibd's "<pow> <dut> <per>" as 1=on, 0=off, -1=other */
+      static int power_state( const std::string &value ) {
+        std::vector<std::string> tokens;
+        Tokenize( value, tokens, " " );
+        if ( tokens.empty() ) return -1;
+        if ( tokens.at(0) == "on"  ) return 1;
+        if ( tokens.at(0) == "off" ) return 0;
+        return -1;
+      }
+  };
+  /***** Sequencer::CalibInfo *************************************************/
+
+
+  /***** Sequencer::PowerInfo *************************************************/
+  /**
+   * @class  PowerInfo
+   * @brief  holds the most recently published powerd telemetry
+   *
+   * Only the plugs the sequencer makes decisions about are kept. Written by the
+   * subscriber thread and read by the sequence threads; all access is
+   * serialized by the caller under Sequence::powerd_mtx.
+   *
+   */
+  class PowerInfo {
+    public:
+      PowerInfo() {
+        // the lamp plug names and their message keys are defined in calib_defs.h
+        //
+        for ( const auto &dev : CalibDefs::callamps() ) {
+          this->plug[dev.name] = -1;
+        }
+      }
+
+      std::map<std::string, int> plug;  ///< 1=on 0=off -1=undefined, indexed by plug name
+
+      /**
+       * @brief  initialize all class member variables to "non-values"
+       */
+      void init() {
+        for ( auto &[name,state] : plug ) { state=-1; }
+      }
+
+      /***** Sequencer::PowerInfo::store **************************************/
+      /**
+       * @brief      store a received powerd telemetry message
+       * @details    powerd publishes a plug as true when it is on. That is
+       *             reduced to a tri-state here so that a plug missing from the
+       *             message is distinguishable from one that is off.
+       * @param[in]  jmessage  subscribed-received JSON message
+       *
+       */
+      void store( const nlohmann::json &jmessage ) {
+        this->init();
+
+        for ( const auto &dev : CalibDefs::callamps() ) {
+          // Leave the plug undefined unless powerd really did report a bool for
+          // it. Defaulting a missing or malformed value to off would claim
+          // knowledge I don't have, and a caller could skip turning a lamp on.
+          //
+          if ( !jmessage.contains(dev.jkey) ||
+               !jmessage[dev.jkey].is_boolean() ) continue;
+          bool ison=false;
+          Common::extract_telemetry_value( jmessage, dev.jkey, ison );
+          this->plug[dev.name] = ( ison ? 1 : 0 );
+        }
+
+        this->received=true;
+      }
+      /***** Sequencer::PowerInfo::store **************************************/
+
+      /**
+       * @brief      is there cached telemetry to act on?
+       * @details    Not an age check, for the same reason as
+       *             CalibInfo::is_valid() -- powerd publishes only on change.
+       * @return     true|false
+       */
+      bool is_valid() const { return this->received; }
+
+      /** @brief  discard the cache, e.g. when powerd is known to have restarted */
+      void invalidate() { this->received=false; this->init(); }
+
+      /**
+       * @brief      cached state of the named plug
+       * @param[in]  name  plug name
+       * @return     1=on 0=off -1=undefined or unknown plug
+       */
+      int plug_state( const std::string &name ) const {
+        auto it = this->plug.find(name);
+        return ( it == this->plug.end() ? -1 : it->second );
+      }
+
+    private:
+      bool received=false;  ///< has any telemetry been received?
+  };
+  /***** Sequencer::PowerInfo *************************************************/
 
 
   /***** Sequencer::TargetInfo ************************************************/

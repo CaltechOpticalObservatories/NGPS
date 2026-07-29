@@ -40,6 +40,12 @@ namespace TCS {
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Daemon::TCSD;
 
+    // Timestamp every snapshot so subscribers can tell how old this state is.
+    // Publishing stops when the connection to the TCS is closed, so the age is
+    // also how a subscriber learns that the TCS is no longer being read.
+    //
+    jmessage_out[Key::PUBTIME] = get_time_us();
+
     std::string motion;
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
@@ -1523,7 +1529,9 @@ namespace TCS {
         retstring="ERR";
         return ERROR;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(250));  // wait for it to turn on|off
+      // the mechanism takes time to respond and the TCS only checks for
+      // this  command once per second.
+      std::this_thread::sleep_for(std::chrono::milliseconds(1100));
     }
 
     // whether or not requesting on|off, check state now

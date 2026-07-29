@@ -149,8 +149,10 @@ namespace Key {
     inline const std::string MODTHAR  = "MODTHAR";
     inline const std::string MODBLCON = "MODBLCON";
     inline const std::string MODBLBYP = "MODBLBYP";
+    inline const std::string MODBLETA = "MODBLETA";
     inline const std::string MODRDCON = "MODRDCON";
     inline const std::string MODRDBYP = "MODRDBYP";
+    inline const std::string MODRDETA = "MODRDETA";
     inline const std::string CALCOVER = "CALCOVER";
     inline const std::string CALDOOR  = "CALDOOR";
   }
