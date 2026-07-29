@@ -2449,9 +2449,9 @@ namespace Sequencer {
 
     // set the dome lamps
     //
-    for ( const auto &[lamp,state] : calinfo.domelamp ) {
+    for ( const auto &[lampname,state] : calinfo.domelamp ) {
       if ( this->cancel_flag.load() ) break;
-      cmd.str(""); cmd << TCSD_LAMP << lamp << " " << (state==1?"on":"off");
+      cmd.str(""); cmd << TCSD_LAMP << " " << lampname << " " << (state==1?"on":"off");
       if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
         logwrite(function, "ERROR "+cmd.str());
         throw std::runtime_error("setting TCS "+cmd.str());
