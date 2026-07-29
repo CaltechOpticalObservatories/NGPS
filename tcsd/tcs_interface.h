@@ -51,6 +51,13 @@ namespace TCS {
    *
    */
   class TcsInfo {
+    private:
+      struct lamp_t {
+        std::string key;    ///< key from message_keys, used for published JSON message
+        size_t num;         ///< lamp number assigned in the TCS, 1-based { 1, 2, 3, 4 }
+        int state;          ///< lamp state reported by the TCS: 0=off, 1=on, -1=undefined
+      };
+
     public:
       bool isopen;          /// is connection open to TCS
       std::string tcsname;  /// name of connected TCS { real sim }
@@ -77,8 +84,21 @@ namespace TCS {
 
       int domeshutters;
 
+      std::map<std::string,lamp_t> lampinfo;  ///< lamp info indexed by a UI key
+
       TcsInfo()
-        : isopen(false) { this->init(); }
+        : isopen(false)
+      {
+        // these map indices are the lamp names accepted by the UI
+        // this is the only place they appear
+        //
+        lampinfo["LO"]    = { Key::Tcsd::LAMP_LO,    1, -1 };
+        lampinfo["HI"]    = { Key::Tcsd::LAMP_HI,    2, -1 };
+        lampinfo["ARC"]   = { Key::Tcsd::LAMP_ARC,   3, -1 };
+        lampinfo["ULTRA"] = { Key::Tcsd::LAMP_ULTRA, 4, -1 };
+
+        this->init();
+      }
 
       /**
        * @brief  initialize all class member variables to "non-values"
@@ -96,9 +116,13 @@ namespace TCS {
         domeazimuth=NAN;
         airmass=NAN;
         focus=NAN;
+        offsetra=NAN;
+        offsetdec=NAN;
         offsetrate=NAN;
         cassangle=NAN;
+        pa=NAN;
         domeshutters=-1;
+        for (auto &[name,info] : lampinfo) { info.state=-1; }
       }
 
       // These functions parse the return string from native TCS commands
@@ -108,6 +132,7 @@ namespace TCS {
       void parse_reqstat( std::string &input );  ///< parse retstring from native REQSTAT
       void parse_reqpos( std::string &input );   ///< parse retstring from native REQPOS
       void parse_pa( std::string &input );       ///< parse retstring from native ?PARALLACTIC
+      void parse_lamps( std::string &input );    ///< parse retstring from native LAMPS?
   };
   /***** TCS::TcsInfo *********************************************************/
 
@@ -493,6 +518,9 @@ namespace TCS {
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
+      long lamp( std::string args, std::string &retstring );
+      long set_lamp( const std::string &which, int state );
+      long get_lamp( const std::string &which, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
       long zero_offsets( const std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );

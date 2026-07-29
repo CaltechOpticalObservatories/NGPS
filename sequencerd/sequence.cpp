@@ -801,6 +801,17 @@ namespace Sequencer {
         }
       }
 
+      // The offset-star offset is applied asynchronously by the ACAM guide loop;
+      // ACAMD_OFFSETGOAL returns before the move lands. Wait so the target is on
+      // the slit before exposing. Skipped when the target has no offset.
+      if ( !this->target.iscal && this->is_fineacquire_locked.load() &&
+           ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) &&
+           this->offset_settle_sec > 0.0 ) {
+        logwrite( function, "NOTICE: waiting "+std::to_string(this->offset_settle_sec)+
+                            " sec for target offset to settle onto slit before exposing" );
+        std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
+      }
+
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
       // Start the exposure in a thread...
@@ -2418,18 +2429,16 @@ namespace Sequencer {
       }
     }
 
-//  Not working yet 2025-02-04
-//
-//  // set the dome lamps
-//  //
-//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
-//    if ( this->cancel_flag.load() ) break;
-//    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
-//    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-//      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-//      throw std::runtime_error("setting dome lamp: "+cmd.str());
-//    }
-//  }
+    // set the dome lamps
+    //
+    for ( const auto &[lamp,state] : calinfo.domelamp ) {
+      if ( this->cancel_flag.load() ) break;
+      cmd.str(""); cmd << TCSD_LAMP << lamp << " " << (state==1?"on":"off");
+      if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
+        logwrite(function, "ERROR "+cmd.str());
+        throw std::runtime_error("setting TCS "+cmd.str());
+      }
+    }
 
     // set the lamp modulators
     //

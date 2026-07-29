@@ -960,9 +960,9 @@ namespace Sequencer {
 
     auto size = Tokenize( args, tokens, " \t" );
 
-    // there must be 20 args. see cfg file for complete description
-    if ( size != 20 ) {
-      logwrite(function, "ERROR bad config file. expected 20 but received "
+    // there must be 22 args. see cfg file for complete description
+    if ( size != 22 ) {
+      logwrite(function, "ERROR bad config file. expected 22 but received "
                          +std::to_string(size)+" parameters");
       return ERROR;
     }
@@ -996,18 +996,18 @@ namespace Sequencer {
         info.lamp[lampnames.at(i)] = on_off(tokens.at(7+i));
       }
 
-      // tokens 11-12 are dome lamps
-      for (size_t i=0; i < 2; i++) {
+      // tokens 11-14 are dome lamps: LO, HI, ARC, ULTRA
+      for (size_t i=0; i < 4; i++) {
         info.domelamp[i] = on_off(tokens.at(11+i));
       }
 
-      // tokens 13-18 -- modulator numbers are {1:6}
+      // tokens 15-20 -- modulator numbers are {1:6}
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i+1] = on_off(tokens.at(13+i));
+        info.lampmod[i+1] = on_off(tokens.at(15+i));
       }
 
-      // token[19] is FITS IMGTYPE
-      info.imgtype = tokens.at(19);
+      // token[21] is FITS IMGTYPE
+      info.imgtype = tokens.at(21);
     }
     catch (const std::exception &e) {
       logwrite(function, "ERROR: "+std::string(e.what()));

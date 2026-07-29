@@ -17,6 +17,14 @@ const int TCS_UNABLE_TO_EXECUTE    = -3;
 const int TCS_HOST_UNAVAILABLE     = -4;
 const int TCS_UNDEFINED            = 9999;
 
+// dome lamps
+// the names are mine but the associated numbers belong to the TCS
+//
+inline static const char TCS_LAMPNAME_LO[]    = "LO";    const int TCS_LAMPNUM_LO    = 1;
+inline static const char TCS_LAMPNAME_HI[]    = "HI";    const int TCS_LAMPNUM_HI    = 2;
+inline static const char TCS_LAMPNAME_ARC[]   = "ARC";   const int TCS_LAMPNUM_ARC   = 3;
+inline static const char TCS_LAMPNAME_ULTRA[] = "ULTRA"; const int TCS_LAMPNUM_ULTRA = 4;
+
 // human-readable strings to match the above
 //
 inline static const char TCS_SUCCESS_STR[] = "success";
