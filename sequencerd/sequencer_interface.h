@@ -134,7 +134,7 @@ namespace Sequencer {
       CalibrationTarget() :
         chans { "U", "G", "R", "I" },
         lampnames { "LAMPTHAR", "LAMPFEAR", "LAMPBLUC", "LAMPREDC" },
-        domelampnames { "LO", "HI", "ARC", "ULTRA" } { }  // this is how they
+        domelampnames { "LO", "HI", "ARC", "ULTRA" } { }  // this is how they are ordered in the TCS
 
       ///< struct holds all calibration parameters not in the target database
       typedef struct {
@@ -144,7 +144,7 @@ namespace Sequencer {
         bool caldoor;                      // true=open
         bool calcover;                     // true=open
         std::map<std::string, bool> lamp;  // true=on
-        std::map<int, bool> domelamp;      // [1=LO, 2=HI, 3=ARC, 4=ULTRA], true=on
+        std::map<std::string, bool> domelamp;  // true=on
         std::map<int, bool> lampmod;       // true=on
       } calinfo_t;
 

@@ -998,7 +998,7 @@ namespace Sequencer {
 
       // tokens 11-14 are dome lamps: LO, HI, ARC, ULTRA
       for (size_t i=0; i < 4; i++) {
-        info.domelamp[i] = on_off(tokens.at(11+i));
+        info.domelamp[domelampnames.at(i)] = on_off(tokens.at(11+i));
       }
 
       // tokens 15-20 -- modulator numbers are {1:6}
