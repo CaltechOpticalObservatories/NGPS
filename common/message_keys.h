@@ -147,22 +147,22 @@ namespace Key {
   }
 
   namespace Flexured {
-    inline const std::string AxisX = "FLX_X_";
-    inline const std::string AxisY = "FLX_Y_";
-    inline const std::string AxisZ = "FLX_Z_";
+    inline const std::string AxisX = "FLEX_X_";
+    inline const std::string AxisY = "FLEX_Y_";
+    inline const std::string AxisZ = "FLEX_Z_";
 
-    inline const std::string FLXSPE_I = "FLXSPE_I";
-    inline const std::string FLXSPA_I = "FLXSPA_I";
-    inline const std::string FLXPIS_I = "FLXPIS_I";
-    inline const std::string FLXSPE_R = "FLXSPE_R";
-    inline const std::string FLXSPA_R = "FLXSPA_R";
-    inline const std::string FLXPIS_R = "FLXPIS_R";
-    inline const std::string FLXSPE_G = "FLXSPE_G";
-    inline const std::string FLXSPA_G = "FLXSPA_G";
-    inline const std::string FLXPIS_G = "FLXPIS_G";
-    inline const std::string FLXSPE_U = "FLXSPE_U";
-    inline const std::string FLXSPA_U = "FLXSPA_U";
-    inline const std::string FLXPIS_U = "FLXPIS_U";
+    inline const std::string FLEX_X_U = "FLEX_X_U";
+    inline const std::string FLEX_Y_U = "FLEX_Y_U";
+    inline const std::string FLEX_Z_U = "FLEX_Z_U";
+    inline const std::string FLEX_X_G = "FLEX_X_G";
+    inline const std::string FLEX_Y_G = "FLEX_Y_G";
+    inline const std::string FLEX_Z_G = "FLEX_Z_G";
+    inline const std::string FLEX_X_R = "FLEX_X_R";
+    inline const std::string FLEX_Y_R = "FLEX_Y_R";
+    inline const std::string FLEX_Z_R = "FLEX_Z_R";
+    inline const std::string FLEX_X_I = "FLEX_X_I";
+    inline const std::string FLEX_Y_I = "FLEX_Y_I";
+    inline const std::string FLEX_Z_I = "FLEX_Z_I";
   }
 
   namespace Focusd {
