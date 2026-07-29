@@ -65,10 +65,6 @@ PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 #   <y>      y-coordinate (row)
 # aimpoint x,y may be fractional
 #
-# Slit-center aimpoint validated on-sky: tuned during fine-acquire tuning 2026-06-17
-# (used 06-17..06-22) and re-confirmed on-sky 2026-07-16. The prior (150.0 115.5)
-# was the pre-tuning value and placed targets off slit center.
-#
 FINE_ACQUIRE_AIMPOINT=(L 150.6 113.0)
 
 # FINE_ACQUIRE_BACKGROUND=(<x1> <x2> <y1> <y2>)
