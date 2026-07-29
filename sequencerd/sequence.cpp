@@ -2359,17 +2359,35 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::flexure_set *************************************/
   /**
-   * @brief      set the flexure
+   * @brief      compensate for flexure
    * @return     NO_ERROR
-   * @todo       flexure not yet implemented
    *
    */
   long Sequence::flexure_set() {
     const std::string function("Sequencer::Sequence::flexure_set");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
 
-    logwrite( function, "flexure not yet implemented." );
+    // build up list of activate chans
+    std::ostringstream activechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      if (active) activechans << " " << chan;
+    }
+
+    std::ostringstream comp;
+    comp << FLEXURED_COMPENSATE << activechans.str();
+
+    if ( !this->cancel_flag.load() &&
+          this->flexured.command( comp.str() ) != NO_ERROR ) {
+      this->broadcast.error( function, "setting flexure compensator" );
+      this->thread_error_manager.set( THR_FLEXURE_SET );
+      throw std::runtime_error("setting flexure compensator");
+    }
+
+    this->broadcast.notice( function, "set flexure compensator for "+activechans.str());
 
     return NO_ERROR;
   }
@@ -2431,9 +2449,9 @@ namespace Sequencer {
 
     // set the dome lamps
     //
-    for ( const auto &[lamp,state] : calinfo.domelamp ) {
+    for ( const auto &[lampname,state] : calinfo.domelamp ) {
       if ( this->cancel_flag.load() ) break;
-      cmd.str(""); cmd << TCSD_LAMP << lamp << " " << (state==1?"on":"off");
+      cmd.str(""); cmd << TCSD_LAMP << " " << lampname << " " << (state==1?"on":"off");
       if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
         logwrite(function, "ERROR "+cmd.str());
         throw std::runtime_error("setting TCS "+cmd.str());

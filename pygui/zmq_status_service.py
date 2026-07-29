@@ -251,10 +251,10 @@ class ZmqStatusService(QObject):
         airmass = data.get('AIRMASS', None)
         alt = data.get('ALT', None)
         az = data.get('AZ', None)
-        dec = data.get('DEC', None)
+        dec = data.get('TELDEC_D', None)
         domeaz = data.get('DOMEAZ', None)
         domeshut = data.get('DOMESHUT', None)
-        ra = data.get('RA', None)
+        ra = data.get('TELRA_H', None)
         raoffset = data.get('RAOFFSET', None)
         zenangle = data.get('ZENANGLE', None)
 

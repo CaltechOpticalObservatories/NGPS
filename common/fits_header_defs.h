@@ -45,18 +45,18 @@ namespace FitsHeaderKeys {
   };
 
   const Extension FlexureInfoKeys[] = {
-    { "I", Key::Flexured::FLXSPE_I.c_str(), "FLXSPE", "I flexure spectral axis 2 (X) in um", "" },
-    { "I", Key::Flexured::FLXSPA_I.c_str(), "FLXSPA", "I flexure spatial axis 3 (Y) in um", "" },
-    { "I", Key::Flexured::FLXPIS_I.c_str(), "FLXPIS", "I flexure piston axis 1 (Z) in um", "" },
-    { "R", Key::Flexured::FLXSPE_R.c_str(), "FLXSPE", "R flexure spectral axis 2 (X) in um", "" },
-    { "R", Key::Flexured::FLXSPA_R.c_str(), "FLXSPA", "R flexure spatial axis 3 (Y) in um", "" },
-    { "R", Key::Flexured::FLXPIS_R.c_str(), "FLXPIS", "R flexure piston axis 1 (Z) in um", "" },
-    { "G", Key::Flexured::FLXSPE_G.c_str(), "FLXSPE", "G flexure spectral axis 2 (X) in um", "" },
-    { "G", Key::Flexured::FLXSPA_G.c_str(), "FLXSPA", "G flexure spatial axis 3 (Y) in um", "" },
-    { "G", Key::Flexured::FLXPIS_G.c_str(), "FLXPIS", "G flexure piston axis 1 (Z) in um", "" },
-    { "U", Key::Flexured::FLXSPE_U.c_str(), "FLXSPE", "U flexure spectral axis 2 (X) in um", "" },
-    { "U", Key::Flexured::FLXSPA_U.c_str(), "FLXSPA", "U flexure spatial axis 3 (Y) in um", "" },
-    { "U", Key::Flexured::FLXPIS_U.c_str(), "FLXPIS", "U flexure piston axis 1 (Z) in um", "" }
+    { "I", Key::Flexured::FLEX_X_I.c_str(), "FLEX_X", "I flexure axis 2 (X) in um", "" },
+    { "I", Key::Flexured::FLEX_Y_I.c_str(), "FLEX_Y", "I flexure axis 3 (Y) in um", "" },
+    { "I", Key::Flexured::FLEX_Z_I.c_str(), "FLEX_Z", "I flexure axis 1 (Z) in um", "" },
+    { "R", Key::Flexured::FLEX_X_R.c_str(), "FLEX_X", "R flexure axis 2 (X) in um", "" },
+    { "R", Key::Flexured::FLEX_Y_R.c_str(), "FLEX_Y", "R flexure axis 3 (Y) in um", "" },
+    { "R", Key::Flexured::FLEX_Z_R.c_str(), "FLEX_Z", "R flexure axis 1 (Z) in um", "" },
+    { "G", Key::Flexured::FLEX_X_G.c_str(), "FLEX_X", "G flexure axis 2 (X) in um", "" },
+    { "G", Key::Flexured::FLEX_Y_G.c_str(), "FLEX_Y", "G flexure axis 3 (Y) in um", "" },
+    { "G", Key::Flexured::FLEX_Z_G.c_str(), "FLEX_Z", "G flexure axis 1 (Z) in um", "" },
+    { "U", Key::Flexured::FLEX_X_U.c_str(), "FLEX_X", "U flexure axis 2 (X) in um", "" },
+    { "U", Key::Flexured::FLEX_Y_U.c_str(), "FLEX_Y", "U flexure axis 3 (Y) in um", "" },
+    { "U", Key::Flexured::FLEX_Z_U.c_str(), "FLEX_Z", "U flexure axis 1 (Z) in um", "" }
   };
 
   const Extension FocusInfoKeys[] = {
@@ -92,12 +92,15 @@ namespace FitsHeaderKeys {
   };
 
   const Primary TcsInfoKeys[] = {
+    { Key::Tcsd::PA.c_str(),       "", "position angle in deg" },
     { Key::Tcsd::CASANGLE.c_str(), "", "TCS reported Cassegrain angle in deg", "FLOAT" },
     { Key::Tcsd::HA.c_str(),       "", "hour angle" },
     { Key::Tcsd::RAOFFSET.c_str(), "", "offset Right Ascension" },
     { Key::Tcsd::DECLOFFS.c_str(), "", "offset Declination" },
     { Key::Tcsd::TELRA.c_str(),    "", "TCS reported Right Ascension" },
     { Key::Tcsd::TELDEC.c_str(),   "", "TCS reported Declination" },
+    { Key::Tcsd::TELRA_H.c_str(),  "", "TCS reported RA in decimal hours", "DOUBLE" },
+    { Key::Tcsd::TELDEC_D.c_str(), "", "TCS reported DEC in decimal deg", "DOUBLE" },
     { Key::Tcsd::AZ.c_str(),       "", "TCS reported azimuth" },
     { Key::Tcsd::ZENANGLE.c_str(), "", "TCS reported Zenith angle", "FLOAT" },
     { Key::Tcsd::DOMEAZ.c_str(),   "", "TCS reported dome azimuth", "FLOAT" },

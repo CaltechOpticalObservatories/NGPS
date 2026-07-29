@@ -121,12 +121,17 @@ namespace Key {
   namespace Tcsd {
     inline const std::string TELRA    = "TELRA";
     inline const std::string TELDEC   = "TELDEC";
+    inline const std::string TELRA_H  = "TELRA_H";
+    inline const std::string TELDEC_D = "TELDEC_D";
     inline const std::string ALT      = "ALT";
     inline const std::string AZ       = "AZ";
     inline const std::string AIRMASS  = "AIRMASS";
     inline const std::string CASANGLE = "CASANGLE";
     inline const std::string MOTION   = "MOTION";
+    inline const std::string ISOPEN   = "ISOPEN";
+    inline const std::string TCSNAME  = "TCSNAME";
     inline const std::string HA       = "HA";
+    inline const std::string PA       = "PA";
     inline const std::string RAOFFSET = "RAOFFSET";
     inline const std::string DECLOFFS = "DECLOFFS";
     inline const std::string ZENANGLE = "ZENANGLE";
@@ -151,18 +156,22 @@ namespace Key {
   }
 
   namespace Flexured {
-    inline const std::string FLXSPE_I = "FLXSPE_I";
-    inline const std::string FLXSPA_I = "FLXSPA_I";
-    inline const std::string FLXPIS_I = "FLXPIS_I";
-    inline const std::string FLXSPE_R = "FLXSPE_R";
-    inline const std::string FLXSPA_R = "FLXSPA_R";
-    inline const std::string FLXPIS_R = "FLXPIS_R";
-    inline const std::string FLXSPE_G = "FLXSPE_G";
-    inline const std::string FLXSPA_G = "FLXSPA_G";
-    inline const std::string FLXPIS_G = "FLXPIS_G";
-    inline const std::string FLXSPE_U = "FLXSPE_U";
-    inline const std::string FLXSPA_U = "FLXSPA_U";
-    inline const std::string FLXPIS_U = "FLXPIS_U";
+    inline const std::string AxisX = "FLEX_X_";
+    inline const std::string AxisY = "FLEX_Y_";
+    inline const std::string AxisZ = "FLEX_Z_";
+
+    inline const std::string FLEX_X_U = "FLEX_X_U";
+    inline const std::string FLEX_Y_U = "FLEX_Y_U";
+    inline const std::string FLEX_Z_U = "FLEX_Z_U";
+    inline const std::string FLEX_X_G = "FLEX_X_G";
+    inline const std::string FLEX_Y_G = "FLEX_Y_G";
+    inline const std::string FLEX_Z_G = "FLEX_Z_G";
+    inline const std::string FLEX_X_R = "FLEX_X_R";
+    inline const std::string FLEX_Y_R = "FLEX_Y_R";
+    inline const std::string FLEX_Z_R = "FLEX_Z_R";
+    inline const std::string FLEX_X_I = "FLEX_X_I";
+    inline const std::string FLEX_Y_I = "FLEX_Y_I";
+    inline const std::string FLEX_Z_I = "FLEX_Z_I";
   }
 
   namespace Focusd {

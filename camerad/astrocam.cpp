@@ -2805,6 +2805,10 @@ namespace AstroCam {
 
     Common::Header telem;
 
+    // Helper function adds all keys from a table.
+    // The tables are defined in fits_header_defs.h and contain extension
+    // channel name (as appropriate), keyword, value, comment, and type.
+    //
     auto add = [&]( const std::string &topic, const auto &keytable ) {
       auto it = this->live_telemetry.find( topic );
       if ( it != this->live_telemetry.end() ) add_cached_telem( telem, it->second, keytable );
