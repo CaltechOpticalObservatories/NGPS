@@ -147,6 +147,10 @@ namespace Key {
   }
 
   namespace Flexured {
+    inline const std::string AxisX = "FLX_X_";
+    inline const std::string AxisY = "FLX_Y_";
+    inline const std::string AxisZ = "FLX_Z_";
+
     inline const std::string FLXSPE_I = "FLXSPE_I";
     inline const std::string FLXSPA_I = "FLXSPA_I";
     inline const std::string FLXPIS_I = "FLXPIS_I";

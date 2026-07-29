@@ -570,9 +570,9 @@ namespace Flexure {
           this->motorinterface.get_pos( chan, axis.second.axisnum, addr, position, posname );
         }
         switch ( axis.second.axisnum ) {
-          case AXIS_Z: key = Key::Flexured::Piston   + chan; break;
-          case AXIS_X: key = Key::Flexured::Spectral + chan; break;
-          case AXIS_Y: key = Key::Flexured::Spatial  + chan; break;
+          case AXIS_Z: key = Key::Flexured::AxisZ + chan; break;
+          case AXIS_X: key = Key::Flexured::AxisX + chan; break;
+          case AXIS_Y: key = Key::Flexured::AxisY + chan; break;
           default: key = "error";
                    message.str(""); message << "ERROR unknown axis " << axis.second.axisnum;
                    logwrite( function, message.str() );

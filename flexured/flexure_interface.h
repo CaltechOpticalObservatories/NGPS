@@ -51,7 +51,7 @@ namespace Flexure {
 
       /**
        * @struct Status
-       * @brief  published flexure state: actuator position (um) by FLX<axis>_<chan> key; NaN if unavailable
+       * @brief  published flexure actuator position (um); NaN if unavailable
        */
       struct Status {
         std::map<std::string,double> positions;
