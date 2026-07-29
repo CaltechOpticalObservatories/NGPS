@@ -163,30 +163,32 @@ OFFSET_SETTLE_SEC=3                  # sec to wait after an offset-star target o
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
 # Calibration Settings
-# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6 imgtype)
+# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp he_arc ultra mod1 mod2 ... mod6 imgtype)
 #
 # where name must be "DEFAULT" or start with "CAL_"
 #       caldoor  = open | close
 #       calcover = open | close
 #       U,G,R,I = on | off        # indicates which channels to enable/disable
-#       lamp* = on | off          # lamp power
-#       mod*  = on | off          # lamp modulator
+#       lamp* = on | off          # lamp power state
+#       mod*  = on | off          # lamp modulator state
 #       imgtype = <imgtype>       # FITS IMGTYPE keyword
-# for a total of 20 required parameters
+# for a total of 22 required parameters
 # name=SCIENCE defines science target operation
 #
-#           name        door  cover U   G   R   I   thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6 imgtype
-CAL_TARGET=(CAL_THAR    open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on   THAR    )
-CAL_TARGET=(CAL_FEAR    open  close on  on  on  on  on   on   on   on   off  off  on   off  off  off  off  off  FEAR    )
-CAL_TARGET=(CAL_THAR_UG open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  on   THAR    )
-CAL_TARGET=(CAL_FEAR_UG open  close on  on  off off on   on   on   on   off  off  on   off  off  off  off  off  FEAR    )
-CAL_TARGET=(CAL_CONTR   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  on   off  off  CONT    )
-CAL_TARGET=(CAL_CONTB   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  on   off  CONT    )
-CAL_TARGET=(CAL_DOME    close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off  DOMEFLAT)
-CAL_TARGET=(CAL_DOME_UG close open  on  on  off off off  off  off  off  off  on   off  off  off  off  off  off  DOMEFLAT)
-CAL_TARGET=(CAL_BIAS    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  BIAS    )
-CAL_TARGET=(CAL_DARK    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  DARK    )
-CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  SCI     )
+#           name          door  cover U   G   R   I   thar fear bluc redc llmp hlmp arc  ultr mod1 mod2 mod3 mod4 mod5 mod6 imgtype
+CAL_TARGET=(CAL_THAR      open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR      open  close on  on  on  on  on   on   on   on   off  off  off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_THAR_UG   open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR_UG   open  close on  on  off off on   on   on   on   off  off  off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_CONTR     open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on   off  off  CONT    )
+CAL_TARGET=(CAL_CONTB     open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  off  on   off  CONT    )
+CAL_TARGET=(CAL_DOME      close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_DOME_UG   close open  on  on  off off off  off  off  off  off  on   off  on   off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_DOMEHE    close open  on  on  on  on  off  off  off  off  off  off  on   off  off  off  off  off  off  off  DOMEHE  )
+CAL_TARGET=(CAL_DOMEHE_UG close open  on  on  off off off  off  off  off  off  off  on   off  off  off  off  off  off  off  DOMEHE  )
+CAL_TARGET=(CAL_BIAS      close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  BIAS    )
+CAL_TARGET=(CAL_DARK      close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  DARK    )
+CAL_TARGET=(SCIENCE       close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  SCI     )
 
 # miscellaneous
 #
