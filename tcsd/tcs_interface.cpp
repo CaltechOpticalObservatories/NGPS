@@ -195,7 +195,10 @@ namespace TCS {
 
     error |= this->send_command( "LAMPS?", retstring, TCS::FAST_RESPONSE );
     std::replace( retstring.begin(), retstring.end(), '\n', ',');
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
     this->tcs_info.parse_lamps( retstring );
+    }
 
     return error;
   }
@@ -1449,11 +1452,11 @@ namespace TCS {
       retstring = TCSD_LAMP;
       retstring.append( " <lamp> [ on | off ]\n" );
       retstring.append( "  where <lamp> is one of { " );
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
       for (const auto &[name,info] : this->tcs_info.lampinfo) {
         retstring.append( name );
         retstring.append( " " );
       }
-      retstring.append( "}" );
       retstring.append( "} and is case-insensitive.\n" );
       retstring.append( "  The optional { on off } will turn the designated lamp on or off.\n" );
       retstring.append( "  No argument will return the lamp state.\n" );
@@ -1484,24 +1487,117 @@ namespace TCS {
 
     // no default lamp, must be specified
     //
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
     auto lamploc = this->tcs_info.lampinfo.find(which);
     if (lamploc==this->tcs_info.lampinfo.end()) {
       logwrite(function, "ERROR unknown lamp '"+which+"'");
       retstring = "unknown_lamp";
       return ERROR;
     }
+    }
 
-    size_t req_lamp = this->tcs_info.lampinfo[which].num;
+    long error = NO_ERROR;
 
+    // requesting on|off
+    //
+    if (req_state!=2) {
+      error = set_lamp(which, req_state);
+      if (error != NO_ERROR) {
+        logwrite(function, "ERROR setting lamp '"+which+"'");
+        retstring="ERR";
+        return ERROR;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));  // wait for it to turn on|off
+    }
+
+    // whether or not requesting on|off, check state now
+    // which requires a completely different command
+    //
+    error = get_lamp(which, retstring);
+
+    if (error != NO_ERROR) {
+      logwrite(function, "ERROR reading state of lamp '"+which+"'");
+      retstring="ERR";
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::lamp *************************************************/
+
+
+  /***** TCS::Interface::set_lamp *********************************************/
+  /**
+   * @brief      set on|off state of specified lamp
+   * @param[in]  which  name of lamp
+   * @param[in]  state  0=off 1=on
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::set_lamp(const std::string &which, int state) {
+    size_t lampnum = -1;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    lampnum = this->tcs_info.lampinfo[which].num;
+    }
+
+    // send lamp power command to TCS
     std::ostringstream cmd;
-    cmd << "LAMP " << req_state << " " << req_lamp;
-
+    cmd << "NPS " << state << " " << lampnum;
     std::string reply;
     long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
 
     return error;
   }
-  /***** TCS::Interface::lamp *************************************************/
+  /***** TCS::Interface::set_lamp *********************************************/
+
+
+  /***** TCS::Interface::get_lamp *********************************************/
+  /**
+   * @brief      get on|off state of specified lamp
+   * @param[in]  which      name of lamp
+   * @param[out] retstring  reference to return string for the on|off state
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::get_lamp(const std::string &which, std::string &retstring) {
+    size_t lampnum = -1;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    lampnum = this->tcs_info.lampinfo[which].num;
+    }
+
+    // send lamp query command to TCS
+    std::ostringstream cmd;
+    cmd << "LAMPS?";
+    std::string reply;
+    long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    // tokenize reply which contains comma-delimited list of all lamps
+    std::vector<std::string> tokens;
+    Tokenize( reply, tokens, "," );
+
+    size_t lampindex = lampnum-1;  // vector index into 1-based lampnum
+
+    if (lampindex < 0 || lampindex >= tokens.size()) {
+      logwrite("TCS::Interface::get_lamp", "ERROR expected n,n,n,n but got '"+reply+"'");
+      return ERROR;
+    }
+
+    try {
+      int state = std::stoi(tokens.at(lampindex));
+      retstring = (state==1 ? "on" : "off");
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      this->tcs_info.lampinfo[which].state = state;
+    }
+    catch (const std::exception &e) {
+      logwrite("TCS::Interface::get_lamp", "ERROR "+std::string(e.what()));
+      return ERROR;
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::get_lamp *********************************************/
 
 
   /***** TCS::Interface::pt_offset ********************************************/
@@ -1727,7 +1823,7 @@ namespace TCS {
     else                                                // These commands reply with information (not a code)...
     if ( cmd == "?NAME"        ||
          cmd == "LAMPS?"       ||
-         cmd == "?PARALLACTIC" ||
+         cmd == "NPS"          ||
          cmd == "?PARALLACTIC" ||
          cmd == "?WEATHER"     ||
          cmd == "RAWDEC"       ||

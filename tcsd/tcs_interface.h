@@ -54,7 +54,7 @@ namespace TCS {
     private:
       struct lamp_t {
         std::string key;    ///< key from message_keys, used for published JSON message
-        size_t num;         ///< lamp number assigned in the TCS
+        size_t num;         ///< lamp number assigned in the TCS, 1-based { 1, 2, 3, 4 }
         int state;          ///< lamp state reported by the TCS: 0=off, 1=on, -1=undefined
       };
 
@@ -516,6 +516,8 @@ namespace TCS {
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
       long lamp( std::string args, std::string &retstring );
+      long set_lamp( const std::string &which, int state );
+      long get_lamp( const std::string &which, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
       long zero_offsets( const std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );
