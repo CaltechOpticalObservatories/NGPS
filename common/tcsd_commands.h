@@ -20,6 +20,7 @@ const std::string TCSD_GET_OFFSETS = "getoffsets";
 const std::string TCSD_GET_PA = "getpa";
 const std::string TCSD_GET_NAME = "getname";
 const std::string TCSD_ISOPEN = "isopen";
+const std::string TCSD_LAMP = "lamp";
 const std::string TCSD_LIST = "list";
 const std::string TCSD_LLIST = "llist";
 const std::string TCSD_NATIVE = "native";
@@ -46,6 +47,7 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_GET_PA+" [ ? ]",
                                                TCSD_GET_NAME+" [ ? ]",
                                                TCSD_ISOPEN+" [ ? ]",
+                                               TCSD_LAMP+" ? | <lamp> [on|off]",
                                                TCSD_LIST+" [ ? ]",
                                                TCSD_LLIST+" [ ? ]",
                                                TCSD_NATIVE+" ? | <cmd>",
