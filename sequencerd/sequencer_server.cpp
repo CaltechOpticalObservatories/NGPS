@@ -362,6 +362,21 @@ namespace Sequencer {
         applied++;
       }
 
+      // OFFSET_SETTLE_SEC
+      if (config.param[entry] == "OFFSET_SETTLE_SEC") {
+        try {
+          this->sequence.offset_settle_sec = std::stod( config.arg[entry] );
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing OFFSET_SETTLE_SEC: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       // ACQUIRE_RETRYS
       if (config.param[entry].compare(0, 14, "ACQUIRE_RETRYS")==0) {
         int rt=-1;

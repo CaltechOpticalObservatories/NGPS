@@ -148,7 +148,8 @@ int main(int argc, char **argv) {
   //
   if ( slicecamd.interface.init_pubsub( { Topic::SLITD,
                                           Topic::ACAMD,
-                                          Topic::TCSD }) == ERROR ) {
+                                          Topic::TCSD,
+                                          Topic::TARGETINFO }) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     slicecamd.exit_cleanly();
   }
