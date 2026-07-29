@@ -87,13 +87,14 @@ namespace Slicecam {
     std::vector<double> ddec_samp;  ///< dDEC samples, degrees
     int    max_samples  = 10;       ///< samples before evaluating a move
     int    min_samples  = 3;        ///< minimum samples before scatter-gated early exit
-    double prec_arcsec  = 0.1;      ///< MAD scatter threshold per axis for early exit (arcsec)
-    double goal_arcsec  = 0.3;      ///< convergence threshold, arcsec
-    double gain         = 0.7;      ///< gain applied when offset <= gain_threshold_arcsec
+    double prec_arcsec  = 0.35;     ///< MAD scatter threshold per axis for early exit (arcsec)
+    double goal_arcsec  = 0.4;      ///< convergence threshold, arcsec
+    double gain         = 1.0;      ///< gain applied when offset <= gain_threshold_arcsec
     double gain_large   = 1.0;      ///< gain applied when offset > gain_threshold_arcsec
     double gain_threshold_arcsec = 2.0; ///< offset above which gain_large is used
     int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
     int    settle_count  = 2;       ///< configured: frames to discard after each move
+    double settle_sec    = 3.0;     ///< time-based settle (sec) after each move; 0 disables (needed when autoexpose shortens frames so the frame-count settle is too brief in wall-clock)
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
     // exposure compensation (shared by the reactive trim and, later, autoexpose)
     double exptime_min     = 0.1;   ///< clamp: minimum auto-adjusted exposure (sec)
