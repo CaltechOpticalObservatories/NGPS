@@ -1008,13 +1008,6 @@ namespace Sequencer {
       logwrite( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
       throw std::runtime_error( "camera returned "+reply );
     }
-    camcmd.str(""); camcmd << CAMERAD_BIN << " col " << this->target.binspect;
-    if (error==NO_ERROR && (error=this->camerad.send( camcmd.str(), reply ))!=NO_ERROR) {
-      this->async.enqueue_and_log( function, "ERROR sending \""+camcmd.str()+"\": "+reply );
-      throw std::runtime_error( "camera returned "+reply );
-    }
-
-    this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 
     this->thread_error_manager.clear( THR_CAMERA_SET );  // success
 
@@ -2366,17 +2359,22 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::flexure_set *************************************/
   /**
-   * @brief      set the flexure
+   * @brief      compensate for flexure
    * @return     NO_ERROR
-   * @todo       flexure not yet implemented
    *
    */
   long Sequence::flexure_set() {
     const std::string function("Sequencer::Sequence::flexure_set");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
 
-    logwrite( function, "flexure not yet implemented." );
+    if ( !this->cancel_flag.load() &&
+          this->flexured.command( FLEXURED_COMPENSATE ) != NO_ERROR ) {
+      this->broadcast.error( function, "setting flexure compensator" );
+      this->thread_error_manager.set( THR_CALIBRATOR_SET );
+      throw std::runtime_error("setting flexure compensator");
+    }
 
     return NO_ERROR;
   }
@@ -2436,18 +2434,16 @@ namespace Sequencer {
       }
     }
 
-//  Not working yet 2025-02-04
-//
-//  // set the dome lamps
-//  //
-//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
-//    if ( this->cancel_flag.load() ) break;
-//    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
-//    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-//      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-//      throw std::runtime_error("setting dome lamp: "+cmd.str());
-//    }
-//  }
+    // set the dome lamps
+    //
+    for ( const auto &[lamp,state] : calinfo.domelamp ) {
+      if ( this->cancel_flag.load() ) break;
+      cmd.str(""); cmd << TCSD_LAMP << lamp << " " << (state==1?"on":"off");
+      if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
+        logwrite(function, "ERROR "+cmd.str());
+        throw std::runtime_error("setting TCS "+cmd.str());
+      }
+    }
 
     // set the lamp modulators
     //
