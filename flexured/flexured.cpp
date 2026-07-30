@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
   }
   logwrite(function, "world");
 
-  message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << flexured.config.n_entries << " lines read from " << flexured.config.filename;

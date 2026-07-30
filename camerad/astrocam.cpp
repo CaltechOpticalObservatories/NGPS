@@ -150,7 +150,7 @@ namespace AstroCam {
    *
    */
   void Interface::get_live_provenance( std::string &githash, std::string &buildtime ) {
-    githash   = GIT_COMMIT_HASH;
+    githash   = GIT_HASH_STR;
     buildtime = get_build_time();
 
     std::unique_lock<std::mutex> lock(live_telemetry_mtx);

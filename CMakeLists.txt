@@ -27,52 +27,29 @@ find_package( Threads )
 
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
-# Get the git commit hash identifying the source that this build came from.
-# It is compiled into every daemon via the generated version.h below, so that
-# each binary can report the commit it was built from.
+# version.h carries the git provenance compiled into every daemon. It is
+# generated into utils/ which is already on every include path.
 #
-execute_process( COMMAND git rev-parse --short HEAD
-                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                 OUTPUT_VARIABLE GIT_COMMIT_HASH
-                 OUTPUT_STRIP_TRAILING_WHITESPACE
-                 RESULT_VARIABLE GIT_RESULT
-                 ERROR_QUIET )
+set( GEN_VERSION_ARGS
+     -DSRC_DIR=${CMAKE_SOURCE_DIR}
+     -DIN_FILE=${PROJECT_BASE_DIR}/utils/version.h.in
+     -DTMP_FILE=${CMAKE_BINARY_DIR}/version.h.tmp
+     -DOUT_FILE=${PROJECT_BASE_DIR}/utils/version.h
+     -P ${PROJECT_BASE_DIR}/utils/gen_version.cmake )
 
-# git failing here would silently leave the hash empty,
-# so make the failure visible instead
+# Generate it now so that version.h exists for the first build.
 #
-if ( NOT GIT_RESULT EQUAL 0 OR GIT_COMMIT_HASH STREQUAL "" )
-  set( GIT_COMMIT_HASH "unknown" )
-  message( WARNING "unable to determine git commit hash: reporting GIT_HASH=unknown" )
-endif()
+execute_process( COMMAND ${CMAKE_COMMAND} ${GEN_VERSION_ARGS} )
 
-message( STATUS "GIT_COMMIT_HASH " ${GIT_COMMIT_HASH} )
-
-# Re-configure whenever the checked-out commit changes, so the hash cannot go
-# stale. --git-path resolves correctly inside a linked worktree, where .git is
-# a file rather than a directory.
+# and again on every build. Editing a file moves neither HEAD nor any
+# CMakeLists, so nothing would re-run configure and a configure-time check
+# would report a stale clean/dirty state. The script leaves version.h alone
+# when nothing changed, so this does not force a rebuild every time.
 #
-execute_process( COMMAND git rev-parse --git-path HEAD
-                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                 OUTPUT_VARIABLE GIT_HEAD_FILE
-                 OUTPUT_STRIP_TRAILING_WHITESPACE
-                 ERROR_QUIET )
-
-if ( GIT_HEAD_FILE )
-  set_property( DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_HEAD_FILE} )
-endif()
-
-# Generate version.h into utils/ which is already on every daemon's include
-# path. It is written through a temporary so that copy_if_different can leave
-# the real header untouched when the hash has not changed, which keeps an
-# unrelated re-configure from forcing a rebuild of everything.
-#
-CONFIGURE_FILE( ${PROJECT_BASE_DIR}/utils/version.h.in
-                ${CMAKE_BINARY_DIR}/version.h.tmp )
-
-execute_process( COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                         ${CMAKE_BINARY_DIR}/version.h.tmp
-                         ${PROJECT_BASE_DIR}/utils/version.h )
+add_custom_target( update_version ALL
+    COMMAND ${CMAKE_COMMAND} ${GEN_VERSION_ARGS}
+    COMMENT "Checking git provenance"
+)
 
 # Here is everything to build
 #

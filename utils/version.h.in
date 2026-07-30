@@ -11,4 +11,4 @@
  */
 #pragma once
 
-#define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"  ///< git commit hash, or "unknown"
+#define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"  ///< hash, hash-dirty, or "unknown"

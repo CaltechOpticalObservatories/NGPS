@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     powerd.exit_cleanly();
   }
 
-  message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << powerd.config.n_entries << " lines read from " << powerd.config.filename;

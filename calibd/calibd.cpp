@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     calibd.exit_cleanly();
   }
 
-  message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << calibd.config.n_entries << " lines read from " << calibd.config.filename;

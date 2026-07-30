@@ -14,9 +14,15 @@ add_definitions( -Wall -Wextra -Wconversion -Wshadow -ansi -Og -Wno-variadic-mac
 
 add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
+        ${PROJECT_UTILS_DIR}/provenance.cpp
         md5
         )
 target_link_libraries(utilities PRIVATE stdc++fs)
+
+# provenance.cpp includes the generated version.h, so make sure it has been
+# refreshed with the current git state before this library is compiled.
+#
+add_dependencies(utilities update_version)
 
 add_library(logentry STATIC
         ${PROJECT_UTILS_DIR}/logentry.cpp
