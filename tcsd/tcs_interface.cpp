@@ -1537,9 +1537,6 @@ namespace TCS {
         retstring="ERR";
         return ERROR;
       }
-      // the mechanism takes time to respond and the TCS only checks for
-      // this  command once per second.
-      std::this_thread::sleep_for(std::chrono::milliseconds(1100));
     }
 
     // whether or not requesting on|off, check state now
@@ -1577,6 +1574,12 @@ namespace TCS {
     cmd << "NPS " << state << " " << lampnum;
     std::string reply;
     long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    // the mechanism takes time to respond and the TCS only checks for
+    // this  command once per second.
+    if (error==NO_ERROR) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1600));
+    }
 
     return error;
   }
