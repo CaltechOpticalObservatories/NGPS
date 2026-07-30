@@ -215,17 +215,25 @@ namespace Sequencer {
    *             re-publishing its own state, ensuring the sequencer receives
    *             current telemetry even if the daemon published before the
    *             sequencer subscribed.
+   *             Naming a single daemon asks only that one, which avoids making
+   *             the others refresh their state, some of which costs hardware I/O.
+   * @param[in]  daemon  optional single daemon to ask, default all of them
    *
    */
-  void Sequence::request_snapshot() {
+  void Sequence::request_snapshot( const std::string &daemon ) {
     nlohmann::json jmessage;
-    jmessage[Daemon::CAMERAD]   = true;
-    jmessage[Daemon::ACAMD]     = true;
-    jmessage[Daemon::SLICECAMD] = true;
-    jmessage[Daemon::SLITD]     = true;
-    jmessage[Daemon::TCSD]      = true;
-    jmessage[Daemon::CALIBD]    = true;
-    jmessage[Daemon::POWERD]    = true;
+    if ( !daemon.empty() ) {
+      jmessage[daemon] = true;
+    }
+    else {
+      jmessage[Daemon::CAMERAD]   = true;
+      jmessage[Daemon::ACAMD]     = true;
+      jmessage[Daemon::SLICECAMD] = true;
+      jmessage[Daemon::SLITD]     = true;
+      jmessage[Daemon::TCSD]      = true;
+      jmessage[Daemon::CALIBD]    = true;
+      jmessage[Daemon::POWERD]    = true;
+    }
     this->publisher->publish( jmessage, Topic::SNAPSHOT );
   }
   /***** Sequencer::Sequence::request_snapshot *******************************/
@@ -1122,9 +1130,8 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
-    // Discard the cached power state. powerd publishes only when its state
-    // changes, so nothing else would tell me that what I have is no longer
-    // current. request_snapshot() below refills it.
+    // Discard the cached power state. powerd publishes only on change, so
+    // nothing else would tell me it's stale. request_snapshot() below refills it.
     {
     std::lock_guard<std::mutex> lock(this->powerd_mtx);
     this->powerinfo.invalidate();
@@ -1136,7 +1143,7 @@ namespace Sequencer {
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
-    this->request_snapshot();
+    this->request_snapshot( Daemon::POWERD );
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::power_init **************************************/
@@ -1546,9 +1553,8 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
-    // Discard the cached calib state. calibd publishes only when its state
-    // changes, so nothing else would tell me that what I have is no longer
-    // current. request_snapshot() below refills it.
+    // Discard the cached calib state. calibd publishes only on change, so
+    // nothing else would tell me it's stale. request_snapshot() below refills it.
     {
     std::lock_guard<std::mutex> lock(this->calibd_mtx);
     this->calibinfo.invalidate();
@@ -1608,7 +1614,7 @@ namespace Sequencer {
 
     // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
-    this->request_snapshot();
+    this->request_snapshot( Daemon::CALIBD );
 
     this->thread_error_manager.clear( THR_CALIB_INIT );
 
@@ -2471,7 +2477,7 @@ namespace Sequencer {
     this->broadcast.notice( function, "configuring calibrator for "+calname);
 
     // set the calib door and cover if needed. CALIBD_SET moves both in one
-    // command, so this can only be skipped when both are already set.
+    // command so both must already be set to skip it.
     //
     bool doorcover_isset = false;
     {
@@ -2556,8 +2562,8 @@ namespace Sequencer {
         continue;
       }
       }
-      // otherwise send the command. calibd publishes modulators by name but
-      // takes the channel number, which comes from the shared table.
+      // otherwise send the command. calibd publishes by name but takes the
+      // channel number.
       const auto *dev = CalibDefs::find( CalibDefs::modulators(), mod );
       if ( dev == nullptr ) {
         this->broadcast.error( function, "unknown lamp modulator "+mod );

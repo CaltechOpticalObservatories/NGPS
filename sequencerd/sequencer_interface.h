@@ -91,9 +91,8 @@ namespace Sequencer {
     inline const std::string I = "I";
   }
 
-  // The calibration lamp, dome lamp and modulator names are shared with tcsd,
-  // calibd and powerd, so they live in common/calib_defs.h as Lamp::Cal,
-  // Lamp::Dome and Lamp::Mod.
+  // The lamp and modulator names are shared with tcsd, calibd and powerd, so
+  // they are in common/calib_defs.h as Lamp::Cal, Lamp::Dome and Lamp::Mod.
 
 
   /***** Sequencer::PowerSwitch ***********************************************/
@@ -185,18 +184,15 @@ namespace Sequencer {
    * @class  TcsInfo
    * @brief  holds the most recently published tcsd telemetry
    *
-   * There is one member here for each key published by
-   * TCS::Interface::publish_snapshot. Written by the subscriber thread and read
-   * by the sequence threads; all access is serialized by the caller under
-   * Sequence::tcsd_mtx.
+   * One member for each key published by TCS::Interface::publish_snapshot.
+   * Written by the subscriber thread, read by the sequence threads; the caller
+   * serializes all access under Sequence::tcsd_mtx.
    *
    */
   class TcsInfo {
     public:
       TcsInfo() {
-        // the lamp names and their message keys are defined in calib_defs.h
-        //
-        for ( const auto &dev : CalibDefs::domelamps() ) {
+        for ( const auto &dev : CalibDefs::domelamps() ) {  // names from calib_defs.h
           this->domelamp[dev.name] = -1;
         }
         this->init();
@@ -257,12 +253,11 @@ namespace Sequencer {
       /***** Sequencer::TcsInfo::store ****************************************/
       /**
        * @brief      store a received tcsd telemetry message
-       * @details    Everything is erased first because a snapshot is all or
-       *             nothing; a key missing from this message must not leave the
-       *             value from an earlier one behind. extract_telemetry_value
-       *             leaves its out-param alone on a missing key, a type
-       *             mismatch, or a null (which is how a NAN arrives), so the
-       *             non-values set by init() survive those cases.
+       * @details    Erase first, because a snapshot is all or nothing; a key
+       *             missing from this message must not leave the value from an
+       *             earlier one behind. extract_telemetry_value leaves its
+       *             out-param alone on a missing key, wrong type, or null (how
+       *             a NAN arrives), so the init() non-values survive those.
        * @param[in]  jmessage  subscribed-received JSON message
        *
        */
@@ -298,15 +293,18 @@ namespace Sequencer {
 
       /***** Sequencer::TcsInfo::is_fresh *************************************/
       /**
-       * @brief      is the cached telemetry recent enough to act on?
-       * @details    tcsd publishes a snapshot every second while its connection
-       *             to the TCS is open, so an age check is meaningful here and
-       *             also covers the not-connected case: publishing stops and the
-       *             cache simply ages out.
+       * @brief      was this read from the TCS recently enough to act on?
+       * @details    Both halves are needed. tcsd publishes every second while
+       *             connected, so the age means something, but it also answers a
+       *             snapshot request while closed and timestamps that message
+       *             like any other. ISOPEN separates the two.
+       *             A poll can still fail while connected, so a caller must
+       *             treat a non-value as unknown no matter what this returns.
        * @return     true|false
        *
        */
       bool is_fresh() const {
+        if ( !this->isopen ) return false;         // nothing was read from the TCS
         if ( this->pubtime == 0 ) return false;    // nothing received yet
         return ( get_time_us() - this->pubtime ) <= TCS_STATUS_MAX_AGE_US;
       }
@@ -334,16 +332,14 @@ namespace Sequencer {
    * @class  CalibInfo
    * @brief  holds the most recently published calibd telemetry
    *
-   * Written by the subscriber thread and read by the sequence threads; all
-   * access is serialized by the caller under Sequence::calibd_mtx.
+   * Written by the subscriber thread, read by the sequence threads; the caller
+   * serializes all access under Sequence::calibd_mtx.
    *
    */
   class CalibInfo {
     public:
       CalibInfo() {
-        // the modulator names and their message keys are defined in calib_defs.h
-        //
-        for ( const auto &dev : CalibDefs::modulators() ) {
+        for ( const auto &dev : CalibDefs::modulators() ) {  // names from calib_defs.h
           this->lampmod[dev.name] = -1;
         }
         this->init();
@@ -366,10 +362,10 @@ namespace Sequencer {
       /***** Sequencer::CalibInfo::store **************************************/
       /**
        * @brief      store a received calibd telemetry message
-       * @details    calibd publishes everything as a string: the actuators as a
-       *             position name, and the modulators as "<pow> <dut> <per>".
-       *             Both are reduced to a tri-state here so that comparing
-       *             against a desired state is uniform.
+       * @details    calibd publishes strings: the actuators as a position name,
+       *             the modulators as "<pow> <dut> <per>". Both reduce to a
+       *             tri-state here so comparing against a desired state is
+       *             uniform.
        * @param[in]  jmessage  subscribed-received JSON message
        *
        */
@@ -399,12 +395,11 @@ namespace Sequencer {
       /***** Sequencer::CalibInfo::is_valid ***********************************/
       /**
        * @brief      is there cached telemetry to act on?
-       * @details    Deliberately not an age check, unlike TcsInfo::is_fresh().
-       *             calibd publishes only when its state changes, plus a forced
-       *             publish at startup and on request, so telemetry that is
-       *             minutes or hours old is still current and an age check would
-       *             reject all of it. Anything that could invalidate the cache
-       *             without calibd publishing has to clear it explicitly.
+       * @details    Not an age check, unlike TcsInfo::is_fresh(). calibd
+       *             publishes only on change, plus a forced publish at startup
+       *             and on request, so telemetry hours old is still current and
+       *             an age check would reject all of it. Anything that can
+       *             invalidate the cache without calibd publishing must clear it.
        * @return     true|false
        *
        */
@@ -452,17 +447,15 @@ namespace Sequencer {
    * @class  PowerInfo
    * @brief  holds the most recently published powerd telemetry
    *
-   * Only the plugs the sequencer makes decisions about are kept. Written by the
-   * subscriber thread and read by the sequence threads; all access is
-   * serialized by the caller under Sequence::powerd_mtx.
+   * Keeps only the plugs the sequencer makes decisions about. Written by the
+   * subscriber thread, read by the sequence threads; the caller serializes all
+   * access under Sequence::powerd_mtx.
    *
    */
   class PowerInfo {
     public:
       PowerInfo() {
-        // the lamp plug names and their message keys are defined in calib_defs.h
-        //
-        for ( const auto &dev : CalibDefs::callamps() ) {
+        for ( const auto &dev : CalibDefs::callamps() ) {  // names from calib_defs.h
           this->plug[dev.name] = -1;
         }
       }
@@ -479,9 +472,9 @@ namespace Sequencer {
       /***** Sequencer::PowerInfo::store **************************************/
       /**
        * @brief      store a received powerd telemetry message
-       * @details    powerd publishes a plug as true when it is on. That is
-       *             reduced to a tri-state here so that a plug missing from the
-       *             message is distinguishable from one that is off.
+       * @details    powerd publishes a plug as true when it is on. That reduces
+       *             to a tri-state here so a plug missing from the message is
+       *             distinguishable from one that is off.
        * @param[in]  jmessage  subscribed-received JSON message
        *
        */
@@ -489,10 +482,8 @@ namespace Sequencer {
         this->init();
 
         for ( const auto &dev : CalibDefs::callamps() ) {
-          // Leave the plug undefined unless powerd really did report a bool for
-          // it. Defaulting a missing or malformed value to off would claim
-          // knowledge I don't have, and a caller could skip turning a lamp on.
-          //
+          // leave undefined unless powerd really did report a bool. Defaulting
+          // to off would let a caller skip turning a lamp on.
           if ( !jmessage.contains(dev.jkey) ||
                !jmessage[dev.jkey].is_boolean() ) continue;
           bool ison=false;
@@ -506,8 +497,7 @@ namespace Sequencer {
 
       /**
        * @brief      is there cached telemetry to act on?
-       * @details    Not an age check, for the same reason as
-       *             CalibInfo::is_valid() -- powerd publishes only on change.
+       * @details    Not an age check, same reason as CalibInfo::is_valid()
        * @return     true|false
        */
       bool is_valid() const { return this->received; }

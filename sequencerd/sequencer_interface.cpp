@@ -991,9 +991,8 @@ namespace Sequencer {
         info.channel_active[chans.at(i)] = on_off(tokens.at(3+i));
       }
 
-      // tokens 7-10 are the internal calibration lamp states, and tokens 11-14
-      // the dome lamp states, each in the order the shared tables list them
-      //
+      // tokens 7-10 are the cal lamps and 11-14 the dome lamps, each in the
+      // order the tables in calib_defs.h list them
       const auto &callamps  = CalibDefs::callamps();
       const auto &domelamps = CalibDefs::domelamps();
       for (size_t i=0; i < 4; i++) {
@@ -1001,9 +1000,8 @@ namespace Sequencer {
         info.domelamp[domelamps.at(i).name] = on_off(tokens.at(11+i));
       }
 
-      // tokens 15-20 are the modulator states, in modulator channel order.
-      // Index by name, which is how calibd publishes them.
-      //
+      // tokens 15-20 are the modulators in channel order, indexed by name
+      // because that's how calibd publishes them
       const auto &modulators = CalibDefs::modulators();
       for (size_t i=0; i<6; i++) {
         info.lampmod[modulators.at(i).name] = on_off(tokens.at(15+i));

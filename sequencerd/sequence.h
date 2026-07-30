@@ -507,7 +507,7 @@ namespace Sequencer {
       void handletopic_calibd( const nlohmann::json &jmessage );
       void handletopic_powerd( const nlohmann::json &jmessage );
       void publish_snapshot();
-      void request_snapshot();
+      void request_snapshot( const std::string &daemon="" );
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();

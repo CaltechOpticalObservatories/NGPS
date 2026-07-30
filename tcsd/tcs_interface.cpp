@@ -33,18 +33,26 @@ namespace TCS {
     this->publish_snapshot(dontcare);
   }
   void Interface::publish_snapshot(std::string &retstring) {
-    // fill the tcs_info class with current info
+    // Only read the TCS when there is a connection to read it with,
+    // and when closed, erase the class.
     //
-    this->get_tcs_info();
+    bool isopen = false;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    isopen = this->tcs_info.isopen;
+    }
+
+    if ( isopen ) {
+      this->get_tcs_info();  // fill the tcs_info class with current info
+    }
+    else {
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      this->tcs_info.init();
+    }
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Daemon::TCSD;
-
-    // Timestamp every snapshot so subscribers can tell how old this state is.
-    // Publishing stops when the connection to the TCS is closed, so the age is
-    // also how a subscriber learns that the TCS is no longer being read.
-    //
-    jmessage_out[Key::PUBTIME] = get_time_us();
+    jmessage_out[Key::PUBTIME] = get_time_us();  // so subscribers can age this
 
     std::string motion;
     {
