@@ -2127,7 +2127,6 @@ namespace AstroCam {
     // These have to be added to fitsinfo[expbuf] because the exposure has already started,
     // and camera_info keys have already been locked-in to fitsinfo[].
     //
-    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
