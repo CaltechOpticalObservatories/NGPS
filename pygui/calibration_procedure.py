@@ -96,6 +96,8 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     t_etalon_nom = 3
     t_dome_nom = 90
     t_dome_nom_ug = 400
+    t_dome_he_nom = 30
+    t_dome_he_nom_ug = 600
     t_bias = 0
     t_dark = 1200
 
@@ -106,6 +108,8 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     n_etalon = 0
     n_dome = 0
     n_dome_ug = 0
+    n_dome_he = 0
+    n_dome_he_ug = 0
     n_bias = 7
     n_dark = 0
 
@@ -116,10 +120,12 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     t_fear = int(t_fear_nom * arc_multiplier)
     t_cont = int(t_cont_nom * cont_multiplier)
     t_dome = int(t_dome_nom * cont_multiplier)
+    t_dome_he = int(t_dome_he_nom * arc_multiplier)
     t_thar_ug = int(t_thar_nom_ug * arc_multiplier)
     t_fear_ug = int(t_fear_nom_ug * arc_multiplier)
     t_contb = int(t_contb_nom * cont_multiplier)
     t_dome_ug = int(t_dome_nom_ug * cont_multiplier)
+    t_dome_he_ug = int(t_dome_he_nom_ug * arc_multiplier)
     t_etalon = int(t_etalon_nom * cont_multiplier)
 
     rows = []
@@ -254,6 +260,32 @@ def make_calibration_targets(slitwidth, xbin, ybin):
             )
         )
 
+    if n_dome_he > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE",
+                "ugri Dome He",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he,
+                n_dome_he,
+            )
+        )
+
+    if n_he_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE_UG",
+                "ug Dome He",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he_ug,
+                n_dome_he_ug,
+            )
+        )
+
     if n_dark > 0:
         rows.append(
             _cal_row(
@@ -312,15 +344,22 @@ def make_dome_flat_targets(slitwidth, xbin, ybin):
     #   T_dome_nom_ug = 400000
     t_dome_nom = 90
     t_dome_nom_ug = 400
+    t_dome_he_nom = 30
+    t_dome_he_nom_ug = 600
 
     # Nominal counts from make_domes.
     n_dome = 5
     n_dome_ug = 7
+    n_dome_he = 0
+    n_dome_he_ug = 3
 
+    arc_multiplier = 1.0 / (xbin * ybin)
     cont_multiplier = (1.0 / (xbin * ybin)) * (0.5 / slitwidth)
 
     t_dome = int(t_dome_nom * cont_multiplier)
     t_dome_ug = int(t_dome_nom_ug * cont_multiplier)
+    t_dome_he = int(t_dome_he_nom * arc_multiplier)
+    t_dome_he_ug = int(t_dome_he_nom_ug * arc_multiplier)
 
     rows = []
 
@@ -350,6 +389,34 @@ def make_dome_flat_targets(slitwidth, xbin, ybin):
             )
         )
 
+    if n_dome_he > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE",
+                "ugri helium dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he,
+                n_dome_he,
+            )
+        )
+
+    if n_dome_he_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE_UG",
+                "ug helium dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he_ug,
+                n_dome_he_ug,
+            )
+        )
+
+
+        
     return rows
 
 
