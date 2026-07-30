@@ -369,6 +369,10 @@ namespace Sequencer {
                   [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
               { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
+              { Topic::CALIBD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_calibd(msg); } ) },
+              { Topic::POWERD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_powerd(msg); } ) },
               { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) }
             };
@@ -423,6 +427,10 @@ namespace Sequencer {
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
       std::condition_variable tcsd_cv;
+      std::mutex calibd_mtx;
+      std::condition_variable calibd_cv;
+      std::mutex powerd_mtx;
+      std::condition_variable powerd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -443,6 +451,10 @@ namespace Sequencer {
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       CalibrationTarget caltarget;
+
+      TcsInfo   tcsinfo;    ///< most recent tcsd telemetry, guarded by tcsd_mtx
+      CalibInfo calibinfo;  ///< most recent calibd telemetry, guarded by calibd_mtx
+      PowerInfo powerinfo;  ///< most recent powerd telemetry, guarded by powerd_mtx
 
       std::string single_obsid;       ///< obsid for single-target GETONE command
       std::string prev_single_obsid;  ///< the previous single_obsid, used for REPEAT
@@ -492,8 +504,10 @@ namespace Sequencer {
       void handletopic_slicecamd( const nlohmann::json &jmessage );
       void handletopic_slitd( const nlohmann::json &jmessage );
       void handletopic_tcsd( const nlohmann::json &jmessage );
+      void handletopic_calibd( const nlohmann::json &jmessage );
+      void handletopic_powerd( const nlohmann::json &jmessage );
       void publish_snapshot();
-      void request_snapshot();
+      void request_snapshot( const std::string &daemon="" );
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();

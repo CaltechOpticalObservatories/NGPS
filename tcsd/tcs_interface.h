@@ -14,6 +14,7 @@
 #include "tcs_constants.h"
 #include "tcsd_commands.h"
 #include "message_keys.h"
+#include "calib_defs.h"
 #include <sys/stat.h>
 #include <map>
 #include <memory>
@@ -89,13 +90,13 @@ namespace TCS {
       TcsInfo()
         : isopen(false)
       {
-        // these map indices are the lamp names accepted by the UI
-        // this is the only place they appear
+        // The map indices are the lamp names accepted by the UI. Those names,
+        // the message keys, and the TCS lamp numbers all come from the shared
+        // table in calib_defs.h, which is where they are defined.
         //
-        lampinfo["LO"]    = { Key::Tcsd::LAMP_LO,    1, -1 };
-        lampinfo["HI"]    = { Key::Tcsd::LAMP_HI,    2, -1 };
-        lampinfo["ARC"]   = { Key::Tcsd::LAMP_ARC,   3, -1 };
-        lampinfo["ULTRA"] = { Key::Tcsd::LAMP_ULTRA, 4, -1 };
+        for ( const auto &dev : CalibDefs::domelamps() ) {
+          lampinfo[dev.name] = { dev.jkey, static_cast<size_t>(dev.num), -1 };
+        }
 
         this->init();
       }

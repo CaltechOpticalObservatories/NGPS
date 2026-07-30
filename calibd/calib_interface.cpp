@@ -776,13 +776,18 @@ namespace Calib {
   /***** Calib::Interface::publish_status *************************************/
 
 
+  /***** Calib::Interface::handletopic_snapshot *******************************/
+  /**
+   * @brief      If my topic is in the jmessage then force-publish my status
+   * @param[in]  jmessage  ref to incomming message
+   *
+   */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    // If my topic is in the jmessage then publish my status
-    //
     if ( jmessage.contains( Topic::CALIBD ) ) {
-      this->publish_status();
+      this->publish_status(true);
     }
   }
+  /***** Calib::Interface::handletopic_snapshot *******************************/
 
 
   /***** Calib::Modulator::configure_host *************************************/

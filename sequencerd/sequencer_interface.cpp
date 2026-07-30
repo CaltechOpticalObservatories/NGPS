@@ -991,19 +991,20 @@ namespace Sequencer {
         info.channel_active[chans.at(i)] = on_off(tokens.at(3+i));
       }
 
-      // tokens 7-10 are lamp states LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
+      // tokens 7-10 are the cal lamps and 11-14 the dome lamps, each in the
+      // order the tables in calib_defs.h list them
+      const auto &callamps  = CalibDefs::callamps();
+      const auto &domelamps = CalibDefs::domelamps();
       for (size_t i=0; i < 4; i++) {
-        info.lamp[lampnames.at(i)] = on_off(tokens.at(7+i));
+        info.lamp[callamps.at(i).name] = on_off(tokens.at(7+i));
+        info.domelamp[domelamps.at(i).name] = on_off(tokens.at(11+i));
       }
 
-      // tokens 11-14 are dome lamps: LO, HI, ARC, ULTRA
-      for (size_t i=0; i < 4; i++) {
-        info.domelamp[domelampnames.at(i)] = on_off(tokens.at(11+i));
-      }
-
-      // tokens 15-20 -- modulator numbers are {1:6}
+      // tokens 15-20 are the modulators in channel order, indexed by name
+      // because that's how calibd publishes them
+      const auto &modulators = CalibDefs::modulators();
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i+1] = on_off(tokens.at(15+i));
+        info.lampmod[modulators.at(i).name] = on_off(tokens.at(15+i));
       }
 
       // token[21] is FITS IMGTYPE

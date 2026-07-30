@@ -38,8 +38,10 @@ namespace FitsHeaderKeys {
     { Key::Calibd::MODTHAR.c_str(),  "", "ThAr lamp modulator pow dut per" },
     { Key::Calibd::MODBLCON.c_str(), "", "Blue continuum modulator pow dut per" },
     { Key::Calibd::MODBLBYP.c_str(), "", "Blue bypass modulator pow dut per" },
+    { Key::Calibd::MODBLETA.c_str(), "", "Blue ETA modulator pow dut per" },
     { Key::Calibd::MODRDCON.c_str(), "", "Red continuum modulator pow dut per" },
     { Key::Calibd::MODRDBYP.c_str(), "", "Red bypass modulator pow dut per" },
+    { Key::Calibd::MODRDETA.c_str(), "", "Red ETA modulator pow dut per" },
     { Key::Calibd::CALCOVER.c_str(), "", "calib cover state" },
     { Key::Calibd::CALDOOR.c_str(),  "", "calib door state" }
   };

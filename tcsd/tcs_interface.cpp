@@ -33,12 +33,26 @@ namespace TCS {
     this->publish_snapshot(dontcare);
   }
   void Interface::publish_snapshot(std::string &retstring) {
-    // fill the tcs_info class with current info
+    // Only read the TCS when there is a connection to read it with,
+    // and when closed, erase the class.
     //
-    this->get_tcs_info();
+    bool isopen = false;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    isopen = this->tcs_info.isopen;
+    }
+
+    if ( isopen ) {
+      this->get_tcs_info();  // fill the tcs_info class with current info
+    }
+    else {
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      this->tcs_info.init();
+    }
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Daemon::TCSD;
+    jmessage_out[Key::PUBTIME] = get_time_us();  // so subscribers can age this
 
     std::string motion;
     {
@@ -1501,7 +1515,6 @@ namespace TCS {
     if ( caseCompareString( state, "off" ) ) req_state = 0;
 
     // no default lamp, must be specified
-    //
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
     auto lamploc = this->tcs_info.lampinfo.find(which);
@@ -1523,7 +1536,6 @@ namespace TCS {
         retstring="ERR";
         return ERROR;
       }
-      std::this_thread::sleep_for(std::chrono::milliseconds(250));  // wait for it to turn on|off
     }
 
     // whether or not requesting on|off, check state now
@@ -1561,6 +1573,12 @@ namespace TCS {
     cmd << "NPS " << state << " " << lampnum;
     std::string reply;
     long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    // the mechanism takes time to respond and the TCS only checks for
+    // this command once per second. yes it really takes this long.
+    if (error==NO_ERROR) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    }
 
     return error;
   }

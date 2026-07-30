@@ -133,7 +133,9 @@ int main(int argc, char **argv) {
                                           Topic::ACAMD,
                                           Topic::SLICECAMD,
                                           Topic::SLITD,
-                                          Topic::TCSD } ) == ERROR ) {
+                                          Topic::TCSD,
+                                          Topic::CALIBD,
+                                          Topic::POWERD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     sequencerd.exit_cleanly();
   }

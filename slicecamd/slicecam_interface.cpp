@@ -1013,6 +1013,14 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, Key::TargetInfo::RA, ra_hms );
     Common::extract_telemetry_value( jmessage, Key::TargetInfo::DECL, dec_dms );
 
+    // no target is normal, so don't get here by way of an exception
+    //
+    if ( ra_hms.empty() || dec_dms.empty() ) {
+      this->targetinfo_ra_deg.store(NAN);
+      this->targetinfo_dec_deg.store(NAN);
+      return;
+    }
+
     try {
       this->targetinfo_ra_deg.store( radec_to_decimal( ra_hms ) * TO_DEGREES );
       this->targetinfo_dec_deg.store( radec_to_decimal( dec_dms ) );
