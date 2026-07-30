@@ -326,6 +326,11 @@ namespace Sequencer {
         }).detach();
       }
 
+      /** @brief  if ra/dec of this target is the same as the last then it's a repeat
+       *  @return true|false
+       */
+      bool repeat_target() const { return ( target.ra_hms  == last_ra_hms &&
+                                            target.dec_dms == last_dec_dms ); }
     public:
       Sequence() :
           context(),

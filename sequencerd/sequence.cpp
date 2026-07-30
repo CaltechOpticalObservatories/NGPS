@@ -750,8 +750,9 @@ namespace Sequencer {
 
         // during acam acquisition, enable slicecam autoexpose to try to get the
         // exposure time set before fine acquisition starts.
+        // no fine acquire on repeat targets.
         //
-        const bool dofine = this->should_fineacquire.load();
+        const bool dofine = this->should_fineacquire.load() && !repeat_target();
         if ( dofine ) (void)this->do_slicecam_autoexpose( true );
 
         // start ACAM acquisition. If it fails then wait for user to continue or cancel.
@@ -1047,10 +1048,7 @@ namespace Sequencer {
       case Sequencer::VSM_ACQUIRE:
         // uses virtual-mode width and offset for acquire,
         // but only for new targets
-        if ( this->target.ra_hms == this->last_ra_hms &&
-             this->target.dec_dms == this->last_dec_dms ) {
-          return NO_ERROR;
-        }
+        if ( repeat_target() ) return NO_ERROR;
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
@@ -2119,8 +2117,7 @@ namespace Sequencer {
 
     // No telescope move if target coordinates didn't change
     //
-    if ( this->target.ra_hms == this->last_ra_hms &&
-         this->target.dec_dms == this->last_dec_dms ) {
+    if (repeat_target()) {
       this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
