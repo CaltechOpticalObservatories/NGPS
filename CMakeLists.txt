@@ -27,40 +27,52 @@ find_package( Threads )
 
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
-# Get the git commit hash and the build date so that the config files can use
-# them. These are evaluated at configure time and stamped into the generated
-# .cfg files, so a re-configure is what refreshes them.
+# Get the git commit hash identifying the source that this build came from.
+# It is compiled into every daemon via the generated version.h below, so that
+# each binary can report the commit it was built from.
 #
 execute_process( COMMAND git rev-parse --short HEAD
                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                  OUTPUT_VARIABLE GIT_COMMIT_HASH
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+                 OUTPUT_STRIP_TRAILING_WHITESPACE
+                 RESULT_VARIABLE GIT_RESULT
+                 ERROR_QUIET )
 
-# Mark the hash when the tree has uncommitted changes, otherwise the hash names
-# a commit that does not describe what was actually built.
+# git failing here would silently leave the hash empty,
+# so make the failure visible instead
 #
-execute_process( COMMAND git diff --quiet HEAD
-                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                 RESULT_VARIABLE GIT_TREE_DIRTY )
-
-if ( NOT GIT_TREE_DIRTY EQUAL 0 )
-  set( GIT_COMMIT_HASH "${GIT_COMMIT_HASH}-dirty" )
+if ( NOT GIT_RESULT EQUAL 0 OR GIT_COMMIT_HASH STREQUAL "" )
+  set( GIT_COMMIT_HASH "unknown" )
+  message( WARNING "unable to determine git commit hash: reporting GIT_HASH=unknown" )
 endif()
 
-string( TIMESTAMP PROJECT_BUILD_DATE "%Y-%m-%dT%H:%M:%S" UTC )
+message( STATUS "GIT_COMMIT_HASH " ${GIT_COMMIT_HASH} )
 
-message( STATUS "GIT_COMMIT_HASH " ${GIT_COMMIT_HASH} " PROJECT_BUILD_DATE " ${PROJECT_BUILD_DATE} )
-
-# Re-configure whenever the checked-out commit changes, so the stamps above
-# cannot go stale. --git-path resolves correctly inside a linked worktree,
-# where .git is a file rather than a directory.
+# Re-configure whenever the checked-out commit changes, so the hash cannot go
+# stale. --git-path resolves correctly inside a linked worktree, where .git is
+# a file rather than a directory.
 #
 execute_process( COMMAND git rev-parse --git-path HEAD
                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                  OUTPUT_VARIABLE GIT_HEAD_FILE
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+                 OUTPUT_STRIP_TRAILING_WHITESPACE
+                 ERROR_QUIET )
 
-set_property( DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_HEAD_FILE} )
+if ( GIT_HEAD_FILE )
+  set_property( DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_HEAD_FILE} )
+endif()
+
+# Generate version.h into utils/ which is already on every daemon's include
+# path. It is written through a temporary so that copy_if_different can leave
+# the real header untouched when the hash has not changed, which keeps an
+# unrelated re-configure from forcing a rebuild of everything.
+#
+CONFIGURE_FILE( ${PROJECT_BASE_DIR}/utils/version.h.in
+                ${CMAKE_BINARY_DIR}/version.h.tmp )
+
+execute_process( COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                         ${CMAKE_BINARY_DIR}/version.h.tmp
+                         ${PROJECT_BASE_DIR}/utils/version.h )
 
 # Here is everything to build
 #

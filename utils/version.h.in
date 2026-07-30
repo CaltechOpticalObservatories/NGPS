@@ -1,0 +1,14 @@
+/** ---------------------------------------------------------------------------
+ * @file     version.h.in
+ * @brief    template for the generated version.h -- do not edit version.h
+ * @details  CMake generates utils/version.h from this file at configure time.
+ *           GIT_COMMIT_HASH identifies the commit this binary was built from
+ *           and is identical for every module built from one configure, so it
+ *           answers "what source is running" while the per-module build time
+ *           (see build_date.h) answers "when was this module last built".
+ * @author   David Hale <dhale@astro.caltech.edu>
+ *
+ */
+#pragma once
+
+#define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"  ///< git commit hash, or "unknown"

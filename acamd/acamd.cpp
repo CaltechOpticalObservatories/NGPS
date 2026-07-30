@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
   message.str(""); message << "[NOTICE] user id = " << uid << " group id = " << gid;
   logwrite( function, message.str() );
 
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
   logwrite(function, message.str());
 
   message.str(""); message << acamd.config.n_entries << " lines read from " << acamd.config.filename;

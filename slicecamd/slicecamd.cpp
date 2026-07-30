@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
     slicecamd.exit_cleanly();
   }
 
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
   logwrite(function, message.str());
 
   message.str(""); message << slicecamd.config.n_entries << " lines read from " << slicecamd.config.filename;

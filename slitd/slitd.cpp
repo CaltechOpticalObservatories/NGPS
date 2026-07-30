@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     slitd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_COMMIT_HASH;
   logwrite(function, message.str());
 
   message.str(""); message << slitd.config.n_entries << " lines read from " << slitd.config.filename;
