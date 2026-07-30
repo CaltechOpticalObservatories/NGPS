@@ -3855,8 +3855,8 @@ namespace Sequencer {
    * @brief      publish target info on Topic::TARGETINFO, on change (or force)
    * @details    Builds a JSON message of the current target and publishes it
    *             only when it differs from the last published message, unless
-   *             force is set. The message is empty unless seq state is
-   *             READY or RUNNING.
+   *             force is set. The values are null unless seq state is READY or
+   *             RUNNING; the keys are always present.
    * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
@@ -3864,7 +3864,7 @@ namespace Sequencer {
     nlohmann::json jmessage;
     jmessage[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
-    // fill telemetry only when READY or RUNNING; otherwise an empty (no-target) message
+    // fill telemetry only when READY or RUNNING
     //
     if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
       // unconfigured values are stored as NAN
@@ -3877,6 +3877,20 @@ namespace Sequencer {
       jmessage[Key::TargetInfo::POINTMODE] = this->target.pointmode;
       jmessage[Key::TargetInfo::RA]        = this->target.ra_hms;
       jmessage[Key::TargetInfo::DECL]      = this->target.dec_dms;
+    }
+    else {
+      // Send the keys with no value rather than omitting them. Having no target
+      // is not the same as having forgotten to send a key, and a subscriber can
+      // only tell the difference if I say which one this is.
+      //
+      jmessage[Key::TargetInfo::OBS_ID]    = nullptr;
+      jmessage[Key::TargetInfo::NAME]      = nullptr;
+      jmessage[Key::TargetInfo::SLITA]     = nullptr;
+      jmessage[Key::TargetInfo::BINSPECT]  = nullptr;
+      jmessage[Key::TargetInfo::BINSPAT]   = nullptr;
+      jmessage[Key::TargetInfo::POINTMODE] = nullptr;
+      jmessage[Key::TargetInfo::RA]        = nullptr;
+      jmessage[Key::TargetInfo::DECL]      = nullptr;
     }
 
     // unless forced, only publish if the target info changed
