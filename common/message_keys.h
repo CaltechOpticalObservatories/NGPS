@@ -54,6 +54,12 @@ namespace Key {
   inline const std::string SOURCE  = "source";
   inline const std::string PUBTIME = "pubtime";
 
+  // Build provenance. Every publisher includes these so that a consumer can
+  // tell which software was running when a message was produced.
+  //
+  inline const std::string GITHASH   = "githash";    ///< commit the publisher was built from
+  inline const std::string BUILDTIME = "buildtime";  ///< when the publisher was built, YYYY-MM-DDThh:mm:ss UTC
+
   namespace Broadcast {
     inline const std::string SEVERITY = "severity";
     inline const std::string MESSAGE  = "message";

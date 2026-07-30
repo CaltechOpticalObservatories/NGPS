@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     telemd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << telemd.config.n_entries << " lines read from " << telemd.config.filename;

@@ -239,24 +239,6 @@ namespace Camera {
             applied++;
           }
 
-          // GIT_HASH
-          if (config.param[entry].compare(0, 8, "GIT_HASH")==0) {
-            this->camera_info.systemkeys.primary().addkey( "GIT_HASH", config.arg[entry], "software git hash" );
-            message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
-            logwrite( function, message.str() );
-            this->camera.async.enqueue( message.str() );
-            applied++;
-          }
-
-          // PROJ_BUILD_DATE
-          if (config.param[entry].compare(0, 15, "PROJ_BUILD_DATE")==0) {
-            this->camera_info.systemkeys.primary().addkey( "SW_BUILD", config.arg[entry], "software build date" );
-            message.str(""); message << "CAMERAD:config:" << config.param[entry] << "=" << config.arg[entry];
-            logwrite( function, message.str() );
-            this->camera.async.enqueue( message.str() );
-            applied++;
-          }
-
         } // end loop through the entries in the configuration file
 
         message.str("");

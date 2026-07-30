@@ -639,6 +639,8 @@ namespace AstroCam {
         topic_handlers = {
           { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { Topic::ACAMD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_acam(msg); } ) },
           { Topic::CALIBD, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_calib(msg); } ) },
           { Topic::FLEXURED, std::function<void(const nlohmann::json&)>(
@@ -647,6 +649,8 @@ namespace AstroCam {
               [this](const nlohmann::json &msg) { handletopic_focus(msg); } ) },
           { Topic::POWERD, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_power(msg); } ) },
+          { Topic::SLICECAMD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_slicecam(msg); } ) },
           { Topic::SLITD, std::function<void(const nlohmann::json&)>(
               [this](const nlohmann::json &msg) { handletopic_slit(msg); } ) },
           { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
@@ -713,10 +717,12 @@ namespace AstroCam {
       void publish_status(bool force=false);
       void request_snapshot();
       void handletopic_snapshot(const nlohmann::json &jmessage_in);
+      void handletopic_acam(const nlohmann::json &jmessage_in);
       void handletopic_calib(const nlohmann::json &jmessage_in);
       void handletopic_flexure(const nlohmann::json &jmessage_in);
       void handletopic_focus(const nlohmann::json &jmessage_in);
       void handletopic_power(const nlohmann::json &jmessage_in);
+      void handletopic_slicecam(const nlohmann::json &jmessage_in);
       void handletopic_slit(const nlohmann::json &jmessage_in);
       void handletopic_targetinfo(const nlohmann::json &jmessage_in);
       void handletopic_tcs(const nlohmann::json &jmessage_in);
@@ -1236,6 +1242,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       long expose(std::string nexp_in);
       long do_expose(int nexp_in);
       double get_live_airmass();                             ///< latest airmass from cached tcsd telemetry, or NAN
+      void get_live_provenance( std::string &githash, std::string &buildtime );  ///< build provenance of all running daemons
       long native(std::string cmdstr);
       long native(std::string cmdstr, std::string &retstring);
 

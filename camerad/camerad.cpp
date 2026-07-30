@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 
   // log build date and hash
   //
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite( function, message.str() );
 
   message.str(""); message << server.config.n_entries << " lines read from " << server.config.filename;
@@ -180,10 +180,12 @@ int main(int argc, char **argv) {
 
   // initialize the pub-sub handler with my subscriber topics
   //
-  if ( server.init_pubsub( { Topic::CALIBD,
+  if ( server.init_pubsub( { Topic::ACAMD,
+                             Topic::CALIBD,
                              Topic::FLEXURED,
                              Topic::FOCUSD,
                              Topic::POWERD,
+                             Topic::SLICECAMD,
                              Topic::SLITD,
                              Topic::TARGETINFO,
                              Topic::TCSD,

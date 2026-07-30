@@ -133,4 +133,18 @@ namespace FitsHeaderKeys {
     { Key::Slitd::SLITW.c_str(), "SLITW", "slit width in arcsec", "FLOAT" }
   };
 
+  /**
+   * @namespace Provenance
+   * @brief     build provenance keywords
+   * @details   These are aggregated across every running daemon rather than
+   *            extracted from one JSON message, so they are not part of a
+   *            Primary[] table. They answer "was there a software change?".
+   */
+  namespace Provenance {
+    inline constexpr const char* GITHASH_KEY       = "GIT_HASH";
+    inline constexpr const char* GITHASH_COMMENT   = "git commit of running software";
+    inline constexpr const char* BUILDTIME_KEY     = "SW_BUILD";
+    inline constexpr const char* BUILDTIME_COMMENT = "newest build of running software";
+  }
+
 }
