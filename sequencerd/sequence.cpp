@@ -2488,10 +2488,7 @@ namespace Sequencer {
     }
 
     std::stringstream cmd;
-    if ( doorcover_isset ) {
-      logwrite( function, "calib door and cover already set" );
-    }
-    else {
+    if ( !doorcover_isset ) {
       cmd.str(""); cmd << CALIBD_SET
                        << " door="  << ( calinfo.caldoor  ? "open" : "close" )
                        << " cover=" << ( calinfo.calcover ? "open" : "close" );
@@ -2502,6 +2499,7 @@ namespace Sequencer {
         this->broadcast.error( function, "moving calib door and/or cover" );
         throw std::runtime_error("moving calib door and/or cover");
       }
+      logwrite( function, "calib door and cover set" );
     }
 
     // set the internal calibration lamps if needed
@@ -2513,7 +2511,6 @@ namespace Sequencer {
       std::lock_guard<std::mutex> lock(this->powerd_mtx);
       if (this->powerinfo.is_valid() &&
           this->powerinfo.plug_state(lamp) == (state?1:0)) {
-        logwrite(function, "cal lamp "+lamp+" already "+(state?"on":"off"));
         continue;
       }
       }
@@ -2526,6 +2523,7 @@ namespace Sequencer {
         this->broadcast.error( function, message.str() );
         throw std::runtime_error("setting lamp "+message.str());
       }
+      logwrite(function, "cal lamp "+lamp+" "+(state?"on":"off"));
     }
 
     // set the dome lamps if needed
@@ -2537,7 +2535,6 @@ namespace Sequencer {
       std::lock_guard<std::mutex> lock(this->tcsd_mtx);
       if (this->tcsinfo.is_fresh() &&
           this->tcsinfo.domelamp_state(lampname) == (state?1:0)) {
-        logwrite(function, "dome lamp "+lampname+" already "+(state?"on":"off"));
         continue;
       }
       }
@@ -2547,6 +2544,7 @@ namespace Sequencer {
         logwrite(function, "ERROR "+cmd.str());
         throw std::runtime_error("setting TCS "+cmd.str());
       }
+      logwrite(function, "dome lamp "+lampname+" "+(state?"on":"off"));
     }
 
     // set the lamp modulators if needed
@@ -2558,7 +2556,6 @@ namespace Sequencer {
       std::lock_guard<std::mutex> lock(this->calibd_mtx);
       if (this->calibinfo.is_valid() &&
           this->calibinfo.lampmod_state(mod) == (state?1:0)) {
-        logwrite(function, "lamp modulator "+mod+" already "+(state?"on":"off"));
         continue;
       }
       }
@@ -2574,6 +2571,7 @@ namespace Sequencer {
         this->broadcast.error( function, cmd.str() );
         throw std::runtime_error("setting lamp modulator "+cmd.str());
       }
+      logwrite(function, "lamp modulator "+mod+" "+(state?"on":"off"));
     }
 
     if ( this->cancel_flag.load() ) {

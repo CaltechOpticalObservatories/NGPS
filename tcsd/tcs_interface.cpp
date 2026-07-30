@@ -1578,7 +1578,7 @@ namespace TCS {
     // the mechanism takes time to respond and the TCS only checks for
     // this  command once per second.
     if (error==NO_ERROR) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1600));
+      std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
 
     return error;
