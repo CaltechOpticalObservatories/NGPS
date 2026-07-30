@@ -27,30 +27,40 @@ find_package( Threads )
 
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
-# Define the output file for the git commit hash, and
-# touch it in case we're starting from scratch.
+# Get the git commit hash and the build date so that the config files can use
+# them. These are evaluated at configure time and stamped into the generated
+# .cfg files, so a re-configure is what refreshes them.
 #
-set(GIT_COMMIT_FILE "${CMAKE_BINARY_DIR}/git_commit.txt")
-file( TOUCH ${GIT_COMMIT_FILE} )
+execute_process( COMMAND git rev-parse --short HEAD
+                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                 OUTPUT_VARIABLE GIT_COMMIT_HASH
+                 OUTPUT_STRIP_TRAILING_WHITESPACE )
 
-# Create a custom target with a command that runs every time make is invoked.
-# This creates the file which contains SET commands to set cmake variables.
+# Mark the hash when the tree has uncommitted changes, otherwise the hash names
+# a commit that does not describe what was actually built.
 #
-add_custom_target(update_git_commit
-    COMMAND ${CMAKE_COMMAND} -E remove ${GIT_COMMIT_FILE}
-    COMMAND bash -c "echo -n set '\\( GIT_COMMIT_HASH ' " > ${GIT_COMMIT_FILE} &&
-            bash -c "git rev-parse HEAD " | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
-            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
-    COMMAND bash -c "echo -n set '\\( PROJECT_BUILD_DATE ' " >> ${GIT_COMMIT_FILE} &&
-            bash -c "date +%Y-%m-%dT%H:%M:%S_%Z" | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
-            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Updating git commit hash file"
-)
+execute_process( COMMAND git diff --quiet HEAD
+                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                 RESULT_VARIABLE GIT_TREE_DIRTY )
 
-# include the git commit hash output file so that config files can use it
+if ( NOT GIT_TREE_DIRTY EQUAL 0 )
+  set( GIT_COMMIT_HASH "${GIT_COMMIT_HASH}-dirty" )
+endif()
+
+string( TIMESTAMP PROJECT_BUILD_DATE "%Y-%m-%dT%H:%M:%S" UTC )
+
+message( STATUS "GIT_COMMIT_HASH " ${GIT_COMMIT_HASH} " PROJECT_BUILD_DATE " ${PROJECT_BUILD_DATE} )
+
+# Re-configure whenever the checked-out commit changes, so the stamps above
+# cannot go stale. --git-path resolves correctly inside a linked worktree,
+# where .git is a file rather than a directory.
 #
-INCLUDE( ${GIT_COMMIT_FILE} )
+execute_process( COMMAND git rev-parse --git-path HEAD
+                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                 OUTPUT_VARIABLE GIT_HEAD_FILE
+                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+
+set_property( DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GIT_HEAD_FILE} )
 
 # Here is everything to build
 #
