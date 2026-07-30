@@ -624,13 +624,13 @@ namespace Flexure {
 
   /***** Flexure::Interface::handletopic_snapshot ****************************/
   /**
-   * @brief      respond to a snapshot request by publishing my status
+   * @brief      If my topic is in the jmessage then force-publish my status
    * @param[in]  jmessage  subscribed-received JSON message
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
     if ( jmessage.contains( Topic::FLEXURED ) ) {
-      this->publish_status();
+      this->publish_status(true);
     }
   }
   /***** Flexure::Interface::handletopic_snapshot ****************************/

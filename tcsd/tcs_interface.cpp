@@ -1515,7 +1515,6 @@ namespace TCS {
     if ( caseCompareString( state, "off" ) ) req_state = 0;
 
     // no default lamp, must be specified
-    //
     {
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
     auto lamploc = this->tcs_info.lampinfo.find(which);
@@ -1576,7 +1575,7 @@ namespace TCS {
     long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
 
     // the mechanism takes time to respond and the TCS only checks for
-    // this  command once per second.
+    // this command once per second. yes it really takes this long.
     if (error==NO_ERROR) {
       std::this_thread::sleep_for(std::chrono::milliseconds(2000));
     }
