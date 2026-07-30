@@ -308,6 +308,10 @@ namespace Power {
 
     message << "u p s   plugname\n";
 
+    // read into a local and swap it in at the end
+    //
+    Status newstatus;
+
     try {
       for ( auto nps : this->npsmap ) {                     // loop through all units in the map
         int unit = nps.first;                               // get the nps unit number from the map
@@ -320,15 +324,16 @@ namespace Power {
         // string to "err".
         //
         long err=ERROR;
+        std::string unitreply;
         if ( nps.second.isconnected() ) {
-          err=nps.second.get_all( maxplugs, retstring ); // get plug status for all plugs in this unit
+          err=nps.second.get_all( maxplugs, unitreply );    // get plug status for all plugs in this unit
         }
 
-        // Tokenize the retstring which is in CSV format.
+        // Tokenize the reply which is in CSV format.
         // Each token is the plug status for this unit.
         //
         std::vector<std::string> tokens;
-        Tokenize( retstring, tokens, "," );
+        Tokenize( unitreply, tokens, "," );
 
         // loop over all plugs (not tokens in the retstring)
         //
@@ -344,7 +349,7 @@ namespace Power {
 
           message << plugid.str() << " " << status_string
                                   << " " << this->plugname[ plugid.str() ] << "\n";
-          this->status.plugstate[this->plugname[plugid.str()]] = status;
+          newstatus.plugstate[this->plugname[plugid.str()]] = status;
         }
       }
       message << this->missing;  // notify of missing hardware, if any
@@ -356,6 +361,12 @@ namespace Power {
     }
 
     retstring = message.str();
+
+    // now swap in what was just read, under the same lock used by publish_status
+    {
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
+    this->status = newstatus;
+    }
 
     // status has been refreshed from hardware; publish if it changed
     //
