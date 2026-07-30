@@ -26,7 +26,9 @@ else()
   # so mark it when the tree carries uncommitted changes. This does not say
   # what changed, only that the commit cannot reproduce this binary.
   #
-  execute_process( COMMAND git diff --quiet HEAD
+  # Only tracked sources decide this.
+  #
+  execute_process( COMMAND git diff --quiet --ignore-submodules=dirty HEAD
                    WORKING_DIRECTORY ${SRC_DIR}
                    RESULT_VARIABLE GIT_TREE_DIRTY )
 
