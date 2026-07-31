@@ -23,15 +23,26 @@ BASEDIR : /home/developer/Software  (binaries in BASEDIR/bin, configs in BASEDIR
 Service account / group: user "dataowner", group "datawriters".
   - daemons run as this user/group
   - the sequencer runs as dataowner and restarts peers via systemctl
-  - members of datawriters (typically including the observer) may run `ngps`
-    without a password (per polkit rule, see step 3)
-Create them if they do not exist. Add observers to datawriters.
+
+Operator group: "ngpsops".
+  - members of "ngpsops" may run `systemctl {start|stop|restart} ngps.target`
+    and `systemctl ... ngps@<name>.service` without a password (per polkit
+    rule, see step 3). They cannot control ngps-watchdog.service -- that one
+    requires admin auth, by design.
+  - datawriters is for write access into the data tree and must NOT be used
+    to grant daemon-control rights -- keep the two groups distinct.
+
+Create the accounts/groups if they do not exist, then add human operators
+(e.g. observer) to ngpsops:
+    sudo groupadd ngpsops 2>/dev/null || true
+    sudo usermod -aG ngpsops observer
+Operators must log out and back in for the new group membership to take effect.
 
 
 ------------------------------------------------------------------------------
 1. Install the systemd units
 ------------------------------------------------------------------------------
-All install commands in steps 1-4 are run from the watchdog_system/ directory.
+All install commands in steps 1-3 are run from the watchdog_system/ directory.
 
 The files to install live in this directory tree (watchdog_system/):
 
@@ -41,7 +52,6 @@ The files to install live in this directory tree (watchdog_system/):
     watchdog_system/systemd/ngps@sequencerd.service.d/order.conf
     watchdog_system/systemd/ngps.env
     watchdog_system/polkit/10-ngps.rules
-    watchdog_system/bin/ngps
 
 Install them:
 
@@ -66,32 +76,21 @@ match the target.
 ------------------------------------------------------------------------------
 3. Install the polkit rule (passwordless systemctl for ngps* units only)
 ------------------------------------------------------------------------------
-Lets user "dataowner" (the sequencer + watchdog) and group "datawriters"
-manage ngps* units without a password.
+Lets user "dataowner" (the sequencer + watchdog) and group "ngpsops"
+(interactive operators) manage ngps* units without a password.
 
     sudo install -m 0644 polkit/10-ngps.rules /etc/polkit-1/rules.d/10-ngps.rules
 
 
 ------------------------------------------------------------------------------
-4. Install the operator wrapper
-------------------------------------------------------------------------------
-    sudo cp -a "$(command -v ngps)" /root/ngps.pre-systemd.bak 2>/dev/null || true
-    sudo install -m 0755 bin/ngps /usr/local/bin/ngps
-    hash -r
-
-`ngps` calls systemctl directly (relying on the polkit rule). Usage:
-    ngps {start|stop|restart|kill|status|list} [daemon ...]
-
-
-------------------------------------------------------------------------------
-5. Disable any old boot mechanism (if migrating from the single-service setup)
+4. Disable any old boot mechanism (if migrating from the single-service setup)
 ------------------------------------------------------------------------------
     sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
     sudo systemctl disable --now ngps-daemon.service   2>/dev/null || true
 
 
 ------------------------------------------------------------------------------
-6. Reload, enable, and start everything
+5. Reload, enable, and start everything
 ------------------------------------------------------------------------------
     sudo systemctl daemon-reload
     sudo systemctl enable --now ngps.target            # Layer 1: all daemons
@@ -99,19 +98,17 @@ manage ngps* units without a password.
 
 
 ------------------------------------------------------------------------------
-7. Verify (do all of these on a new system)
+6. Verify (do all of these on a new system)
 ------------------------------------------------------------------------------
 Boot chain is complete (without this, services show "enabled" yet stay
-"inactive (dead)" after a reboot -- step 6's `enable --now ngps.target` is what
+"inactive (dead)" after a reboot -- step 5's `enable --now ngps.target` is what
 inserts the target into multi-user.target.wants/):
     systemctl is-enabled ngps.target                                    # -> enabled
     ls -l /etc/systemd/system/multi-user.target.wants/ngps.target       # must exist
 
 All instances loaded and the aggregate is healthy:
     systemctl list-units 'ngps@*' --all
-    systemctl status ngps.target
-    ngps status
-    ngps list
+    systemctl status ngps.target 'ngps@*'
 
 Sequencer starts only after its peers are READY (Type=notify ordering):
     systemd-analyze critical-chain ngps@sequencerd.service
@@ -122,8 +119,12 @@ Layer 1 -- auto-restart on death (kill one and watch it return ~2 s later):
     journalctl -u ngps@acamd.service -n 5 | grep -i 'scheduled restart'
 
 Clean stop releases hardware and stays stopped (no auto-restart):
-    ngps stop acamd ; systemctl is-active ngps@acamd.service   # -> inactive
-    ngps start acamd                                           # bring it back
+    systemctl stop ngps@acamd.service                          # operator: no sudo, polkit grants
+    systemctl is-active ngps@acamd.service                     # -> inactive
+    systemctl start ngps@acamd.service                         # bring it back
+
+Operator cannot control the watchdog (admin auth required, by design):
+    systemctl restart ngps-watchdog.service                    # -> polkit auth prompt
 
 Liveness probe answers (port from BASEDIR/Config/sequencerd.cfg, e.g. ACAMD_PORT):
     printf 'ping\n' | nc -w2 127.0.0.1 <ACAMD_PORT>           # -> pong
@@ -144,11 +145,30 @@ Sequencer-initiated restart works without a password prompt (as dataowner):
 
 
 ------------------------------------------------------------------------------
+Operator command reference (systemctl is the canonical control surface;
+no `ngps` wrapper is installed in PATH)
+------------------------------------------------------------------------------
+    All daemons      systemctl {start|stop|restart} ngps.target
+    One daemon       systemctl {start|stop|restart} ngps@<name>.service
+    Status           systemctl status ngps.target 'ngps@*'
+    Instances list   systemctl list-units 'ngps@*'
+    SIGKILL all      systemctl kill ngps.target          # cascades via PartOf=
+    SIGKILL one      systemctl kill --signal=SIGKILL ngps@<name>.service
+
+Operators do NOT need sudo for the commands above -- polkit grants them via
+the "ngpsops" group. ngps-watchdog.service is intentionally NOT in the polkit
+scope; controlling the watchdog requires admin auth.
+
+A developer-only wrapper lives at watchdog_system/bin/ngps for convenience
+when debugging from that directory. It is not installed to PATH.
+
+
+------------------------------------------------------------------------------
 Notes
 ------------------------------------------------------------------------------
 - The ONLY thing that keeps a daemon down is a commanded stop
-  (`ngps stop` / `systemctl stop`, and the stop half of `restart`). That is also
-  how you halt a daemon that is crash-looping on bad config.
+  (`systemctl stop`, and the stop half of `restart`). That is also how you
+  halt a daemon that is crash-looping on bad config.
 
 - KillSignal=SIGINT reuses each daemon's graceful shutdown. If a daemon does not
   release hardware within TimeoutStopSec=30, systemd will SIGKILL it -- verify

@@ -9,8 +9,11 @@
 // CentOS 8 ships polkit 0.115, which uses these JavaScript rules.
 //
 // Permits:
-//   - user "dataowner"            (the daemon service account / sequencer)
-//   - any member of "datawriters" (interactive operators)
+//   - user "dataowner"         (the daemon service account / sequencer)
+//   - any member of "ngpsops"  (interactive operators; e.g. observer)
+//
+// "ngpsops" is intentionally separate from "datawriters" -- datawriters grants
+// write access into the data tree and must not be used to grant daemon control.
 
 polkit.addRule(function(action, subject) {
     if (action.id !== "org.freedesktop.systemd1.manage-units") {
@@ -24,7 +27,7 @@ polkit.addRule(function(action, subject) {
     if (unit != "ngps.target" && unit.indexOf("ngps@") !== 0) {
         return polkit.Result.NOT_HANDLED;
     }
-    if (subject.user == "dataowner" || subject.isInGroup("datawriters")) {
+    if (subject.user == "dataowner" || subject.isInGroup("ngpsops")) {
         return polkit.Result.YES;
     }
     return polkit.Result.NOT_HANDLED;
