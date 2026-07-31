@@ -1,0 +1,92 @@
+#!/bin/bash
+#
+# configure-watchdog -- install the watchdog system from the deploy tree, and
+# transition the host away from the legacy ngps-daemon launch mechanism.
+#
+# Run as root or via sudo.
+#
+
+set -e
+
+WATCHDOG_DIR="${WATCHDOG_DIR:-/home/developer/Software/watchdog_system}"
+BIN_DIR="${BIN_DIR:-/home/developer/Software/bin}"
+
+# Sanity: required source files must exist under WATCHDOG_DIR
+for f in \
+  "$WATCHDOG_DIR/systemd/ngps@.service" \
+  "$WATCHDOG_DIR/systemd/ngps.target" \
+  "$WATCHDOG_DIR/systemd/ngps-watchdog.service" \
+  "$WATCHDOG_DIR/systemd/ngps@sequencerd.service.d/order.conf" \
+  "$WATCHDOG_DIR/systemd/ngps.env" \
+  "$WATCHDOG_DIR/polkit/10-ngps.rules"; do
+  if [ ! -f "$f" ]; then
+    echo "ERROR: missing $f -- check out the watchdog branch and rebuild," >&2
+    echo "       or set WATCHDOG_DIR to the correct path." >&2
+    exit 1
+  fi
+done
+
+# Verify the built binary that ngps-watchdog.service will exec
+if [ ! -x "$BIN_DIR/ngps-watchdog" ]; then
+  echo "ERROR: $BIN_DIR/ngps-watchdog not found or not executable." >&2
+  echo "       Build the watchdog branch (cmake --build build/) before installing," >&2
+  echo "       or set BIN_DIR to the correct path." >&2
+  exit 1
+fi
+
+# 1. Take down the legacy launcher so its Restart= behavior does not fight us
+sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
+sudo systemctl disable --now ngps-daemon.service  2>/dev/null || true
+
+# 2. Install systemd units
+sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@.service"         /etc/systemd/system/ngps@.service
+sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.target"           /etc/systemd/system/ngps.target
+sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps-watchdog.service" /etc/systemd/system/ngps-watchdog.service
+sudo mkdir -p /etc/systemd/system/ngps@sequencerd.service.d
+sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@sequencerd.service.d/order.conf" \
+                     /etc/systemd/system/ngps@sequencerd.service.d/order.conf
+
+# 3. Install environment file (only on first install -- preserve operator edits)
+if [ ! -f /etc/sysconfig/ngps ]; then
+  sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.env" /etc/sysconfig/ngps
+  echo "NOTE: created /etc/sysconfig/ngps -- edit to set PYTHONPATH /"
+  echo "      RUBIN_SIM_DATA_DIR / XPA_NSUSERS for this host"
+fi
+
+# 4. Install polkit rule and reload polkit so it sees the new rule
+sudo install -m 0644 "$WATCHDOG_DIR/polkit/10-ngps.rules" /etc/polkit-1/rules.d/10-ngps.rules
+sudo systemctl restart polkit 2>/dev/null || true
+
+# 5. Create the operator group. Users must be added per-deploy (see notes below).
+sudo groupadd ngpsops 2>/dev/null || true
+
+# 6. Tell systemd about the new units and start them
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+sudo systemctl enable --now ngps.target
+sudo systemctl enable --now ngps-watchdog.service
+
+cat <<'EOF'
+
+Watchdog system installed.
+
+Add interactive operators to ngpsops (they must log out + log back in afterward):
+
+    sudo usermod -aG ngpsops <username>      # e.g. observer
+
+Operators control daemons via systemctl directly -- no `ngps` wrapper is
+installed. Quick reference:
+
+    systemctl start|stop|restart ngps.target              # all 12 daemons
+    systemctl start|stop|restart ngps@<name>.service      # one daemon
+    systemctl status ngps.target 'ngps@*'                 # status
+    systemctl kill ngps.target                            # SIGKILL the lot
+
+Verify:
+
+    systemctl is-enabled ngps.target                                # -> enabled
+    ls -l /etc/systemd/system/multi-user.target.wants/ngps.target   # must exist
+    systemctl list-units 'ngps@*' --all
+    systemctl status ngps.target ngps-watchdog.service
+
+EOF

@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# restore -- undo the watchdog_system install and return the deploy host to a
+# state compatible with main (legacy `_ngps`/`ngps-daemon.{service,timer}`).
+#
+# Run as root or via sudo. Stops the new units before removing the unit files
+# so systemd does not lose track of running processes.
+#
+set -e
+
+# 1. Stop everything (commanded stop suppresses Restart=always)
+sudo systemctl stop ngps-watchdog.service || true
+sudo systemctl stop ngps.target           || true   # cascades via PartOf=
+
+# 2. Disable so nothing comes back on reboot
+sudo systemctl disable ngps.target ngps-watchdog.service 2>/dev/null || true
+sudo systemctl disable 'ngps@*.service'                  2>/dev/null || true
+
+# 3. Remove the unit files and any symlinks left behind
+sudo rm -f  /etc/systemd/system/ngps@.service
+sudo rm -f  /etc/systemd/system/ngps.target
+sudo rm -f  /etc/systemd/system/ngps-watchdog.service
+sudo rm -rf /etc/systemd/system/ngps@sequencerd.service.d
+sudo rm -f  /etc/systemd/system/multi-user.target.wants/ngps.target
+sudo rm -rf /etc/systemd/system/ngps.target.wants
+
+# 4. Remove the environment file and the polkit rule
+sudo rm -f /etc/sysconfig/ngps
+sudo rm -f /etc/polkit-1/rules.d/10-ngps.rules
+
+# 5. Remove any /usr/local/bin/ngps left behind by a prior install. The legacy
+#    `ngps` wrapper lives in the source tree at /home/developer/Software/run/ngps
+#    on main, so `git checkout main` reinstates it automatically -- nothing to
+#    restore here.
+sudo rm -f /usr/local/bin/ngps
+hash -r
+
+# 6. Tell systemd everything is gone
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+
+# 7. Re-enable the old boot path (whichever main uses)
+sudo systemctl enable --now ngps-daemon.timer   2>/dev/null || true
+sudo systemctl enable --now ngps-daemon.service 2>/dev/null || true
+
+cat <<'EOF'
+
+Restore complete. Verify with:
+
+    systemctl list-unit-files 'ngps*'        # ngps@.service / ngps.target / ngps-watchdog should NOT appear
+    systemctl list-units --failed            # empty (or unrelated)
+    ls /usr/local/bin/ngps                   # not found (legacy wrapper lives in run/ on main)
+    ls /etc/polkit-1/rules.d/ | grep ngps    # empty
+
+EOF
