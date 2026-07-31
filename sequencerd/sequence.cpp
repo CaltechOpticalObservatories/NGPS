@@ -750,9 +750,21 @@ namespace Sequencer {
       // science targets -- and those are NOT the same target; they must be fully
       // re-acquired.) On a true repeat the telescope was not moved (move_to_target skips
       // it), acquisition was already performed, and the science offset was already
-      // applied, so skip ACAM acquire, fine acquire, and the science re-offset, and let
-      // the observer continue straight to the exposure. Guiding state is intentionally
-      // NOT consulted (left to the observer). Use "clearlasttarget" to force re-acquisition.
+      // applied, so skip ACAM acquire, fine acquire, and the science re-offset.
+      //
+      // Whether the observer is then prompted follows the FINE ACQUIRE MODE:
+      //   ON  -> expose immediately. Nothing moved, so there is nothing for a person to
+      //          check, and a prompt defeats the purpose of a fast repeat (the whole
+      //          point is repeating a target at a new slit width / binning / exposure
+      //          time with no unnecessary waits). This is also what lets a robotic
+      //          scheduler use repeats at all: it cannot answer a prompt.
+      //   OFF -> prompt, exactly as an ordinary target does with fine acquire off. In
+      //          that mode the observer positions by hand and expects to be asked.
+      //
+      // Guiding state is intentionally NOT consulted (left to the observer): a repeat
+      // assumes the telescope held position, which the P200 does well without guiding
+      // for a long time. If guiding dropped and the target must be re-found, use
+      // "clearlasttarget" to force a full re-acquisition.
       //
       const bool repeat_target = ( !this->target.ra_hms.empty() &&
                                    this->target.ra_hms     == this->last_acquire_ra_hms  &&
@@ -807,11 +819,16 @@ namespace Sequencer {
         this->last_acquire_slitangle  = this->target.slitangle;
       }
 
-      // Repeat of the same target: skip all re-acquisition and just wait for the
-      // observer to continue (or cancel) before exposing.
+      // Repeat of the same target: skip all re-acquisition. The prompt follows the
+      // fine acquire MODE, not whether anything was actually run -- with fine acquire
+      // ON nothing moved and nothing needs checking, so expose immediately; with it
+      // OFF the observer positions by hand and expects to be asked, exactly as for an
+      // ordinary target in that mode.
       if ( !this->target.iscal && repeat_target ) {
-        this->broadcast.notice( function, "repeat of same target -- skipping re-acquisition" );
-        if ( this->wait_for_user()==ABORT ) {
+        const bool dofine = this->should_fineacquire.load();
+        this->broadcast.notice( function, std::string("repeat of same target -- skipping re-acquisition; ")
+                                          + ( dofine ? "exposing" : "waiting for user" ) );
+        if ( !dofine && this->wait_for_user()==ABORT ) {
           this->broadcast.notice( function, "cancelled" );
           return;
         }
