@@ -18,18 +18,25 @@
  *
  */
 int main(int argc, char **argv) {
-  std::string function = "Flexure::main";
+  const std::string function("main");
   std::stringstream message;
-  std::string logpath;
-  long ret=NO_ERROR;
+
+  // Unless specifically requested to run in foreground,
+  // immediately daemonize.
+  //
+  if ( !cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
+    logwrite(function, "starting daemon");
+    Daemon::daemonize( Flexure::DAEMON_NAME, "/tmp", "/dev/null", "/tmp/flexured.stderr", "", false );
+    std::cerr << get_timestamp() << "  (" << function << ") daemonized. child process running" << std::endl;
+  }
+  else logwrite(function, "starting");
+
+  // the child process instantiates a Server object
+  //
+  Flexure::Server flexured;
+
   std::string daemon_in;     // daemon setting read from config file
   bool start_daemon = false; // don't start as daemon unless specifically requested
-
-  // capture these signals
-  //
-  signal(SIGINT, signal_handler);
-  signal(SIGPIPE, signal_handler);
-  signal(SIGHUP, signal_handler);
 
   // check for "-f <filename>" command line option to specify config file
   //
@@ -57,6 +64,8 @@ int main(int argc, char **argv) {
     flexured.exit_cleanly();
   }
 
+  std::string logpath;
+
   for (int entry=0; entry < flexured.config.n_entries; entry++) {
     if (flexured.config.param[entry] == "LOGPATH") logpath = flexured.config.arg[entry];
     if (flexured.config.param[entry] == "DAEMON")  daemon_in = flexured.config.arg[entry];
@@ -79,45 +88,19 @@ int main(int argc, char **argv) {
     flexured.exit_cleanly();
   }
 
-  if ( !daemon_in.empty() && daemon_in == "yes" ) start_daemon = true;
-  else
-  if ( !daemon_in.empty() && daemon_in == "no"  ) start_daemon = false;
-  else {
-    message.str(""); message << "ERROR: unrecognized argument DAEMON=" << daemon_in << ", expected { yes | no }";
-    logwrite( function, message.str() );
-    flexured.exit_cleanly();
-  }
-
-  // check for "-d" command line option last so that the command line
-  // can override the config file to start as daemon
-  //
-  if ( cmdOptionExists( argv, argv+argc, "-d" ) ) {
-    start_daemon = true;
-  }
-
-  // --foreground forces foreground regardless of -d or config DAEMON= (for systemd Type=notify)
-  //
-  if ( cmdOptionExists( argv, argv+argc, "--foreground" ) ) {
-    start_daemon = false;
-  }
-
-  if ( start_daemon ) {
-    logwrite( function, "starting daemon" );
-    Daemon::daemonize( Flexure::DAEMON_NAME, "/tmp", "", "", "" );
-  }
-
   if ( ( init_log( logpath, Flexure::DAEMON_NAME ) != 0 ) ) {        // initialize the logging system
     logwrite(function, "ERROR: unable to initialize logging system");
     flexured.exit_cleanly();
   }
+  logwrite(function, "world");
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << flexured.config.n_entries << " lines read from " << flexured.config.filename;
   logwrite(function, message.str());
 
-  if (ret==NO_ERROR) ret=flexured.configure_flexured();    // get needed values out of read-in configuration file for the daemon
+  long ret=flexured.configure_flexured();    // get needed values out of read-in configuration file for the daemon
 
   if (ret != NO_ERROR) {
     logwrite(function, "ERROR: unable to configure system");
@@ -131,7 +114,7 @@ int main(int argc, char **argv) {
 
   // initialize the pub/sub handler
   //
-  if ( flexured.interface.init_pubsub() == ERROR ) {
+  if ( flexured.interface.init_pubsub({Topic::TCSD}) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     flexured.exit_cleanly();
   }
@@ -140,6 +123,18 @@ int main(int argc, char **argv) {
   // publish current state so the world knows I'm online
   //
   flexured.interface.publish_status( true );
+
+  // Ask tcsd for a current snapshot. On a restart the broker replays tcsd's
+  // last cached message, which tcs_info time-stamps on receipt, so without
+  // this request an old cached reading would look fresh for 10 seconds.
+  //
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  try {
+    flexured.interface.request_tcs_snapshot();
+  }
+  catch ( const std::exception &e ) {
+    logwrite( function, "ERROR requesting TCS snapshot: "+std::string(e.what()) );
+  }
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
@@ -226,40 +221,3 @@ int main(int argc, char **argv) {
   return 0;
 }
 /***** main *******************************************************************/
-
-
-/***** signal_handler *********************************************************/
-/**
- * @brief      handles ctrl-C
- * @param[in]  signo
- *
- */
-void signal_handler(int signo) {
-  std::string function = "Flexure::signal_handler";
-  std::stringstream message;
-
-  switch (signo) {
-    case SIGTERM:
-    case SIGINT:
-      logwrite(function, "received termination signal");
-      message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
-      flexured.interface.async.enqueue( message.str() );
-      flexured.exit_cleanly();                   // shutdown the daemon
-      break;
-    case SIGHUP:
-      logwrite(function, "caught SIGHUP");
-      break;
-    case SIGPIPE:
-      logwrite(function, "caught SIGPIPE");
-      break;
-    default:
-      message << "received unknown signal " << strsignal(signo);
-      logwrite( function, message.str() );
-      message.str(""); message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
-      flexured.interface.async.enqueue( message.str() );
-      flexured.exit_cleanly();                   // shutdown the daemon
-      break;
-  }
-  return;
-}
-/***** signal_handler *********************************************************/

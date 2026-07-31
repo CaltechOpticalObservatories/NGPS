@@ -33,12 +33,26 @@ namespace TCS {
     this->publish_snapshot(dontcare);
   }
   void Interface::publish_snapshot(std::string &retstring) {
-    // fill the tcs_info class with current info
+    // Only read the TCS when there is a connection to read it with,
+    // and when closed, erase the class.
     //
-    this->get_tcs_info();
+    bool isopen = false;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    isopen = this->tcs_info.isopen;
+    }
+
+    if ( isopen ) {
+      this->get_tcs_info();  // fill the tcs_info class with current info
+    }
+    else {
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      this->tcs_info.init();
+    }
 
     nlohmann::json jmessage_out;
     jmessage_out[Key::SOURCE] = Daemon::TCSD;
+    jmessage_out[Key::PUBTIME] = get_time_us();  // so subscribers can age this
 
     std::string motion;
     {
@@ -47,24 +61,28 @@ namespace TCS {
     motion = this->tcs_info.motion;
     jmessage_out[Key::Tcsd::MOTION] = motion;
     jmessage_out[Key::ISOPEN]       = this->tcs_info.isopen;
-    jmessage_out["TCSNAME"]         = this->tcs_info.tcsname;
+    jmessage_out[Key::Tcsd::TCSNAME] = this->tcs_info.tcsname;
 
-    jmessage_out["PA"]              = this->tcs_info.pa;         // double
+    jmessage_out[Key::Tcsd::PA]       = this->tcs_info.pa;         // double
     jmessage_out[Key::Tcsd::CASANGLE] = this->tcs_info.cassangle;  // double
-    jmessage_out["HA"]              = this->tcs_info.ha;         // string
-    jmessage_out["RAOFFSET"]        = this->tcs_info.offsetra;   // double
-    jmessage_out["DECLOFFS"]        = this->tcs_info.offsetdec;  // double
+    jmessage_out[Key::Tcsd::HA]     = this->tcs_info.ha;         // string
+    jmessage_out[Key::Tcsd::RAOFFSET] = this->tcs_info.offsetra;   // double
+    jmessage_out[Key::Tcsd::DECLOFFS] = this->tcs_info.offsetdec;  // double
     jmessage_out[Key::Tcsd::TELRA]  = this->tcs_info.ra_hms;     // string "hh:mm:ss.s"
     jmessage_out[Key::Tcsd::TELDEC] = this->tcs_info.dec_dms;    // string "dd:mm:ss.s"
-    jmessage_out["RA"]              = radec_to_decimal( this->tcs_info.ra_hms );
-    jmessage_out["DEC"]             = radec_to_decimal( this->tcs_info.dec_dms );
+    jmessage_out[Key::Tcsd::TELRA_H]  = radec_to_decimal( this->tcs_info.ra_hms );
+    jmessage_out[Key::Tcsd::TELDEC_D] = radec_to_decimal( this->tcs_info.dec_dms );
     jmessage_out[Key::Tcsd::AZ]     = this->tcs_info.azimuth;
     jmessage_out[Key::Tcsd::ALT]    = 90. - this->tcs_info.zenithangle;
-    jmessage_out["ZENANGLE"]        = this->tcs_info.zenithangle;
-    jmessage_out["DOMEAZ"]          = this->tcs_info.domeazimuth;
-    jmessage_out["DOMESHUT"]        = this->tcs_info.domeshutters==1?"open":"closed";
-    jmessage_out["TELFOCUS"]        = this->tcs_info.focus;
+    jmessage_out[Key::Tcsd::ZENANGLE]        = this->tcs_info.zenithangle;
+    jmessage_out[Key::Tcsd::DOMEAZ] = this->tcs_info.domeazimuth;
+    jmessage_out[Key::Tcsd::DOMESHUT] = this->tcs_info.domeshutters==1?"open":"closed";
+    jmessage_out[Key::Tcsd::TELFOCUS] = this->tcs_info.focus;
     jmessage_out[Key::Tcsd::AIRMASS] = this->tcs_info.airmass;
+
+    for (const auto &[name,info] : this->tcs_info.lampinfo) {    // TCS lamp states
+      jmessage_out[info.key] = info.state;
+    }
     }
 
     // broadcast motion status if it changed
@@ -77,8 +95,6 @@ namespace TCS {
     }
     }
 
-    // for backwards compatibility
-    jmessage_out["messagetype"] = "tcsinfo";
     retstring=jmessage_out.dump();
     retstring.append(JEOF);
 
@@ -154,40 +170,56 @@ namespace TCS {
    */
   long Interface::get_tcs_info() {
     long error = NO_ERROR;
-    std::string retstring;
+    std::string reqpos, reqstat, weather, parallactic, motion, lamps;
 
+    // Serialize pollers. Held across the I/O so two overlapping calls can't have
+    // the slower one commit older data over the newer, but this blocks only other
+    // pollers -- readers of tcs_info are never delayed by it. Lock order is
+    // query_mtx then tcs_info_mtx.
+    //
+    std::lock_guard<std::mutex> qlock(query_mtx);
+
+    // Call the native functions to read everything from the TCS into local
+    // buffers, without holding the lock that protects tcs_info. Each command
+    // gets its own buffer so that a command which returns early can't leave the
+    // previous command's reply to be parsed by the next one.
+    //
+    error |= this->send_command( "REQPOS", reqpos, TCS::FAST_RESPONSE );
+    std::replace( reqpos.begin(), reqpos.end(), '\n', ',');
+
+    error |= this->send_command( "REQSTAT", reqstat, TCS::FAST_RESPONSE );
+    std::replace( reqstat.begin(), reqstat.end(), '\n', ',');
+
+    error |= this->send_command( "?WEATHER", weather, TCS::FAST_RESPONSE );
+    std::replace( weather.begin(), weather.end(), '\n', ',');
+
+    error |= this->send_command( "?PARALLACTIC", parallactic, TCS::FAST_RESPONSE );
+    std::replace( parallactic.begin(), parallactic.end(), '\n', ',');
+
+    error |= this->send_command( "?MOTION", motion, TCS::FAST_RESPONSE );
+    std::replace( motion.begin(), motion.end(), '\n', ',');
+
+    error |= this->send_command( "LAMPS?", lamps, TCS::FAST_RESPONSE );
+    std::replace( lamps.begin(), lamps.end(), '\n', ',');
+
+    // Erase the class and parse everything into it in a single critical section,
+    // because it's all or nothing. If something failed partway through, we don't
+    // want to mix values from a command now with values from an earlier command.
+    // E.G. if reqpos fails here but reqstat and weather succeed, we don't want
+    // the class to contain values from this reqstat and an earlier call to
+    // reqpos. Committing all at once also means no reader can observe a poll in
+    // progress.
+    //
     std::lock_guard<std::mutex> lock(tcs_info_mtx);
 
-    // erase the class because it's all or nothing. If something fails partway
-    // through, we don't want to mix values from a command now with values from
-    // an earlier command. E.G. if reqpos fails here but reqstat and weather
-    // succeed, we don't want the class to contain values from this reqstat and
-    // an earlier call to reqpos.
-    //
     this->tcs_info.init();
 
-    // Call the three native functions and the associated parsing function,
-    // which will populate the tcs_info class.
-    //
-    error |= this->send_command( "REQPOS", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_reqpos( retstring );
-
-    error |= this->send_command( "REQSTAT", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_reqstat( retstring );
-
-    error |= this->send_command( "?WEATHER", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_weather( retstring );
-
-    error |= this->send_command( "?PARALLACTIC", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.parse_pa( retstring );
-
-    error |= this->send_command( "?MOTION", retstring, TCS::FAST_RESPONSE );
-    std::replace( retstring.begin(), retstring.end(), '\n', ',');
-    this->tcs_info.motion = retstring;
+    this->tcs_info.parse_reqpos( reqpos );
+    this->tcs_info.parse_reqstat( reqstat );
+    this->tcs_info.parse_weather( weather );
+    this->tcs_info.parse_pa( parallactic );
+    this->tcs_info.motion = motion;
+    this->tcs_info.parse_lamps( lamps );
 
     return error;
   }
@@ -414,7 +446,6 @@ namespace TCS {
    */
   long Interface::isopen( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::isopen";
-    std::stringstream message;
 
     // Help
     //
@@ -1173,14 +1204,16 @@ namespace TCS {
       return ERROR;
     }
 
-    // parse the reply which stores it in the TcsInfo class
+    // Parse the reply into a local TcsInfo. get_tcs_info() refreshes the shared
+    // tcs_info.pa on every poll, so this query must not write to it -- that would
+    // put a pa into the published record which was sampled at a different time
+    // than everything else in it.
     //
+    TcsInfo info;
+    info.parse_pa(tcsreply);
+
     std::ostringstream oss;
-    this->tcs_info.parse_pa(tcsreply);
-    {
-    std::lock_guard<std::mutex> lock(tcs_info_mtx);
-    oss << this->tcs_info.pa;
-    }
+    oss << info.pa;
     retstring = oss.str();
 
     if ( !retstring.empty() && !silent ) logwrite( function, retstring );
@@ -1269,7 +1302,6 @@ namespace TCS {
    */
   long Interface::get_motion( const std::string &arg, std::string &retstring ) {
     std::string function = "TCS::Interface::get_motion";
-    std::stringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -1285,7 +1317,13 @@ namespace TCS {
     // continuously (sequencerd, targetcontrol GUI) don't flood the log
     // with ERROR on every call after a shutdown.
     //
-    if ( ! this->tcs_info.isopen ) {
+    bool isopen;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    isopen = this->tcs_info.isopen;
+    }
+
+    if ( ! isopen ) {
       retstring = "not_connected";
       return NO_ERROR;
     }
@@ -1390,8 +1428,6 @@ namespace TCS {
    */
   long Interface::coords( std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::coords";
-    std::string retcode;
-    std::stringstream message;
 
     // Help
     //
@@ -1423,6 +1459,178 @@ namespace TCS {
     return error;
   }
   /***** TCS::Interface::coords ***********************************************/
+
+
+  /***** TCS::Interface::lamp *************************************************/
+  /**
+   * @brief      dome lamp control
+   * @details    TCS-native command is "NPS <cmd> <lamp>" where
+   *             <cmd>  is: 0=off, 1=on, 2=state
+   *             <lamp> is: 1=low, 2=high, 3=He arc, 4=new high
+   * @param[in]  args       expect "<lamp> [ on | off ]"
+   * @param[out] retstring
+   * @return     ERROR | NO_ERROR | HELP
+   *
+   */
+  long Interface::lamp( std::string args, std::string &retstring ) {
+    std::string function = "TCS::Interface::lamp";
+
+    // Help
+    //
+    if ( args == "?" ) {
+      retstring = TCSD_LAMP;
+      retstring.append( " <lamp> [ on | off ]\n" );
+      retstring.append( "  where <lamp> is one of { " );
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      for (const auto &[name,info] : this->tcs_info.lampinfo) {
+        retstring.append( name );
+        retstring.append( " " );
+      }
+      retstring.append( "} and is case-insensitive.\n" );
+      retstring.append( "  The optional { on off } will turn the designated lamp on or off.\n" );
+      retstring.append( "  No argument will return the lamp state.\n" );
+      return HELP;
+    }
+
+    // check arguments. default to status and unspecified lamp.
+    //
+    std::vector<std::string> tokens;
+    int ntok = Tokenize( args, tokens, " " );
+
+    std::string state="status";  // optional
+    std::string which="";        // required
+
+    if ( ntok < 1 || ntok > 2 ) { retstring="invalid_arguments"; return ERROR; }
+    if ( ntok > 1 ) state = tokens.at(1);
+    if ( ntok > 0 ) which = tokens.at(0);
+
+    make_uppercase( which );
+
+    // default req_state reads status and arg can override this
+    //
+    int req_state = 2;  // status
+
+    if ( caseCompareString( state, "on" ) )  req_state = 1;
+    else
+    if ( caseCompareString( state, "off" ) ) req_state = 0;
+
+    // no default lamp, must be specified
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    auto lamploc = this->tcs_info.lampinfo.find(which);
+    if (lamploc==this->tcs_info.lampinfo.end()) {
+      logwrite(function, "ERROR unknown lamp '"+which+"'");
+      retstring = "unknown_lamp";
+      return ERROR;
+    }
+    }
+
+    long error = NO_ERROR;
+
+    // requesting on|off
+    //
+    if (req_state!=2) {
+      error = set_lamp(which, req_state);
+      if (error != NO_ERROR) {
+        logwrite(function, "ERROR setting lamp '"+which+"'");
+        retstring="ERR";
+        return ERROR;
+      }
+    }
+
+    // whether or not requesting on|off, check state now
+    // which requires a completely different command
+    //
+    error = get_lamp(which, retstring);
+
+    if (error != NO_ERROR) {
+      logwrite(function, "ERROR reading state of lamp '"+which+"'");
+      retstring="ERR";
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::lamp *************************************************/
+
+
+  /***** TCS::Interface::set_lamp *********************************************/
+  /**
+   * @brief      set on|off state of specified lamp
+   * @param[in]  which  name of lamp
+   * @param[in]  state  0=off 1=on
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::set_lamp(const std::string &which, int state) {
+    size_t lampnum = -1;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    lampnum = this->tcs_info.lampinfo[which].num;
+    }
+
+    // send lamp power command to TCS
+    std::ostringstream cmd;
+    cmd << "NPS " << state << " " << lampnum;
+    std::string reply;
+    long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    // the mechanism takes time to respond and the TCS only checks for
+    // this command once per second. yes it really takes this long.
+    if (error==NO_ERROR) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::set_lamp *********************************************/
+
+
+  /***** TCS::Interface::get_lamp *********************************************/
+  /**
+   * @brief      get on|off state of specified lamp
+   * @param[in]  which      name of lamp
+   * @param[out] retstring  reference to return string for the on|off state
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::get_lamp(const std::string &which, std::string &retstring) {
+    size_t lampnum = -1;
+    {
+    std::lock_guard<std::mutex> lock(tcs_info_mtx);
+    lampnum = this->tcs_info.lampinfo[which].num;
+    }
+
+    // send lamp query command to TCS
+    std::ostringstream cmd;
+    cmd << "LAMPS?";
+    std::string reply;
+    long error = this->send_command( cmd.str(), reply, TCS::FAST_RESPONSE );
+
+    // tokenize reply which contains comma-delimited list of all lamps
+    std::vector<std::string> tokens;
+    Tokenize( reply, tokens, "," );
+
+    size_t lampindex = lampnum-1;  // vector index into 1-based lampnum
+
+    if (lampindex < 0 || lampindex >= tokens.size()) {
+      logwrite("TCS::Interface::get_lamp", "ERROR expected n,n,n,n but got '"+reply+"'");
+      return ERROR;
+    }
+
+    try {
+      int state = std::stoi(tokens.at(lampindex));
+      retstring = (state==1 ? "on" : "off");
+      std::lock_guard<std::mutex> lock(tcs_info_mtx);
+      this->tcs_info.lampinfo[which].state = state;
+    }
+    catch (const std::exception &e) {
+      logwrite("TCS::Interface::get_lamp", "ERROR "+std::string(e.what()));
+      return ERROR;
+    }
+
+    return error;
+  }
+  /***** TCS::Interface::get_lamp *********************************************/
 
 
   /***** TCS::Interface::pt_offset ********************************************/
@@ -1526,8 +1734,6 @@ namespace TCS {
    */
   long Interface::zero_offsets( const std::string args, std::string &retstring ) {
     std::string function = "TCS::Interface::zero_offsets";
-    std::string retcode;
-    std::stringstream message;
 
     // Help
     //
@@ -1649,6 +1855,8 @@ namespace TCS {
     }
     else                                                // These commands reply with information (not a code)...
     if ( cmd == "?NAME"        ||
+         cmd == "LAMPS?"       ||
+         cmd == "NPS"          ||
          cmd == "?PARALLACTIC" ||
          cmd == "?WEATHER"     ||
          cmd == "RAWDEC"       ||
@@ -1800,6 +2008,11 @@ namespace TCS {
 
 
   /***** TCS::TcsInfo::parse_pa ***********************************************/
+  /**
+   * @brief      extract parallactic angle from string and store it in the class
+   * @param[in]  input  "PARALLACTIC = xx.xx"
+   *
+   */
   void TcsInfo::parse_pa( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_pa");
 
@@ -1825,6 +2038,11 @@ namespace TCS {
 
 
   /***** TCS::TcsInfo::parse_weather ******************************************/
+  /**
+   * @brief      extract values from "?WEATHER" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_weather( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
@@ -1869,8 +2087,15 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_weather ******************************************/
 
 
+  /***** TCS::TcsInfo::parse_reqstat ******************************************/
+  /**
+   * @brief      extract values from "REQSTAT" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_reqstat( std::string &input ) {
     const std::string function("TCS::TcsInfo::parse_weather");
     std::stringstream message;
@@ -1915,7 +2140,15 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_reqstat ******************************************/
 
+
+  /***** TCS::TcsInfo::parse_reqpos *******************************************/
+  /**
+   * @brief      extract values from "REQPOS" command and store in the class
+   * @param[in]  input
+   *
+   */
   void TcsInfo::parse_reqpos( std::string &input ) {
     const std::string function="TCS::TcsInfo::parse_weather";
     std::stringstream message;
@@ -1959,5 +2192,49 @@ namespace TCS {
     }
     return;
   }
+  /***** TCS::TcsInfo::parse_reqpos *******************************************/
 
+
+  /***** TCS::TcsInfo::parse_lamps ********************************************/
+  /**
+   * @brief      extract values from "LAMPS?" command and store in TcsInfo class
+   * @details    TCS replies with #,#,#,# where #={0 1} to indicate the state of
+   *             lamps 1,2,3,4
+   * @param[in]  input
+   *
+   */
+  void TcsInfo::parse_lamps( std::string &input ) {
+    const std::string function="TCS::TcsInfo::parse_lamps";
+    std::stringstream message;
+
+    // input string is expected to be: #,#,#,# DONE
+    // Remove "DONE"
+    //
+    size_t pos = input.find("DONE");
+    if ( pos != std::string::npos ) input.erase( pos, 4 );
+
+    // Tokenize on the comma "," and expect 4 tokens
+    //
+    std::vector<std::string> tokens;
+    Tokenize( input, tokens, "," );
+
+    if (tokens.size() != 4) {
+      logwrite(function, "ERROR expected 4 tokens but got '"+input+"'");
+      return;
+    }
+
+    // lampinfo map indexed by name but TCS response held by tokens is indexed by number.
+    // This is not particularly efficient but there are only four to loop through.
+    //
+    for (auto &[name,info] : this->lampinfo) {
+      for (size_t tok=0; tok<tokens.size(); tok++) {  // tokens index is 0-based
+        if (info.num==(tok+1)) {                   // lamp nums are 1-based
+          try { info.state = std::stoi(tokens[tok]); }
+          catch(...) { logwrite(function, "ERROR parsing '"+input+"'"); }
+          break;
+        }
+      }
+    }
+  }
+  /***** TCS::TcsInfo::parse_lamps ********************************************/
 }

@@ -20,9 +20,8 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 
 # C-Python API Development libraries and headers
 #
-find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
-find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-include_directories( ${PYTHON_DEV} )
+find_path(PYTHON_DEV "Python.h" PATHS ${PYTHON_INCLUDE_DIR} NO_DEFAULT_PATH)
+find_library(PYTHON_LIB ${PYTHON_VERSION} PATHS ${PYTHON_LIB_DIR} NO_DEFAULT_PATH)
 
 # ZMQ
 #
@@ -42,7 +41,7 @@ add_executable(sequencerd
         ${SEQUENCER_DIR}/sequencer_server.cpp 
         ${SEQUENCER_DIR}/sequencer_interface.cpp 
         ${SEQUENCER_DIR}/sequence_acquisition.cpp
-        ${SEQUENCER_DIR}/sequence.cpp
+        ${SEQUENCER_DIR}/sequence.cpp 
         )
 target_include_directories(sequencerd PRIVATE
         ${PYTHON_DEV}

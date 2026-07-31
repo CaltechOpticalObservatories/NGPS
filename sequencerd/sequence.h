@@ -342,6 +342,7 @@ namespace Sequencer {
           tcs_settle_stable(1),
           tcs_domeazi_ready(1),
           tcs_preauth_time(0),
+          offset_settle_sec(3),
           do_once(false),
           tcs_which("real"),
           tcs_name("offline"),
@@ -368,16 +369,16 @@ namespace Sequencer {
                   [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) },
               { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-              { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) },
               { Topic::CALIBD, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_calibd(msg); } ) },
+              { Topic::POWERD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_powerd(msg); } ) },
+              { Topic::CAMERAD, std::function<void(const nlohmann::json&)>(
+                  [this](const nlohmann::json &msg) { handletopic_camerad(msg); } ) },
               { Topic::FLEXURED, std::function<void(const nlohmann::json&)>(
                   [this](const nlohmann::json &msg) { handletopic_flexured(msg); } ) },
               { Topic::FOCUSD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_focusd(msg); } ) },
-              { Topic::POWERD, std::function<void(const nlohmann::json&)>(
-                  [this](const nlohmann::json &msg) { handletopic_powerd(msg); } ) }
+                  [this](const nlohmann::json &msg) { handletopic_focusd(msg); } ) }
             };
           }
 
@@ -415,6 +416,7 @@ namespace Sequencer {
       double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
+      double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
@@ -429,6 +431,10 @@ namespace Sequencer {
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
       std::condition_variable tcsd_cv;
+      std::mutex calibd_mtx;
+      std::condition_variable calibd_cv;
+      std::mutex powerd_mtx;
+      std::condition_variable powerd_cv;
       std::mutex wait_mtx;
       std::condition_variable cv;
       std::mutex cv_mutex;
@@ -449,6 +455,10 @@ namespace Sequencer {
                                       ///< Sequencer::TargetInfo is defined in sequencer_interface.h
 
       CalibrationTarget caltarget;
+
+      TcsInfo   tcsinfo;    ///< most recent tcsd telemetry, guarded by tcsd_mtx
+      CalibInfo calibinfo;  ///< most recent calibd telemetry, guarded by calibd_mtx
+      PowerInfo powerinfo;  ///< most recent powerd telemetry, guarded by powerd_mtx
 
       std::string single_obsid;       ///< obsid for single-target GETONE command
       std::string prev_single_obsid;  ///< the previous single_obsid, used for REPEAT
@@ -501,7 +511,7 @@ namespace Sequencer {
       void handletopic_focusd( const nlohmann::json &jmessage );
       void handletopic_powerd( const nlohmann::json &jmessage );
       void publish_snapshot();
-      void request_snapshot();
+      void request_snapshot( const std::string &daemon="" );
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();
@@ -615,6 +625,7 @@ namespace Sequencer {
       long do_acam_stop();
       long do_slicecam_fineacquire();
       long do_slicecam_stop();
+      long do_slicecam_autoexpose( bool enable );
 
 
       long acam_init();                                        ///< initializes connection to acamd

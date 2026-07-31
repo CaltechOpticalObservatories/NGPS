@@ -53,7 +53,13 @@ namespace Key {
 
   inline const std::string SOURCE  = "source";
   inline const std::string PUBTIME = "pubtime";
-  inline const std::string ISOPEN  = "isopen";   // hardware connection state, published by every hardware daemon
+  inline const std::string ISOPEN  = "isopen";   ///< hardware connection state, published by every hardware daemon
+
+  // Build provenance. Every publisher includes these so that a consumer can
+  // tell which software was running when a message was produced.
+  //
+  inline const std::string GITHASH   = "githash";    ///< commit the publisher was built from
+  inline const std::string BUILDTIME = "buildtime";  ///< when the publisher was built, YYYY-MM-DDThh:mm:ss UTC
 
   namespace Broadcast {
     inline const std::string SEVERITY = "severity";
@@ -105,6 +111,7 @@ namespace Key {
   namespace Slicecamd {
     inline const std::string FINEACQUIRE_LOCKED  = "fineacquire_locked";
     inline const std::string FINEACQUIRE_RUNNING = "fineacquire_running";
+    inline const std::string AUTOEXPOSE_RUNNING  = "autoexpose_running";
     inline const std::string TANDOR_L            = "tandor_L";
     inline const std::string TANDOR_R            = "tandor_R";
   }
@@ -120,18 +127,26 @@ namespace Key {
   namespace Tcsd {
     inline const std::string TELRA    = "TELRA";
     inline const std::string TELDEC   = "TELDEC";
+    inline const std::string TELRA_H  = "TELRA_H";
+    inline const std::string TELDEC_D = "TELDEC_D";
     inline const std::string ALT      = "ALT";
     inline const std::string AZ       = "AZ";
     inline const std::string AIRMASS  = "AIRMASS";
     inline const std::string CASANGLE = "CASANGLE";
     inline const std::string MOTION   = "MOTION";
+    inline const std::string TCSNAME  = "TCSNAME";
     inline const std::string HA       = "HA";
+    inline const std::string PA       = "PA";
     inline const std::string RAOFFSET = "RAOFFSET";
     inline const std::string DECLOFFS = "DECLOFFS";
     inline const std::string ZENANGLE = "ZENANGLE";
     inline const std::string DOMEAZ   = "DOMEAZ";
     inline const std::string DOMESHUT = "DOMESHUT";
     inline const std::string TELFOCUS = "TELFOCUS";
+    inline const std::string LAMP_LO  = "LAMP_LO";
+    inline const std::string LAMP_HI  = "LAMP_HI";
+    inline const std::string LAMP_ARC = "LAMP_ARC";
+    inline const std::string LAMP_ULTRA= "LAMP_ULTRA";
   }
 
   namespace Calibd {
@@ -139,25 +154,31 @@ namespace Key {
     inline const std::string MODTHAR  = "MODTHAR";
     inline const std::string MODBLCON = "MODBLCON";
     inline const std::string MODBLBYP = "MODBLBYP";
+    inline const std::string MODBLETA = "MODBLETA";
     inline const std::string MODRDCON = "MODRDCON";
     inline const std::string MODRDBYP = "MODRDBYP";
+    inline const std::string MODRDETA = "MODRDETA";
     inline const std::string CALCOVER = "CALCOVER";
     inline const std::string CALDOOR  = "CALDOOR";
   }
 
   namespace Flexured {
-    inline const std::string FLXSPE_I = "FLXSPE_I";
-    inline const std::string FLXSPA_I = "FLXSPA_I";
-    inline const std::string FLXPIS_I = "FLXPIS_I";
-    inline const std::string FLXSPE_R = "FLXSPE_R";
-    inline const std::string FLXSPA_R = "FLXSPA_R";
-    inline const std::string FLXPIS_R = "FLXPIS_R";
-    inline const std::string FLXSPE_G = "FLXSPE_G";
-    inline const std::string FLXSPA_G = "FLXSPA_G";
-    inline const std::string FLXPIS_G = "FLXPIS_G";
-    inline const std::string FLXSPE_U = "FLXSPE_U";
-    inline const std::string FLXSPA_U = "FLXSPA_U";
-    inline const std::string FLXPIS_U = "FLXPIS_U";
+    inline const std::string AxisX = "FLEX_X_";
+    inline const std::string AxisY = "FLEX_Y_";
+    inline const std::string AxisZ = "FLEX_Z_";
+
+    inline const std::string FLEX_X_U = "FLEX_X_U";
+    inline const std::string FLEX_Y_U = "FLEX_Y_U";
+    inline const std::string FLEX_Z_U = "FLEX_Z_U";
+    inline const std::string FLEX_X_G = "FLEX_X_G";
+    inline const std::string FLEX_Y_G = "FLEX_Y_G";
+    inline const std::string FLEX_Z_G = "FLEX_Z_G";
+    inline const std::string FLEX_X_R = "FLEX_X_R";
+    inline const std::string FLEX_Y_R = "FLEX_Y_R";
+    inline const std::string FLEX_Z_R = "FLEX_Z_R";
+    inline const std::string FLEX_X_I = "FLEX_X_I";
+    inline const std::string FLEX_Y_I = "FLEX_Y_I";
+    inline const std::string FLEX_Z_I = "FLEX_Z_I";
   }
 
   namespace Focusd {

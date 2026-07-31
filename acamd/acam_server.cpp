@@ -920,6 +920,7 @@ namespace Acam {
       if ( cmd == ACAMD_FILTER ) {
                       ret = this->interface.motion.filter( args, retstring );
          if (ret==NO_ERROR) this->interface.guider_settings_control();          // update Guider GUI display igores ret
+         if (ret==NO_ERROR) this->interface.publish_status();                   // push filter change to subscribers
       }
       else
 
@@ -927,6 +928,7 @@ namespace Acam {
       //
       if ( cmd == ACAMD_COVER ) {
                       ret = this->interface.motion.cover( args, retstring );
+         if (ret==NO_ERROR) this->interface.publish_status();                   // push cover change to subscribers
       }
       else
 

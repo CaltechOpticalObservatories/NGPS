@@ -12,7 +12,9 @@
 #include "pi.h"
 #include "logentry.h"
 #include "common.h"
+#include "tcs_info.h"
 #include "flexured_commands.h"
+#include "flexure_compensator.h"
 #include <sys/stat.h>
 #include <map>
 #include <condition_variable>
@@ -49,7 +51,7 @@ namespace Flexure {
 
       /**
        * @struct Status
-       * @brief  published flexure state: actuator position (um) by FLX<axis>_<chan> key; NaN if unavailable
+       * @brief  published flexure actuator position (um); NaN if unavailable
        */
       struct Status {
         std::map<std::string,double> positions;
@@ -70,19 +72,28 @@ namespace Flexure {
       std::mutex publish_mutex;                        ///< serializes publish-on-change; held over get_status() — @TODO revisit
 
     public:
-
-      Interface()
-        : context(),
-          numdev(-1),
-          is_subscriber_thread_running(false),
-          should_subscriber_thread_run(false),
-          motorinterface( FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE )
+      Interface() :
+        context(),
+        numdev(-1),
+        motorinterface(FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE),
+        subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
+        is_subscriber_thread_running(false),
+        should_subscriber_thread_run(false),
+        tcs_snapshot_status(false),
+        tcs_info(),
+        compensator(tcs_info)
       {
         topic_handlers = {
           { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
-                     [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) }
+              [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
+          { Topic::TCSD, std::function<void(const nlohmann::json&)>(
+              [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) }
         };
       }
+
+      // PI Interface class for the Piezo type
+      //
+      Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo> motorinterface;
 
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object
       std::string publisher_address;                   ///< publish socket endpoint
@@ -96,24 +107,30 @@ namespace Flexure {
                          std::function<void(const nlohmann::json&)>> topic_handlers;
                                                        ///< maps a handler function to each topic
 
+      bool tcs_snapshot_status;
+      std::mutex snapshot_mutex;
+
+      // publish/subscribe functions
+      //
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {
-        if (!subscriber) {
-          subscriber = std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB);
-        }
         return Common::PubSubHandler::init_pubsub(context, *this, topics);
       }
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );  ///< respond to a snapshot request
+      void handletopic_tcsd( const nlohmann::json &jmessage );      ///< store TCS telemetry published by tcsd
       void get_status();                                            ///< refresh status from hardware
       void publish_status( bool force=false );                      ///< publish flexure state on change (or force)
 
+      void request_tcs_snapshot();               ///< ask tcsd to publish a snapshot of its telemetry
+      bool wait_for_tcs_snapshot();              ///< wait for that snapshot to be received
+
       Common::Queue async;
 
-      // PI Interface class for the Piezo type
-      //
-      Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo> motorinterface;
+      TcsInfo tcs_info;                          ///< defined in tcs_info.h
+
+      Compensator compensator;
 
       long initialize_class();
       long open();                               ///< opens the PI socket connection
@@ -123,6 +140,7 @@ namespace Flexure {
       long set( std::string args, std::string &retstring ); ///< set the slit width and offset
       long get( std::string args, std::string &retstring ); ///< get the current width and offset
       long compensate( std::string args, std::string &retstring );  ///< perform flexure compensation
+      void offset_tiptilt(const std::string &chan, const std::pair<double,double> &delta, bool is_dryrun);
 
       long stop();                               ///< send the stop-all-motion command to all controllers
       long send_command( const std::string &name, std::string cmd );      ///< writes the raw command as received to the master controller, no reply
@@ -136,6 +154,18 @@ namespace Flexure {
       std::mutex wait_mtx;                       ///< mutex object for waiting for threads
       std::condition_variable cv;                ///< condition variable for waiting for threads
 
+
+      void validate_tcs_telemetry() {
+        // if TCS telemetry is old then ask it to publish
+        //
+        if (this->tcs_info.is_older_than(std::chrono::seconds(10))) {
+          try {
+            this->request_tcs_snapshot();
+            this->wait_for_tcs_snapshot();
+          }
+          catch (const std::exception &e) { throw; }
+        }
+      }
   };
   /***** Flexure::Interface ***************************************************/
 

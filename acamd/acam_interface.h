@@ -351,6 +351,7 @@ namespace Acam {
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
 
       double tcs_max_offset;
+      double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for a deliberate goal offset (put-on-slit etc.) applied while guiding; defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
 
       double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
@@ -359,6 +360,7 @@ namespace Acam {
 
       std::vector<double> ra_offs, dec_offs;          ///< lists of offsets for median filtering
       std::vector<std::chrono::steady_clock::time_point> time_offs;
+      std::mutex offset_params_mtx;                   ///< guards ra_offs/dec_offs/time_offs (median_filter vs reset_offset_params)
       std::chrono::seconds::rep tcs_offset_period;    ///< period at which to send offsets while guiding
 
       struct coords_t {
@@ -378,6 +380,7 @@ namespace Acam {
 
       inline std::chrono::seconds::rep get_tcs_offset_period() { return this->tcs_offset_period; }
       inline void reset_offset_params(std::chrono::seconds::rep val) {
+        std::lock_guard<std::mutex> lock(this->offset_params_mtx);  // P2: serialize vs median_filter
         this->ra_offs.clear();
         this->dec_offs.clear();
         this->time_offs.clear();
@@ -412,6 +415,16 @@ namespace Acam {
       }
 
       inline double get_tcs_max_offset() { return this->tcs_max_offset; }
+
+      inline long set_tcs_max_putonslit_offset( const double _offset ) {
+        if ( std::isnan( _offset ) || _offset <= 0 ) return ERROR;
+        else {
+          this->tcs_max_putonslit_offset = _offset;
+          return NO_ERROR;
+        }
+      }
+
+      inline double get_tcs_max_putonslit_offset() { return this->tcs_max_putonslit_offset; }
 
       inline void set_max_attempts( int _max ) { this->max_attempts = _max; }
       inline void set_min_repeat( int _repeat ) { this->min_repeat = _repeat; }
@@ -472,7 +485,7 @@ namespace Acam {
         double angle;
       } acam_goal;
 
-      double putonslit_offset, last_putonslit_offset;
+      std::atomic<bool> allow_large_offset{false};  ///< one-shot: allow the next guiding correction up to tcs_max_putonslit_offset
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  is_acquired(false),
@@ -482,8 +495,7 @@ namespace Acam {
                  tcs_offset_period(1),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
-                 dRA(0), dDEC(0),
-                 putonslit_offset(0), last_putonslit_offset(0) { }
+                 dRA(0), dDEC(0) { }
   };
   /***** Acam::Target *********************************************************/
 
@@ -516,6 +528,8 @@ namespace Acam {
         bool        is_acquired  = false;
         int         nacquired    = 0;
         int         attempts     = 0;
+        std::string filter       = "";
+        std::string cover        = "";
       } last_status;
 
     public:

@@ -38,25 +38,27 @@ namespace FitsHeaderKeys {
     { Key::Calibd::MODTHAR.c_str(),  "", "ThAr lamp modulator pow dut per" },
     { Key::Calibd::MODBLCON.c_str(), "", "Blue continuum modulator pow dut per" },
     { Key::Calibd::MODBLBYP.c_str(), "", "Blue bypass modulator pow dut per" },
+    { Key::Calibd::MODBLETA.c_str(), "", "Blue ETA modulator pow dut per" },
     { Key::Calibd::MODRDCON.c_str(), "", "Red continuum modulator pow dut per" },
     { Key::Calibd::MODRDBYP.c_str(), "", "Red bypass modulator pow dut per" },
+    { Key::Calibd::MODRDETA.c_str(), "", "Red ETA modulator pow dut per" },
     { Key::Calibd::CALCOVER.c_str(), "", "calib cover state" },
     { Key::Calibd::CALDOOR.c_str(),  "", "calib door state" }
   };
 
   const Extension FlexureInfoKeys[] = {
-    { "I", Key::Flexured::FLXSPE_I.c_str(), "FLXSPE", "I flexure spectral axis 2 (X) in um", "" },
-    { "I", Key::Flexured::FLXSPA_I.c_str(), "FLXSPA", "I flexure spatial axis 3 (Y) in um", "" },
-    { "I", Key::Flexured::FLXPIS_I.c_str(), "FLXPIS", "I flexure piston axis 1 (Z) in um", "" },
-    { "R", Key::Flexured::FLXSPE_R.c_str(), "FLXSPE", "R flexure spectral axis 2 (X) in um", "" },
-    { "R", Key::Flexured::FLXSPA_R.c_str(), "FLXSPA", "R flexure spatial axis 3 (Y) in um", "" },
-    { "R", Key::Flexured::FLXPIS_R.c_str(), "FLXPIS", "R flexure piston axis 1 (Z) in um", "" },
-    { "G", Key::Flexured::FLXSPE_G.c_str(), "FLXSPE", "G flexure spectral axis 2 (X) in um", "" },
-    { "G", Key::Flexured::FLXSPA_G.c_str(), "FLXSPA", "G flexure spatial axis 3 (Y) in um", "" },
-    { "G", Key::Flexured::FLXPIS_G.c_str(), "FLXPIS", "G flexure piston axis 1 (Z) in um", "" },
-    { "U", Key::Flexured::FLXSPE_U.c_str(), "FLXSPE", "U flexure spectral axis 2 (X) in um", "" },
-    { "U", Key::Flexured::FLXSPA_U.c_str(), "FLXSPA", "U flexure spatial axis 3 (Y) in um", "" },
-    { "U", Key::Flexured::FLXPIS_U.c_str(), "FLXPIS", "U flexure piston axis 1 (Z) in um", "" }
+    { "I", Key::Flexured::FLEX_X_I.c_str(), "FLEX_X", "I flexure axis 2 (X) in um", "" },
+    { "I", Key::Flexured::FLEX_Y_I.c_str(), "FLEX_Y", "I flexure axis 3 (Y) in um", "" },
+    { "I", Key::Flexured::FLEX_Z_I.c_str(), "FLEX_Z", "I flexure axis 1 (Z) in um", "" },
+    { "R", Key::Flexured::FLEX_X_R.c_str(), "FLEX_X", "R flexure axis 2 (X) in um", "" },
+    { "R", Key::Flexured::FLEX_Y_R.c_str(), "FLEX_Y", "R flexure axis 3 (Y) in um", "" },
+    { "R", Key::Flexured::FLEX_Z_R.c_str(), "FLEX_Z", "R flexure axis 1 (Z) in um", "" },
+    { "G", Key::Flexured::FLEX_X_G.c_str(), "FLEX_X", "G flexure axis 2 (X) in um", "" },
+    { "G", Key::Flexured::FLEX_Y_G.c_str(), "FLEX_Y", "G flexure axis 3 (Y) in um", "" },
+    { "G", Key::Flexured::FLEX_Z_G.c_str(), "FLEX_Z", "G flexure axis 1 (Z) in um", "" },
+    { "U", Key::Flexured::FLEX_X_U.c_str(), "FLEX_X", "U flexure axis 2 (X) in um", "" },
+    { "U", Key::Flexured::FLEX_Y_U.c_str(), "FLEX_Y", "U flexure axis 3 (Y) in um", "" },
+    { "U", Key::Flexured::FLEX_Z_U.c_str(), "FLEX_Z", "U flexure axis 1 (Z) in um", "" }
   };
 
   const Extension FocusInfoKeys[] = {
@@ -92,17 +94,24 @@ namespace FitsHeaderKeys {
   };
 
   const Primary TcsInfoKeys[] = {
+    { Key::Tcsd::PA.c_str(),       "", "position angle in deg" },
     { Key::Tcsd::CASANGLE.c_str(), "", "TCS reported Cassegrain angle in deg", "FLOAT" },
     { Key::Tcsd::HA.c_str(),       "", "hour angle" },
     { Key::Tcsd::RAOFFSET.c_str(), "", "offset Right Ascension" },
     { Key::Tcsd::DECLOFFS.c_str(), "", "offset Declination" },
     { Key::Tcsd::TELRA.c_str(),    "", "TCS reported Right Ascension" },
     { Key::Tcsd::TELDEC.c_str(),   "", "TCS reported Declination" },
+    { Key::Tcsd::TELRA_H.c_str(),  "", "TCS reported RA in decimal hours", "DOUBLE" },
+    { Key::Tcsd::TELDEC_D.c_str(), "", "TCS reported DEC in decimal deg", "DOUBLE" },
     { Key::Tcsd::AZ.c_str(),       "", "TCS reported azimuth" },
     { Key::Tcsd::ZENANGLE.c_str(), "", "TCS reported Zenith angle", "FLOAT" },
     { Key::Tcsd::DOMEAZ.c_str(),   "", "TCS reported dome azimuth", "FLOAT" },
     { Key::Tcsd::DOMESHUT.c_str(), "", "dome shutters" },
-    { Key::Tcsd::TELFOCUS.c_str(), "", "TCS reported telescope focus position in mm", "FLOAT" }
+    { Key::Tcsd::TELFOCUS.c_str(), "", "TCS reported telescope focus position in mm", "FLOAT" },
+    { Key::Tcsd::LAMP_LO.c_str(),  "LAMP_LO", "TCS LO lamp 0=off 1=on", "INT" },
+    { Key::Tcsd::LAMP_HI.c_str(),  "LAMP_HI", "TCS HI lamp 0=off 1=on", "INT" },
+    { Key::Tcsd::LAMP_ARC.c_str(), "LAMP_ARC", "TCS He-arc lamp 0=off 1=on", "INT" },
+    { Key::Tcsd::LAMP_ULTRA.c_str(), "LAMP_ULT", "TCS ultra-high lamp 0=off 1=on", "INT" }
   };
 
   const Extension ThermalInfoKeys[] = {
@@ -125,5 +134,19 @@ namespace FitsHeaderKeys {
     { Key::Slitd::SLITO.c_str(), "SLITO", "slit offset in arcsec", "FLOAT" },
     { Key::Slitd::SLITW.c_str(), "SLITW", "slit width in arcsec", "FLOAT" }
   };
+
+  /**
+   * @namespace Provenance
+   * @brief     build provenance keywords
+   * @details   These are aggregated across every running daemon rather than
+   *            extracted from one JSON message, so they are not part of a
+   *            Primary[] table. They answer "was there a software change?".
+   */
+  namespace Provenance {
+    inline constexpr const char* GITHASH_KEY       = "GIT_HASH";
+    inline constexpr const char* GITHASH_COMMENT   = "git commit of running software";
+    inline constexpr const char* BUILDTIME_KEY     = "SW_BUILD";
+    inline constexpr const char* BUILDTIME_COMMENT = "newest build of running software";
+  }
 
 }

@@ -257,4 +257,29 @@ namespace Sequencer {
   }
   /***** Sequencer::Sequence::do_slicecam_stop *********************************/
 
+
+  /***** Sequencer::Sequence::do_slicecam_autoexpose **************************/
+  /**
+   * @brief      enable/disable slicecam pre-acquisition auto-exposure
+   * @details    Enabling autoexpose on slicecam before the fineacquire sequence
+   *             to adjust exposure time before the fine acquisition sequence
+   *             starts. A failure here never aborts the sequence.
+   * @param[in]  enable  true = turn auto-exposure on, false = turn it off
+   * @return     NO_ERROR | ERROR
+   *
+   */
+  long Sequence::do_slicecam_autoexpose( bool enable ) {
+    const std::string function("Sequencer::Sequence::do_slicecam_autoexpose");
+    const std::string arg = enable ? " on" : " off";
+
+    std::string reply;
+    if ( this->slicecamd.command( SLICECAMD_AUTOEXPOSE + arg, reply ) != NO_ERROR
+         || reply.find("DONE") == std::string::npos ) {
+      this->broadcast.warning( function, "slicecam autoexpose"+arg+" not confirmed (reply=\""+reply+"\")" );
+      return ERROR;
+    }
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::do_slicecam_autoexpose **************************/
+
 }

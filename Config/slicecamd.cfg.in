@@ -65,7 +65,7 @@ PUSH_GUI_IMAGE=/home/developer/Software/GuiderGUI/push_image.sh
 #   <y>      y-coordinate (row)
 # aimpoint x,y may be fractional
 #
-FINE_ACQUIRE_AIMPOINT=(L 150.0 115.5)
+FINE_ACQUIRE_AIMPOINT=(L 150.6 113.0)
 
 # FINE_ACQUIRE_BACKGROUND=(<x1> <x2> <y1> <y2>)
 # defines the bounds of the region for background coorection
@@ -90,11 +90,19 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 #
 FINE_ACQUIRE_SETTLE_FRAMES=2
 
+# FINE_ACQUIRE_SETTLE_SEC=<sec>
+# Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
+# to let the TCS physically finish the move before sampling resumes. This matters
+# when autoexpose shortens the exposure (e.g. bright targets): the frame-count
+# settle then elapses too quickly in wall-clock. Set to 0 to disable.
+#
+FINE_ACQUIRE_SETTLE_SEC=3.0
+
 # FINE_ACQUIRE_GAIN=<g>
 # Proportional gain <g> = {0..1} applied to the commanded offset when the residual
 # is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.
 #
-FINE_ACQUIRE_GAIN=0.7
+FINE_ACQUIRE_GAIN=1.0
 
 # FINE_ACQUIRE_GAIN_LARGE=<g>
 # Proportional gain <g> applied when the residual exceeds FINE_ACQUIRE_GAIN_THRESHOLD.
@@ -110,6 +118,59 @@ FINE_ACQUIRE_GAIN_LARGE=1.0
 # all corrections.
 #
 FINE_ACQUIRE_GAIN_THRESHOLD=2.0
+
+# FINE_ACQUIRE_EXPTIME_MIN / _MAX = <sec>
+# Clamp range for auto-adjusted fine-acquisition exposure time.
+#
+FINE_ACQUIRE_EXPTIME_MIN=0.1
+FINE_ACQUIRE_EXPTIME_MAX=15.0
+
+# Exposure-compensation band (two-band model). FAINT/BRIGHT are the trip points
+# that decide WHETHER to adjust; the _GOAL values are what the exposure is scaled
+# toward once it does. Within [FAINT, BRIGHT] the source is adequately exposed and
+# the exposure is left unchanged.
+#
+# REQUIRED ORDERING (enforced at config time -- slicecamd will refuse to start if
+# violated): FAINT <= FAINT_GOAL <= BRIGHT  and  FAINT <= BRIGHT_GOAL <= BRIGHT,
+# with FAINT, BRIGHT > 0. A goal left unset defaults to its own threshold. A goal
+# outside its band edge would make the correction scale the WRONG way (e.g. a
+# BRIGHT_GOAL above BRIGHT drives the source brighter and never re-enters the band).
+#
+# FINE_ACQUIRE_COUNTS_FAINT / _FAINT_GOAL = <counts>
+# Below COUNTS_FAINT (top-10%-mean of background-subtracted pixels) the source is
+# under-exposed: raise exposure toward COUNTS_FAINT_GOAL. Leave both unset to
+# disable exposure compensation.
+#
+FINE_ACQUIRE_COUNTS_FAINT=250
+FINE_ACQUIRE_COUNTS_FAINT_GOAL=1500
+
+# FINE_ACQUIRE_SATURATION=<counts>
+# Raw-peak ceiling. A source is treated as saturated at or above this value.
+#
+FINE_ACQUIRE_SATURATION=55000
+
+# FINE_ACQUIRE_COUNTS_BRIGHT / _BRIGHT_GOAL = <counts>
+# Above COUNTS_BRIGHT the source is over-exposed: lower exposure toward
+# COUNTS_BRIGHT_GOAL. Between FAINT and BRIGHT the exposure is left unchanged
+# (the source is adequately exposed).
+#
+FINE_ACQUIRE_COUNTS_BRIGHT=10000
+FINE_ACQUIRE_COUNTS_BRIGHT_GOAL=2500
+
+# FINE_ACQUIRE_MIN_SNR=<snr>
+# Peak signal-to-noise (background-subtracted peak / background sigma) at or above
+# which a source is considered well enough defined to centroid reliably. Above this
+# fine-acquire and autoexpose stop RAISING the exposure even if the source is still
+# below FINE_ACQUIRE_COUNTS_FAINT.
+# Must be >=2 if set, or leave unset to disable SNR requirement and use only count band.
+#
+FINE_ACQUIRE_MIN_SNR=3
+
+# FINE_ACQUIRE_AUTOEXPOSE_WINDOW=<n>
+# Number of frames the pre-acquisition auto-exposure averages before each
+# decision.
+#
+FINE_ACQUIRE_AUTOEXPOSE_WINDOW=2
 
 # SkySimulator options:
 #   SKYSIM_IMAGE_SIZE=<is>   where <is> is integer

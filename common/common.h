@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <climits>
+#include <cstddef>
 #include <sstream>
 #include <queue>
 #include <string>
@@ -23,6 +25,7 @@
 #include "logentry.h"
 #include "network.h"
 #include "message_keys.h"
+#include "build_date.h"    // declares GIT_HASH_STR and get_build_time()
 
 const long NOTHING = -1;
 const long NO_ERROR = 0;
@@ -190,12 +193,21 @@ namespace Common {
         if ( _mode != Mode::PUB ) {
           throw std::runtime_error( "(Common::PubSub::publish) not a publisher" );
         }
+        // Every message carries the build provenance of the publishing binary
+        // so that a consumer can tell which software produced it. This is done
+        // here rather than at each call site so that no publisher can omit it.
+        //
+        static const std::string build_time = get_build_time();
+        json message = message_out;
+        message[Key::GITHASH]   = GIT_HASH_STR;
+        message[Key::BUILDTIME] = build_time;
+
         std::lock_guard<std::mutex> lock( _publish_mtx );  // serialize the non-thread-safe socket
         zmqpp::message message_zmq;
         // Publish to either class default _topic or topic specified as
         // optional arg.
         message_zmq.add( topic.empty() ? _topic : topic );
-        message_zmq.add( message_out.dump() );
+        message_zmq.add( message.dump() );
         _socket.send( message_zmq );
       }
       /***** Common::PubSub::publish ******************************************/
@@ -231,6 +243,13 @@ namespace Common {
 
         for ( const auto &topic : topics ) {
           iface.subscriber_topics.push_back(topic);
+        }
+
+        // check subscriber initialization (this would be a programming error)
+        //
+        if (!iface.subscriber) {
+          logwrite(function, "ERROR subscriber object is not initialized");
+          return ERROR;
         }
 
         try {

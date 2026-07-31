@@ -27,30 +27,29 @@ find_package( Threads )
 
 message( STATUS "CMAKE_BINARY_DIR" ${CMAKE_BINARY_DIR} )
 
-# Define the output file for the git commit hash, and
-# touch it in case we're starting from scratch.
+# version.h carries the git provenance compiled into every daemon. It is
+# generated into utils/ which is already on every include path.
 #
-set(GIT_COMMIT_FILE "${CMAKE_BINARY_DIR}/git_commit.txt")
-file( TOUCH ${GIT_COMMIT_FILE} )
+set( GEN_VERSION_ARGS
+     -DSRC_DIR=${CMAKE_SOURCE_DIR}
+     -DIN_FILE=${PROJECT_BASE_DIR}/utils/version.h.in
+     -DTMP_FILE=${CMAKE_BINARY_DIR}/version.h.tmp
+     -DOUT_FILE=${PROJECT_BASE_DIR}/utils/version.h
+     -P ${PROJECT_BASE_DIR}/utils/gen_version.cmake )
 
-# Create a custom target with a command that runs every time make is invoked.
-# This creates the file which contains SET commands to set cmake variables.
+# Generate it now so that version.h exists for the first build.
 #
-add_custom_target(update_git_commit
-    COMMAND ${CMAKE_COMMAND} -E remove ${GIT_COMMIT_FILE}
-    COMMAND bash -c "echo -n set '\\( GIT_COMMIT_HASH ' " > ${GIT_COMMIT_FILE} &&
-            bash -c "git rev-parse HEAD " | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
-            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
-    COMMAND bash -c "echo -n set '\\( PROJECT_BUILD_DATE ' " >> ${GIT_COMMIT_FILE} &&
-            bash -c "date +%Y-%m-%dT%H:%M:%S_%Z" | awk '{print $0}' | xargs echo -n >> ${GIT_COMMIT_FILE} &&
-            bash -c "echo ' \\)'" >> ${GIT_COMMIT_FILE}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Updating git commit hash file"
+execute_process( COMMAND ${CMAKE_COMMAND} ${GEN_VERSION_ARGS} )
+
+# and again on every build. Editing a file moves neither HEAD nor any
+# CMakeLists, so nothing would re-run configure and a configure-time check
+# would report a stale clean/dirty state. The script leaves version.h alone
+# when nothing changed, so this does not force a rebuild every time.
+#
+add_custom_target( update_version ALL
+    COMMAND ${CMAKE_COMMAND} ${GEN_VERSION_ARGS}
+    COMMENT "Checking git provenance"
 )
-
-# include the git commit hash output file so that config files can use it
-#
-INCLUDE( ${GIT_COMMIT_FILE} )
 
 # Here is everything to build
 #

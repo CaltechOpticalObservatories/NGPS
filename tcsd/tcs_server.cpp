@@ -709,6 +709,11 @@ void doit(TcsIO &tcs_io, const std::string &client_cmd, bool is_slow_command) {
       }
       else
 
+      if ( cmd==TCSD_LAMP ) {
+                      ret = this->interface.lamp( args, retstring );
+      }
+      else
+
       // list
       //
       if ( cmd.compare( TCSD_LIST ) == 0 ) {

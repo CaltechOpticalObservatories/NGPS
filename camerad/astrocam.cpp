@@ -77,6 +77,10 @@ namespace AstroCam {
   // provider, keyed by topic. The JSON->FITS-keyword conversion is deferred
   // to exposure lock-in (see do_expose / add_cached_telem).
   //
+  void Interface::handletopic_acam( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::ACAMD] = jmessage;
+  }
   void Interface::handletopic_calib( const nlohmann::json &jmessage ) {
     std::unique_lock<std::mutex> lock(live_telemetry_mtx);
     this->live_telemetry[Topic::CALIBD] = jmessage;
@@ -92,6 +96,10 @@ namespace AstroCam {
   void Interface::handletopic_power( const nlohmann::json &jmessage ) {
     std::unique_lock<std::mutex> lock(live_telemetry_mtx);
     this->live_telemetry[Topic::POWERD] = jmessage;
+  }
+  void Interface::handletopic_slicecam( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::SLICECAMD] = jmessage;
   }
   void Interface::handletopic_slit( const nlohmann::json &jmessage ) {
     std::unique_lock<std::mutex> lock(live_telemetry_mtx);
@@ -133,6 +141,38 @@ namespace AstroCam {
     return NAN;
   }
   /***** AstroCam::Interface::get_live_airmass ********************************/
+
+
+  /***** AstroCam::Interface::get_live_provenance *****************************/
+  /**
+   * @brief      return the build provenance of all running daemons
+   * @details    Every publisher stamps its git hash and build time into every
+   *             message (see Common::PubSub::publish), so the cached snapshots
+   *             describe the software that was actually running. A daemon that
+   *             was rebuilt but not restarted still reports its old build,
+   *             which is correct because the old binary produced the data.
+   * @param[out] githash    common commit, or "MIXED" if running daemons differ
+   * @param[out] buildtime  newest build time among running daemons
+   *
+   */
+  void Interface::get_live_provenance( std::string &githash, std::string &buildtime ) {
+    githash   = GIT_HASH_STR;
+    buildtime = get_build_time();
+
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+
+    for ( const auto &[topic, jmsg] : this->live_telemetry ) {
+      if ( jmsg.contains( Key::GITHASH ) && jmsg.at( Key::GITHASH ).is_string() ) {
+        const std::string hash = jmsg.at( Key::GITHASH ).get<std::string>();
+        if ( !hash.empty() && hash != githash ) githash = "MIXED";
+      }
+      if ( jmsg.contains( Key::BUILDTIME ) && jmsg.at( Key::BUILDTIME ).is_string() ) {
+        const std::string btime = jmsg.at( Key::BUILDTIME ).get<std::string>();
+        if ( btime > buildtime ) buildtime = btime;
+      }
+    }
+  }
+  /***** AstroCam::Interface::get_live_provenance *****************************/
 
 
   long NewAstroCam::new_expose( std::string nseq_in ) {
@@ -2093,7 +2133,6 @@ namespace AstroCam {
     // These have to be added to fitsinfo[expbuf] because the exposure has already started,
     // and camera_info keys have already been locked-in to fitsinfo[].
     //
-    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
@@ -2811,6 +2850,10 @@ namespace AstroCam {
 
     Common::Header telem;
 
+    // Helper function adds all keys from a table.
+    // The tables are defined in fits_header_defs.h and contain extension
+    // channel name (as appropriate), keyword, value, comment, and type.
+    //
     auto add = [&]( const std::string &topic, const auto &keytable ) {
       auto it = this->live_telemetry.find( topic );
       if ( it != this->live_telemetry.end() ) add_cached_telem( telem, it->second, keytable );
@@ -2827,6 +2870,19 @@ namespace AstroCam {
 
     this->camera_info.telemkeys = telem;
     }
+
+    // Record what software was running for this exposure. Done outside the
+    // block above because get_live_provenance() takes live_telemetry_mtx
+    // itself.
+    //
+    std::string githash, buildtime;
+    this->get_live_provenance( githash, buildtime );
+    this->camera_info.telemkeys.primary().addkey( FitsHeaderKeys::Provenance::GITHASH_KEY,
+                                                  githash,
+                                                  FitsHeaderKeys::Provenance::GITHASH_COMMENT );
+    this->camera_info.telemkeys.primary().addkey( FitsHeaderKeys::Provenance::BUILDTIME_KEY,
+                                                  buildtime,
+                                                  FitsHeaderKeys::Provenance::BUILDTIME_COMMENT );
 
     // Make a copy of this->camera_info for this particular exposure buffer number.
     // This expinfo will be used for this particular exposure.

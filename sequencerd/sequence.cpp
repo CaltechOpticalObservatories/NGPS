@@ -127,7 +127,7 @@ namespace Sequencer {
     Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
     if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_TCS );
 
-    // the completed target table contains TCS data now
+    // load the completed target table with TCS telemetry
     this->target.column_from_json<std::string>( "TELRA",   Key::Tcsd::TELRA,    jmessage );
     this->target.column_from_json<std::string>( "TELDECL", Key::Tcsd::TELDEC,   jmessage );
     this->target.column_from_json<double>( "ALT",          Key::Tcsd::ALT,      jmessage );
@@ -135,10 +135,49 @@ namespace Sequencer {
     this->target.column_from_json<double>( "AIRMASS",      Key::Tcsd::AIRMASS,  jmessage );
     this->target.column_from_json<double>( "CASANGLE",     Key::Tcsd::CASANGLE, jmessage );
 
+    // Store under the mutex so the writes are visible to any waiter's predicate
+    // when it re-acquires tcsd_mtx inside tcsd_cv.wait().
     std::lock_guard<std::mutex> lock(tcsd_mtx);
+    this->tcsinfo.store( jmessage );
     this->tcsd_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_tcsd *******************************/
+
+
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+  /**
+   * @brief      handles Topic::CALIBD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_calibd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
+
+    std::lock_guard<std::mutex> lock(calibd_mtx);
+    this->calibinfo.store( jmessage );
+    this->calibd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_calibd *****************************/
+
+
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
+  /**
+   * @brief      handles Topic::POWERD telemetry
+   * @param[in]  jmessage  subscribed-received JSON message
+   *
+   */
+  void Sequence::handletopic_powerd(const nlohmann::json &jmessage) {
+    bool isopen = true;
+    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
+    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_POWER );
+
+    std::lock_guard<std::mutex> lock(powerd_mtx);
+    this->powerinfo.store( jmessage );
+    this->powerd_cv.notify_all();
+  }
+  /***** Sequencer::Sequence::handletopic_powerd *****************************/
 
 
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
@@ -180,20 +219,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::handletopic_acamd ******************************/
 
 
-  /***** Sequencer::Sequence::handletopic_calibd *****************************/
-  /**
-   * @brief      handles Topic::CALIBD telemetry
-   * @param[in]  jmessage  subscribed-received JSON message
-   *
-   */
-  void Sequence::handletopic_calibd(const nlohmann::json &jmessage) {
-    bool isopen = true;
-    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
-    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
-  }
-  /***** Sequencer::Sequence::handletopic_calibd *****************************/
-
-
   /***** Sequencer::Sequence::handletopic_flexured ***************************/
   /**
    * @brief      handles Topic::FLEXURED telemetry
@@ -222,20 +247,6 @@ namespace Sequencer {
   /***** Sequencer::Sequence::handletopic_focusd *****************************/
 
 
-  /***** Sequencer::Sequence::handletopic_powerd *****************************/
-  /**
-   * @brief      handles Topic::POWERD telemetry
-   * @param[in]  jmessage  subscribed-received JSON message
-   *
-   */
-  void Sequence::handletopic_powerd(const nlohmann::json &jmessage) {
-    bool isopen = true;
-    Common::extract_telemetry_value( jmessage, Key::ISOPEN, isopen );
-    if ( !isopen ) this->daemon_manager.clear( Sequencer::DAEMON_POWER );
-  }
-  /***** Sequencer::Sequence::handletopic_powerd *****************************/
-
-
   /***** Sequencer::Sequence::publish_snapshot *******************************/
   /**
    * @brief      publishes snapshot of all of my telemetry
@@ -260,19 +271,27 @@ namespace Sequencer {
    *             re-publishing its own state, ensuring the sequencer receives
    *             current telemetry even if the daemon published before the
    *             sequencer subscribed.
+   *             Naming a single daemon asks only that one, which avoids making
+   *             the others refresh their state, some of which costs hardware I/O.
+   * @param[in]  daemon  optional single daemon to ask, default all of them
    *
    */
-  void Sequence::request_snapshot() {
+  void Sequence::request_snapshot( const std::string &daemon ) {
     nlohmann::json jmessage;
-    jmessage[Daemon::CAMERAD]   = true;
-    jmessage[Daemon::ACAMD]     = true;
-    jmessage[Daemon::SLICECAMD] = true;
-    jmessage[Daemon::SLITD]     = true;
-    jmessage[Daemon::TCSD]      = true;
-    jmessage[Daemon::CALIBD]    = true;
-    jmessage[Daemon::FLEXURED]  = true;
-    jmessage[Daemon::FOCUSD]    = true;
-    jmessage[Daemon::POWERD]    = true;
+    if ( !daemon.empty() ) {
+      jmessage[daemon] = true;
+    }
+    else {
+      jmessage[Daemon::CAMERAD]   = true;
+      jmessage[Daemon::ACAMD]     = true;
+      jmessage[Daemon::SLICECAMD] = true;
+      jmessage[Daemon::SLITD]     = true;
+      jmessage[Daemon::TCSD]      = true;
+      jmessage[Daemon::CALIBD]    = true;
+      jmessage[Daemon::FLEXURED]  = true;
+      jmessage[Daemon::FOCUSD]    = true;
+      jmessage[Daemon::POWERD]    = true;
+    }
     this->publisher->publish( jmessage, Topic::SNAPSHOT );
   }
   /***** Sequencer::Sequence::request_snapshot *******************************/
@@ -828,8 +847,19 @@ namespace Sequencer {
       //
       if ( !this->target.iscal ) {
 
+        // during acam acquisition, enable slicecam autoexpose to try to get the
+        // exposure time set before fine acquisition starts.
+        //
+        const bool dofine = this->should_fineacquire.load();
+        if ( dofine ) (void)this->do_slicecam_autoexpose( true );
+
         // start ACAM acquisition. If it fails then wait for user to continue or cancel.
-        if ( this->do_acam_acquire() != NO_ERROR ) {
+        const long acq_error = this->do_acam_acquire();
+
+        // disable autoexpose no matter how ACAM finished
+        if ( dofine ) (void)this->do_slicecam_autoexpose( false );
+
+        if ( acq_error != NO_ERROR ) {
           this->broadcast.warning( function, "acam acquisition failed" );
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
@@ -839,7 +869,6 @@ namespace Sequencer {
         else {  // ACAM success...
           // start SLICECAM fine acquisition if enabled
           long ret=NO_ERROR;
-          bool dofine = this->should_fineacquire.load();
           if ( dofine ) ret = this->do_slicecam_fineacquire();
           if ( ret!=NO_ERROR ) this->broadcast.warning( function, "slicecam fine acquisition failed" );
 
@@ -869,6 +898,17 @@ namespace Sequencer {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
           return;
         }
+      }
+
+      // The offset-star offset is applied asynchronously by the ACAM guide loop;
+      // ACAMD_OFFSETGOAL returns before the move lands. Wait so the target is on
+      // the slit before exposing. Skipped when the target has no offset.
+      if ( !this->target.iscal && this->is_fineacquire_locked.load() &&
+           ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) &&
+           this->offset_settle_sec > 0.0 ) {
+        logwrite( function, "NOTICE: waiting "+std::to_string(this->offset_settle_sec)+
+                            " sec for target offset to settle onto slit before exposing" );
+        std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -927,6 +967,7 @@ namespace Sequencer {
           this->request_snapshot();
           lock.lock();
         }
+        this->broadcast.notice( function, "done waiting for readout" );
       }
       this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
@@ -1147,12 +1188,20 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_POWER );  // powerd not ready
 
+    // Discard the cached power state. powerd publishes only on change, so
+    // nothing else would tell me it's stale. request_snapshot() below refills it.
+    {
+    std::lock_guard<std::mutex> lock(this->powerd_mtx);
+    this->powerinfo.invalidate();
+    }
+
     if ( this->reopen_hardware(this->powerd, POWERD_REOPEN, 10000 ) != NO_ERROR ) {
       logwrite( function, "ERROR initializing power control" );
       throw std::runtime_error("could not initialize power control");
     }
 
     this->daemon_manager.set( Sequencer::DAEMON_POWER );  // powerd ready
+    this->request_snapshot( Daemon::POWERD );
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::power_init **************************************/
@@ -1562,6 +1611,13 @@ namespace Sequencer {
 
     this->daemon_manager.clear( Sequencer::DAEMON_CALIB );
 
+    // Discard the cached calib state. calibd publishes only on change, so
+    // nothing else would tell me it's stale. request_snapshot() below refills it.
+    {
+    std::lock_guard<std::mutex> lock(this->calibd_mtx);
+    this->calibinfo.invalidate();
+    }
+
     ScopedState thr_state( thread_state_manager, Sequencer::THR_CALIB_INIT );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_CALIB );
 
@@ -1616,6 +1672,7 @@ namespace Sequencer {
 
     // calibd is ready
     this->daemon_manager.set( Sequencer::DAEMON_CALIB );
+    this->request_snapshot( Daemon::CALIBD );
 
     this->thread_error_manager.clear( THR_CALIB_INIT );
 
@@ -2417,17 +2474,35 @@ namespace Sequencer {
 
   /***** Sequencer::Sequence::flexure_set *************************************/
   /**
-   * @brief      set the flexure
+   * @brief      compensate for flexure
    * @return     NO_ERROR
-   * @todo       flexure not yet implemented
    *
    */
   long Sequence::flexure_set() {
     const std::string function("Sequencer::Sequence::flexure_set");
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
+    ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
 
-    logwrite( function, "flexure not yet implemented." );
+    // build up list of activate chans
+    std::ostringstream activechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      if (active) activechans << " " << chan;
+    }
+
+    std::ostringstream comp;
+    comp << FLEXURED_COMPENSATE << activechans.str();
+
+    if ( !this->cancel_flag.load() &&
+          this->flexured.command( comp.str() ) != NO_ERROR ) {
+      this->broadcast.error( function, "setting flexure compensator" );
+      this->thread_error_manager.set( THR_FLEXURE_SET );
+      throw std::runtime_error("setting flexure compensator");
+    }
+
+    this->broadcast.notice( function, "set flexure compensator for "+activechans.str());
 
     return NO_ERROR;
   }
@@ -2459,24 +2534,45 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "configuring calibrator for "+calname);
 
-    // set the calib door and cover
+    // set the calib door and cover if needed. CALIBD_SET moves both in one
+    // command so both must already be set to skip it.
     //
-    std::stringstream cmd;
-    cmd.str(""); cmd << CALIBD_SET
-                     << " door="  << ( calinfo.caldoor  ? "open" : "close" )
-                     << " cover=" << ( calinfo.calcover ? "open" : "close" );
-
-    logwrite( function, "calib: "+cmd.str() );
-    if ( !this->cancel_flag.load() &&
-          this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
-      this->broadcast.error( function, "moving calib door and/or cover" );
-      throw std::runtime_error("moving calib door and/or cover");
+    bool doorcover_isset = false;
+    {
+    std::lock_guard<std::mutex> lock(this->calibd_mtx);
+    doorcover_isset = ( this->calibinfo.is_valid() &&
+                        this->calibinfo.caldoor  == (calinfo.caldoor?1:0) &&
+                        this->calibinfo.calcover == (calinfo.calcover?1:0) );
     }
 
-    // set the internal calibration lamps
+    std::stringstream cmd;
+    if ( !doorcover_isset ) {
+      cmd.str(""); cmd << CALIBD_SET
+                       << " door="  << ( calinfo.caldoor  ? "open" : "close" )
+                       << " cover=" << ( calinfo.calcover ? "open" : "close" );
+
+      logwrite( function, "calib: "+cmd.str() );
+      if ( !this->cancel_flag.load() &&
+            this->calibd.command_timeout( cmd.str(), CALIBD_SET_TIMEOUT ) != NO_ERROR ) {
+        this->broadcast.error( function, "moving calib door and/or cover" );
+        throw std::runtime_error("moving calib door and/or cover");
+      }
+      logwrite( function, "calib door and cover set" );
+    }
+
+    // set the internal calibration lamps if needed
     //
     for ( const auto &[lamp,state] : calinfo.lamp ) {
       if ( this->cancel_flag.load() ) break;
+      // skip if lamp is already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->powerd_mtx);
+      if (this->powerinfo.is_valid() &&
+          this->powerinfo.plug_state(lamp) == (state?1:0)) {
+        continue;
+      }
+      }
+      // otherwise send the command
       cmd.str(""); cmd << lamp << " " << (state?"on":"off");
       message.str(""); message << "power " << cmd.str();
       logwrite( function, message.str() );
@@ -2485,30 +2581,55 @@ namespace Sequencer {
         this->broadcast.error( function, message.str() );
         throw std::runtime_error("setting lamp "+message.str());
       }
+      logwrite(function, "cal lamp "+lamp+" "+(state?"on":"off"));
     }
 
-//  Not working yet 2025-02-04
-//
-//  // set the dome lamps
-//  //
-//  for ( const auto &[lamp,state] : calinfo.domelamp ) {
-//    if ( this->cancel_flag.load() ) break;
-//    cmd.str(""); cmd << TCSD_NATIVE << " NPS " << lamp << " " << (state?1:0);
-//    if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
-//      this->async.enqueue_and_log( function, "ERROR "+cmd.str() );
-//      throw std::runtime_error("setting dome lamp: "+cmd.str());
-//    }
-//  }
+    // set the dome lamps if needed
+    //
+    for ( const auto &[lampname,state] : calinfo.domelamp ) {
+      if ( this->cancel_flag.load() ) break;
+      // skip if lamp is already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->tcsd_mtx);
+      if (this->tcsinfo.is_fresh() &&
+          this->tcsinfo.domelamp_state(lampname) == (state?1:0)) {
+        continue;
+      }
+      }
+      // otherwise send command to tcsd
+      cmd.str(""); cmd << TCSD_LAMP << " " << lampname << " " << (state==1?"on":"off");
+      if ( this->tcsd.command( cmd.str() ) != NO_ERROR ) {
+        logwrite(function, "ERROR "+cmd.str());
+        throw std::runtime_error("setting TCS "+cmd.str());
+      }
+      logwrite(function, "dome lamp "+lampname+" "+(state?"on":"off"));
+    }
 
-    // set the lamp modulators
+    // set the lamp modulators if needed
     //
     for ( const auto &[mod,state] : calinfo.lampmod ) {
       if ( this->cancel_flag.load() ) break;
-      cmd.str(""); cmd << CALIBD_LAMPMOD << " " << mod << " " << (state?1:0) << " 1000";
+      // skip if already in the desired state
+      {
+      std::lock_guard<std::mutex> lock(this->calibd_mtx);
+      if (this->calibinfo.is_valid() &&
+          this->calibinfo.lampmod_state(mod) == (state?1:0)) {
+        continue;
+      }
+      }
+      // otherwise send the command. calibd publishes by name but takes the
+      // channel number.
+      const auto *dev = CalibDefs::find( CalibDefs::modulators(), mod );
+      if ( dev == nullptr ) {
+        this->broadcast.error( function, "unknown lamp modulator "+mod );
+        throw std::runtime_error("unknown lamp modulator "+mod);
+      }
+      cmd.str(""); cmd << CALIBD_LAMPMOD << " " << dev->num << " " << (state?1:0) << " 1000";
       if ( this->calibd.command( cmd.str() ) != NO_ERROR ) {
         this->broadcast.error( function, cmd.str() );
         throw std::runtime_error("setting lamp modulator "+cmd.str());
       }
+      logwrite(function, "lamp modulator "+mod+" "+(state?"on":"off"));
     }
 
     if ( this->cancel_flag.load() ) {
@@ -2524,13 +2645,13 @@ namespace Sequencer {
   /***** Sequencer::Sequence::abort_process *********************************/
   /**
    * @brief      tries to abort everything happening
-   * @details    Sets SEQ_ABORTING via RAII for the duration of the abort,
-   *             then on exit:
-   *               - if aborting during RUNNING or PAUSED, restores SEQ_READY
-   *               - if aborting during STARTING or STOPPING, sets SEQ_FAILED
+   * @details    Sets SEQ_ABORTING for the duration of the abort, then on exit
+   *             selects a one-hot terminal seqstate:
+   *               - aborting during STARTING or STOPPING sets SEQ_FAILED
    *                 (indeterminate lifecycle state; requires startup/shutdown
    *                  to clear)
-   *               - otherwise leaves seqstate unchanged on exit
+   *               - otherwise the terminal state reflects actual readiness:
+   *                 SEQ_READY when all daemons are ready, else SEQ_NOTREADY
    *
    */
   void Sequence::abort_process() {
@@ -2607,16 +2728,21 @@ namespace Sequencer {
       }
     }
 
-    // Exit SEQ_ABORTING to a strict one-hot terminal state chosen from the
-    // snapshot taken at entry. If neither condition applies (e.g. abort
-    // invoked while READY/NOTREADY/FAILED) we leave the state at NOTREADY
-    // so callers never see SEQ_ABORTING linger and no prior bit is retained.
+    // Exit SEQ_ABORTING to a strict one-hot terminal state. A lifecycle abort
+    // (STARTING/STOPPING) leaves hardware in an indeterminate state, so it must
+    // go to SEQ_FAILED (cleared only by a subsequent startup/shutdown).
+    // Otherwise the abort has only stopped activity, so the terminal state is
+    // the system's actual readiness: SEQ_READY when every subsystem is ready,
+    // else SEQ_NOTREADY. This mirrors the readiness contract used by startup()
+    // (the are_all_set gate) and broadcast_daemonstate(), so an abort issued
+    // while already READY with all daemons up returns to READY -- and one
+    // issued after a daemon dropped correctly settles on NOTREADY.
     //
-    if ( abort_during_run ) {
-      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
-    }
-    else if ( abort_during_lifecycle ) {
+    if ( abort_during_lifecycle ) {
       this->seq_state_manager.set_only( {Sequencer::SEQ_FAILED} );
+    }
+    else if ( this->daemon_manager.are_all_set() ) {
+      this->seq_state_manager.set_only( {Sequencer::SEQ_READY} );
     }
     else {
       this->seq_state_manager.set_only( {Sequencer::SEQ_NOTREADY} );
@@ -3785,8 +3911,8 @@ namespace Sequencer {
    * @brief      publish target info on Topic::TARGETINFO, on change (or force)
    * @details    Builds a JSON message of the current target and publishes it
    *             only when it differs from the last published message, unless
-   *             force is set. The message is empty unless seq state is
-   *             READY or RUNNING.
+   *             force is set. The values are null unless seq state is READY or
+   *             RUNNING; the keys are always present.
    * @param[in]  force  optional (default=false) publish irrespective of change
    *
    */
@@ -3794,7 +3920,7 @@ namespace Sequencer {
     nlohmann::json jmessage;
     jmessage[Key::SOURCE] = Sequencer::DAEMON_NAME;
 
-    // fill telemetry only when READY or RUNNING; otherwise an empty (no-target) message
+    // fill telemetry only when READY or RUNNING
     //
     if ( this->seq_state_manager.are_any_set( Sequencer::SEQ_READY, Sequencer::SEQ_RUNNING ) ) {
       // unconfigured values are stored as NAN
@@ -3807,6 +3933,20 @@ namespace Sequencer {
       jmessage[Key::TargetInfo::POINTMODE] = this->target.pointmode;
       jmessage[Key::TargetInfo::RA]        = this->target.ra_hms;
       jmessage[Key::TargetInfo::DECL]      = this->target.dec_dms;
+    }
+    else {
+      // Send the keys with no value rather than omitting them. Having no target
+      // is not the same as having forgotten to send a key, and a subscriber can
+      // only tell the difference if I say which one this is.
+      //
+      jmessage[Key::TargetInfo::OBS_ID]    = nullptr;
+      jmessage[Key::TargetInfo::NAME]      = nullptr;
+      jmessage[Key::TargetInfo::SLITA]     = nullptr;
+      jmessage[Key::TargetInfo::BINSPECT]  = nullptr;
+      jmessage[Key::TargetInfo::BINSPAT]   = nullptr;
+      jmessage[Key::TargetInfo::POINTMODE] = nullptr;
+      jmessage[Key::TargetInfo::RA]        = nullptr;
+      jmessage[Key::TargetInfo::DECL]      = nullptr;
     }
 
     // unless forced, only publish if the target info changed

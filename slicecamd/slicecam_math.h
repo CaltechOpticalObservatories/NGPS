@@ -54,7 +54,10 @@ namespace Slicecam {
                                       long cols, long rows,
                                       Rect background,
                                       Point aimpoint,
-                                      Point &centroid );
+                                      Point &centroid,
+                                      double &peak_raw,     // raw ADU at source peak (saturation test)
+                                      double &top10_mean,   // mean of top 10% bkg-subtracted pixels (scaling)
+                                      double &peak_snr );   // background-subtracted peak / background sigma
       /**
        * @brief      convert pixel coordinates to sky coordinates using WCS keys
        */

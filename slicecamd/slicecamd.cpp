@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
     slicecamd.exit_cleanly();
   }
 
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << slicecamd.config.n_entries << " lines read from " << slicecamd.config.filename;
@@ -149,7 +149,8 @@ int main(int argc, char **argv) {
   //
   if ( slicecamd.interface.init_pubsub( { Topic::SLITD,
                                           Topic::ACAMD,
-                                          Topic::TCSD }) == ERROR ) {
+                                          Topic::TCSD,
+                                          Topic::TARGETINFO }) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     slicecamd.exit_cleanly();
   }

@@ -10,12 +10,19 @@ set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/utils)
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -Wextra -Wconversion -Wshadow -Og -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -Wextra -Wconversion -Wshadow -ansi -Og -Wno-variadic-macros -ggdb )
 
 add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
+        ${PROJECT_UTILS_DIR}/provenance.cpp
+        md5
         )
-        target_link_libraries(utilities PUBLIC md5 stdc++fs)
+target_link_libraries(utilities PRIVATE stdc++fs)
+
+# provenance.cpp includes the generated version.h, so make sure it has been
+# refreshed with the current git state before this library is compiled.
+#
+add_dependencies(utilities update_version)
 
 add_library(logentry STATIC
         ${PROJECT_UTILS_DIR}/logentry.cpp
@@ -48,12 +55,12 @@ include_directories( ${MYSQL_INCLUDES} )
 
 add_library(database STATIC
         ${PROJECT_UTILS_DIR}/database.cpp
+        ${MYSQL_LIB}
         )
-target_link_libraries(database PRIVATE ${MYSQL_LIB})
 
-#add_executable(socksend
-#        ${PROJECT_UTILS_DIR}/sendcmd.c
-#        )
+add_executable(socksend
+        ${PROJECT_UTILS_DIR}/sendcmd.c
+        )
 
 add_executable(listener
         ${PROJECT_UTILS_DIR}/listener.cpp
@@ -64,4 +71,16 @@ target_link_libraries( listener PRIVATE utilities )
 #
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
+
+add_executable( seqmon
+        ${PROJECT_UTILS_DIR}/seqmon.cpp
+        )
+target_include_directories( seqmon PRIVATE
+        ${PROJECT_BASE_DIR}/utils
+        ${PROJECT_BASE_DIR}/common
+        )
+target_link_libraries( seqmon PRIVATE
+        ${ZMQPP_LIB}
+        ${ZMQ_LIB}
+        )
 
