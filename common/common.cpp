@@ -6,6 +6,7 @@
  */
 
 #include "common.h"
+#include "common_commands.h"
 
 #include <iomanip>
 #include <random>
@@ -1310,7 +1311,7 @@ namespace Common {
       return( false );
     }
 
-    if ( this->send( (silent?"poll isopen":"isopen"), reply ) != NO_ERROR ) {
+    if ( this->send( (silent?"poll "+CMD_ISOPEN:CMD_ISOPEN), reply ) != NO_ERROR ) {
       message.str(""); message << "ERROR sending \"isopen\" to " << this->name
                                << " on " << this->host << ":" << this->port;
       logwrite( function, message.str() );

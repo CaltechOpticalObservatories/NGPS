@@ -18,4 +18,10 @@
 const std::string CMD_PING = "ping";   ///< liveness probe (external watchdog); reply is CMD_PONG
 const std::string CMD_PONG = "pong";   ///< liveness reply to CMD_PING
 
+/// Hardware connection query, accepted by every hardware daemon. This is for
+/// generic call sites that do not know which daemon they are addressing; a call
+/// site that knows its target keeps using that daemon's XXXXD_ISOPEN constant.
+///
+const std::string CMD_ISOPEN = "isopen";
+
 #endif

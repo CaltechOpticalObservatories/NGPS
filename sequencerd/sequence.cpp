@@ -4165,7 +4165,7 @@ namespace Sequencer {
 
     // Ask if hardware connection is open
     //
-    error |= daemon.send( "isopen", reply );
+    error |= daemon.send( CMD_ISOPEN, reply );
     error |= this->parse_state( function, reply, isopen );
     if ( error != NO_ERROR ) {
       logwrite( function, "ERROR opening "+daemon.name+" hardware" );
@@ -5334,7 +5334,7 @@ namespace Sequencer {
       logwrite( function, message.str() );
 
       std::string reply;
-      long send_error = daemon_ptr->send( "isopen", reply );
+      long send_error = daemon_ptr->send( CMD_ISOPEN, reply );
 
       message.str(""); message << "reply from " << tokens[1] << ": \"" << reply << "\"";
       logwrite( function, message.str() );
