@@ -259,6 +259,9 @@ namespace Sequencer {
     // user-settable: should automatic fine acquisition run?
     jmessage_out[Key::Sequencer::SHOULD_FINEACQUIRE] = this->should_fineacquire.load();
 
+    // user-settable: should flexure compensation be applied?
+    jmessage_out[Key::Sequencer::SHOULD_FLEXCOMP] = this->should_flexcomp.load();
+
     try {
       this->publisher->publish( jmessage_out, Topic::SEQ_SEQSTATE );
     }
@@ -2417,6 +2420,11 @@ namespace Sequencer {
   /***** Sequencer::Sequence::flexure_set *************************************/
   /**
    * @brief      compensate for flexure
+   * @details    When compensation is user-disabled the actuators are instead moved
+   *             to their configured default positions. The defaults are the
+   *             compensation origin (flexured adds the computed delta to defpos),
+   *             so this is the neutral state; it prevents a previous target's
+   *             compensation from being left applied to every subsequent target.
    * @return     NO_ERROR
    *
    */
@@ -2425,6 +2433,23 @@ namespace Sequencer {
 
     ScopedState thr_state( thread_state_manager, Sequencer::THR_FLEXURE_SET );
     ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_FLEXURE );
+
+    // Compensation can be user-disabled, in which case neutralize the compensator
+    // by moving the actuators to their defaults, once. Failure here is not fatal
+    // but warn and let the next target retry.
+    //
+    if ( !this->should_flexcomp.load() ) {
+      if ( !this->cancel_flag.load() && !this->is_flexure_default.load() ) {
+        if ( this->flexured.command( FLEXURED_DEFAULTPOS ) != NO_ERROR ) {
+          this->broadcast.warning( function, "flexure compensation disabled: ERROR moving actuators to default" );
+        }
+        else {
+          this->is_flexure_default.store(true);
+          this->broadcast.notice( function, "flexure compensation disabled: actuators moved to default" );
+        }
+      }
+      return NO_ERROR;
+    }
 
     // build up list of activate chans
     std::ostringstream activechans;
@@ -2444,7 +2469,9 @@ namespace Sequencer {
       throw std::runtime_error("setting flexure compensator");
     }
 
-    this->broadcast.notice( function, "set flexure compensator for "+activechans.str());
+    this->is_flexure_default.store(false);
+
+    this->broadcast.notice( function, "flexure compensator set for "+activechans.str());
 
     return NO_ERROR;
   }
@@ -4190,7 +4217,7 @@ namespace Sequencer {
    */
   long Sequence::fine_acquire(std::string args, std::string &retstring) {
     if (args=="help"||args=="?") {
-      retstring = SLICECAMD_FINEACQUIRE;
+      retstring = SEQUENCERD_FINEACQUIRE;
       retstring.append( " [ enable | disable ]\n" );
       retstring.append( "   enables or disables the automatic fine acquisition step\n" );
       retstring.append( "   no arg returns state only\n" );
@@ -4219,6 +4246,47 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::fine_acquire ************************************/
+
+
+  /***** Sequencer::Sequence::flexure_compensate ******************************/
+  /**
+   * @brief      enable or disable flexure compensation
+   * @param[in]  args       enable|disable
+   * @param[out] retstring  state {enabled|disabled}
+   * @return     ERROR|NO_ERROR|HELP
+   *
+   */
+  long Sequence::flexure_compensate(std::string args, std::string &retstring) {
+    if (args=="help"||args=="?") {
+      retstring = SEQUENCERD_FLEXCOMP;
+      retstring.append( " [ enable | disable ]\n" );
+      retstring.append( "   enables or disables the flexure compensation step\n" );
+      retstring.append( "   no arg returns state only\n" );
+      return HELP;
+    }
+
+    const bool prev = this->should_flexcomp.load();
+
+    if (args=="enable") this->should_flexcomp.store(true);
+    else
+    if (args=="disable") this->should_flexcomp.store(false);
+    else
+    if (!args.empty()) {
+      logwrite("Sequencer::Sequence::flexure_compensate",
+               "ERROR invalid '"+args+"' expected enable|disable");
+      return ERROR;
+    }
+
+    retstring = this->should_flexcomp.load() ? "enabled" : "disabled";
+
+    // publish on change
+    if ( this->should_flexcomp.load() != prev ) {
+      this->publish_seqstate();
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::flexure_compensate ******************************/
 
 
   /***** Sequencer::Sequence::test ********************************************/
