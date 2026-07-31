@@ -764,6 +764,8 @@ namespace Physik_Instrumente {
   template <typename ControllerType>
   long Interface<ControllerType>::move_to_default() {
 
+    this->thread_error.store( NO_ERROR );  // initialize the thread_error state.
+
     for ( const auto &mot : this->motormap ) {
       for ( const auto &axis : mot.second.axes ) {
         if ( !std::isnan(axis.second.defpos) ) {
