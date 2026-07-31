@@ -289,6 +289,8 @@ namespace Sequencer {
     private:
       zmqpp::context context;
       bool ready_to_start;                       ///< set on nightly startup success, used to return seqstate to READY after an abort
+      std::atomic<bool> should_flexcomp{true};   ///< should flexure compensation be applied?
+      std::atomic<bool> is_flexure_default{false};  ///< are flexure actuators at their default (uncompensated) positions?
       std::atomic<bool> can_expose;
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
@@ -562,6 +564,7 @@ namespace Sequencer {
       long parse_state( std::string whoami, std::string reply, bool &state );  ///< parse true|false state from reply string
       void dothread_test_fpoffset();                                           ///< for testing, calls Python function from thread
       long fine_acquire( std::string args, std::string &retstring );           ///< enable|disable fineacquisition step
+      long flexure_compensate( std::string args, std::string &retstring );     ///< enable|disable flexure compensation
       long test( std::string args, std::string &retstring );                   ///< handles test commands
       long extract_tcs_value( std::string reply, int &value );                 ///< extract value returned by the TCS via tcsd
       long parse_tcs_generic( int value );                                     ///< parse generic TCS reply

@@ -1204,7 +1204,11 @@ namespace Sequencer {
       }
       else
       if ( cmd == SEQUENCERD_FINEACQUIRE ) {
-                  this->sequence.fine_acquire(args, retstring);
+                  ret = this->sequence.fine_acquire(args, retstring);
+      }
+      else
+      if ( cmd == SEQUENCERD_FLEXCOMP ) {
+                  ret = this->sequence.flexure_compensate(args, retstring);
       }
       else
 
