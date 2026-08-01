@@ -713,6 +713,10 @@ namespace Sequencer {
       // These things can all be done in parallel, just have to sync up at the end.
       //
 
+      // latch repeat state before any worker starts
+      this->is_repeat_target.store( this->repeat_target() );
+      if ( this->is_repeat_target.load() ) this->broadcast.notice( function, "repeat target" );
+
       // threads to start, pair their ThreadStatusBit with the function to call
       std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
 
@@ -788,9 +792,9 @@ namespace Sequencer {
         break;
       }
 
-      // If not a calibration target then acquire, first acam then slicecam
+      // If not a calibration or repeat target then acquire, first acam then slicecam
       //
-      if ( !this->target.iscal ) {
+      if ( !this->target.iscal && !this->is_repeat_target.load() ) {
 
         // during acam acquisition, enable slicecam autoexpose to try to get the
         // exposure time set before fine acquisition starts.
@@ -828,8 +832,9 @@ namespace Sequencer {
 
       if ( !this->target.iscal ) {
         // send offsets only on fineacquire, otherwise user needs to fix things
-        if ( this->is_fineacquire_locked.load() &&
-            this->target_offset() == ERROR ) {
+        if ( !this->is_repeat_target.load()      &&
+              this->is_fineacquire_locked.load() &&
+              this->target_offset() == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
             return;
@@ -1091,10 +1096,7 @@ namespace Sequencer {
       case Sequencer::VSM_ACQUIRE:
         // uses virtual-mode width and offset for acquire,
         // but only for new targets
-        if ( this->target.ra_hms == this->last_ra_hms &&
-             this->target.dec_dms == this->last_dec_dms ) {
-          return NO_ERROR;
-        }
+        if ( this->is_repeat_target.load() ) return NO_ERROR;
         slitcmd << this->slitwidthacquire << " " << this->slitoffsetacquire;
         modestr = "ACQUIRE";
         break;
@@ -2179,8 +2181,7 @@ namespace Sequencer {
 
     // No telescope move if target coordinates didn't change
     //
-    if ( this->target.ra_hms == this->last_ra_hms &&
-         this->target.dec_dms == this->last_dec_dms ) {
+    if (repeat_target()) {
       this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
@@ -4995,13 +4996,16 @@ namespace Sequencer {
     else
 
     // ---------------------------------------------------------
-    // clearlasttarget -- clear the last target name, allowing repointing
+    // clearlasttarget -- clear the last target info, allowing repointing
     //                    to the same target (otherwise move_to_target won't
     //                    repoint the telescope if the name is the same)
     // ---------------------------------------------------------
     //
     if ( testname == "clearlasttarget" ) {
       this->last_target="";
+      this->last_ra_hms.clear();
+      this->last_dec_dms.clear();
+      this->is_repeat_target.store(false);
       error=NO_ERROR;
     }
     else
