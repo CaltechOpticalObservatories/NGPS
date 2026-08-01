@@ -1,4 +1,4 @@
-# End-of-Night Activities
+# End of Night Activities
 
 ## Shutdown
 
