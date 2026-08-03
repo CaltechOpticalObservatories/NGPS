@@ -1,3 +1,4 @@
+import bcrypt
 import mysql.connector
 from PyQt5.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QPushButton, QLabel, QFormLayout, QMessageBox
 from PyQt5.QtCore import Qt
@@ -93,12 +94,16 @@ class LoginService:
                 )
                 return False
 
+            hashed_password = bcrypt.hashpw(
+                password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
             cursor.execute(
                 """
                 INSERT INTO owner (OWNER_ID, PASSWORD, EMAIL)
                 VALUES (%s, %s, %s)
                 """,
-                (owner_id, password, email),
+                (owner_id, hashed_password, email),
             )
 
             self.connection.commit()
@@ -150,16 +155,21 @@ class LoginService:
 
             cursor.execute(
                 """
-                SELECT OWNER_ID
+                SELECT PASSWORD
                 FROM owner
                 WHERE OWNER_ID = %s
-                  AND PASSWORD = %s
                 """,
-                (owner_id, password),
+                (owner_id,),
             )
 
             result = cursor.fetchone()
-            return result is not None
+
+            if result is None:
+                return False
+
+            return bcrypt.checkpw(
+                password.encode("utf-8"), result["PASSWORD"].encode("utf-8")
+            )
 
         except mysql.connector.Error as err:
             print(f"Login database error: {err}")
@@ -231,7 +241,7 @@ class LoginDialog(QDialog):
         username = self.username_field.text().strip()
         password = self.password_field.text()
 
-        if self.validate_user_credentials(username):
+        if self.validate_user_credentials(username, password):
             print(f"Login successful for user: {username}")
 
             self.owner = username
@@ -257,9 +267,9 @@ class LoginDialog(QDialog):
         if self.main_window is not None:
             self.main_window.on_create_account()
 
-    def validate_user_credentials(self, username):
+    def validate_user_credentials(self, username, password):
         """Validate user credentials against the MySQL database."""
-        if not username:
+        if not username or not password:
             return False
 
         try:
@@ -269,7 +279,7 @@ class LoginDialog(QDialog):
 
             cursor.execute(
                 """
-                SELECT OWNER_ID
+                SELECT OWNER_ID, PASSWORD
                 FROM owner
                 WHERE OWNER_ID = %s
                 """,
@@ -279,7 +289,7 @@ class LoginDialog(QDialog):
             user = cursor.fetchone()
             cursor.close()
 
-            if user:
+            if user and self._check_password(username, password, user["PASSWORD"]):
                 print(f"Login validated for user: {user['OWNER_ID']}")
                 return True
 
@@ -295,6 +305,46 @@ class LoginDialog(QDialog):
             print(f"Unexpected error: {e}")
             self.show_error_message("An unexpected error occurred.")
             return False
+
+    def _check_password(self, username, password, stored_password):
+        """
+        Verify a password against its stored hash. Accounts created before
+        password hashing was added still have a plaintext PASSWORD; if one of
+        those matches, transparently upgrade it to a bcrypt hash.
+        """
+        if not stored_password:
+            return False
+
+        if stored_password.startswith("$2"):
+            return bcrypt.checkpw(
+                password.encode("utf-8"), stored_password.encode("utf-8")
+            )
+
+        if password != stored_password:
+            return False
+
+        self._upgrade_password_hash(username, password)
+        return True
+
+    def _upgrade_password_hash(self, username, password):
+        """Rehash a legacy plaintext password and store it as a bcrypt hash."""
+        try:
+            hashed_password = bcrypt.hashpw(
+                password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "UPDATE owner SET PASSWORD = %s WHERE OWNER_ID = %s",
+                (hashed_password, username),
+            )
+            self.connection.commit()
+            cursor.close()
+
+            print(f"Upgraded password hash for user: {username}")
+
+        except mysql.connector.Error as err:
+            print(f"Failed to upgrade password hash for user {username}: {err}")
 
     def show_error_message(self, message):
         """Display error message in the dialog."""
