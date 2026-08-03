@@ -161,6 +161,14 @@ class LogicService:
                     if column == "PRIORITY" and (value == '' or value is None):
                         value = "1"  # Default to "1" if empty or None
 
+                    # OTMslitwidth is NOT NULL and normally filled in later by the OTM
+                    # process; default it to the requested SLITWIDTH so the insert succeeds.
+                    if column == "OTMslitwidth" and (value == '' or value is None):
+                        try:
+                            value = float(row.get('SLITWIDTH'))
+                        except (TypeError, ValueError):
+                            value = 0.0
+
                     # Add the column and value to the query
                     insert_columns.append(column)
                     insert_placeholders.append('%s')
@@ -282,6 +290,14 @@ class LogicService:
 
                     if column == "OWNER" and (value == "" or value is None):
                         value = owner
+
+                    # OTMslitwidth is NOT NULL and normally filled in later by the OTM
+                    # process; default it to the requested SLITWIDTH so the insert succeeds.
+                    if column == "OTMslitwidth" and (value == "" or value is None):
+                        try:
+                            value = float(row.get('SLITWIDTH'))
+                        except (TypeError, ValueError):
+                            value = 0.0
 
                     insert_columns.append(column)
                     insert_placeholders.append('%s')

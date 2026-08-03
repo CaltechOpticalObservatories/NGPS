@@ -273,7 +273,7 @@ def make_calibration_targets(slitwidth, xbin, ybin):
             )
         )
 
-    if n_he_ug > 0:
+    if n_dome_he_ug > 0:
         rows.append(
             _cal_row(
                 "CAL_DOMEHE_UG",
