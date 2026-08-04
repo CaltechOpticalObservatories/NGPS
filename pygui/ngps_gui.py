@@ -6,7 +6,7 @@ from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
 from sequencer_service import SequencerService
-from login_service import LoginDialog, CreateAccountDialog
+from login_service import LoginDialog, CreateAccountDialog, ChangePasswordDialog, ForgotPasswordDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
 from status_service import StatusService
 from calib.calibration import CalibrationGUI
@@ -266,6 +266,20 @@ class NgpsGUI(QMainWindow):
         # If account creation is successful, handle it (e.g., show success message)
         if create_account_dialog.exec_() == QDialog.Accepted:
             print("Account successfully created!")
+
+    def on_change_password(self):
+        """ Handle the change password action from the User menu """
+        change_password_dialog = ChangePasswordDialog(self)
+
+        if change_password_dialog.exec_() == QDialog.Accepted:
+            print("Password successfully changed!")
+
+    def on_forgot_password(self):
+        """ Handle the forgot password action from the Login dialog """
+        forgot_password_dialog = ForgotPasswordDialog(self)
+
+        if forgot_password_dialog.exec_() == QDialog.Accepted:
+            print("Password successfully reset!")
 
     def send_command(self, command):
         """ Load data from MySQL after successful login """
