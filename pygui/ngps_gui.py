@@ -6,33 +6,24 @@ from menu_service import MenuService
 from logic_service import LogicService
 from layout_service import LayoutService
 from sequencer_service import SequencerService
-from login_service import LoginDialog, CreateAccountDialog
+from login_service import LoginDialog, CreateAccountDialog, ChangePasswordDialog, ForgotPasswordDialog
 from zmq_status_service import ZmqStatusService, ZmqStatusServiceThread
 from status_service import StatusService
 from calib.calibration import CalibrationGUI
 from etc_popup import EtcPopup
 from control_tab import ControlTab 
-from daemon_status_bar import DaemonStatusBar, DaemonState
+from daemon_status_bar import DaemonStatusBar, DaemonState, DAEMON_SUBSYSTEMS
 from calibration_procedure import (
     make_calibration_targets,
     make_calibration_csv_text,
+    make_dome_flat_targets,
     save_calibration_csv,
 )
 from datetime import datetime
 
-DAEMONS = [
-    "acamd",
-    "calibd",
-    "camerad",
-    "flexured",
-    "focusd",
-    "powerd",
-    "sequencerd",
-    "slicecamd",
-    "slitd",
-    "tcsd",
-    "thermald",
-]
+# Display-label/daemon-key/wait-key mapping lives in daemon_status_bar.py.
+# Keep this alias for local fallback polling code.
+DAEMONS = DAEMON_SUBSYSTEMS
 
 PER_DAEMON_COMMANDS = {
     # Defaults are ["Ping", "Restart", "Open Logs"] if not specified:
@@ -60,6 +51,8 @@ class NgpsGUI(QMainWindow):
         self.current_target_list_name = None
         self.zmq_status_service = None
         self.zmq_debug_messages = False
+        self._daemon_telemetry_seen = False
+        self._daemon_blink_phase = False
         
         # Login status flag
         self.logged_in = False
@@ -107,7 +100,7 @@ class NgpsGUI(QMainWindow):
         )
         self.setStatusBar(self._statusbar)
 
-        self.daemon_row = DaemonStatusBar(DAEMONS, per_daemon_commands=PER_DAEMON_COMMANDS, parent=self)
+        self.daemon_row = DaemonStatusBar(DAEMON_SUBSYSTEMS, per_daemon_commands=PER_DAEMON_COMMANDS, parent=self)
         self.daemon_row.commandRequested.connect(self.on_daemon_command)
         self.daemon_row.detailsRequested.connect(self.on_daemon_details)
 
@@ -118,20 +111,17 @@ class NgpsGUI(QMainWindow):
         self._statusbar.addWidget(self.daemon_row, 1)
 
         self.daemon_row.bulk_update({
-            "acamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "calibd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "camerad": (DaemonState.UNKNOWN, "Awaiting first UDP packet..."),
-            "flexured": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "focusd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "powerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "sequencerd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "slicecamd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "slitd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "tcsd": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
-            "thermald": (DaemonState.UNKNOWN, "Awaiting first heartbeat..."),
+            subsystem["daemon"]: (DaemonState.UNKNOWN, "Awaiting sequencer telemetry...")
+            for subsystem in DAEMON_SUBSYSTEMS
         })
 
-        # Start polling local processes to update daemon states
+        # Connect seqgui-style daemon status telemetry after the bar exists.
+        self._connect_daemon_status_signals()
+
+        # One shared blink timer for wait-state-active daemon chips.
+        self._init_daemon_blink_timer()
+
+        # Start process polling only as a fallback until sequencer telemetry arrives.
         self._init_daemon_polling()
 
     def init_ui(self):
@@ -170,16 +160,19 @@ class NgpsGUI(QMainWindow):
         self.sequencer_service = SequencerService(self)
         self.sequencer_service.connect()
         
-        # Start the StatusService in a separate thread with heartbeat
+        # Start the StatusService in a separate thread with heartbeat.
+        # Do not send StatusService chatter to the visible message log; that
+        # widget is reserved for subscribed topic-broadcast messages only.
         self.status_service = StatusService(self)
-        self.status_service.status_updated_signal.connect(self.layout_service.update_message_log)
         self.status_service.start()
         
         self.status_service.progress_updated_signal.connect(self.layout_service.update_exposure_progress)
         self.status_service.readout_progress_updated_signal.connect(self.layout_service.update_readout_progress)
         self.status_service.image_number_updated_signal.connect(self.layout_service.update_image_number)
         self.status_service.image_name_updated_signal.connect(self.layout_service.update_image_name)
-        self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
+        # Instrument System Status is driven only by ZMQ seq_seqstate.
+        # Do not let the legacy StatusService or seq_waitstate override it.
+        # self.status_service.update_status_signal.connect(self.layout_service.update_system_status)
         self.status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
         self.status_service.shutter_status_signal.connect(self.layout_service.update_shutter_status)
 
@@ -197,16 +190,26 @@ class NgpsGUI(QMainWindow):
         self.zmq_status_service.subscribe_to_topic("calibd")
         self.zmq_status_service.subscribe_to_topic("tcsd")
         self.zmq_status_service.subscribe_to_topic("acamd")
+
+        # Only this topic is allowed to feed the visible message log.
+        # The other subscriptions below still drive dedicated widgets/status.
+        self.zmq_status_service.subscribe_to_topic("broadcast")
+
         self.zmq_status_service.subscribe_to_topic("seq_waitstate")
         self.zmq_status_service.subscribe_to_topic("seq_seqstate")
+        self.zmq_status_service.subscribe_to_topic("seq_daemonstate")
 
-        # Connect the message_received signal from ZMQStatusService to the update_message_log slot
-        self.zmq_status_service.new_message_signal.connect(self.layout_service.update_message_log)
+        # Only subscribed ZMQ topic broadcasts should appear in the visible message log.
+        self.zmq_status_service.topic_broadcast_signal.connect(
+            self.layout_service.update_topic_broadcast_log
+        )
         self.zmq_status_service.lamp_states_signal.connect(self.layout_service.update_lamps)
         self.zmq_status_service.modulator_states_signal.connect(self.layout_service.update_modulators)
         self.zmq_status_service.airmass_signal.connect(self.layout_service.update_airmass)
         self.zmq_status_service.slit_info_signal.connect(self.layout_service.update_slit_info_fields)
         self.zmq_status_service.system_status_signal.connect(self.layout_service.update_system_status)
+        self.zmq_status_service.shutter_status_signal.connect(self.layout_service.update_shutter_status)
+        self.zmq_status_service.user_can_expose_signal.connect(self.layout_service.control_tab.enable_continue_and_offset_button)
 
     def on_date_time_changed(self, datetime):
         start_time_utc = LogicService.convert_pst_to_utc(datetime)
@@ -264,6 +267,20 @@ class NgpsGUI(QMainWindow):
         if create_account_dialog.exec_() == QDialog.Accepted:
             print("Account successfully created!")
 
+    def on_change_password(self):
+        """ Handle the change password action from the User menu """
+        change_password_dialog = ChangePasswordDialog(self)
+
+        if change_password_dialog.exec_() == QDialog.Accepted:
+            print("Password successfully changed!")
+
+    def on_forgot_password(self):
+        """ Handle the forgot password action from the Login dialog """
+        forgot_password_dialog = ForgotPasswordDialog(self)
+
+        if forgot_password_dialog.exec_() == QDialog.Accepted:
+            print("Password successfully reset!")
+
     def send_command(self, command):
         """ Load data from MySQL after successful login """
         self.sequencer_service.send_command(command)
@@ -304,9 +321,38 @@ class NgpsGUI(QMainWindow):
         return False  # If not READY or an error occurs, return False
 
     def open_calibration_gui(self):
+        """Method to open the Calibration GUI"""
+        if self.calibration_gui is None or not self.calibration_gui.isVisible():
+            self.calibration_gui = CalibrationGUI()
+            self.calibration_gui.show()
+        else:
+            self.calibration_gui.raise_()  # Brings the window to the front if already open
+            self.calibration_gui.activateWindow()
+
+    def run_calibration(self):
         """
         Generate a calibration target list from slit width and binning.
+
+        The user can choose either the standard calibration recipe or
+        the dome-flat recipe. Both are uploaded as calibration target lists.
         """
+
+        calibration_options = [
+            "Internal",
+            "Dome Flats",
+        ]
+
+        calibration_type, ok = QInputDialog.getItem(
+            self,
+            "Calibration Setup",
+            "Calibration type:",
+            calibration_options,
+            0,
+            False,
+        )
+
+        if not ok or not calibration_type:
+            return
 
         slitwidth, ok = QInputDialog.getDouble(
             self,
@@ -347,8 +393,17 @@ class NgpsGUI(QMainWindow):
         if not ok:
             return
 
+        if calibration_type == "Dome Flats":
+            target_rows_fn = make_dome_flat_targets
+            target_list_prefix = "CAL_DOME"
+            list_kind_label = "dome-flat"
+        else:
+            target_rows_fn = make_calibration_targets
+            target_list_prefix = "CAL"
+            list_kind_label = "calibration"
+
         try:
-            rows = make_calibration_targets(
+            rows = target_rows_fn(
                 slitwidth=slitwidth,
                 xbin=xbin,
                 ybin=ybin,
@@ -366,12 +421,12 @@ class NgpsGUI(QMainWindow):
             QMessageBox.warning(
                 self,
                 "No Calibration Rows",
-                "No calibration rows were generated."
+                f"No {list_kind_label} rows were generated."
             )
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        target_list_name = f"CAL_{timestamp}_slit{slitwidth:g}_bin{xbin}x{ybin}"
+        target_list_name = f"{target_list_prefix}_{timestamp}_slit{slitwidth:g}_bin{xbin}x{ybin}"
 
         set_id = self.logic_service.upload_generated_targets_to_mysql(
             rows,
@@ -381,16 +436,17 @@ class NgpsGUI(QMainWindow):
         if set_id is None:
             return
 
-        try:
-            csv_path = save_calibration_csv(rows, target_list_name)
-        except Exception as e:
-            csv_path = None
-            QMessageBox.warning(
-                self,
-                "CSV Save Warning",
-                f"The calibration list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
-            )
-
+        # Saving CSV for CALS disabled for now
+        # try:
+        #     csv_path = save_calibration_csv(rows, target_list_name)
+        # except Exception as e:
+        #     csv_path = None
+        #     QMessageBox.warning(
+        #         self,
+        #         "CSV Save Warning",
+        #         f"The {list_kind_label} list was inserted into MySQL, but the CSV file could not be saved:\n{e}"
+        #     )
+        csv_path = None
         self.current_target_list_name = target_list_name
 
         # Make calibration mode active
@@ -402,8 +458,9 @@ class NgpsGUI(QMainWindow):
             self.layout_service.load_target_lists()
 
         message = (
-            f"Created calibration target list '{target_list_name}'.\n\n"
+            f"Created {list_kind_label} target list '{target_list_name}'.\n\n"
             f"SET_ID: {set_id}\n"
+            f"Type: {calibration_type}\n"
             f"Slit width: {slitwidth:g}\n"
             f"Spatial binning / xbin: {xbin}\n"
             f"Spectral binning / ybin: {ybin}\n"
@@ -524,6 +581,40 @@ class NgpsGUI(QMainWindow):
             print(f"Exception during target list deletion: {e}")
             QMessageBox.critical(self, "Error", f"An error occurred while deleting the target list:\n{str(e)}")
             
+    def _connect_daemon_status_signals(self):
+        """Connect seqgui-style ZMQ telemetry to the bottom daemon chip bar."""
+        if self.zmq_status_service is None or not hasattr(self, "daemon_row"):
+            return
+
+        self.zmq_status_service.daemonstate_signal.connect(self._on_daemonstate_update)
+        self.zmq_status_service.waitstate_signal.connect(self._on_waitstate_update)
+        self.zmq_status_service.sequencerd_alive_signal.connect(self.daemon_row.set_sequencerd_online)
+        
+
+    @pyqtSlot(dict)
+    def _on_daemonstate_update(self, state: dict):
+        """Apply seq_daemonstate: daemon key -> initialized/ready bool."""
+        self._daemon_telemetry_seen = True
+        self.daemon_row.set_daemon_ready_state(state)
+
+    @pyqtSlot(dict)
+    def _on_waitstate_update(self, state: dict):
+        """Apply seq_waitstate: wait key -> busy/waiting bool."""
+        self._daemon_telemetry_seen = True
+        self.daemon_row.set_wait_state(state)
+
+    def _init_daemon_blink_timer(self):
+        """Drive busy blinking for any wait-state-active daemon chips."""
+        self._daemon_blink_timer = QTimer(self)
+        self._daemon_blink_timer.setInterval(500)
+        self._daemon_blink_timer.timeout.connect(self._daemon_blink_tick)
+        self._daemon_blink_timer.start()
+
+    def _daemon_blink_tick(self):
+        self._daemon_blink_phase = not self._daemon_blink_phase
+        if hasattr(self, "daemon_row"):
+            self.daemon_row.blink_tick(self._daemon_blink_phase)
+
     def on_daemon_details(self, name: str):
         # DaemonChip already shows a QMessageBox with details.
         # Keep this slot for a future richer dialog (logs, metrics, traces).
@@ -574,15 +665,21 @@ class NgpsGUI(QMainWindow):
           - 'ok'      => green pill
           - 'unknown' => grey pill
         """
+        # Once sequencer telemetry has arrived, ZMQ becomes the source of truth.
+        # Do not let process polling fight seq_daemonstate/seq_waitstate.
+        if getattr(self, "_daemon_telemetry_seen", False):
+            return
+
         updates = {}
 
-        for name in DAEMONS:
+        for subsystem in DAEMONS:
+            name = subsystem["daemon"] if isinstance(subsystem, dict) else str(subsystem)
             if self._daemon_process_running(name):
-                updates[name] = ("ok", f"{name} process is running.")
+                updates[name] = (DaemonState.OK, f"{name} process is running. Awaiting seq_daemonstate.")
             else:
-                updates[name] = ("unknown", f"{name} not found in process list.")
+                updates[name] = (DaemonState.UNKNOWN, f"{name} not found in process list. Awaiting seq_daemonstate.")
 
-        # bulk_update expects {name: (state, tooltip)} just like the seed above
+        # bulk_update accepts daemon keys, e.g. acamd/camerad/tcsd.
         self.daemon_row.bulk_update(updates)
 
     def _init_daemon_polling(self):
@@ -615,7 +712,7 @@ class NgpsGUI(QMainWindow):
             self.zmq_status_service.set_debug_messages(enabled)
 
         state = "enabled" if enabled else "disabled"
-        self.layout_service.update_message_log(f"ZMQ debug messages {state}.")
+        print(f"ZMQ debug messages {state}.")
 
 
 if __name__ == '__main__':

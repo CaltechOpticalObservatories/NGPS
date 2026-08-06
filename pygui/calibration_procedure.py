@@ -24,6 +24,8 @@ CAL_HEADER = [
     "MAGFILTER",
     "EXPTIME",
     "NEXP",
+    "OTMslitwidth",
+    "OTMexpt",
 ]
 
 
@@ -34,22 +36,29 @@ def _fmt(value):
     return str(value)
 
 
-def _cal_row(name, comment, bin_spat, bin_spec, slitwidth, exptime, nexp):
-    """
-    Build one calibration target row using the same field layout as make_cals.
+def _to_float(value, field_name):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be numeric, got {value!r}")
 
-    Bash equivalent:
-        print_line $name "$comment" $xbin $ybin $slitwidth $exptime $N_exp
-    """
+
+def _cal_row(name, comment, bin_spat, bin_spec, slitwidth, exptime, nexp):
     row = {key: "" for key in CAL_HEADER}
 
     row["NAME"] = name
     row["COMMENT"] = comment
     row["BINSPAT"] = _fmt(bin_spat)
     row["BINSPECT"] = _fmt(bin_spec)
-    row["SLITWIDTH"] = f"SET {_fmt(slitwidth)}"
-    row["EXPTIME"] = f"SET {_fmt(exptime)}"
+
+    # CSV/display-style fields
+    row["SLITWIDTH"] = _fmt(slitwidth)
+    row["EXPTIME"] = _fmt(exptime)
     row["NEXP"] = _fmt(nexp)
+
+    # MySQL DOUBLE fields
+    row["OTMslitwidth"] = _to_float(slitwidth, "OTMslitwidth")
+    row["OTMexpt"] = _to_float(exptime, "OTMexpt")
 
     return row
 
@@ -87,17 +96,21 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     t_etalon_nom = 3
     t_dome_nom = 90
     t_dome_nom_ug = 400
+    t_dome_he_nom = 30
+    t_dome_he_nom_ug = 600
     t_bias = 0
     t_dark = 1200
 
     # Nominal counts.
     n_thar = 3
     n_fear = 3
-    n_cont = 3
+    n_cont = 0
     n_etalon = 0
     n_dome = 0
     n_dome_ug = 0
-    n_bias = 5
+    n_dome_he = 0
+    n_dome_he_ug = 0
+    n_bias = 7
     n_dark = 0
 
     arc_multiplier = 1.0 / (xbin * ybin)
@@ -107,10 +120,12 @@ def make_calibration_targets(slitwidth, xbin, ybin):
     t_fear = int(t_fear_nom * arc_multiplier)
     t_cont = int(t_cont_nom * cont_multiplier)
     t_dome = int(t_dome_nom * cont_multiplier)
+    t_dome_he = int(t_dome_he_nom * arc_multiplier)
     t_thar_ug = int(t_thar_nom_ug * arc_multiplier)
     t_fear_ug = int(t_fear_nom_ug * arc_multiplier)
     t_contb = int(t_contb_nom * cont_multiplier)
     t_dome_ug = int(t_dome_nom_ug * cont_multiplier)
+    t_dome_he_ug = int(t_dome_he_nom_ug * arc_multiplier)
     t_etalon = int(t_etalon_nom * cont_multiplier)
 
     rows = []
@@ -245,6 +260,32 @@ def make_calibration_targets(slitwidth, xbin, ybin):
             )
         )
 
+    if n_dome_he > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE",
+                "ugri Dome He",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he,
+                n_dome_he,
+            )
+        )
+
+    if n_dome_he_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE_UG",
+                "ug Dome He",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he_ug,
+                n_dome_he_ug,
+            )
+        )
+
     if n_dark > 0:
         rows.append(
             _cal_row(
@@ -271,6 +312,125 @@ def make_calibration_csv_text(slitwidth, xbin, ybin):
     writer.writerows(rows)
 
     return output.getvalue()
+
+def make_dome_flat_targets(slitwidth, xbin, ybin):
+    """
+    Generate NGPS dome-flat calibration target rows.
+
+    This is the Python equivalent of the make_domes bash recipe:
+        make_domes <slitw> <bin_spat> <bin_spec>
+
+    The exposure-time constants follow the same convention used by
+    make_calibration_targets() above. In other words, the bash values
+    90000 and 400000 are represented here as 90 and 400.
+
+    Current mapping preserves the bash output:
+        BINSPAT  <- xbin
+        BINSPECT <- ybin
+    """
+    slitwidth = float(slitwidth)
+    xbin = int(xbin)
+    ybin = int(ybin)
+
+    if slitwidth <= 0:
+        raise ValueError("slitwidth must be greater than 0.")
+
+    if xbin <= 0 or ybin <= 0:
+        raise ValueError("binning values must be greater than 0.")
+
+    # Nominal exposure times, seconds.
+    # Bash make_domes equivalent values:
+    #   T_dome_nom    = 90000
+    #   T_dome_nom_ug = 400000
+    t_dome_nom = 90
+    t_dome_nom_ug = 400
+    t_dome_he_nom = 30
+    t_dome_he_nom_ug = 600
+
+    # Nominal counts from make_domes.
+    n_dome = 5
+    n_dome_ug = 7
+    n_dome_he = 0
+    n_dome_he_ug = 3
+
+    arc_multiplier = 1.0 / (xbin * ybin)
+    cont_multiplier = (1.0 / (xbin * ybin)) * (0.5 / slitwidth)
+
+    t_dome = int(t_dome_nom * cont_multiplier)
+    t_dome_ug = int(t_dome_nom_ug * cont_multiplier)
+    t_dome_he = int(t_dome_he_nom * arc_multiplier)
+    t_dome_he_ug = int(t_dome_he_nom_ug * arc_multiplier)
+
+    rows = []
+
+    if n_dome > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOME",
+                "ugri dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome,
+                n_dome,
+            )
+        )
+
+    if n_dome_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOME_UG",
+                "ug dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_ug,
+                n_dome_ug,
+            )
+        )
+
+    if n_dome_he > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE",
+                "ugri helium dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he,
+                n_dome_he,
+            )
+        )
+
+    if n_dome_he_ug > 0:
+        rows.append(
+            _cal_row(
+                "CAL_DOMEHE_UG",
+                "ug helium dome",
+                xbin,
+                ybin,
+                slitwidth,
+                t_dome_he_ug,
+                n_dome_he_ug,
+            )
+        )
+
+
+        
+    return rows
+
+
+def make_dome_flat_csv_text(slitwidth, xbin, ybin):
+    """Return the generated dome-flat procedure as CSV text."""
+    rows = make_dome_flat_targets(slitwidth, xbin, ybin)
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CAL_HEADER)
+    writer.writeheader()
+    writer.writerows(rows)
+
+    return output.getvalue()
+
 
 def save_calibration_csv(rows, target_list_name, output_dir="generated_target_lists/calibrations"):
     """

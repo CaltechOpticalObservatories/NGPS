@@ -1,3 +1,4 @@
+import csv
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QLineEdit, QFrame, QMessageBox, QDialog
@@ -257,17 +258,17 @@ class ControlTab(QDialog):
         self.headers_button = QPushButton("Headers")
 
         self.calibration_button = QPushButton("Calibration")
-        self.calibration_button.clicked.connect(self.parent.open_calibration_gui)
+        self.calibration_button.clicked.connect(self.parent.run_calibration)
 
         self.reset_button = QPushButton("Reset")
         self.reset_button.clicked.connect(self.on_reset_button_click)
 
-        binning_layout.addWidget(self.binning_button)
+        binning_layout.addWidget(self.calibration_button)
         binning_layout.addWidget(self.etc_button)
 
         display_layout.addWidget(self.headers_button)
-        display_layout.addWidget(self.calibration_button)
-
+        display_layout.addWidget(self.binning_button)
+        
         lamps_layout.addWidget(self.reset_button)
 
         self.startup_shutdown_button = QPushButton("Startup")
@@ -365,22 +366,69 @@ class ControlTab(QDialog):
 
     def on_go_button_click(self):
         """Send target start command; disable Go and show waiting popup."""
-        if self.parent.current_observation_id is not None:
-            self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
-            observation_id = self.parent.current_observation_id
-            print(f"Sending command: seq startone {observation_id}")
-            self.parent.layout_service.update_slit_info_fields()
-            self.send_target_command(observation_id)
-            QSound.play("sound/go_button_clicked.wav")
-            self._style_disabled_gray(self.go_button)
-            self.logic_service.set_active_target(observation_id)
-            self.show_waiting_popup()
-        else:
+        calibration_mode = self._is_calibration_mode()
+        observation_id = self.parent.current_observation_id
+
+        # Science mode requires a selected observation.
+        # Calibration mode uses "seq do all" and does not require one OBSERVATION_ID.
+        if not calibration_mode and observation_id is None:
             print("No observation ID available.")
+            return
+
+        self.parent.zmq_status_service.unsubscribe_from_topic("slitd")
+        self.parent.layout_service.update_slit_info_fields()
+
+        if calibration_mode:
+            set_id = self.logic_service.fetch_set_id()
+            if set_id is None:
+                print("No target SET_ID available for calibration sequence.")
+                return
+
+            print(f"Sending command: seq do all {set_id}")
+            self.send_target_command(calibration_mode=True, set_id=set_id)
+        else:
+            print(f"Sending command: seq startone {observation_id}")
+            self.send_target_command(observation_id)
+            self.logic_service.set_active_target(observation_id)
+
+        QSound.play("sound/go_button_clicked.wav")
+        self._style_disabled_gray(self.go_button)
+        self.show_waiting_popup()
+
+
+    def _is_calibration_mode(self):
+        """Return True when the target list mode toggle is set to Calibration."""
+        layout_service = getattr(self.parent, "layout_service", None)
+        mode_toggle = getattr(layout_service, "target_list_mode_toggle", None)
+        return bool(mode_toggle and mode_toggle.isChecked())
+
+
+    def send_target_command(self, observation_id=None, calibration_mode=False, set_id=None):
+        if calibration_mode:
+            if set_id is None:
+                set_id = self.logic_service.fetch_set_id()
+
+            if set_id is None:
+                print("No target SET_ID available for calibration command.")
+                return
+
+            command = f"targetset {set_id}\nstart\n"
+
+        elif observation_id:
+            command = f"startone {observation_id}\n"
+
+        else:
+            print("No OBSERVATION_ID to send the command.")
+            return
+
+        print(f"Sending command to SequencerService: {command}")
+        self.parent.send_command(command)
+        print(f"Command sent: {command}")
 
     def enable_continue_and_offset_button(self):
         self._style_enabled_green(self.continue_button)
         self._style_enabled_green(self.offset_to_target_button)
+
 
     def show_waiting_popup(self):
         """Show a popup message with a 'Close' button (auto-closes after 5s)."""
@@ -396,15 +444,6 @@ class ControlTab(QDialog):
         """Re-enable 'Go' button (kept for external timer hooks if you re-enable later)."""
         print("Re-enabling 'Go' button.")
         self._style_enabled_green(self.go_button)
-
-    def send_target_command(self, observation_id):
-        if observation_id:
-            command = f"startone {observation_id}\n"
-            print(f"Sending command to SequencerService: {command}")
-            self.parent.send_command(command)
-            print(f"Command sent: {command}")
-        else:
-            print("No OBSERVATION_ID to send the command.")
 
     def on_continue_button_click(self):
         """Send 'usercontinue' and enable Expose button only if seq state shows USER."""
@@ -527,13 +566,38 @@ class ControlTab(QDialog):
         exposure_time = self.exposure_time_box.text()
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMexpt", exposure_time)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", "SET " + exposure_time)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "exptime", exposure_time)
 
     def on_slit_width_changed(self):
         slit_width = self.slit_width_box.text()
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitwidth", slit_width)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", "SET " + slit_width)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitwidth", slit_width)
+
+    def _read_theta0(self, geocal_path="/home/developer/Software/Python/acam_skyinfo/geocal.cfg"):
+        """Read Theta0 from geocal.cfg."""
+        try:
+            with open(geocal_path, "r", newline="") as file:
+                reader = csv.DictReader(file)
+                row = next(reader, None)
+
+            if row is None or "Theta0" not in row:
+                print(f"Theta0 not found in {geocal_path}")
+                return None
+
+            return float(row["Theta0"])
+
+        except Exception as e:
+            print(f"Could not read Theta0 from {geocal_path}: {e}")
+            return None
+
+
+    def _parse_angle_float(self, value):
+        """Parse a slit angle value into float."""
+        try:
+            return float(str(value).replace("SET", "").strip())
+        except Exception:
+            return None
 
     def on_slit_angle_changed(self):
         slit_angle = self.slit_angle_box.text()
@@ -544,7 +608,7 @@ class ControlTab(QDialog):
 
         if self.parent.current_observation_id:
             self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", "SET " + slit_angle)
+            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)
 
     def num_of_exposures_changed(self):
         num_of_exposures = self.num_of_exposures_box.text()
