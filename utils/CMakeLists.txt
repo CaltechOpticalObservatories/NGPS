@@ -10,7 +10,7 @@ set(PROJECT_UTILS_DIR ${PROJECT_BASE_DIR}/utils)
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -Wextra -Wconversion -Wshadow -ansi -Og -Wno-variadic-macros -ggdb )
+add_definitions( -Wall -Wextra -Wconversion -Wshadow -Og -Wno-variadic-macros -ggdb )
 
 add_library(utilities STATIC
         ${PROJECT_UTILS_DIR}/utilities.cpp
