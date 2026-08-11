@@ -135,23 +135,26 @@ void logmsg( const std::string &message ) {
 
 /***** load_targets *********************************************************/
 /**
- * @brief      parse the sequencer config file into a map of unit name to command port
- * @details    Peer daemons appear as "<NAME>D_PORT" (e.g. ACAMD_PORT); the
- *             sequencer's own command port is "BLKPORT". "<NAME>D_NBPORT"
- *             (non-blocking) entries are skipped, as are non-numeric values such
- *             as unresolved CMake "@TOKEN@" placeholders. The broker (messaged)
- *             has no command port and is handled separately (see cfg_value).
- * @param[in]  cfgpath  path to the sequencer config file
- * @param[out] error    set to a message if the file cannot be opened
- * @return     map of unit name (e.g. "acamd") to command port
+ * @brief      parse the sequencer config file into maps of unit name to command port
+ * @details    Peer daemons appear as "<NAME>D_PORT" (blocking) and
+ *             "<NAME>D_NBPORT" (non-blocking); the sequencer's own ports are
+ *             "BLKPORT"/"NBPORT". Non-numeric values, such as unresolved CMake
+ *             "@TOKEN@" placeholders, are skipped. The broker (messaged) has no
+ *             command port and is handled separately (see cfg_value).
+ * @param[in]  cfgpath     path to the sequencer config file
+ * @param[out] error       set to a message if the file cannot be opened
+ * @param[out] nb_targets  map of unit name to non-blocking port, for units that have one
+ * @return     map of unit name (e.g. "acamd") to blocking command port
  *
  */
-std::map<std::string, uint16_t> load_targets( const std::string &cfgpath, std::string &error ) {
+std::map<std::string, uint16_t> load_targets( const std::string &cfgpath, std::string &error,
+                                              std::map<std::string, uint16_t> &nb_targets ) {
   std::map<std::string, uint16_t> targets;
   std::ifstream cfg( cfgpath );
   if ( !cfg.is_open() ) { error = "cannot open " + cfgpath; return targets; }
 
   const std::string suffix = "_PORT";
+  const std::string nb_suffix = "_NBPORT";
   std::string line;
   while ( std::getline( cfg, line ) ) {
     const std::size_t hash = line.find( '#' );          // strip an inline comment
@@ -165,13 +168,23 @@ std::map<std::string, uint16_t> load_targets( const std::string &cfgpath, std::s
     if ( key.empty() || value.empty() ) continue;
 
     std::string unit;
+    bool is_nb = false;
     if ( key == "BLKPORT" ) {
       unit = "sequencerd";                              // the sequencer's own command port
     }
-    else if ( key.size() > suffix.size() &&
-              key.compare( key.size()-suffix.size(), suffix.size(), suffix ) == 0 &&
-              key[key.size()-suffix.size()-1] == 'D' &&
-              key.find( "_NBPORT" ) == std::string::npos ) {
+    else if ( key == "NBPORT" ) {
+      unit = "sequencerd"; // the sequencer's own non-blocking port
+      is_nb = true;
+    }
+    else if ( key.size() > nb_suffix.size() && key.compare( key.size() - nb_suffix.size(), nb_suffix.size(), nb_suffix ) == 0 &&
+              key[key.size() - nb_suffix.size() - 1] == 'D' ) {
+      unit = key.substr( 0, key.size() - nb_suffix.size() ); // "ACAMD_NBPORT" -> "ACAMD"
+      std::transform( unit.begin(), unit.end(), unit.begin(),
+                      []( unsigned char chr ) { return static_cast<char>( std::tolower( chr ) ); } );
+      is_nb = true;
+    }
+    else if ( key.size() > suffix.size() && key.compare( key.size() - suffix.size(), suffix.size(), suffix ) == 0 &&
+              key[key.size() - suffix.size() - 1] == 'D' ) {
       unit = key.substr( 0, key.size()-suffix.size() ); // "ACAMD_PORT" -> "ACAMD"
       std::transform( unit.begin(), unit.end(), unit.begin(),
                       []( unsigned char chr ){ return static_cast<char>( std::tolower(chr) ); } );
@@ -182,7 +195,12 @@ std::map<std::string, uint16_t> load_targets( const std::string &cfgpath, std::s
 
     try {
       const int port = std::stoi( value );
-      if ( port > 0 && port <= 65535 ) targets[unit] = static_cast<uint16_t>( port );
+      if ( port > 0 && port <= 65535 ) {
+        if ( is_nb )
+          nb_targets[unit] = static_cast<uint16_t>( port );
+        else
+          targets[unit] = static_cast<uint16_t>( port );
+      }
     }
     catch ( const std::exception & ) {
       // non-numeric value (e.g. an unresolved "@TOKEN@"); skip it
@@ -430,13 +448,19 @@ int main( int argc, char **argv ) {
   const std::string cfgfile = ( argc > 1 ) ? std::string(argv[1]) : DEFAULT_CFG;
 
   std::string error;
-  const std::map<std::string, uint16_t> targets = load_targets( cfgfile, error );
+  std::map<std::string, uint16_t> nb_targets;
+  const std::map<std::string, uint16_t> targets = load_targets( cfgfile, error, nb_targets );
   if ( !error.empty() ) { logmsg( "ERROR " + error ); return 1; }
   if ( targets.empty() ) { logmsg( "ERROR no daemon command ports found in " + cfgfile ); return 1; }
 
   std::string watched;
   for ( const auto &target : targets ) watched += ( watched.empty() ? "" : ", " ) + target.first;
   logmsg( "watching command ports: " + watched );
+
+  std::string watched_nb;
+  for ( const auto &target : nb_targets )
+    watched_nb += ( watched_nb.empty() ? "" : ", " ) + target.first;
+  logmsg( "watching non-blocking ports: " + watched_nb );
 
   std::map<std::string, int> fails;
   std::map<std::string, std::chrono::steady_clock::time_point> last_restart;
@@ -449,6 +473,12 @@ int main( int argc, char **argv ) {
   std::map<std::string, int> pub_fails;
   for ( const auto &target : SNAPSHOT_TARGETS ) {
     pub_fails[target.first] = 0;
+    last_restart[target.first] = startup - std::chrono::seconds( COOLDOWN_SEC + 1 );
+  }
+
+  std::map<std::string, int> nb_fails;
+  for ( const auto &target : nb_targets ) {
+    nb_fails[target.first] = 0;
     last_restart[target.first] = startup - std::chrono::seconds( COOLDOWN_SEC + 1 );
   }
 
@@ -516,9 +546,17 @@ int main( int argc, char **argv ) {
   while ( true ) {
     for ( const auto &target : targets ) {
       const std::string &unit = target.first;
-      const bool responsive = unit_is_active( unit ) ? probe_daemon( target.second ) : true;
+      const bool active = unit_is_active( unit );
+      const bool responsive = active ? probe_daemon( target.second ) : true;
       consider_restart( unit, responsive, fails, last_restart );
       Daemon::sd_notify( "WATCHDOG=1\n" );   // heartbeat tied to real probe progress
+
+      const auto nb_it = nb_targets.find( unit );
+      if ( nb_it != nb_targets.end() ) {
+        const bool nb_responsive = active ? probe_daemon( nb_it->second ) : true;
+        consider_restart( unit, nb_responsive, nb_fails, last_restart );
+        Daemon::sd_notify( "WATCHDOG=1\n" );
+      }
     }
 
     if ( broker_enabled ) {
