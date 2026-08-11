@@ -310,21 +310,6 @@ namespace Sequencer {
         applied++;
       }
 
-      // FILTERD_PORT
-      if (config.param[entry] == "FILTERD_PORT") {
-        try {
-          this->sequence.filterd.port = std::stoi( config.arg[entry] );
-        }
-        catch (const std::exception &e) {
-          message.str(""); message << "ERROR parsing FILTERD_PORT: " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
-        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        applied++;
-      }
-
       // FOCUSD_PORT
       if (config.param[entry] == "FOCUSD_PORT") {
         try {
