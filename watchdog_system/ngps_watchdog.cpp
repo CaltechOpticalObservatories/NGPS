@@ -418,7 +418,13 @@ void restart_unit( const std::string &unit ) {
 void consider_restart( const std::string &unit, bool responsive,
                        std::map<std::string,int> &fails,
                        std::map<std::string,std::chrono::steady_clock::time_point> &last_restart ) {
-  if ( responsive ) { fails[unit] = 0; return; }
+  if ( responsive ) {
+    if ( fails[unit] > 0 ) {
+      logmsg( "ngps@" + unit + " probe recovered after " + std::to_string( fails[unit] ) + " miss(es)" );
+    }
+    fails[unit] = 0;
+    return;
+  }
 
   ++fails[unit];
   logmsg( "ngps@" + unit + " no reply (" +
@@ -426,11 +432,17 @@ void consider_restart( const std::string &unit, bool responsive,
 
   const auto now = std::chrono::steady_clock::now();
   const long since = std::chrono::duration_cast<std::chrono::seconds>( now - last_restart[unit] ).count();
-  if ( fails[unit] >= FAIL_THRESHOLD && since > COOLDOWN_SEC ) {
-    logmsg( "ngps@" + unit + " appears hung -> systemctl restart" );
-    restart_unit( unit );
-    last_restart[unit] = now;
-    fails[unit] = 0;
+  if ( fails[unit] >= FAIL_THRESHOLD ) {
+    if ( since > COOLDOWN_SEC ) {
+      logmsg( "ngps@" + unit + " appears hung -> systemctl restart" );
+      restart_unit( unit );
+      last_restart[unit] = now;
+      fails[unit] = 0;
+    }
+    else if ( fails[unit] == FAIL_THRESHOLD ) {
+      logmsg( "ngps@" + unit + " appears hung but in cooldown (" + std::to_string( COOLDOWN_SEC - since ) +
+              "s remaining), not restarting yet" );
+    }
   }
 }
 /***** consider_restart *****************************************************/
