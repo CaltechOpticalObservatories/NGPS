@@ -612,8 +612,32 @@ namespace Focus {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Topic::FOCUSD ) ) {
+    if ( !jmessage.contains( Topic::FOCUSD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
       this->publish_status(true);
+    }
+  }
+
+
+  /***** Focus::Interface::publish_watchdog ***********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips get_status() and its motor-controller hardware I/O,
+   *             exercising the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::FOCUSD;
+    jmessage[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Focus::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
   /***** Focus::Interface::handletopic_snapshot ******************************/

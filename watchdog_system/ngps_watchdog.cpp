@@ -32,6 +32,9 @@
 
 #include "common_commands.h"       // CMD_PING / CMD_PONG (header-only: <string>)
 #include "sd_notify.h"             // header-only; no daemon logging/config/network coupling
+#include "message_keys.h"          // header-only Topic::/Key::/Daemon:: constants -- no daemon-infra coupling
+
+#include <json.hpp>                // nlohmann::json, for the Topic::SNAPSHOT request payload
 
 #include <zmqpp/zmqpp.hpp>
 
@@ -62,11 +65,37 @@ namespace {
   constexpr long COOLDOWN_SEC      = 120;   ///< minimum seconds between restarts of the same daemon
   constexpr int  BROKER_SETTLE_MS  = 300;   ///< let the SUB subscription propagate to our PUB before probing
   constexpr int  STARTUP_GRACE_SEC = 30;    ///< delay before the first probe, so a slow cold-boot is not mistaken for a hang
+  constexpr int SNAPSHOT_PERIOD_SEC = 300;  ///< seconds between forced-publish probes
+  constexpr int SNAPSHOT_WINDOW_MS = 5000;  ///< time to wait for all requested topics to answer a snapshot round
 
   const std::string DEFAULT_CFG  = "/home/developer/Software/Config/sequencerd.cfg";
   const std::string LOCALHOST    = "127.0.0.1";
   const std::string BROKER_UNIT  = "messaged";    ///< the ZMQ broker unit (no command port)
   const std::string HEALTH_TOPIC = "_ngps_wd";    ///< private topic for the broker round-trip probe
+
+  /// per-unit request key (set true in the Topic::SNAPSHOT payload) and the
+  /// topic to watch for that unit's response. telemd is absent -- confirmed
+  /// inactive scaffolding (no pub/sub participation anywhere), not merely
+  /// omitted. sequencerd has no single Topic::SEQUENCERD, so it requests on
+  /// its own daemon name and is answered on Topic::SEQ_DAEMONSTATE, which
+  /// publishes unconditionally.
+  struct SnapshotTarget {
+      std::string request_key;
+      std::string response_topic;
+  };
+  const std::map<std::string, SnapshotTarget> SNAPSHOT_TARGETS = {
+      { "tcsd", { Topic::TCSD, Topic::TCSD } },
+      { "slitd", { Topic::SLITD, Topic::SLITD } },
+      { "camerad", { Topic::CAMERAD, Topic::CAMERAD } },
+      { "acamd", { Topic::ACAMD, Topic::ACAMD } },
+      { "calibd", { Topic::CALIBD, Topic::CALIBD } },
+      { "flexured", { Topic::FLEXURED, Topic::FLEXURED } },
+      { "focusd", { Topic::FOCUSD, Topic::FOCUSD } },
+      { "powerd", { Topic::POWERD, Topic::POWERD } },
+      { "thermald", { Topic::THERMALD, Topic::THERMALD } },
+      { "slicecamd", { Topic::SLICECAMD, Topic::SLICECAMD } },
+      { "sequencerd", { Daemon::SEQUENCER, Topic::SEQ_DAEMONSTATE } },
+  };
 }
 
 
@@ -238,48 +267,87 @@ bool probe_daemon( uint16_t port ) {
 /***** probe_daemon *********************************************************/
 
 
-/***** probe_broker *********************************************************/
+/***** probe_round ***********************************************************/
 /**
- * @brief      probe the messaged broker by round-tripping a message through it
- * @details    Publishes a unique nonce on a private topic and waits for that same
- *             nonce to come back via the subscriber, proving the broker is
- *             forwarding. The sockets are persistent (created once by the caller)
- *             so there is no per-probe slow-joiner drop. A timed poll is used so a
- *             hung broker yields a timeout rather than blocking the watchdog.
- * @param[in]  pub     persistent PUB socket connected to the broker's XSUB endpoint
- * @param[in]  sub     persistent SUB socket connected to the broker's XPUB endpoint
- * @param[in]  poller  poller registered on sub for poll_in
- * @param[in]  nonce   unique token for this probe
- * @return     true if the nonce round-tripped within the timeout, else false
+ * @brief      one broker-health probe, and optionally one publish-liveness round
+ * @details    Always round-trips the broker nonce, exactly as probe_broker did.
+ *             On a snapshot round (snapshot_targets non-null), also publishes a
+ *             Topic::SNAPSHOT request naming every unit in snapshot_targets,
+ *             tagged Key::WATCHDOG. Drains any backlog to empty first, so a
+ *             message arriving just after the previous round's deadline is never
+ *             misattributed to this round.
+ * @param[in]  pub               PUB socket connected to the broker's XSUB endpoint
+ * @param[in]  sub               SUB socket connected to the broker's XPUB endpoint
+ * @param[in]  poller            poller registered on sub for poll_in
+ * @param[in]  nonce             unique token for this round's broker probe
+ * @param[in]  snapshot_targets  non-null on a snapshot round: units/topics to request
+ * @param[out] topic_seen        cleared, and on a snapshot round populated per response_topic
+ * @return     true if the broker nonce round-tripped within the window, else false
  *
  */
-bool probe_broker( zmqpp::socket &pub, zmqpp::socket &sub, zmqpp::poller &poller, const std::string &nonce ) {
-  try {
-    zmqpp::message out;
-    out.add( HEALTH_TOPIC );
-    out.add( nonce );
-    pub.send( out );
+bool probe_round( zmqpp::socket &pub, zmqpp::socket &sub, zmqpp::poller &poller, const std::string &nonce,
+                  const std::map<std::string, SnapshotTarget>* snapshot_targets, std::map<std::string, bool> &topic_seen ) {
+  topic_seen.clear();
+  bool broker_responsive = false;
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds( PROBE_TIMEOUT_MS );
+  try {
+    while ( poller.poll( 0 ) > 0 ) {   // drain any backlog left from the previous round's deadline
+      zmqpp::message discard;
+      sub.receive( discard );
+    }
+
+    zmqpp::message health_out;
+    health_out.add( HEALTH_TOPIC );
+    health_out.add( nonce );
+    pub.send( health_out );
+
+    int window_ms = PROBE_TIMEOUT_MS;
+
+    if ( snapshot_targets ) {          // snapshot round: also ask every listed unit to publish
+      nlohmann::json jmessage;
+      for ( const auto &[unit, tgt] : *snapshot_targets )
+        jmessage[tgt.request_key] = true;
+      jmessage[Key::WATCHDOG] = true;  // tags this as a cheap ping, not organic telemetry
+      for ( const auto &[unit, tgt] : *snapshot_targets )
+        topic_seen[tgt.response_topic] = false;
+
+      zmqpp::message snap_out;
+      snap_out.add( Topic::SNAPSHOT );
+      snap_out.add( jmessage.dump() );
+      pub.send( snap_out );
+
+      window_ms = std::max( PROBE_TIMEOUT_MS, SNAPSHOT_WINDOW_MS );  // snapshot replies may lag a plain ping
+    }
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds( window_ms );
     while ( std::chrono::steady_clock::now() < deadline ) {
-      const long remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
-                               deadline - std::chrono::steady_clock::now() ).count();
-      if ( poller.poll( remaining > 0 ? static_cast<int>(remaining) : 0 ) <= 0 ) break;   // timeout
+      const bool have_all_topics =
+          std::all_of( topic_seen.begin(), topic_seen.end(), []( const auto &kv ) { return kv.second; } );
+      if ( broker_responsive && have_all_topics ) break;             // nothing left to wait for this round
+
+      const long remaining =
+          std::chrono::duration_cast<std::chrono::milliseconds>( deadline - std::chrono::steady_clock::now() ).count();
+      if ( poller.poll( remaining > 0 ? static_cast<int>( remaining ) : 0 ) <= 0 ) break;  // timeout
 
       zmqpp::message in;
       sub.receive( in );
       std::string topic, payload;
       in >> topic >> payload;
-      if ( payload == nonce ) return true;          // our token round-tripped the broker
-      // otherwise a stale token from an earlier probe; keep waiting until the deadline
+      // our token round-tripped the broker
+      if ( topic == HEALTH_TOPIC && payload == nonce ) {
+        broker_responsive = true;
+        continue;
+      }
+      auto it = topic_seen.find( topic );
+      if ( it != topic_seen.end() ) it->second = true;  // mark this daemon's snapshot reply as seen
     }
   }
   catch ( const std::exception &e ) {
-    logmsg( "broker probe error: " + std::string(e.what()) );   // treat as a failed probe
+    logmsg( "broker probe error: " + std::string( e.what() ) );
   }
-  return false;
+  return broker_responsive;
 }
-/***** probe_broker *********************************************************/
+/***** probe_round ***********************************************************/
 
 
 /***** unit_is_active *******************************************************/
@@ -322,8 +390,8 @@ void restart_unit( const std::string &unit ) {
 /***** consider_restart *****************************************************/
 /**
  * @brief      apply the fail-threshold + cooldown policy and restart if warranted
- * @param[in]  unit          the daemon unit name
- * @param[in]  responsive    result of this round's probe
+ * @param[in]  unit            the daemon unit name
+ * @param[in]  responsive      result of this round's probe
  * @param[in,out] fails        per-unit consecutive-failure counters
  * @param[in,out] last_restart per-unit last-restart timestamps
  * @return     none
@@ -378,6 +446,12 @@ int main( int argc, char **argv ) {
     last_restart[target.first] = startup - std::chrono::seconds( COOLDOWN_SEC + 1 );
   }
 
+  std::map<std::string, int> pub_fails;
+  for ( const auto &target : SNAPSHOT_TARGETS ) {
+    pub_fails[target.first] = 0;
+    last_restart[target.first] = startup - std::chrono::seconds( COOLDOWN_SEC + 1 );
+  }
+
   // Set up the broker (messaged) round-trip probe, if its endpoints are
   // configured. PUB_ENDPOINT is where publishers connect (broker XSUB) and
   // SUB_ENDPOINT is where subscribers connect (broker XPUB). The sockets are
@@ -398,11 +472,20 @@ int main( int argc, char **argv ) {
       broker_pub.connect( broker_pub_ep );
       broker_sub.connect( broker_sub_ep );
       broker_sub.subscribe( HEALTH_TOPIC );
+      // also listen for each daemon's Topic::SNAPSHOT reply
+      for ( const auto &target : SNAPSHOT_TARGETS )
+        broker_sub.subscribe( target.second.response_topic );
       broker_poller.add( broker_sub, zmqpp::poller::poll_in );
       std::this_thread::sleep_for( std::chrono::milliseconds( BROKER_SETTLE_MS ) );
       fails[BROKER_UNIT] = 0;
       last_restart[BROKER_UNIT] = startup - std::chrono::seconds( COOLDOWN_SEC + 1 );
       logmsg( "watching broker " + BROKER_UNIT + " round-trip " + broker_pub_ep + " -> " + broker_sub_ep );
+
+      std::string watched_pub;
+      for ( const auto &target : SNAPSHOT_TARGETS )
+        watched_pub += ( watched_pub.empty() ? "" : ", " ) + target.first;
+      logmsg( "watching publish liveness (Topic::SNAPSHOT, every " + std::to_string( SNAPSHOT_PERIOD_SEC ) +
+              "s) for: " + watched_pub );
     }
     catch ( const std::exception &e ) {
       logmsg( "ERROR setting up broker probe (" + std::string(e.what()) + "); " + BROKER_UNIT + " not hang-probed" );
@@ -410,7 +493,7 @@ int main( int argc, char **argv ) {
     }
   }
   else {
-    logmsg( "broker endpoints not in config; " + BROKER_UNIT + " will not be hang-probed" );
+    logmsg( "broker endpoints not in config; " + BROKER_UNIT + " and publish-liveness will not be hang-probed" );
   }
 
   // Startup grace: give daemons time to come up before probing for liveness, so
@@ -427,6 +510,9 @@ int main( int argc, char **argv ) {
     }
   }
 
+  auto next_snapshot = std::chrono::steady_clock::now();
+  std::map<std::string, bool> topic_seen;
+
   while ( true ) {
     for ( const auto &target : targets ) {
       const std::string &unit = target.first;
@@ -436,11 +522,24 @@ int main( int argc, char **argv ) {
     }
 
     if ( broker_enabled ) {
-      const bool responsive = unit_is_active( BROKER_UNIT )
-          ? probe_broker( broker_pub, broker_sub, broker_poller, std::to_string( ++nonce ) )
-          : true;
-      consider_restart( BROKER_UNIT, responsive, fails, last_restart );
+      const bool broker_active = unit_is_active( BROKER_UNIT );
+      const auto now = std::chrono::steady_clock::now();
+      const bool snapshot_due = broker_active && ( now >= next_snapshot );  // deferred, not penalized, if messaged is down
+
+      const bool broker_responsive = broker_active
+                                         ? probe_round( broker_pub, broker_sub, broker_poller, std::to_string( ++nonce ),
+                                                        snapshot_due ? &SNAPSHOT_TARGETS : nullptr, topic_seen )
+                                         : true;
+      consider_restart( BROKER_UNIT, broker_responsive, fails, last_restart );
       Daemon::sd_notify( "WATCHDOG=1\n" );
+
+      if ( snapshot_due ) {
+        for ( const auto &[unit, tgt] : SNAPSHOT_TARGETS ) {
+          const bool responsive = unit_is_active( unit ) ? topic_seen[tgt.response_topic] : true;
+          consider_restart( unit, responsive, pub_fails, last_restart );
+        }
+        next_snapshot = now + std::chrono::seconds( SNAPSHOT_PERIOD_SEC );  // only advance if the probe actually ran
+      }
     }
 
     std::this_thread::sleep_for( std::chrono::seconds( PROBE_PERIOD_SEC ) );

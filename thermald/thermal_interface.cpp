@@ -56,8 +56,32 @@ namespace Thermal {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Topic::THERMALD ) ) {
+    if ( !jmessage.contains( Topic::THERMALD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
       this->publish_status();
+    }
+  }
+
+
+  /***** Thermal::Interface::publish_watchdog *********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the cached-telemdata assembly, exercising the same
+   *             publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::THERMALD;
+    jmessage[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage, Topic::THERMALD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Thermal::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
   /***** Thermal::Interface::handletopic_snapshot ****************************/

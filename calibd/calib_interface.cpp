@@ -788,15 +788,42 @@ namespace Calib {
   /***** Calib::Interface::publish_status *************************************/
 
 
+  /***** Calib::Interface::publish_watchdog ************************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips get_status() and its motion-controller/lampmod hardware
+   *             I/O, exercising the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::CALIBD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Calib::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
+    }
+  }
+  /***** Calib::Interface::publish_watchdog ************************************/
+
+
   /***** Calib::Interface::handletopic_snapshot *******************************/
   /**
-   * @brief      If my topic is in the jmessage then force-publish my status
+   * @brief      If my topic is in the jmessage then force-publish my status,
+   *             or a cheap liveness-only publish if the watchdog only asked
+   *             for that (Key::WATCHDOG)
    * @param[in]  jmessage  ref to incomming message
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Topic::CALIBD ) ) {
-      this->publish_status(true);
+    if ( !jmessage.contains( Topic::CALIBD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
+      this->publish_status( true );
     }
   }
   /***** Calib::Interface::handletopic_snapshot *******************************/

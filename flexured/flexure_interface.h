@@ -119,6 +119,7 @@ namespace Flexure {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );  ///< respond to a snapshot request
+      void publish_watchdog();                                      ///< cheap liveness-only publish
       void handletopic_tcsd( const nlohmann::json &jmessage );      ///< store TCS telemetry published by tcsd
       void get_status();                                            ///< refresh status from hardware
       void publish_status( bool force=false );                      ///< publish flexure state on change (or force)

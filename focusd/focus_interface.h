@@ -114,6 +114,7 @@ namespace Focus {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_watchdog();
 
       long initialize_class();
       long open();                                              ///< opens the PI socket connection

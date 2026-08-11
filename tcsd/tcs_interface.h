@@ -487,6 +487,7 @@ namespace TCS {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_watchdog();
 
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);

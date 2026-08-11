@@ -68,7 +68,31 @@ namespace AstroCam {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
-    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_status(true);
+    if ( !jmessage_in.contains( Topic::CAMERAD ) ) return;
+    if ( jmessage_in.value( Key::WATCHDOG, false ) )
+      this->publish_watchdog();
+    else
+      this->publish_status( true );
+  }
+
+
+  /**** AstroCam::Interface::publish_watchdog **********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the change-gating check and status assembly, exercising
+   *             the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::CAMERAD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "AstroCam::Interface::publish_watchdog", "ERROR: " + std::string( e.what() ) );
+    }
   }
   /***** AstroCam::Interface::handletopic_snapshot ****************************/
 

@@ -243,6 +243,7 @@ namespace Slit {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_watchdog();
       void publish_status(bool force=false);
 
       long initialize_class();

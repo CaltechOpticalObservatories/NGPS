@@ -645,8 +645,32 @@ namespace Power {
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
     // If my topic is in the jmessage then publish my status
     //
-    if ( jmessage.contains( Topic::POWERD ) ) {
+    if ( !jmessage.contains( Topic::POWERD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
       this->publish_status();
+    }
+  }
+
+
+  /***** Power::Interface::publish_watchdog ************************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the change-gating check and status assembly, exercising
+   *             the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::POWERD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Power::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
 }

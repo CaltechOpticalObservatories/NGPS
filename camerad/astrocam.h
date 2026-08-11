@@ -715,6 +715,7 @@ namespace AstroCam {
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
       void publish_status(bool force=false);
+      void publish_watchdog();
       void request_snapshot();
       void handletopic_snapshot(const nlohmann::json &jmessage_in);
       void handletopic_acam(const nlohmann::json &jmessage_in);

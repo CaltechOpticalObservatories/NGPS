@@ -253,6 +253,7 @@ namespace Power {
       void start_subscriber_thread() { Common::PubSubHandler::start_subscriber_thread(*this); }
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this);  }
       void handletopic_snapshot( const nlohmann::json &jmessage );
+      void publish_watchdog();
 
       void configure_interface( Power::NpsInfo npsinfo );  ///< configure the NPS interface vector with info from configuration file
       long initialize_class();                             ///< initialize class variables

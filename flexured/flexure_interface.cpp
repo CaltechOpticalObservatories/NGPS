@@ -637,8 +637,32 @@ namespace Flexure {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains( Topic::FLEXURED ) ) {
+    if ( !jmessage.contains( Topic::FLEXURED ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
       this->publish_status(true);
+    }
+  }
+
+
+  /***** Flexure::Interface::publish_watchdog *********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips get_status() and its motor-controller hardware I/O,
+   *             exercising the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::FLEXURED;
+    jmessage[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage, Topic::FLEXURED );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Flexure::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
   /***** Flexure::Interface::handletopic_snapshot ****************************/

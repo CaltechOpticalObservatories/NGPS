@@ -898,7 +898,31 @@ namespace Slicecam {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains(Topic::SLICECAMD) ) this->publish_snapshot();
+    if ( !jmessage.contains( Topic::SLICECAMD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) )
+      this->publish_watchdog();
+    else
+      this->publish_snapshot();
+  }
+
+
+  /***** Slicecam::Interface::publish_watchdog *********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the state assembly and cached-temperature field,
+   *             exercising the same publisher/mutex publish_snapshot() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::SLICECAMD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out, Topic::SLICECAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slicecam::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
+    }
   }
   /***** Slicecam::Interface::handletopic_snapshot ****************************/
 

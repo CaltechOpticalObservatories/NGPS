@@ -15,8 +15,30 @@ namespace TCS {
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
     // If my name is in the jmessage then publish my snapshot
     //
-    if ( jmessage.contains( TCS::DAEMON_NAME ) ) {
+    if ( !jmessage.contains( TCS::DAEMON_NAME ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) )
+      this->publish_watchdog();
+    else
       this->publish_snapshot();
+  }
+
+
+  /***** TCS::Interface::publish_watchdog **************************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips get_tcs_info() -- a live TCS query -- exercising the same
+   *             publisher/mutex publish_snapshot() uses without it.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Daemon::TCSD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "TCS::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
 

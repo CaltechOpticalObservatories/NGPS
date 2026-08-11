@@ -725,7 +725,31 @@ namespace Slit {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    if ( jmessage.contains(Topic::SLITD) ) this->publish_status();
+    if ( !jmessage.contains( Topic::SLITD ) ) return;
+    if ( jmessage.value( Key::WATCHDOG, false ) )
+      this->publish_watchdog();
+    else
+      this->publish_status();
+  }
+
+
+  /***** Slit::Interface::publish_watchdog *************************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the change-gating check and status assembly, exercising
+   *             the same publisher/mutex publish_status() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::SLITD;
+    jmessage_out[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage_out );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Slit::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
+    }
   }
   /***** Slit::Interface::handletopic_snapshot ********************************/
 

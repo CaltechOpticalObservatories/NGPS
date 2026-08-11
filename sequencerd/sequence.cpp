@@ -30,10 +30,24 @@ namespace Sequencer {
   void Sequence::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
     // If my name is in the jmessage then publish my snapshot
     //
-    if ( jmessage_in.contains( Sequencer::DAEMON_NAME ) ) {
+    if ( !jmessage_in.contains( Sequencer::DAEMON_NAME ) ) return;
+    if ( jmessage_in.value( Key::WATCHDOG, false ) ) {
+      this->publish_watchdog();
+    }
+    else {
       this->publish_snapshot();
     }
   }
+
+
+  /***** Sequencer::Sequence::publish_watchdog ********************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Reuses the already-cheap, unconditional publish_daemonstate()
+   *             rather than the full four-topic publish_snapshot().
+   *
+   */
+  void Sequence::publish_watchdog() { this->publish_daemonstate(); }
   /***** Sequencer::Sequence::handletopic_snapshot ***************************/
 
 

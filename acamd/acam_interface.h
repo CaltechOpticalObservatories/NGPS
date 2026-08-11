@@ -677,6 +677,7 @@ namespace Acam {
       void publish_snapshot();
       void publish_status(bool force=false);
       void publish_temperature();                ///< publish only the andor temperature on Topic::ACAMD (periodic)
+      void publish_watchdog();                   ///< liveness-only publish
       void request_snapshot();
       bool wait_for_snapshots();
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class

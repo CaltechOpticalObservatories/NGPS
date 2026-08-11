@@ -517,6 +517,7 @@ namespace Sequencer {
       void publish_seqstate();
       void publish_waitstate();
       void publish_daemonstate();
+      void publish_watchdog();
       void publish_threadstate();
 
       std::unique_ptr<Common::PubSub> publisher;       ///< publisher object

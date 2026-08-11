@@ -1429,6 +1429,26 @@ namespace Acam {
   /***** Acam::Interface::publish_snapshot ************************************/
 
 
+  /***** Acam::Interface::publish_watchdog *************************************/
+  /**
+   * @brief      liveness-only publish for the watchdog
+   * @details    Skips the acquire-state assembly and the Andor temperature read;
+   *             exercises the same publisher/mutex publish_snapshot() uses.
+   *
+   */
+  void Interface::publish_watchdog() {
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::ACAMD;
+    jmessage[Key::WATCHDOG] = true;
+    try {
+      this->publisher->publish( jmessage, Topic::ACAMD );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Acam::Interface::publish_watchdog", "ERROR publishing message: " + std::string( e.what() ) );
+    }
+  }
+
+
   /***** Acam::Interface::publish_status **************************************/
   /**
    * @brief      publishes my acam-related (important) status on change
@@ -1604,7 +1624,11 @@ namespace Acam {
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
-    if ( jmessage_in.contains( Topic::ACAMD ) ) this->publish_snapshot();
+    if ( !jmessage_in.contains( Topic::ACAMD ) ) return;
+    if ( jmessage_in.value( Key::WATCHDOG, false ) )
+      this->publish_watchdog();
+    else
+      this->publish_snapshot();
   }
   /***** Acam::Interface::handletopic_snapshot ********************************/
 

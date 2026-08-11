@@ -53,7 +53,9 @@ namespace Key {
 
   inline const std::string SOURCE  = "source";
   inline const std::string PUBTIME = "pubtime";
-  inline const std::string ISOPEN  = "isopen";   ///< hardware connection state, published by every hardware daemon
+  inline const std::string ISOPEN  = "isopen";       ///< hardware connection state, published by every hardware daemon
+
+  inline const std::string WATCHDOG = "watchdog";    ///< liveness-probe-only publish request
 
   // Build provenance. Every publisher includes these so that a consumer can
   // tell which software was running when a message was produced.

@@ -152,6 +152,7 @@ namespace Thermal {
       void stop_subscriber_thread()  { Common::PubSubHandler::stop_subscriber_thread(*this); }
 
       void handletopic_snapshot( const nlohmann::json &jmessage );  ///< respond to a snapshot request
+      void publish_watchdog();                                      ///< cheap liveness-only publish
       void handletopic_acamd( const nlohmann::json &jmessage );     ///< stash acam CCD temperature into externaldata
       void handletopic_slicecamd( const nlohmann::json &jmessage ); ///< stash slicecam CCD temperatures into externaldata
       void publish_status();                                        ///< publish thermalinfo on Topic::THERMALD
