@@ -304,12 +304,14 @@ bool unit_is_active( const std::string &unit ) {
 /***** restart_unit *********************************************************/
 /**
  * @brief      restart a daemon unit via systemctl
+ * @details    Use "--no-block" to prevent ngps-watchdog.service WatchdogSec
+ *             from killing the watchdog itself mid-restart.
  * @param[in]  unit  the daemon unit name (e.g. "acamd")
  * @return     none
  *
  */
 void restart_unit( const std::string &unit ) {
-  const std::string cmd = "systemctl restart ngps@" + unit + ".service";
+  const std::string cmd = "systemctl restart --no-block ngps@" + unit + ".service";
   if ( std::system( cmd.c_str() ) == -1 ) {
     logmsg( "ERROR could not invoke systemctl to restart ngps@" + unit );
   }
