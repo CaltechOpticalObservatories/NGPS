@@ -72,6 +72,7 @@ namespace {
   const std::string LOCALHOST    = "127.0.0.1";
   const std::string BROKER_UNIT  = "messaged";    ///< the ZMQ broker unit (no command port)
   const std::string HEALTH_TOPIC = "_ngps_wd";    ///< private topic for the broker round-trip probe
+  const std::string SYSTEMCTL = "/usr/bin/systemctl"; ///< absolute path: no shell PATH lookup
 
   /// per-unit request key (set true in the Topic::SNAPSHOT payload) and the
   /// topic to watch for that unit's response. telemd is absent -- confirmed
@@ -380,7 +381,7 @@ bool probe_round( zmqpp::socket &pub, zmqpp::socket &sub, zmqpp::poller &poller,
  *
  */
 bool unit_is_active( const std::string &unit ) {
-  const std::string cmd = "systemctl is-active --quiet ngps@" + unit + ".service";
+  const std::string cmd = SYSTEMCTL + " is-active --quiet ngps@" + unit + ".service";
   const int rc = std::system( cmd.c_str() );
   return ( rc != -1 && WIFEXITED(rc) && WEXITSTATUS(rc) == 0 );
 }
@@ -397,7 +398,7 @@ bool unit_is_active( const std::string &unit ) {
  *
  */
 void restart_unit( const std::string &unit ) {
-  const std::string cmd = "systemctl restart --no-block ngps@" + unit + ".service";
+  const std::string cmd = SYSTEMCTL + " restart --no-block ngps@" + unit + ".service";
   if ( std::system( cmd.c_str() ) == -1 ) {
     logmsg( "ERROR could not invoke systemctl to restart ngps@" + unit );
   }
