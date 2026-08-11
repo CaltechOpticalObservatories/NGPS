@@ -18,9 +18,10 @@ include_directories( ${PROJECT_BASE_DIR}/acamd )
 
 link_directories( ${PROJECT_BASE_DIR}/lib )
 
+# C-Python API Development libraries and headers
+#
 find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
 find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
-include_directories( ${PYTHON_DEV} )
 
 find_library( ZMQPP_LIB zmqpp NAMES libzmqpp PATHS /usr/local/lib )
 find_library( ZMQ_LIB zmq NAMES libzmq PATHS /usr/local/lib )
