@@ -20,8 +20,8 @@ link_directories( ${PROJECT_BASE_DIR}/lib )
 
 # C-Python API Development libraries and headers
 #
-find_path(PYTHON_DEV "Python.h" PATHS ${PYTHON_INCLUDE_DIR} NO_DEFAULT_PATH)
-find_library(PYTHON_LIB ${PYTHON_VERSION} PATHS ${PYTHON_LIB_DIR} NO_DEFAULT_PATH)
+find_path( PYTHON_DEV "Python.h" PATHS /usr/include/python3.9 )
+find_library( PYTHON_LIB python3.9 NAMES libpython3.9 PATHS /usr/lib64 )
 
 # ZMQ
 #
