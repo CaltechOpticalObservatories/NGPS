@@ -59,6 +59,11 @@ class MenuService:
         create_account_action.triggered.connect(self.parent.on_create_account)  # Connect to create account handler
         user_menu.addAction(create_account_action)
 
+        # Add Change Password Action
+        change_password_action = QAction('Change Password', self.menubar)
+        change_password_action.triggered.connect(self.parent.on_change_password)  # Connect to change password handler
+        user_menu.addAction(change_password_action)
+
         # Targets Menu
         targets_menu = self.menubar.addMenu('Target List')
 

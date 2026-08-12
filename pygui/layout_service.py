@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QStyle, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
-from PyQt5.QtGui import QColor, QFont, QDoubleValidator
+from PyQt5.QtGui import QColor, QFont, QDoubleValidator, QTextCursor
 from logic_service import LogicService
 from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
+import html
 import re
 import subprocess
 
@@ -192,33 +193,23 @@ class LayoutService:
         system_status_layout.setSpacing(10)
         system_status_layout.setContentsMargins(5, 5, 5, 5)
 
-        # Create a mapping for status colors
+        # Instrument System Status intentionally shows sequencer lifecycle
+        # states from seq_seqstate only. Busy/wait states from seq_waitstate
+        # belong to the bottom daemon/status bar, not this panel.
         status_map = {
-            "stopped": QColor(169, 169, 169),
+            # These are lifecycle states from seq_seqstate only.
+            # seq_waitstate belongs to the daemon/status bar, not this panel.
             "not_ready": QColor(255, 0, 0),
-            "idle": QColor(255, 255, 0),
+            "ready": QColor(0, 180, 0),
+            "running": QColor(0, 255, 0),
+            "stopping": QColor(255, 165, 0),
             "paused": QColor(255, 165, 0),
-            "exposing": QColor(0, 255, 0),
-            "readout": QColor(0, 255, 0),
+            "starting": QColor(255, 255, 0),
+            "failed": QColor(255, 0, 0),
+            "aborting": QColor(255, 0, 0),
 
-            "moveto": QColor(255, 255, 0),
-            "acam_acquire": QColor(255, 255, 0),
-            "slicecam_fineacquire": QColor(255, 255, 0),
-
-            "focus": QColor(255, 255, 0),
-            "calib": QColor(255, 255, 0),
-            "camera": QColor(255, 255, 0),
-            "flexure": QColor(255, 255, 0),
-            "power": QColor(255, 255, 0),
-            "slit": QColor(255, 255, 0),
-            "tcs": QColor(255, 255, 0),
-            "tcsop": QColor(255, 255, 0),
-            "user": QColor(255, 255, 0),
-
-            # transitional / backward compatibility
-            "acam": QColor(255, 255, 0),
-            "slicecam": QColor(255, 255, 0),
-            "acquire": QColor(255, 255, 0),
+            # Backward-compatible fallback if older code still sends STOPPED.
+            "stopped": QColor(169, 169, 169),
         }
 
         # Create a dictionary to hold the status widgets, which we will enable/disable
@@ -277,16 +268,47 @@ class LayoutService:
 
     def update_system_status(self, status):
         """
-        Update the system status and make only the relevant widget visible.
-        Hide all other status widgets.
+        Update Instrument System Status from seq_seqstate lifecycle states.
+
+        The ZMQ service normally sends normalized lower-case keys, but this
+        method also accepts the raw sequencer strings so local startup checks
+        or future callers can pass values like READY/RUNNING directly.
         """
+        raw_status = "" if status is None else str(status).strip()
+        seqstate_to_ui = {
+            "NOTREADY": "not_ready",
+            "READY": "ready",
+            "RUNNING": "running",
+            "STOPPING": "stopping",
+            "PAUSED": "paused",
+            "STARTING": "starting",
+            "FAILED": "failed",
+            "ABORTING": "aborting",
+            "IDLE": "ready",
+            "STOPPED": "stopped",
+            "ERROR": "failed",
+        }
+        status_key = seqstate_to_ui.get(
+            raw_status.upper(),
+            raw_status.lower().replace(" ", "_"),
+        )
+
+        # Backward-compatible aliases from older GUI/status code.
+        if status_key == "idle":
+            status_key = "ready"
+        elif status_key == "error":
+            status_key = "failed"
+
         # Hide all status widgets
-        for status_key, status_info in self.status_widgets.items():
+        for status_info in self.status_widgets.values():
             status_info['widget'].setVisible(False)
 
-        # Show the widget corresponding to the current status
-        if status in self.status_widgets:
-            self.status_widgets[status]['widget'].setVisible(True)
+        # Show the widget corresponding to the current status.
+        # Fall back to stopped if the value is unknown.
+        if status_key not in self.status_widgets:
+            status_key = "stopped"
+
+        self.status_widgets[status_key]['widget'].setVisible(True)
 
     def create_tcs_status_group(self):
         tcs_status_group = QGroupBox("TCS Status")
@@ -373,12 +395,33 @@ class LayoutService:
 
         self.parent.sequencer_mode_single = QRadioButton("Single")
         self.parent.sequencer_mode_all = QRadioButton("All")
+
+        self.parent.sequencer_mode_single.clicked.connect(
+            self.on_sequencer_mode_single_clicked
+        )
+        self.parent.sequencer_mode_all.clicked.connect(
+            self.on_sequencer_mode_all_clicked
+        )
+
+        self.parent.sequencer_mode_single.setToolTip(
+            "Runs the next PENDING target in database sequence order; this is not necessarily the selected row or visible first row."
+        )
+        self.parent.sequencer_mode_all.setToolTip(
+            "Runs all remaining PENDING targets in database sequence order."
+        )
+
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_single)
         sequencer_mode_layout.addWidget(self.parent.sequencer_mode_all)
 
+        self.next_target_label = QLabel("Single: no target list loaded yet.")
+        self.next_target_label.setWordWrap(True)
+        self.next_target_label.setStyleSheet("font-size: 10pt; color: #fff; padding: 3px;")
+        sequencer_mode_layout.addWidget(self.next_target_label)
+
         # Fine acquire toggle
-        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Disabled")
+        self.parent.fine_acquire_toggle = QPushButton("Fine Acquire: Enabled")
         self.parent.fine_acquire_toggle.setCheckable(True)
+        self.parent.fine_acquire_toggle.setChecked(True)
         self.parent.fine_acquire_toggle.setToolTip("Enable or disable sequencer fine acquire")
         self.parent.fine_acquire_toggle.setMaximumWidth(200)
         self.parent.fine_acquire_toggle.setStyleSheet("""
@@ -398,12 +441,46 @@ class LayoutService:
         sequencer_mode_layout.addWidget(self.parent.fine_acquire_toggle)
 
         sequencer_mode_group.setLayout(sequencer_mode_layout)
-
-        # Set maximum width and height for the sequencer mode group
-        sequencer_mode_group.setMaximumWidth(300)  # Maximum width
-        sequencer_mode_group.setMaximumHeight(145)  # Maximum height
+        sequencer_mode_group.setMaximumWidth(300)
+        sequencer_mode_group.setMaximumHeight(220)
 
         return sequencer_mode_group
+
+    def on_sequencer_mode_single_clicked(self):
+        """Set sequencer to single-target mode."""
+        self.logic_service.refresh_visible_target_states()
+        mode, target = self.logic_service.current_or_next_target()
+
+        if target is not None:
+            msg = (
+                f"Single mode will run the next DB target: "
+                f"{target.get('NAME', 'Unnamed')} "
+                f"(OBS {target.get('OBSERVATION_ID', '')}). "
+                "This is based on STATE/sequence order, not table selection or table sorting."
+            )
+        else:
+            msg = "Single mode selected, but no PENDING target is visible in the current list."
+
+        print("Sequencer mode selected: Single")
+        print(msg)
+        print("Sending command: seq do one")
+        self.parent.send_command("do one\n")
+
+
+    def on_sequencer_mode_all_clicked(self):
+        """Set sequencer to all-targets mode."""
+        self.logic_service.refresh_visible_target_states()
+        rows = getattr(self.parent, "all_targets", []) or []
+        pending = sum(
+            1 for row in rows
+            if isinstance(row, dict) and self.logic_service.normalize_target_state(row.get("STATE")) == "PENDING"
+        )
+        msg = f"All mode will run {pending} remaining PENDING target(s) in DB sequence order."
+
+        print("Sequencer mode selected: All")
+        print(msg)
+        print("Sending command: seq do all")
+        self.parent.send_command("do all\n")
 
     def on_fine_acquire_toggled(self, checked):
         """Enable/disable the sequencer fine-acquire step."""
@@ -422,10 +499,6 @@ class LayoutService:
                 text=True,
             )
 
-            if hasattr(self.parent, "message_log") and self.parent.message_log:
-                self.update_message_log(f"Ran command: {' '.join(command)}")
-                if result.stdout.strip():
-                    self.update_message_log(result.stdout.strip())
 
         except Exception as exc:
             # Revert the UI if the command failed.
@@ -440,8 +513,6 @@ class LayoutService:
                 f"Could not run: {' '.join(command)}\n\n{exc}",
             )
 
-            if hasattr(self.parent, "message_log") and self.parent.message_log:
-                self.update_message_log(f"Fine acquire command failed: {' '.join(command)} — {exc}")
 
     def create_progress_and_image_group(self):
         progress_and_image_group = QGroupBox("Progress and Image Info")
@@ -458,7 +529,7 @@ class LayoutService:
         # Add all components to the main layout
         progress_and_image_layout.addLayout(progress_layout)
         progress_and_image_layout.addLayout(image_info_layout)
-        progress_and_image_layout.addWidget(QLabel("Log Messages:"))
+        progress_and_image_layout.addWidget(QLabel("Messages:"))
         progress_and_image_layout.addWidget(message_log)
 
         progress_and_image_group.setLayout(progress_and_image_layout)
@@ -590,6 +661,7 @@ class LayoutService:
         # Set size policies to allow the widget to stretch and grow proportionally
         self.parent.message_log.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.parent.message_log.setReadOnly(True)
+        self.parent.message_log.document().setMaximumBlockCount(100)
 
         # Optionally set a minimum height or width if desired
         self.parent.message_log.setMinimumHeight(60)
@@ -607,34 +679,44 @@ class LayoutService:
         self.parent.message_log.clear()
 
     
-    def update_message_log(self, message):
-        MAX_LOG_SIZE = 1000  # Max number of characters in the log
-        MAX_MESSAGES = 100  # Max number of messages in the log
-        """ Update the message log with the new message, maintaining a limit on the size. """
-        if self.parent.message_log:
-            current_text = self.parent.message_log.toPlainText()
+    def update_topic_broadcast_log(self, message, severity="NOTICE"):
+        """Append a parsed operator broadcast message to the visible log.
 
-            # Add the new message
-            updated_text = current_text + "\n" + message
-            
-            # Limit the log to the most recent MAX_LOG_SIZE characters
-            if len(updated_text) > MAX_LOG_SIZE:
-                updated_text = updated_text[-MAX_LOG_SIZE:]
+        The ZMQ service should pass only the payload's ``message`` field here.
+        The ``severity`` field controls display color only; it is not printed
+        in the log line.
+        """
+        self.update_message_log(message, severity)
 
-            # Optionally, limit to the most recent MAX_MESSAGES messages
-            messages = updated_text.split("\n")
-            if len(messages) > MAX_MESSAGES:
-                messages = messages[-MAX_MESSAGES:]
-            
-            updated_text = "\n".join(messages)
 
-            # Update the message log with the new, trimmed text
-            self.parent.message_log.setPlainText(updated_text)
+    def update_message_log(self, message, severity="NOTICE"):
+        """Append one colored broadcast message to the log."""
+        if not self.parent.message_log:
+            return
 
-            # Optionally, scroll to the bottom of the text log
-            cursor = self.parent.message_log.textCursor()
-            cursor.movePosition(cursor.End)
-            self.parent.message_log.setTextCursor(cursor)
+        severity = str(severity).strip().upper() or "NOTICE"
+        message = str(message).strip()
+
+        if not message:
+            return
+
+        color_by_severity = {
+            "NOTICE": "#e0e0e0",
+            "WARNING": "#ffcc40",
+            "ERROR": "#ff5c5c",
+        }
+        font_weight = "bold" if severity in ("WARNING", "ERROR") else "normal"
+        color = color_by_severity.get(severity, color_by_severity["NOTICE"])
+        safe_message = html.escape(message)
+
+        self.parent.message_log.append(
+            f'<span style="color:{color}; font-weight:{font_weight};">'
+            f'{safe_message}</span>'
+        )
+
+        cursor = self.parent.message_log.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.parent.message_log.setTextCursor(cursor)
 
     def _connect_button_once(self, button, slot):
         """
@@ -778,6 +860,29 @@ class LayoutService:
         # Add the header layout to the main layout
         bottom_section_layout.addLayout(header_layout)
 
+        state_layout = QHBoxLayout()
+        state_layout.setSpacing(8)
+
+        self.target_state_summary_label = QLabel("PENDING: 0   COMPLETED: 0   EXPOSING: 0")
+        self.target_state_summary_label.setToolTip("Counts come from the targets.STATE database column.")
+        state_layout.addWidget(self.target_state_summary_label)
+
+        state_layout.addStretch(1)
+        state_layout.addWidget(QLabel("Selected state:"))
+
+        self.target_state_combo = QComboBox()
+        self.target_state_combo.addItems(["PENDING", "COMPLETED", "EXPOSING"])
+        self.target_state_combo.setToolTip("Set STATE for the selected target row.")
+        self.target_state_combo.setMaximumWidth(130)
+        state_layout.addWidget(self.target_state_combo)
+
+        self.apply_target_state_button = QPushButton("Apply")
+        self.apply_target_state_button.setToolTip("Write the selected STATE to the database for the selected row.")
+        self.apply_target_state_button.clicked.connect(self.on_apply_target_state_clicked)
+        state_layout.addWidget(self.apply_target_state_button)
+
+        bottom_section_layout.addLayout(state_layout)
+
         # Create the button to load the target list
         self.load_target_button = QPushButton("Please login or load your target list to start")
         self.load_target_button.setStyleSheet("""
@@ -894,9 +999,56 @@ class LayoutService:
         # Connect the selectionChanged signal to the update_target_info function in LogicService
         self.target_list_display.selectionModel().selectionChanged.connect(self.update_target_info)
 
+        # Periodically refresh only target STATE values from the DB.  This keeps
+        # COMPLETED/EXPOSING/PENDING current without destroying the observer's
+        # manual table sorting or selected row.
+        self.target_state_refresh_timer = QTimer(self.parent)
+        self.target_state_refresh_timer.setInterval(5000)
+        self.target_state_refresh_timer.timeout.connect(
+            self.logic_service.refresh_visible_target_states
+        )
+        self.target_state_refresh_timer.start()
+
         target_list_group.setLayout(bottom_section_layout)
 
         return target_list_group
+
+    def on_apply_target_state_clicked(self):
+        """Write STATE for the currently selected target row."""
+        table = self.target_list_display
+        selected_rows = table.selectionModel().selectedRows() if table is not None else []
+        if not selected_rows:
+            QMessageBox.information(
+                self.parent,
+                "No target selected",
+                "Select a target row before changing its STATE.",
+            )
+            return
+
+        observation_id = self.logic_service.selected_observation_id()
+        if not observation_id:
+            QMessageBox.warning(
+                self.parent,
+                "Missing OBSERVATION_ID",
+                "Could not find OBSERVATION_ID for the selected row.",
+            )
+            return
+
+        state = self.target_state_combo.currentText().strip().upper()
+        try:
+            ok = self.logic_service.update_target_state(observation_id, state)
+        except ValueError as exc:
+            QMessageBox.warning(self.parent, "Invalid target state", str(exc))
+            return
+
+        if ok:
+            print(f"Set OBSERVATION_ID {observation_id} STATE to {state}.")
+        else:
+            QMessageBox.warning(
+                self.parent,
+                "State update failed",
+                f"Could not set OBSERVATION_ID {observation_id} to {state}.",
+            )
 
     def show_column_toggle_dialog(self):
         table = self.target_list_display
@@ -954,7 +1106,7 @@ class LayoutService:
             return
 
         # Column names to hide by default
-        to_hide = {"OBSERVATION_ID", "CHANNEL", "MAGNITUDE", "MAGSYSTEM", "MAGFILTER"}
+        to_hide = {"CHANNEL", "MAGNITUDE", "MAGSYSTEM", "MAGFILTER"}
 
         for col in range(table.columnCount()):
             header_item = table.horizontalHeaderItem(col)
@@ -1088,6 +1240,11 @@ class LayoutService:
             offset_ra = None
             offset_dec = None
             num_of_exposures = None
+            ra = ""
+            dec = ""
+            binspect = ""
+            binspat = ""
+            target_state = "PENDING"
 
             print("Selected Row:", selected_row)  # Print the selected row index
             print("Column Headers:", column_headers)  # Print the column headers
@@ -1102,6 +1259,9 @@ class LayoutService:
                 if header == 'OBSERVATION_ID':
                     observation_id = value  # Store the observation ID
                     print(f"Found OBSERVATION_ID: {observation_id}")  # Print the found OBSERVATION_ID
+
+                if header == 'STATE':
+                    target_state = self.logic_service.normalize_target_state(value)
 
                 # Check if the header is 'Exposure Time' and extract its value
                 if header == 'RA':
@@ -1156,6 +1316,12 @@ class LayoutService:
                     num_of_exposures = value  # Store the NEXP
                     print(f"Found NEXP: {num_of_exposures}")  # Print the found NEXP 
                     self.control_tab.num_of_exposures_box.setText(num_of_exposures)
+
+            if hasattr(self, "target_state_combo") and self.target_state_combo is not None:
+                idx = self.target_state_combo.findText(target_state)
+                if idx >= 0:
+                    with QSignalBlocker(self.target_state_combo):
+                        self.target_state_combo.setCurrentIndex(idx)
 
             # Pass the dictionary of target data to LogicService
             print("Target Data:", target_data)  # Print the full target data for the selected row
@@ -1212,8 +1378,8 @@ class LayoutService:
             self.target_list_display.selectRow(selected_row)
             
             slit_angle = "0"
-            # if self.parent.current_ra != '' and self.parent.current_dec != '':
-            #     slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            if self.parent.current_ra != '' and self.parent.current_dec != '':
+                slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
             self.control_tab.slit_angle_box.setText(slit_angle)
 
         else:
@@ -1242,19 +1408,28 @@ class LayoutService:
         return self.target_list_display 
 
     def set_column_widths(self):
-        # Set specific column widths (adjust as needed)
-        column_widths = [
-            250, 175, 125, 125, 125, 125, 125, 125, 125, 125, 175, 175, 175, 175, 175, 175, 175, 175, 175, 125, 125, 125
-        ]
+        """Set readable widths, with operational columns kept compact/visible."""
+        table = self.target_list_display
+        if table is None:
+            return
 
-        # Get the number of columns in the table
-        column_count = self.target_list_display.columnCount()
+        widths_by_name = {
+            "STATE": 115,
+            "OBSERVATION_ID": 130,
+            "NAME": 250,
+            "RA": 175,
+            "DECL": 175,
+            "EXPTIME": 125,
+            "SLITWIDTH": 125,
+            "BINSPECT": 95,
+            "BINSPAT": 95,
+            "NEXP": 80,
+        }
 
-        # Ensure we don't exceed the number of available columns
-        for col in range(column_count):
-            # Use the width from the list, or a default width if the list is too short
-            width = column_widths[col] if col < len(column_widths) else 150
-            self.target_list_display.setColumnWidth(col, width)
+        for col in range(table.columnCount()):
+            header = table.horizontalHeaderItem(col)
+            name = header.text().strip().upper() if header else ""
+            table.setColumnWidth(col, widths_by_name.get(name, 150))
 
 
     def update_status_ui(self, data, modulator_data):

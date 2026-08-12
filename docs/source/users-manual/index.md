@@ -1,8 +1,15 @@
 # Users Manual
 
-This manual focuses on day-to-day NGPS observing operations, instrument-control tools, calibration workflows, data products, maintenance, and troubleshooting.
+This manual serves the needs of all NGPS users, including astronomers and observatory support staff. It covers background and system overview, day-to-day observing operations, instrument-control tools, calibration workflows, data products, hardware reference, the physical installation procedure, maintenance, and troubleshooting.
 
-Background and high-level overview material has been removed from this section so the manual can start with the information observers and support staff need during preparation, observing, and shutdown.
+Use the sidebar (or the Next/Previous links at the bottom of each page) to move through the manual in order, or jump directly to a section below.
+
+```{toctree}
+:maxdepth: 2
+:caption: Overview
+
+about
+```
 
 ```{toctree}
 :maxdepth: 2
@@ -22,6 +29,7 @@ end-of-night
 :caption: Software and Tools
 
 software-overview
+software-architecture
 main-gui
 acquisition-and-guiding
 command-line-interface
@@ -42,6 +50,15 @@ support-equipment-and-electronics
 
 ```{toctree}
 :maxdepth: 2
+:caption: Installation Procedure
+
+installation-pre-mounting
+installation-cage-connections
+installation-data-room-checklist
+```
+
+```{toctree}
+:maxdepth: 2
 :caption: Maintenance and Reference
 
 maintenance
@@ -49,5 +66,6 @@ troubleshooting
 specifications-data-and-logs
 fits-headers
 detector-and-command-reference
+plumbing-and-cooling
 workflows-and-diagrams
 ```

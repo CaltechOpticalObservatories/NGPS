@@ -137,7 +137,7 @@ namespace Network {
 
     // now that there is a group and port, create the socket
     //
-    if ( (this->fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1 ) {
+    if ( (this->fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0)) == -1 ) {
       errstm << "error " << errno << " creating socket: " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
@@ -240,7 +240,7 @@ namespace Network {
 
     // now that there is a group and port, create the socket
     //
-    if ( ( this->fd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ) {
+    if ( ( this->fd = socket( AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0 ) ) < 0 ) {
       message << "error " << errno << " creating socket: " << strerror( errno );
       logwrite(function, message.str());
       return(-1);
@@ -563,10 +563,15 @@ namespace Network {
    * Create new listening socket for pending connection on this->listenfd
    * and returns a new connected socket this->fd
    *
+   * accept4() with SOCK_CLOEXEC is used here rather than accept() because a
+   * descriptor from accept() never inherits close-on-exec from the listening
+   * socket, and setting it afterwards would leave a window in which a fork
+   * from another thread could inherit the connection.
+   *
    */
   int TcpSocket::Accept() {
     this->clilen = (socklen_t)sizeof(this->cliaddr);
-    this->fd = accept(this->listenfd, (struct sockaddr *) &this->cliaddr, &this->clilen);
+    this->fd = accept4(this->listenfd, (struct sockaddr *) &this->cliaddr, &this->clilen, SOCK_CLOEXEC);
     if (this->fd < 0) { perror("(Network::TcpSocket::Accept) error calling accept"); return -1; }
     return (this->fd);
   }
@@ -586,9 +591,11 @@ namespace Network {
     std::string function = "Network::TcpSocket::Listen";
     std::stringstream errstm;
 
-    // create the socket
+    // create the socket, close-on-exec so that a process spawned by this one
+    // (E.G. Sequencer::Sequence::daemon_restart) cannot inherit the listening
+    // port and hold it after this process exits
     //
-    if ( (this->listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1 ) {
+    if ( (this->listenfd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP)) == -1 ) {
       errstm << "error " << errno << " creating socket: " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
@@ -731,7 +738,7 @@ namespace Network {
     for (struct addrinfo *sa = this->addrs; sa != NULL; sa = sa->ai_next) {
       // create the socket, which returns a file descriptor on success
       //
-      this->fd = socket(sa->ai_family, sa->ai_socktype, sa->ai_protocol);
+      this->fd = socket(sa->ai_family, sa->ai_socktype | SOCK_CLOEXEC, sa->ai_protocol);
 
       if (this->fd == -1) continue;    // try another entry in the sock addr struct
 
