@@ -2,26 +2,27 @@
 #
 # ngps -- operator front-end to NGPS daemon processes via systemd.
 #
-#   ngps start|stop|restart|kill|status|list [daemon ...]
+#   ngps {start|stop|restart} {all|<daemon> [<daemon> ...]}
+#   ngps status [<daemon> [<daemon> ...]]
+#   ngps {enable|disable}
+#   ngps list
 #
-# With no daemon arguments, start/stop/restart act on the whole set (via
-# ngps.target, which cascades through PartOf=). With one or more names, they act
-# on those instances only.
-#
-# Requires the polkit rule (10-ngps.rules) so the invoking operator may manage
-# ngps units without a password.
+# Requires the polkit rule (10-ngps.rules) so the invoking operator may
+# manage ngps units without a password. This script itself is developer-
+# only -- execute permission is restricted to user "developer" by
+# install-watchdog; operators use `systemctl` directly (see readme.txt).
 #
 
 SYSTEMCTL=/usr/bin/systemctl
 
-# Valid daemon instance names. Must match run/ngps-config PROCNAMES order
-# (sequencer last). Note: telemd is intentionally excluded -- it is not in
-# PROCNAMES and is not managed here.
 DAEMONS=(messaged acamd slicecamd calibd camerad flexured focusd thermald powerd slitd tcsd sequencerd)
 
 usage() {
-  echo "Usage: ngps {start|stop|restart|kill|status|list} [daemon ...]"
-  echo "       daemons: ${DAEMONS[*]}"
+  echo "Usage: ngps {start|stop|restart} {all|<daemon> [<daemon> ...]}" >&2
+  echo "       ngps status [<daemon> ...]" >&2
+  echo "       ngps {enable|disable}" >&2
+  echo "       ngps list" >&2
+  echo "       daemons: ${DAEMONS[*]}" >&2
   exit 1
 }
 
@@ -48,18 +49,14 @@ cmd="$1"; shift
 
 case "$cmd" in
   start|stop|restart)
-    if [ $# -eq 0 ]; then
-      exec "$SYSTEMCTL" "$cmd" ngps.target
+    [ $# -ge 1 ] || usage
+    if [ "$1" = "all" ]; then
+      [ $# -eq 1 ] || usage
+      exec "$SYSTEMCTL" "$cmd" ngps.target 'ngps@*'
     else
       build_units "$@"
       exec "$SYSTEMCTL" "$cmd" "${UNITS[@]}"
     fi
-    ;;
-  kill)
-    # kill does not follow target dependencies, so enumerate instances
-    [ $# -eq 0 ] && set -- "${DAEMONS[@]}"
-    build_units "$@"
-    exec "$SYSTEMCTL" kill --signal=SIGKILL "${UNITS[@]}"
     ;;
   status)
     if [ $# -eq 0 ]; then
@@ -68,6 +65,17 @@ case "$cmd" in
       build_units "$@"
       exec "$SYSTEMCTL" --no-pager status "${UNITS[@]}"
     fi
+    ;;
+  enable|disable)
+    if [ $# -ne 0 ]; then
+      echo "ERROR: $cmd takes no arguments -- it always acts on ngps.target" >&2
+      echo "       only. ngps.target's Wants= already pulls in every" >&2
+      echo "       instance regardless of that instance's own enable state," >&2
+      echo "       so enabling/disabling one specific daemon would not do" >&2
+      echo "       what it looks like." >&2
+      exit 1
+    fi
+    exec "$SYSTEMCTL" "$cmd" ngps.target 'ngps@*'
     ;;
   list)
     printf '%s\n' "${DAEMONS[@]}"

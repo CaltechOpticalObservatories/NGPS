@@ -1,14 +1,41 @@
 # @file     readme.txt
 # @brief    readme file for ngps watchdog system
-# @details  how to set up the watchdog 
+# @details  how to set up the watchdog
 # @author   David Hale
 #
 
 ==============================================================================
-NGPS daemon system control + watchdog -- system setup checklist
+NGPS daemon system control + watchdog
 ==============================================================================
 
-The three safety nets:
+------------------------------------------------------------------------------
+Quick start
+------------------------------------------------------------------------------
+Prerequisites: accounts "dataowner"/"datawriters" (daemons), "developer"
+(builds + owns the ngps wrapper), and any interactive operators (e.g.
+"observer") must already exist on the host. The watchdog branch must be
+built (BASEDIR/bin/ngps-watchdog present and executable).
+
+Install (as root or via sudo, from the watchdog_system/ directory):
+
+    sudo ./install-watchdog
+
+Uninstall -- disaster-recovery/rollback only; returns the host to the
+legacy `_ngps`/`ngps-daemon` boot path (see "What install-watchdog /
+uninstall-watchdog do" below):
+
+    sudo ./uninstall-watchdog
+
+Both accept the same overridable path variables if the deploy layout
+differs from the default (WATCHDOG_DIR, BIN_DIR, RUN_DIR) -- see the
+comments at the top of each script. That's the whole procedure; everything
+below explains what the two scripts do and how to operate the daemons
+afterward.
+
+
+------------------------------------------------------------------------------
+How it works -- three safety nets
+------------------------------------------------------------------------------
   Layer 1  systemd restarts any daemon that EXITS (crash/signal/exit 0).
   Layer 2  ngps-watchdog restarts any daemon that is alive but FROZEN.
   Layer 3  systemd watches ngps-watchdog itself (WatchdogSec heartbeat).
@@ -16,7 +43,7 @@ Plus: the sequencer restarts a peer it cannot talk to, via systemctl.
 
 
 ------------------------------------------------------------------------------
-0. Installation
+Requirements (must already be true before running install-watchdog)
 ------------------------------------------------------------------------------
 BASEDIR : /home/developer/Software  (binaries in BASEDIR/bin, configs in BASEDIR/Config).
 
@@ -24,85 +51,118 @@ Service account / group: user "dataowner", group "datawriters".
   - daemons run as this user/group
   - the sequencer runs as dataowner and restarts peers via systemctl
 
+Developer account: user "developer".
+  - owns and may execute watchdog_system/bin/ngps (see "the ngps wrapper"
+    below) -- install-watchdog installs a restricted copy for this
+    account only, at run/ngps
+  - must also be a member of "ngpsops" (install-watchdog adds it
+    automatically, see below) -- without that membership, the wrapper's
+    `systemctl` calls would hit a password prompt instead of the
+    passwordless path the polkit rule provides
+
 Operator group: "ngpsops".
-  - members of "ngpsops" may run `systemctl {start|stop|restart} ngps.target`
-    and `systemctl ... ngps@<name>.service` without a password (per polkit
-    rule, see step 3). They cannot control ngps-watchdog.service -- that one
-    requires admin auth, by design.
-  - datawriters is for write access into the data tree and must NOT be used
-    to grant daemon-control rights -- keep the two groups distinct.
-
-Create the accounts/groups if they do not exist, then add human operators
-(e.g. observer) to ngpsops:
-    sudo groupadd ngpsops 2>/dev/null || true
-    sudo usermod -aG ngpsops observer
-Operators must log out and back in for the new group membership to take effect.
-
-
-------------------------------------------------------------------------------
-1. Install the systemd units
-------------------------------------------------------------------------------
-All install commands in steps 1-3 are run from the watchdog_system/ directory.
-
-The files to install live in this directory tree (watchdog_system/):
-
-    watchdog_system/systemd/ngps@.service
-    watchdog_system/systemd/ngps.target
-    watchdog_system/systemd/ngps-watchdog.service
-    watchdog_system/systemd/ngps@sequencerd.service.d/order.conf
-    watchdog_system/systemd/ngps.env
-    watchdog_system/polkit/10-ngps.rules
-
-Install them:
-
-    sudo install -m 0644 systemd/ngps@.service        /etc/systemd/system/ngps@.service
-    sudo install -m 0644 systemd/ngps.target          /etc/systemd/system/ngps.target
-    sudo install -m 0644 systemd/ngps-watchdog.service /etc/systemd/system/ngps-watchdog.service
-
-    sudo mkdir -p /etc/systemd/system/ngps@sequencerd.service.d
-    sudo install -m 0644 systemd/ngps@sequencerd.service.d/order.conf \
-         /etc/systemd/system/ngps@sequencerd.service.d/order.conf
+  - members may run `systemctl {start|stop|restart} ngps.target` and
+    `systemctl ... ngps@<name>.service` without a password (per polkit
+    rule, installed by install-watchdog). They cannot control
+    ngps-watchdog.service -- that one requires admin auth, by design.
+  - datawriters is for write access into the data tree and must NOT be
+    used to grant daemon-control rights -- keep the two groups distinct.
+  - install-watchdog creates this group if missing and adds "developer"
+    and "observer" to it automatically (both must already exist as
+    accounts). Add any additional interactive operators yourself:
+        sudo usermod -aG ngpsops <username>
+    Operators must log out and back in for new group membership to take
+    effect.
 
 
 ------------------------------------------------------------------------------
-2. Install the environment file
+What install-watchdog / uninstall-watchdog do
 ------------------------------------------------------------------------------
-    sudo install -m 0644 systemd/ngps.env /etc/sysconfig/ngps
+install-watchdog:
+  - Disables the legacy ngps-daemon.timer/.service so its Restart=
+    behavior does not fight the new units, and removes any live
+    run/ngps, run/_ngps, /usr/local/bin/ngps leftover (normally a
+    no-op -- see below).
+  - Installs the systemd units (ngps@.service, ngps.target,
+    ngps-watchdog.service, ngps@sequencerd.service.d/order.conf) to
+    /etc/systemd/system/.
+  - Installs /etc/sysconfig/ngps from systemd/ngps.env, only if it
+    doesn't already exist (preserves operator edits on reinstall).
+  - Installs the polkit rule (10-ngps.rules) and restarts polkit.
+  - Creates the "ngpsops" group if missing, and adds "developer" and
+    "observer" to it.
+  - Reloads systemd and enables+starts ngps.target and
+    ngps-watchdog.service.
+  - Locks down watchdog_system/bin/ngps to owner developer, mode 744,
+    and installs a mode-700 copy at $RUN_DIR/ngps (default
+    .../Software/run/ngps) -- see "the ngps wrapper" below.
 
-Then edit /etc/sysconfig/ngps so PYTHONPATH / RUBIN_SIM_DATA_DIR / XPA_NSUSERS
-match the target.
+uninstall-watchdog reverses the above in the opposite order: stops and
+disables the ngps units, removes the unit files/env file/polkit rule,
+restores the legacy launcher scripts (run/ngps, run/_ngps) from their
+permanently-tracked copies at watchdog_system/legacy/, then re-enables
+ngps-daemon.timer/.service. The restore step is fully self-contained -- it
+does not depend on the deploy host being on any particular git branch,
+unlike a manual `git checkout main`. It does not remove the "ngpsops"
+group or any user's membership in it -- group membership is left as a
+durable host-level administrative fact, the same way the group itself is
+never deleted.
+
+uninstall-watchdog exists as a disaster-recovery/rollback tool -- rebuild
+a corrupted host, back out a bad install-watchdog run -- not for routine
+use. Once the watchdog system is validated in production, "uninstalling"
+it makes as little sense as uninstalling any other daemon; the legacy
+launcher scripts stay permanently tracked at watchdog_system/legacy/
+specifically so that capability remains available indefinitely at near-
+zero ongoing cost, without requiring the deploy host to juggle a separate
+git ref.
 
 
 ------------------------------------------------------------------------------
-3. Install the polkit rule (passwordless systemctl for ngps* units only)
+Operating daemons -- systemctl directly
 ------------------------------------------------------------------------------
-Lets user "dataowner" (the sequencer + watchdog) and group "ngpsops"
-(interactive operators) manage ngps* units without a password.
+    All daemons      systemctl {start|stop|restart} ngps.target
+    One daemon       systemctl {start|stop|restart} ngps@<name>.service
+    Status           systemctl status ngps.target 'ngps@*'
+    Instances list   systemctl list-units 'ngps@*'
+    SIGKILL all      systemctl kill ngps.target          # cascades via PartOf=
+    SIGKILL one      systemctl kill --signal=SIGKILL ngps@<name>.service
 
-    sudo install -m 0644 polkit/10-ngps.rules /etc/polkit-1/rules.d/10-ngps.rules
-
-
-------------------------------------------------------------------------------
-4. Disable any old boot mechanism (if migrating from the single-service setup)
-------------------------------------------------------------------------------
-    sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
-    sudo systemctl disable --now ngps-daemon.service   2>/dev/null || true
-
-
-------------------------------------------------------------------------------
-5. Reload, enable, and start everything
-------------------------------------------------------------------------------
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now ngps.target            # Layer 1: all daemons
-    sudo systemctl enable --now ngps-watchdog.service  # Layer 2 + 3: hang watch
+Operators do NOT need sudo for the commands above -- polkit grants them via
+the "ngpsops" group. ngps-watchdog.service is intentionally NOT in the
+polkit scope; controlling the watchdog requires admin auth.
 
 
 ------------------------------------------------------------------------------
-6. Verify (do all of these on a new system)
+Operating daemons -- the ngps wrapper (developer only)
+------------------------------------------------------------------------------
+watchdog_system/bin/ngps is a thin systemctl passthrough, installed by
+install-watchdog to $RUN_DIR/ngps (default .../Software/run/ngps) with
+execute permission restricted to user "developer". It saves typing during
+development/debugging -- it is not installed to PATH and is not granted
+to ngpsops:
+
+    ngps {start|stop|restart} {all|<daemon> [<daemon> ...]}
+    ngps status [<daemon> [<daemon> ...]]
+    ngps {enable|disable}
+    ngps list
+
+"all" is required (never implied by a bare invocation) for start/stop/
+restart, since omitting it would otherwise silently act on the whole
+fleet. status has a well-defined bare-invocation default (matching
+systemctl's own), so a daemon name narrows it and "all" is not a
+recognized argument there. enable/disable take no argument at all --
+ngps.target's own Wants= line pulls in every instance regardless of that
+instance's own enable state, so a per-daemon enable/disable would not do
+what it looks like; both always act on ngps.target only.
+
+
+------------------------------------------------------------------------------
+Verify (do all of these on a new system)
 ------------------------------------------------------------------------------
 Boot chain is complete (without this, services show "enabled" yet stay
-"inactive (dead)" after a reboot -- step 5's `enable --now ngps.target` is what
-inserts the target into multi-user.target.wants/):
+"inactive (dead)" after a reboot -- install-watchdog's `enable --now
+ngps.target` step is what inserts the target into multi-user.target.wants/):
     systemctl is-enabled ngps.target                                    # -> enabled
     ls -l /etc/systemd/system/multi-user.target.wants/ngps.target       # must exist
 
@@ -140,27 +200,8 @@ Broker round-trip probe (messaged has no command port):
 
 Sequencer-initiated restart works without a password prompt (as dataowner):
     sudo -u dataowner /usr/bin/systemctl restart ngps@acamd.service && echo OK
-    # if it prompts for a password, the polkit rule (step 3) is not loaded;
-    # check:  journalctl -u polkit
-
-
-------------------------------------------------------------------------------
-Operator command reference (systemctl is the canonical control surface;
-no `ngps` wrapper is installed in PATH)
-------------------------------------------------------------------------------
-    All daemons      systemctl {start|stop|restart} ngps.target
-    One daemon       systemctl {start|stop|restart} ngps@<name>.service
-    Status           systemctl status ngps.target 'ngps@*'
-    Instances list   systemctl list-units 'ngps@*'
-    SIGKILL all      systemctl kill ngps.target          # cascades via PartOf=
-    SIGKILL one      systemctl kill --signal=SIGKILL ngps@<name>.service
-
-Operators do NOT need sudo for the commands above -- polkit grants them via
-the "ngpsops" group. ngps-watchdog.service is intentionally NOT in the polkit
-scope; controlling the watchdog requires admin auth.
-
-A developer-only wrapper lives at watchdog_system/bin/ngps for convenience
-when debugging from that directory. It is not installed to PATH.
+    # if it prompts for a password, install-watchdog's polkit rule
+    # (10-ngps.rules) is not loaded; check:  journalctl -u polkit
 
 
 ------------------------------------------------------------------------------

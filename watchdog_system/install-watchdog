@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# configure-watchdog -- install the watchdog system from the deploy tree, and
+# install-watchdog -- install the watchdog system from the deploy tree, and
 # transition the host away from the legacy ngps-daemon launch mechanism.
 #
 # Run as root or via sudo.
@@ -10,6 +10,7 @@ set -e
 
 WATCHDOG_DIR="${WATCHDOG_DIR:-/home/developer/Software/watchdog_system}"
 BIN_DIR="${BIN_DIR:-/home/developer/Software/bin}"
+RUN_DIR="${RUN_DIR:-/home/developer/Software/run}"
 
 # Sanity: required source files must exist under WATCHDOG_DIR
 for f in \
@@ -34,11 +35,15 @@ if [ ! -x "$BIN_DIR/ngps-watchdog" ]; then
   exit 1
 fi
 
-# 1. Take down the legacy launcher so its Restart= behavior does not fight us
+# Take down the legacy launcher so its Restart= behavior does not fight us,
+# and remove any live legacy/leftover ngps wrapper (run/ngps, run/_ngps, and
+# the older /usr/local/bin/ngps location) so nothing stale can be invoked
+# while the watchdog is active.
 sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
 sudo systemctl disable --now ngps-daemon.service  2>/dev/null || true
+sudo rm -f "$RUN_DIR/ngps" "$RUN_DIR/_ngps" /usr/local/bin/ngps
 
-# 2. Install systemd units
+# Install systemd units
 sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@.service"         /etc/systemd/system/ngps@.service
 sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.target"           /etc/systemd/system/ngps.target
 sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps-watchdog.service" /etc/systemd/system/ngps-watchdog.service
@@ -46,36 +51,54 @@ sudo mkdir -p /etc/systemd/system/ngps@sequencerd.service.d
 sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@sequencerd.service.d/order.conf" \
                      /etc/systemd/system/ngps@sequencerd.service.d/order.conf
 
-# 3. Install environment file (only on first install -- preserve operator edits)
+# Install environment file (only on first install -- preserve operator edits)
 if [ ! -f /etc/sysconfig/ngps ]; then
   sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.env" /etc/sysconfig/ngps
   echo "NOTE: created /etc/sysconfig/ngps -- edit to set PYTHONPATH /"
   echo "      RUBIN_SIM_DATA_DIR / XPA_NSUSERS for this host"
 fi
 
-# 4. Install polkit rule and reload polkit so it sees the new rule
+# Install polkit rule and reload polkit so it sees the new rule
 sudo install -m 0644 "$WATCHDOG_DIR/polkit/10-ngps.rules" /etc/polkit-1/rules.d/10-ngps.rules
 sudo systemctl restart polkit 2>/dev/null || true
 
-# 5. Create the operator group. Users must be added per-deploy (see notes below).
+# Create the operator group and add the accounts the watchdog system
+# itself depends on for passwordless systemctl access: "developer" (runs
+# the ngps wrapper below) and "observer" (default interactive operator).
+# Additional operators are still added per-deploy (see notes below).
 sudo groupadd ngpsops 2>/dev/null || true
+sudo usermod -aG ngpsops developer
+sudo usermod -aG ngpsops observer
 
-# 6. Tell systemd about the new units and start them
+# Tell systemd about the new units and start them
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 sudo systemctl enable --now ngps.target
 sudo systemctl enable --now ngps-watchdog.service
 
+# Lock the source copy down (git only tracks executable-yes/no, not 744
+# specifically), then install the ngps operator-convenience wrapper to
+# run/ngps -- the exact path the legacy run/ngps used to occupy --
+# restricted to the developer account only. Operators use systemctl
+# directly (see readme.txt); this wrapper is a developer convenience,
+# never installed to PATH or granted to ngpsops.
+sudo chown developer:developer "$WATCHDOG_DIR/bin/ngps"
+sudo chmod 744 "$WATCHDOG_DIR/bin/ngps"
+sudo install -o developer -g developer -m 700 \
+     "$WATCHDOG_DIR/bin/ngps" "$RUN_DIR/ngps"
+
 cat <<'EOF'
 
 Watchdog system installed.
 
-Add interactive operators to ngpsops (they must log out + log back in afterward):
+"developer" and "observer" have been added to ngpsops automatically (log
+out and back in for the new group membership to take effect). Add any
+additional interactive operators the same way:
 
-    sudo usermod -aG ngpsops <username>      # e.g. observer
+    sudo usermod -aG ngpsops <username>
 
-Operators control daemons via systemctl directly -- no `ngps` wrapper is
-installed. Quick reference:
+Operators control daemons via systemctl directly. A developer-only `ngps`
+wrapper is also installed at run/ngps (see readme.txt). Quick reference:
 
     systemctl start|stop|restart ngps.target              # all 12 daemons
     systemctl start|stop|restart ngps@<name>.service      # one daemon
