@@ -38,8 +38,10 @@ fi
 # Ensure the daemon binaries carry an SELinux type systemd is permitted to
 # execute.
 if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
-  if ! command -v semanage >/dev/null 2>&1; then
-    sudo dnf install -y policycoreutils-python-utils
+  if [ ! -x /usr/sbin/semanage ] && [ ! -x /usr/bin/semanage ]; then
+    echo "ERROR: semanage not found (needed to relabel $BIN_DIR for SELinux)." >&2
+    echo "       Install it first: sudo dnf install policycoreutils-python-utils" >&2
+    exit 1
   fi
   sudo semanage fcontext -a -t bin_t "${BIN_DIR}(/.*)?" 2>/dev/null || \
   sudo semanage fcontext -m -t bin_t "${BIN_DIR}(/.*)?"
