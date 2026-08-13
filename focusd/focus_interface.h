@@ -109,9 +109,6 @@ namespace Focus {
       //
       std::map<std::string, MotionController::Name> motors;
 
-      template <typename Function>
-      void all_motors(Function f) { for (auto &[name,motor] : motors) f(*motor); };
-
       // publish/subscribe functions
       //
       long init_pubsub(const std::initializer_list<std::string> &topics={}) {

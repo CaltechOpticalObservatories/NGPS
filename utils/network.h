@@ -20,6 +20,7 @@
 #include <iostream>
 #include <mutex>
 #include <atomic>
+#include <optional>
 
 #include <sys/ioctl.h>                 // for ioctl, FIONREAD
 #include <poll.h>                      // for pollfd
