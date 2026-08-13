@@ -75,7 +75,7 @@ case "$cmd" in
       echo "       what it looks like." >&2
       exit 1
     fi
-    exec "$SYSTEMCTL" "$cmd" ngps.target 'ngps@*'
+    exec "$SYSTEMCTL" "$cmd" ngps.target
     ;;
   list)
     printf '%s\n' "${DAEMONS[@]}"

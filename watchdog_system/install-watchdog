@@ -35,6 +35,17 @@ if [ ! -x "$BIN_DIR/ngps-watchdog" ]; then
   exit 1
 fi
 
+# Ensure the daemon binaries carry an SELinux type systemd is permitted to
+# execute.
+if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
+  if ! command -v semanage >/dev/null 2>&1; then
+    sudo dnf install -y policycoreutils-python-utils
+  fi
+  sudo semanage fcontext -a -t bin_t "${BIN_DIR}(/.*)?" 2>/dev/null || \
+  sudo semanage fcontext -m -t bin_t "${BIN_DIR}(/.*)?"
+  sudo restorecon -Rv "$BIN_DIR"
+fi
+
 # Take down the legacy launcher so its Restart= behavior does not fight us,
 # and remove any live legacy/leftover ngps wrapper (run/ngps, run/_ngps, and
 # the older /usr/local/bin/ngps location) so nothing stale can be invoked
@@ -63,9 +74,7 @@ sudo install -m 0644 "$WATCHDOG_DIR/polkit/10-ngps.rules" /etc/polkit-1/rules.d/
 sudo systemctl restart polkit 2>/dev/null || true
 
 # Create the operator group and add the accounts the watchdog system
-# itself depends on for passwordless systemctl access: "developer" (runs
-# the ngps wrapper below) and "observer" (default interactive operator).
-# Additional operators are still added per-deploy (see notes below).
+# itself depends on for passwordless systemctl access.
 sudo groupadd ngpsops 2>/dev/null || true
 sudo usermod -aG ngpsops developer
 sudo usermod -aG ngpsops observer
@@ -76,12 +85,8 @@ sudo systemctl reset-failed
 sudo systemctl enable --now ngps.target
 sudo systemctl enable --now ngps-watchdog.service
 
-# Lock the source copy down (git only tracks executable-yes/no, not 744
-# specifically), then install the ngps operator-convenience wrapper to
-# run/ngps -- the exact path the legacy run/ngps used to occupy --
-# restricted to the developer account only. Operators use systemctl
-# directly (see readme.txt); this wrapper is a developer convenience,
-# never installed to PATH or granted to ngpsops.
+# install convenience wrapper for developer only
+# other operators use systemctl
 sudo chown developer:developer "$WATCHDOG_DIR/bin/ngps"
 sudo chmod 744 "$WATCHDOG_DIR/bin/ngps"
 sudo install -o developer -g developer -m 700 \

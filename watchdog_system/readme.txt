@@ -74,6 +74,15 @@ Operator group: "ngpsops".
     Operators must log out and back in for new group membership to take
     effect.
 
+Before first install on a new host, check for systemd units named like
+this project's that aren't actually part of it:
+    systemctl list-unit-files '*ngps*'
+Anything besides ngps-daemon.service/.timer (the legacy launcher this
+project's scripts already manage) is unrelated -- inspect with
+`systemctl show <unit> -p FragmentPath,SourcePath` and `systemctl cat
+<unit>` before removing anything, and cross-check `git log --all
+-S"<unit-name>"` in this repo to confirm it isn't part of this project.
+
 
 ------------------------------------------------------------------------------
 What install-watchdog / uninstall-watchdog do
@@ -210,6 +219,20 @@ Notes
 - The ONLY thing that keeps a daemon down is a commanded stop
   (`systemctl stop`, and the stop half of `restart`). That is also how you
   halt a daemon that is crash-looping on bad config.
+
+  Exception: messaged. ngps@sequencerd.service.d/order.conf deliberately
+  lists messaged in its Wants= (messaged is the broker six of sequencerd's
+  peers rely on entirely for status -- see that file's comments), so a
+  stopped messaged will come back the next time sequencerd restarts, for
+  any reason -- watchdog-triggered or manual. Every other daemon's
+  commanded stop is fully sticky; messaged's is not.
+
+- Bringing a daemon up under systemd without its real hardware reachable
+  (e.g. testing on a host without the instrument attached) can hang past
+  TimeoutStartSec=60 -- some daemons (e.g. powerd) open their hardware
+  connection before signaling ready. Set that daemon's OPEN_ON_START=no in
+  its Config/<name>.cfg to let it start without opening hardware, then open
+  it manually once you confirm the port is reachable.
 
 - KillSignal=SIGINT reuses each daemon's graceful shutdown. If a daemon does not
   release hardware within TimeoutStopSec=30, systemd will SIGKILL it -- verify
