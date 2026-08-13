@@ -83,6 +83,20 @@ project's scripts already manage) is unrelated -- inspect with
 <unit>` before removing anything, and cross-check `git log --all
 -S"<unit-name>"` in this repo to confirm it isn't part of this project.
 
+On an SELinux-enforcing host, BASEDIR/bin's daemon binaries must be
+relabeled before any daemon can start: files under a home directory
+default to user_home_t, which systemd (init_t) is not permitted to
+execute -- every daemon fails with status=203/EXEC otherwise (check
+`getenforce` and, if a daemon won't start, `sudo ausearch -m avc -ts
+recent` for a denial naming the daemon). Fix once per host, before or
+after install-watchdog (order doesn't matter -- this only affects
+whether daemons can exec, not whether the units install):
+    sudo semanage fcontext -a -t bin_t 'BASEDIR/bin(/.*)?'
+    sudo restorecon -Rv BASEDIR/bin
+This is deliberately a manual step, not part of install-watchdog --
+an earlier attempt to automate it there caused the script to hang on a
+deploy host.
+
 
 ------------------------------------------------------------------------------
 What install-watchdog / uninstall-watchdog do

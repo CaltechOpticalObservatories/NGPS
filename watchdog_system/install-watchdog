@@ -35,18 +35,12 @@ if [ ! -x "$BIN_DIR/ngps-watchdog" ]; then
   exit 1
 fi
 
-# Ensure the daemon binaries carry an SELinux type systemd is permitted to
-# execute.
-if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
-  if [ ! -x /usr/sbin/semanage ] && [ ! -x /usr/bin/semanage ]; then
-    echo "ERROR: semanage not found (needed to relabel $BIN_DIR for SELinux)." >&2
-    echo "       Install it first: sudo dnf install policycoreutils-python-utils" >&2
-    exit 1
-  fi
-  sudo semanage fcontext -a -t bin_t "${BIN_DIR}(/.*)?" 2>/dev/null || \
-  sudo semanage fcontext -m -t bin_t "${BIN_DIR}(/.*)?"
-  sudo restorecon -Rv "$BIN_DIR"
-fi
+# NOTE: on an SELinux-enforcing host, $BIN_DIR's daemon binaries must carry
+# an SELinux type systemd is permitted to execute (they default to
+# user_home_t under a home directory, which init_t cannot exec -- every
+# daemon fails with status=203/EXEC otherwise). This is a one-time, per-host
+# manual step, not automated here -- see readme.txt Requirements for the
+# exact commands.
 
 # Take down the legacy launcher so its Restart= behavior does not fight us,
 # and remove any live legacy/leftover ngps wrapper (run/ngps, run/_ngps, and
