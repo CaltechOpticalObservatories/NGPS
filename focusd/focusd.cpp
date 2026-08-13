@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     focusd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << focusd.config.n_entries << " lines read from " << focusd.config.filename;
@@ -126,6 +126,10 @@ int main(int argc, char **argv) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     focusd.exit_cleanly();
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+
+  // read current state and force-publish so the world knows I'm online
+  focusd.interface.publish_status( true );
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

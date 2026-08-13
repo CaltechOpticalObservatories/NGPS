@@ -50,7 +50,7 @@ void signal_handler( int signo ) {
 
 int  main( int argc, char **argv );         // main thread (just gets things started)
 void block_main( Network::TcpSocket sock ); // this thread handles requests on blocking port
-void doit( Network::TcpSocket sock );       // the worker thread
+void doit( Network::TcpSocket &sock );      // the worker thread
 
 
 /** main *********************************************************************/
@@ -211,7 +211,7 @@ void block_main(Network::TcpSocket sock) {
  * <device> [all|<app>] [_BLOCK_] <command> [<arg>]
  *
  */
-void doit(Network::TcpSocket sock) {
+void doit(Network::TcpSocket &sock) {
   std::string function = "  (Emulator::doit) ";
   char  buf[BUFSIZE+1];
   long  ret;

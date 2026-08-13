@@ -46,7 +46,7 @@ MOTOR_CONTROLLER="U GALIL @IP_ETS8P@ @ETS8P_FOCUS@ 0 1"     # U-channel has no a
 #
 MOTOR_AXIS="I 1 0 7.6 0 ref 4.75"
 MOTOR_AXIS="R 1 0 6.7 0 ref 2.45"
-MOTOR_AXIS="G 1 0 7.8 0 ref 0.00"
+MOTOR_AXIS="G 1 0 7.8 0 ref 3.35"
 MOTOR_AXIS="U 1 0 7.8 0 na  0.00"  # U-channel axis 1=A
 
 # Specify nominal focus positions for each actuator

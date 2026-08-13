@@ -506,68 +506,77 @@ namespace Focus {
   /***** Focus::Interface::send_command ***************************************/
 
 
-  /***** Focus::Interface::make_telemetry_message *****************************/
+  /***** Focus::Interface::get_status *****************************************/
   /**
-   * @brief      assembles a telemetry message
-   * @details    This creates a JSON message for telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  optional string ref containing serialization of JSON message
+   * @brief      read current focus positions into status
    *
    */
-  void Interface::make_telemetry_message(std::string* retstring) {
-    const std::string function="Focus::Interface::make_telemetry_message";
-
-    // assemble the telemetry into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage_out;
-    jmessage_out["messagetype"]="focusinfo";
-
-    // get focus position for each motor
-    //
-    for (auto &mot : this->motors) {
+  void Interface::get_status() {
+    this->status.positions.clear();
+    for ( auto &mot : this->motors ) {
       int axis = 1;
       float position = NAN;
       std::string posname;
-      mot.second.get_pos(axis, position, posname);
-
-      std::string key = "FOCUS" + mot.first;
-
-      // assign the position or NaN to a key in the JSON jmessage
-      //
-      if ( !std::isnan(position) ) jmessage_out[key]=position; else jmessage_out[key]="NAN";
-    }
-
-    this->publisher->publish(jmessage_out);
-
-    if (retstring) {
-      *retstring = jmessage_out.dump();  // serialize the json message into retstring
-      retstring->append(JEOF);           // append the JSON message terminator
+      if ( mot.second.is_connected() ) {
+        mot.second.get_pos( axis, position, posname );
+      }
+      this->status.positions["FOCUS" + mot.first] = position;
     }
   }
-  /***** Focus::Interface::make_telemetry_message *****************************/
+  /***** Focus::Interface::get_status *****************************************/
 
 
-  /***** Focus::Interface::handletopic_snapshot *******************************/
+  /***** Focus::Interface::publish_status ***********************************/
   /**
-   * @brief      publishes snapshot of my telemetry
-   * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry info when the subscriber receives the "_snapshot"
-   *             topic and the payload contains my daemon name.
-   * @param[in]  jmessage  received JSON message
+   * @brief      publish focus state, but only if it changed (or forced)
+   * @param[in]  force  optional (default=false) publish irrespective of change
+   *
+   */
+  void Interface::publish_status( bool force ) {
+    // Serialize publish-on-change; held across get_status() hardware I/O for now @TODO revisit
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
+
+    // refresh current state from hardware
+    //
+    this->get_status();
+
+    // unless forced, only publish if the state changed
+    //
+    if ( !force && this->status == this->last_published_status ) return;
+
+    nlohmann::json jmessage;
+    jmessage[Key::SOURCE] = Topic::FOCUSD;
+    for ( const auto &[key, pos] : this->status.positions ) {
+      if ( !std::isnan( pos ) )
+        jmessage[key] = pos;
+      else
+        jmessage[key] = "NAN";
+    }
+
+    this->last_published_status = this->status;
+
+    try {
+      this->publisher->publish( jmessage );
+    }
+    catch ( const std::exception &e ) {
+      logwrite( "Focus::Interface::publish_status", "ERROR publishing message: " + std::string( e.what() ) );
+    }
+  }
+  /***** Focus::Interface::publish_status ***********************************/
+
+
+  /***** Focus::Interface::handletopic_snapshot ******************************/
+  /**
+   * @brief      If my topic is in the jmessage then force-publish my status
+   * @param[in]  jmessage  subscribed-received JSON message
    *
    */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    // if my name is in the jmessage then publish my snapshot
-    if ( jmessage.contains( Focus::DAEMON_NAME ) ) {
-      this->make_telemetry_message();
-    }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Focusd::Interface::handletopic_snapshot", jmessage.dump() );
+    if ( jmessage.contains( Topic::FOCUSD ) ) {
+      this->publish_status( true );
     }
   }
-  /***** Focus::Interface::handletopic_snapshot *******************************/
+  /***** Focus::Interface::handletopic_snapshot ******************************/
 
 
   /***** Focus::Interface::test ***********************************************/

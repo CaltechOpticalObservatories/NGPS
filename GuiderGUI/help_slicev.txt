@@ -35,6 +35,9 @@ BUTTONS:
 [put on guider] -- Offset the telescope so that the crosshairs 
       coordinates are visbile on the guider camera.
 
+[acquire last slew] -- This assumes the last TCS slew command was calculated to
+      align a target on the slit (target and TCS coords are not the same).
+      Initiate acquisition and guide for that target.
 
 TROUBLESHOOTING:
 

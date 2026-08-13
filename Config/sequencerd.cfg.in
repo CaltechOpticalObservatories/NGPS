@@ -59,7 +59,7 @@ CAMERA_PROLOGUE=(native G ERS 1000 1000)
 CAMERA_PROLOGUE=(imsize I 1220 4114 0 100 1 1)
 CAMERA_PROLOGUE=(imsize R 1220 4114 0 100 1 1)
 CAMERA_PROLOGUE=(imsize G 1220 4114 0 100 1 1)
-CAMERA_PROLOGUE=(imsize U 2198 4202 0 100 1 1)
+CAMERA_PROLOGUE=(imsize U 2048 4102 0 100 1 1)
 CAMERA_PROLOGUE=(bin spat 2)
 CAMERA_PROLOGUE=(native I WRM 0x400004 2040)
 CAMERA_PROLOGUE=(native R WRM 0x400004 2040)
@@ -87,7 +87,7 @@ CAMERA_EPILOGUE=(close)
 # slit init and shutdown states
 # formatted as (width offset)
 #
-SLIT__INIT=(0.5 3.0)
+SLIT__INIT=(0.4 3.0)
 SLIT__SHUTDOWN=
 
 # ACAM init and shutdown states
@@ -107,7 +107,7 @@ CALIB_DOOR__SHUTDOWN=close
 # Virtual Slit Mode slit offset positions
 # units are arcseconds
 #
-VIRTUAL_SLITW_ACQUIRE=0.5   # slit width during acquire
+VIRTUAL_SLITW_ACQUIRE=0.4   # slit width during acquire
 VIRTUAL_SLITO_ACQUIRE=-3.0  # slit offset for acquiring target
 VIRTUAL_SLITO_EXPOSE=3.0    # slit offset for science exposure
 
@@ -159,48 +159,41 @@ ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence 
 ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
+OFFSET_SETTLE_SEC=3                  # sec to wait after an offset-star target offset before exposing (0 disables; only delays targets with a non-zero offset)
 ACQUIRE_TCS_MAX_OFFSET=60            # the maximum allowable offset sent to the TCS, in arcsec
 
 # Calibration Settings
-# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp mod1 mod2 ... mod6)
+# CAL_TARGET=(name caldoor calcover U G R I lampthar lampfear lampbluc lampredc lolamp hilamp he_arc ultra mod1 mod2 ... mod6 imgtype)
 #
 # where name must be "DEFAULT" or start with "CAL_"
 #       caldoor  = open | close
 #       calcover = open | close
 #       U,G,R,I = on | off        # indicates which channels to enable/disable
-#       lamp* = on | off          # lamp power
-#       mod*  = on | off          # lamp modulator
-# for a total of 19 required parameters
+#       lamp* = on | off          # lamp power state
+#       mod*  = on | off          # lamp modulator state
+#       imgtype = <imgtype>       # FITS IMGTYPE keyword
+# for a total of 22 required parameters
 # name=SCIENCE defines science target operation
 #
-#           name        door  cover U   G   R   I   thar fear bluc redc llmp hlmp mod1 mod2 mod3 mod4 mod5 mod6
-CAL_TARGET=(CAL_THAR    open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on )
-CAL_TARGET=(CAL_FEAR    open  close on  on  on  on  on   on   on   on   off  off  on   off  off  off  off  off)
-CAL_TARGET=(CAL_THAR_UG open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  on )
-CAL_TARGET=(CAL_FEAR_UG open  close on  on  off off on   on   on   on   off  off  on   off  off  off  off  off)
-CAL_TARGET=(CAL_CONTR   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  on   off  off)
-CAL_TARGET=(CAL_CONTB   open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  on   off)
-CAL_TARGET=(CAL_DOME    close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off)
-CAL_TARGET=(CAL_DOME_UG close open  on  on  off off off  off  off  off  off  on   off  off  off  off  off  off)
-CAL_TARGET=(CAL_BIAS    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
-CAL_TARGET=(CAL_DARK    close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
-CAL_TARGET=(SCIENCE     close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off)
+#           name          door  cover U   G   R   I   thar fear bluc redc llmp hlmp arc  ultr mod1 mod2 mod3 mod4 mod5 mod6 imgtype
+CAL_TARGET=(CAL_THAR      open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR      open  close on  on  on  on  on   on   on   on   off  off  off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_THAR_UG   open  close on  on  off off on   on   on   on   off  off  off  off  off  off  off  off  off  on   THAR    )
+CAL_TARGET=(CAL_FEAR_UG   open  close on  on  off off on   on   on   on   off  off  off  off  on   off  off  off  off  off  FEAR    )
+CAL_TARGET=(CAL_CONTR     open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  on   off  off  CONT    )
+CAL_TARGET=(CAL_CONTB     open  close on  on  on  on  on   on   on   on   off  off  off  off  off  off  off  off  on   off  CONT    )
+CAL_TARGET=(CAL_DOME      close open  on  on  on  on  off  off  off  off  off  on   off  off  off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_DOME_UG   close open  on  on  off off off  off  off  off  off  on   off  on   off  off  off  off  off  off  DOMEFLAT)
+CAL_TARGET=(CAL_DOMEHE    close open  on  on  on  on  off  off  off  off  off  off  on   off  off  off  off  off  off  off  DOMEHE  )
+CAL_TARGET=(CAL_DOMEHE_UG close open  on  on  off off off  off  off  off  off  off  on   off  off  off  off  off  off  off  DOMEHE  )
+CAL_TARGET=(CAL_BIAS      close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  BIAS    )
+CAL_TARGET=(CAL_DARK      close close on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  DARK    )
+CAL_TARGET=(SCIENCE       close open  on  on  on  on  off  off  off  off  off  off  off  off  off  off  off  off  off  off  SCI     )
 
 # miscellaneous
 #
 UPDATE_TIME_REMAINING=10             # block updates to active target with less than this exptime (sec) remaining
 
-# -----------------------------------------------------------------------------
-# TELEM_PROVIDER=( <name> <port> )
-#
-# This is a list of telemetry providers where <name> is the daemon name,
-# and <port> is the port on which to send the telemetry request.
-# Provide one per line.
-#
-TELEM_PROVIDER=(slitd      @SLITD_NB_PORT@)
-TELEM_PROVIDER=(tcsd       @TCSD_NB_PORT@)
-TELEM_PROVIDER=(camerad    @CAMERAD_NB_PORT@)
-#
 SUBSCRIBE_TO=(slitd      "tcp://127.0.0.1:@SLITD_PUB_PORT@")
 SUBSCRIBE_TO=(tcsd       "tcp://127.0.0.1:@TCSD_PUB_PORT@")
 SUBSCRIBE_TO=(camerad    "tcp://127.0.0.1:@CAMERAD_PUB_PORT@")

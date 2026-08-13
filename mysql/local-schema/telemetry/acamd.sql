@@ -20,7 +20,7 @@ CREATE TABLE `acamd` (
   `DECsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM center (deg)',
   `ANGsolve` float DEFAULT NULL COMMENT 'Astrometry solution for ACAM position angle (deg)',
   `rms_arcsec` float DEFAULT NULL COMMENT 'RMS residuals of solver WCS fit (arcsec)',
-  `result` varchar(8) DEFAULT NULL COMMENT 'Result of astrometry solver (GOOD, NOISY, etc.)',
+  `result` varchar(16) DEFAULT NULL COMMENT 'Result of astrometry solver (GOOD, NOISY, etc.)',
   `matches` int DEFAULT NULL COMMENT 'Number of matches sources from solver',
   `seeing` float DEFAULT NULL COMMENT 'median seeing in ACAM field (arcsec)',
   `seeing_zen` float DEFAULT NULL COMMENT 'seeing extrapolated to zenith (arcsec)',

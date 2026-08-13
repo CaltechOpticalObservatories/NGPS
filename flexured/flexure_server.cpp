@@ -9,6 +9,7 @@
 
 namespace Flexure {
 
+  Server* Server::instance = nullptr;
 
   /***** Flexure::Server::exit_cleanly ****************************************/
   /**
@@ -17,11 +18,50 @@ namespace Flexure {
    */
   void Server::exit_cleanly(void) {
     std::string function = "Flexure::Server::exit_cleanly";
+
+    this->interface.stop_subscriber_thread();
+
     logwrite( function, "exiting" );
 
     exit(EXIT_SUCCESS);
   }
   /***** Flexure::Server::exit_cleanly ****************************************/
+
+
+  /***** Flexure::Server::handle_signal ***************************************/
+  /**
+   * @brief      handles ctrl-C and other signals
+   * @param[in]  signo
+   *
+   */
+  void Server::handle_signal( int signo ) {
+    const std::string function( "Flexure::Server::handle_signal" );
+    std::ostringstream message;
+
+    switch ( signo ) {
+      case SIGTERM:
+      case SIGINT:
+        logwrite( function, "received termination signal" );
+        message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        Server::instance->exit_cleanly(); // shutdown the daemon
+        break;
+      case SIGHUP:
+        logwrite( function, "ignored SIGHUP" );
+        break;
+      case SIGPIPE:
+        logwrite( function, "ignored SIGPIPE" );
+        break;
+      default:
+        message << "received unknown signal " << strsignal( signo );
+        logwrite( function, message.str() );
+        message.str( "" );
+        message << "NOTICE:" << Flexure::DAEMON_NAME << " exit";
+        Server::instance->interface.async.enqueue( message.str() );
+        break;
+    }
+  }
+  /***** Flexure::Server::handle_signal ***************************************/
 
 
   /***** Flexure::Server::configure_flexured **********************************/
@@ -33,7 +73,7 @@ namespace Flexure {
   long Server::configure_flexured() {
     std::string function = "Flexure::Server::configure_flexured";
     std::stringstream message;
-    int applied=0;
+    int numapplied = 0, lastapplied = 0;
     long error;
 
     // In case this is a reload,
@@ -44,6 +84,8 @@ namespace Flexure {
     // loop through the entries in the configuration file, stored in config class
     //
     for (int entry=0; entry < this->config.n_entries; entry++) {
+
+      lastapplied = numapplied;
 
       // NBPORT -- nonblocking listening port for the flexure daemon
       //
@@ -61,101 +103,118 @@ namespace Flexure {
           return(ERROR);
         }
         this->nbport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
-      // BLKPORT -- blocking listening port for the flexure daemon
-      //
-      if ( config.param[entry].find( "BLKPORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad BLKPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "BLKPORT number out of integer range");
-          return(ERROR);
-        }
-        this->blkport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // ASYNCPORT -- asynchronous broadcast message port for the flexure daemon
-      //
-      if ( config.param[entry].find( "ASYNCPORT" ) == 0 ) {
-        int port;
-        try {
-          port = std::stoi( config.arg[entry] );
-        }
-        catch (std::invalid_argument &) {
-          logwrite(function, "ERROR: bad ASYNCPORT: unable to convert to integer");
-          return(ERROR);
-        }
-        catch (std::out_of_range &) {
-          logwrite(function, "ASYNCPORT number out of integer range");
-          return(ERROR);
-        }
-        this->asyncport = port;
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // ASYNCGROUP -- asynchronous broadcast group for the flexure daemon
-      //
-      if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
-        this->asyncgroup = config.arg[entry];
-        message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-        this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
-      }
-
-      // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
-      //                     Each CONTROLLER is stored in an STL map indexed by motorname
-      //
-      if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
-        std::istringstream iss(config.arg[entry]);
-        std::string name, type, host;
-        int port, addr, axes;
-        long ret=NO_ERROR;
-
-        if (!(iss >> name >> type >> host >> port >> addr >> axes)) {
-          logwrite(function, "ERROR: bad config input. Expected { <name> <type> <host> <port> <addr> <axes> }");
-          error=ERROR;
-          continue;
-        }
-
-        // call the load_controller_config for the appropriate vendor
-        if (type=="PI") {
-          if (!this->interface.pi_interface) {
-            // initialize a pointer if it doesn't already exist
-            this->interface.pi_interface = std::make_unique<
-            Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo>>(FLEXURE_MOVE_TIMEOUT,
-                                                                          0,
-                                                                          FLEXURE_POSNAME_TOLERANCE);
+        // BLKPORT -- blocking listening port for the flexure daemon
+        //
+        if ( config.param[entry].find( "BLKPORT" ) == 0 ) {
+          int port;
+          try {
+            port = std::stoi( config.arg[entry] );
           }
-          this->interface.motors.emplace(name, MotionController::Name(this->interface.pi_interface.get(), name));
-          ret = this->interface.pi_interface->load_controller_config(config.arg[entry]);
+          catch ( std::invalid_argument & ) {
+            logwrite( function, "ERROR: bad BLKPORT: unable to convert to integer" );
+            return ( ERROR );
+          }
+          catch ( std::out_of_range & ) {
+            logwrite( function, "BLKPORT number out of integer range" );
+            return ( ERROR );
+          }
+          this->blkport = port;
+          numapplied++;
         }
-        else {
-          logwrite(function, "ERROR: unknown type. Expected PI");
-          error=ERROR;
-          continue;
-        }
+        else
 
-        if (ret==NO_ERROR) {
-          message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
-          this->interface.async.enqueue_and_log( function, message.str() );
-          applied++;
-        }
-      }
+          // ASYNCPORT -- asynchronous broadcast message port for the flexure daemon
+          //
+          if ( config.param[entry].find( "ASYNCPORT" ) == 0 ) {
+            int port;
+            try {
+              port = std::stoi( config.arg[entry] );
+            }
+            catch ( std::invalid_argument & ) {
+              logwrite( function, "ERROR: bad ASYNCPORT: unable to convert to integer" );
+              return ( ERROR );
+            }
+            catch ( std::out_of_range & ) {
+              logwrite( function, "ASYNCPORT number out of integer range" );
+              return ( ERROR );
+            }
+            this->asyncport = port;
+            numapplied++;
+          }
+          else
+
+            // ASYNCGROUP -- asynchronous broadcast group for the flexure daemon
+            //
+            if ( config.param[entry].find( "ASYNCGROUP" ) == 0 ) {
+              this->asyncgroup = config.arg[entry];
+              numapplied++;
+            }
+            else
+
+              // MOTOR_CONTROLLER -- address and name of each PI motor controller in daisy-chain
+              //                     Each CONTROLLER is stored in an STL map indexed by motorname
+              //
+              if ( config.param[entry].find( "MOTOR_CONTROLLER" ) == 0 ) {
+                std::istringstream iss( config.arg[entry] );
+                std::string name, type, host;
+                int port, addr, axes;
+                long ret = NO_ERROR;
+
+                if ( !( iss >> name >> type >> host >> port >> addr >> axes ) ) {
+                  logwrite( function, "ERROR: bad config input. Expected { <name> <type> <host> <port> <addr> <axes> }" );
+                  error = ERROR;
+                  continue;
+                }
+
+                // call the load_controller_config for the appropriate vendor
+                if ( type == "PI" ) {
+                  if ( !this->interface.pi_interface ) {
+                    // initialize a pointer if it doesn't already exist
+                    this->interface.pi_interface = std::make_unique<Physik_Instrumente::Interface<Physik_Instrumente::PiezoInfo>>(
+                        FLEXURE_MOVE_TIMEOUT, 0, FLEXURE_POSNAME_TOLERANCE );
+                  }
+                  this->interface.motors.emplace( name, MotionController::Name( this->interface.pi_interface.get(), name ) );
+                  ret = this->interface.pi_interface->load_controller_config( config.arg[entry] );
+                }
+                else {
+                  logwrite( function, "ERROR: unknown type. Expected PI" );
+                  error = ERROR;
+                  continue;
+                }
+
+                if ( ret == NO_ERROR ) {
+                  message.str( "" );
+                  message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
+                  this->interface.async.enqueue_and_log( function, message.str() );
+                  numapplied++;
+                }
+              }
+              else
+
+                // PUB_ENDPOINT -- my ZeroMQ socket endpoint for publishing telemetry
+                // SUB_ENDPOINT -- the broker endpoint I subscribe to (for snapshot requests)
+                //
+                // NOTE: these two keys must be present in the flexured config file for
+                //       publishing to work. Without PUB_ENDPOINT, init_pubsub() fails and
+                //       no telemetry is published on Topic::FLEXURED.
+                //
+                if ( config.param[entry] == "PUB_ENDPOINT" ) {
+                  this->interface.publisher_address = config.arg[entry];
+                  this->interface.publisher_topic = DAEMON_NAME; // default publish topic is my name
+                  numapplied++;
+                }
+                else
+
+                  // SUB_ENDPOINT
+                  //
+                  if ( config.param[entry] == "SUB_ENDPOINT" ) {
+                    this->interface.subscriber_address = config.arg[entry];
+                    numapplied++;
+                  }
 
       // MOTOR_AXIS -- axis info for specified MOTOR_CONTROLLER
       //
@@ -190,45 +249,51 @@ namespace Flexure {
         if ( (error=this->interface.motors.at(name).add_axis(AXIS)) != NO_ERROR ) continue;
         message.str(""); message << "FLEXURED:config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( function, message.str() );
-        applied++;
+        numapplied++;
       }
+      else
 
-      // TELEM_PROVIDER : contains daemon name and port to contact for header telemetry info
-      //
-      if ( config.param[entry] == "TELEM_PROVIDER" ) {
-        std::vector<std::string> tokens;
-        Tokenize( config.arg[entry], tokens, " " );
-        try {
-          if ( tokens.size() == 2 ) {
-            this->interface.telemetry_providers[tokens.at(0)] = std::stod(tokens.at(1));
+        // POSITION_COEFFICIENTS
+        //
+        if ( config.param[entry] == "POSITION_COEFFICIENTS" ) {
+          error = interface.compensator.load_vector_from_config( config.arg[entry], VectorType::POSITION_COEFFICIENTS );
+          if ( error == NO_ERROR ) {
+            numapplied++;
           }
-          else {
-            message.str(""); message << "ERROR bad format TELEM_PROVIDER=\"" << config.arg[entry] << "\": expected <name> <port>";
-            logwrite( function, message.str() );
+          else
             return ERROR;
+        }
+        else
+
+          // FLEXURE_POLYNOMIALS
+          //
+          if ( config.param[entry] == "FLEXURE_POLYNOMIALS" ) {
+            error = interface.compensator.load_vector_from_config( config.arg[entry], VectorType::FLEXURE_POLYNOMIALS );
+            if ( error == NO_ERROR ) {
+              numapplied++;
+            }
+            else
+              return ERROR;
           }
-        }
-        catch ( const std::exception &e ) {
-          message.str(""); message << "ERROR parsing TELEM_PROVIDER from " << config.arg[entry] << ": " << e.what();
-          logwrite( function, message.str() );
-          return ERROR;
-        }
+
+      if ( numapplied > lastapplied ) {
         message.str(""); message << "config:" << config.param[entry] << "=" << config.arg[entry];
         this->interface.async.enqueue_and_log( to_uppercase(DAEMON_NAME), function, message.str() );
-        applied++;
       }
-
     } // end loop through the entries in the configuration file
 
+    // logwrite(function, "will start subscriber thread");
+    //     this->interface.start_subscriber_thread();
+
     message.str("");
-    if (applied==0) {
+    if ( numapplied == 0 ) {
       message << "ERROR: ";
       error = ERROR;
     }
     else {
       error = NO_ERROR;
     }
-    message << "applied " << applied << " configuration lines to flexured";
+    message << "applied " << numapplied << " configuration lines to flexured";
     logwrite(function, message.str());
 
     return error;
@@ -252,7 +317,14 @@ namespace Flexure {
       auto newlogtime = next_occurrence( 12, 01, 00 );
       std::this_thread::sleep_until( newlogtime );
       close_log();
-      init_log( logpath, Flexure::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Flexure::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Flexure::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds( 60 ) );
+      }
       // ensure it doesn't immediately re-open
       std::this_thread::sleep_for( std::chrono::seconds(1) );
     }
@@ -417,6 +489,31 @@ namespace Flexure {
       buf.erase(std::remove(buf.begin(), buf.end(), '\r' ), buf.end());
       buf.erase(std::remove(buf.begin(), buf.end(), '\n' ), buf.end());
 
+      // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+      // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+      // can be rejected by the client. CLI users send no prefix and corr_id is
+      // left empty; the server then echoes no prefix on reply.
+      //
+      std::string corr_id;
+      {
+        std::string payload;
+        Common::extract_correlation_id( buf, corr_id, payload );
+        buf = std::move( payload );
+      }
+
+      // Replay a cached reply if this command's ID matches a recent one.
+      // This makes DaemonClient retries idempotent: the underlying handler
+      // is invoked at most once per correlation ID within the cache TTL.
+      //
+      if ( !corr_id.empty() ) {
+        std::string cached_reply;
+        if ( this->corr_cache.lookup( corr_id, cached_reply ) ) {
+          std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+          if ( sock.Write( out ) < 0 ) connection_open = false;
+          continue;
+        }
+      }
+
       if (buf.empty()) {sock.Write("\n"); continue;}   // acknowledge empty command so client doesn't time out
 
       try {
@@ -548,22 +645,6 @@ namespace Flexure {
       }
       else
 
-      // send telemetry upon request
-      //
-      if ( cmd == TELEMREQUEST ) {
-                      if ( args=="?" || args=="help" ) {
-                        retstring=TELEMREQUEST+"\n";
-                        retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                        retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                        ret=HELP;
-                      }
-                      else {
-                        this->interface.make_telemetry_message( retstring );
-                        ret = JSON;
-                      }
-      }
-      else
-
       // test routines
       //
       if ( cmd == FLEXURED_TEST ) {
@@ -584,7 +665,7 @@ namespace Flexure {
       // Don't append anything nor log the reply if the command was just requesting help.
       //
       if (ret != NOTHING) {
-        if ( ! retstring.empty() ) retstring.append( " " );
+        if ( !retstring.empty() && ret != HELP ) retstring.append( " " );
         if ( ret != HELP && ret != JSON ) retstring.append( ret == NO_ERROR ? "DONE" : "ERROR" );
 
         if ( ret == JSON ) {
@@ -598,8 +679,25 @@ namespace Flexure {
           logwrite( function, message.str() );
         }
 
+        // Cache the bare reply (without prefix) so retries with the same
+        // correlation ID can be replayed without re-running the handler.
+        //
+        if ( !corr_id.empty() ) {
+          this->corr_cache.insert( corr_id, retstring );
+        }
+
+        // Echo the correlation ID back to inter-daemon clients so they can
+        // verify the reply belongs to the command they just sent. CLI users
+        // sent no prefix, so corr_id is empty and nothing is prepended.
+        //
+        if ( !corr_id.empty() ) {
+          retstring = CID_PREFIX + corr_id + " " + retstring;
+        }
+
         if ( sock.Write( retstring ) < 0 ) connection_open=false;
       }
+
+      if ( ret == NO_ERROR ) this->interface.publish_status();
 
       if (!sock.isblocking()) break;       // Non-blocking connection exits immediately.
                                            // Keep blocking connection open for interactive session.

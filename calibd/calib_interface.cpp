@@ -672,93 +672,105 @@ namespace Calib {
   /***** Calib::Interface::close **********************************************/
 
 
-  /***** Calib::Interface::publish_snapshot ***********************************/
+  /***** Calib::Interface::get_status *****************************************/
   /**
-   * @brief      publishes a snapshot of my telemetry
-   * @details    This publishes a JSON message containing a snapshot of my
-   *             telemetry.
+   * @brief      read current calib state (modulators + actuators) into status
    *
    */
-  void Interface::publish_snapshot() {
-    std::string dontcare;
-    this->publish_snapshot(dontcare);
-  }
-  void Interface::publish_snapshot( std::string &retstring ) {
-    const std::string function("Calib::Interface::publish_snapshot");
+  void Interface::get_status() {
     std::string ret_isopen;
 
-    // assemble the telemetry into a json message
-    //
-    nlohmann::json jmessage_out;
+    this->status.values.clear();
 
-    jmessage_out["source"] = "calibd";        // source of this telemetry
-
-    // get the status for each modulator in the map
-    // assemble message string of "pow dut per" indexed by name
+    // modulator state: "pow dut per" indexed by modulator name
     //
-    this->is_open("lampmod",ret_isopen);
+    this->is_open( "lampmod", ret_isopen );
     for ( const auto &[num,name] : this->modulator.modmap_num ) {
-      // initialize these on each pass
       double dut=NAN;
       double per=NAN;
       int pow=-1;
       std::stringstream retstream;
 
-      if (ret_isopen=="true") this->modulator.status( num, dut, per, pow );
+      if ( ret_isopen == "true" ) this->modulator.status( num, dut, per, pow );
 
       switch(pow) {
         case 0 : retstream << "off "; break;
         case 1 : retstream << "on " ; break;
         default: retstream << "err "; break;
       }
-
       if ( std::isnan(dut) ) retstream << "nan "; else retstream << dut << " ";
       if ( std::isnan(per) ) retstream << "nan "; else retstream << per;
 
-      jmessage_out[name] = retstream.str();
+      this->status.values[name] = retstream.str();
     }
 
-    // get a copy of the motormap and
-    // loop through all motors, getting their actuator position
+    // actuator state: CAL<motor> indexed by uppercase motor name
     //
     std::string retmotion;
-    this->is_open("motion",retmotion);
-    bool ismotion = (retmotion=="true" ? true : false);
+    this->is_open( "motion", retmotion );
+    bool ismotion = ( retmotion == "true" );
+    for ( const auto &mot : this->motion.motors ) {
+      std::string posret;
+      if ( ismotion ) this->motion.get( mot.first, posret );
+      std::string key = "CAL" + mot.first;
+      make_uppercase( key );
+      this->status.values[key] = ( ismotion ? posret : "not_connected" );
+    }
+  }
+  /***** Calib::Interface::get_status *****************************************/
 
-    for (auto &mot : this->motion.motors) {
-      if (ismotion) this->motion.get( mot.first, retstring );     // get position of actuator
-      std::string key="CAL"+mot.first;                            // key = CALxxxx
-      make_uppercase(key);                                        // make key uppercase
-      jmessage_out[ key ] = (ismotion?retstring:"not_connected"); // store in JSON message
+
+  /***** Calib::Interface::publish_status *************************************/
+  /**
+   * @brief      publish calib state, but only if it changed (or forced)
+   * @param[in]  force  optional (default=false) publish irrespective of change
+   *
+   */
+  void Interface::publish_status( bool force ) {
+    // Serialize the publish-on-change critical section against concurrent callers
+    // (doit threads + subscriber thread). NOTE: held across get_status() hardware I/O
+    // for now — a contained per-daemon stall, not socket corruption. @TODO revisit:
+    // refactor get_status() to build a local and swap under a short lock.
+    std::lock_guard<std::mutex> lock( this->publish_mutex );
+
+    // refresh current state from hardware
+    //
+    this->get_status();
+
+    // unless forced, only publish if the state changed
+    //
+    if ( !force && this->status == this->last_published_status ) return;
+
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE] = Topic::CALIBD;
+    for ( const auto &[key, val] : this->status.values ) {
+      jmessage_out[key] = val;
     }
 
-    // for backwards compatibility
-    jmessage_out["messagetype"]="calibinfo";
-    retstring = jmessage_out.dump();  // serialize the json message into retstring
-    retstring.append(JEOF);           // append the JSON message terminator
+    this->last_published_status = this->status;
 
     try {
       this->publisher->publish( jmessage_out );
     }
     catch( const std::exception &e ) {
-      logwrite( "Calib::Interface::publish_snapshot",
-                "ERROR publishing message: "+std::string(e.what()) );
+      logwrite( "Calib::Interface::publish_status", "ERROR publishing message: " + std::string( e.what() ) );
     }
   }
-  /***** Calib::Interface::publish_snapshot ***********************************/
+  /***** Calib::Interface::publish_status *************************************/
 
 
+  /***** Calib::Interface::handletopic_snapshot *******************************/
+  /**
+   * @brief      If my topic is in the jmessage then force-publish my status
+   * @param[in]  jmessage  ref to incomming message
+   *
+   */
   void Interface::handletopic_snapshot( const nlohmann::json &jmessage ) {
-    // If my name is in the jmessage then publish my snapshot
-    //
-    if ( jmessage.contains( Calib::DAEMON_NAME ) ) {
-      this->publish_snapshot();
-    }
-    else
-    if ( jmessage.contains( "test" ) ) {
-      logwrite( "Calib::Interface::handletopic_snapshot", jmessage.dump() );
+    if ( jmessage.contains( Topic::CALIBD ) ) {
+      this->publish_status( true );
     }
   }
+  /***** Calib::Interface::handletopic_snapshot *******************************/
 
 
   /***** Calib::Modulator::configure_host *************************************/

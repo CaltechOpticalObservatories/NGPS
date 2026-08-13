@@ -10,7 +10,7 @@ set( EMULATOR_DIR ${PROJECT_BASE_DIR}/emulator )
 
 set( CMAKE_CXX_STANDARD 17 )
 
-add_definitions( -Wall -ansi -O0 -Wno-variadic-macros )
+add_definitions( -Wall -O0 -Wno-variadic-macros )
 
 include_directories( ${EMULATOR_DIR} )
 include_directories( ${PROJECT_BASE_DIR}/utils )

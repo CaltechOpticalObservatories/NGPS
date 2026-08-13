@@ -148,7 +148,14 @@ namespace Telemetry {
     while (1) {
       std::this_thread::sleep_for( std::chrono::seconds( nextday ) );
       close_log();
-      init_log( logpath, Telemetry::DAEMON_NAME );
+      // retry the re-open on a short timer so a transient failure (missing
+      // datedir, permission/owner drift, full disk) doesn't silence logging
+      // for ~24h until the next rotation
+      while ( init_log( logpath, Telemetry::DAEMON_NAME ) != 0 ) {
+        std::cerr << get_timestamp() << "  (Telemetry::Server::new_log_day) "
+                  << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+        std::this_thread::sleep_for( std::chrono::seconds(60) );
+      }
     }
   }
   /***** new_log_day **********************************************************/
@@ -261,7 +268,7 @@ namespace Telemetry {
    * Valid commands are listed in telemd_commands.h
    *
    */
-  void Server::doit( Network::TcpSocket sock ) {
+  void Server::doit( Network::TcpSocket &sock ) {
     std::string function = "Telemetry::Server::doit";
     long  ret;
     std::stringstream message;

@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     tcsd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << tcsd.config.n_entries << " lines read from " << tcsd.config.filename;
@@ -131,6 +131,10 @@ int main(int argc, char **argv) {
 
   // publish my snapshot so the world knows I'm online
   tcsd.interface.publish_snapshot();
+
+  // thread to publish snapshot when connected
+  std::thread( &TCS::Interface::do_continuous_snapshot,
+               std::ref(tcsd.interface) ).detach();
 
   // This will pre-thread N_THREADS threads, a little differently from other
   // daemons.  There will be N_THREADS-1 non-blocking threads as before then

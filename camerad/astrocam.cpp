@@ -18,36 +18,155 @@ extern Camera::Server server;
 
 namespace AstroCam {
 
-  /**** AstroCam::Interface::publish_snapshot *********************************/
+  /**** AstroCam::Interface::publish_status ***********************************/
   /**
-   * @brief      publish a snapshot of my telemetry
-   * @param[out] retstring  optional pointer to buffer for return string
+   * @brief      publish status on change
+   * @param[in]  force  if true, publish even if status unchanged
    *
    */
-  void Interface::publish_snapshot(std::string *retstring) {
-    const std::string function("AstroCam::Interface::publish_snapshot");
-    nlohmann::json jmessage_out;
+  void Interface::publish_status(bool force) {
+    std::lock_guard<std::mutex> lock(this->publish_mutex);  // REQUIRED: serializes publish-on-change + non-thread-safe socket
 
-    // build JSON message with my telemetry
-    jmessage_out[Key::SOURCE] = "camerad";
-    jmessage_out[Key::Camerad::READY] = this->can_expose.load();
+    // unless forced, publish only if there was a change
+    if (!force && this->status==this->last_published_status) return;
+
+    nlohmann::json jmessage_out;
+    jmessage_out[Key::SOURCE]               = Topic::CAMERAD;
+    jmessage_out[Key::Camerad::READY]       = this->status.can_expose.load();
+    jmessage_out[Key::Camerad::INREADOUT]   = this->status.in_readout;
+    jmessage_out[Key::Camerad::EXPOSING]    = this->status.is_exposing;
+    jmessage_out[Key::Camerad::PAUSED]      = this->status.is_paused;
+    jmessage_out[Key::Camerad::SHUTTEROPEN] = this->status.is_shutteropen;
+    jmessage_out[Key::Camerad::SHUTTERTIME] = this->camera.shutter.get_duration();
 
     // publish JSON message
     try {
       this->publisher->publish(jmessage_out);
+      this->last_published_status = this->status;
     }
     catch (const std::exception &e) {
-      logwrite(function, "ERROR: "+std::string(e.what()));
+      logwrite("AstroCam::Interface::publish_status", "ERROR: "+std::string(e.what()));
       return;
     }
+  }
+  /**** AstroCam::Interface::publish_status ***********************************/
 
-    // if a retstring buffer was supplied then return the JSON message
-    if (retstring) {
-      *retstring=jmessage_out.dump();
-      retstring->append(JEOF);
+
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+  /**
+   * @brief      what to do when the topic is Topic::SNAPSHOT
+   * @details    This publishes a JSON message containing a snapshot of my
+   *             telemetry info when the subscriber receives the Topic::SNAPSHOT
+   *             topic and the payload contains my name.
+   * @param[in]  jmessage_in  subscribed-received JSON message
+   *
+   */
+  void Interface::handletopic_snapshot( const nlohmann::json &jmessage_in ) {
+    if ( jmessage_in.contains( Topic::CAMERAD ) ) this->publish_status(true);
+  }
+  /***** AstroCam::Interface::handletopic_snapshot ****************************/
+
+
+  // Each subscriber handler caches the latest full JSON snapshot from its
+  // provider, keyed by topic. The JSON->FITS-keyword conversion is deferred
+  // to exposure lock-in (see do_expose / add_cached_telem).
+  //
+  void Interface::handletopic_acam( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::ACAMD] = jmessage;
+  }
+  void Interface::handletopic_calib( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::CALIBD] = jmessage;
+  }
+  void Interface::handletopic_flexure( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::FLEXURED] = jmessage;
+  }
+  void Interface::handletopic_focus( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::FOCUSD] = jmessage;
+  }
+  void Interface::handletopic_power( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::POWERD] = jmessage;
+  }
+  void Interface::handletopic_slicecam( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::SLICECAMD] = jmessage;
+  }
+  void Interface::handletopic_slit( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::SLITD] = jmessage;
+  }
+  void Interface::handletopic_targetinfo( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::TARGETINFO] = jmessage;
+  }
+  void Interface::handletopic_tcs( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::TCSD] = jmessage;
+  }
+  void Interface::handletopic_thermal( const nlohmann::json &jmessage ) {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    this->live_telemetry[Topic::THERMALD] = jmessage;
+  }
+
+
+  /***** AstroCam::Interface::get_live_airmass ********************************/
+  /**
+   * @brief      return the latest airmass from cached tcsd pub-sub telemetry
+   * @details    AIRMASS is averaged over the exposure in dothread_shutter and
+   *             written to systemkeys, so it is intentionally not part of the
+   *             FITS telemkeys. Returns NAN when no valid (on-sky) value is
+   *             available.
+   * @return     airmass as double, or NAN if unavailable
+   *
+   */
+  double Interface::get_live_airmass() {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+    auto it = this->live_telemetry.find( Topic::TCSD );
+    if ( it != this->live_telemetry.end() ) {
+      const auto &jmsg = it->second;
+      if ( jmsg.contains( Key::Tcsd::AIRMASS ) && jmsg.at( Key::Tcsd::AIRMASS ).is_number() ) {
+        return jmsg.at( Key::Tcsd::AIRMASS ).get<double>();
+      }
+    }
+    return NAN;
+  }
+  /***** AstroCam::Interface::get_live_airmass ********************************/
+
+
+  /***** AstroCam::Interface::get_live_provenance *****************************/
+  /**
+   * @brief      return the build provenance of all running daemons
+   * @details    Every publisher stamps its git hash and build time into every
+   *             message (see Common::PubSub::publish), so the cached snapshots
+   *             describe the software that was actually running. A daemon that
+   *             was rebuilt but not restarted still reports its old build,
+   *             which is correct because the old binary produced the data.
+   * @param[out] githash    common commit, or "MIXED" if running daemons differ
+   * @param[out] buildtime  newest build time among running daemons
+   *
+   */
+  void Interface::get_live_provenance( std::string &githash, std::string &buildtime ) {
+    githash   = GIT_HASH_STR;
+    buildtime = get_build_time();
+
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+
+    for ( const auto &[topic, jmsg] : this->live_telemetry ) {
+      if ( jmsg.contains( Key::GITHASH ) && jmsg.at( Key::GITHASH ).is_string() ) {
+        const std::string hash = jmsg.at( Key::GITHASH ).get<std::string>();
+        if ( !hash.empty() && hash != githash ) githash = "MIXED";
+      }
+      if ( jmsg.contains( Key::BUILDTIME ) && jmsg.at( Key::BUILDTIME ).is_string() ) {
+        const std::string btime = jmsg.at( Key::BUILDTIME ).get<std::string>();
+        if ( btime > buildtime ) buildtime = btime;
+      }
     }
   }
-  /**** AstroCam::Interface::publish_snapshot *********************************/
+  /***** AstroCam::Interface::get_live_provenance *****************************/
 
 
   long NewAstroCam::new_expose( std::string nseq_in ) {
@@ -253,9 +372,18 @@ namespace AstroCam {
     interface.state_monitor_condition.notify_all();
     logwrite(function, "running");
 
+    auto update_and_publish = [&interface]() {
+      interface.status.in_readout     = interface.in_readout();
+      interface.status.is_exposing    = interface.exposure_pending() && !interface.in_readout();
+      interface.status.is_shutteropen = interface.camera.shutter.isopen();
+      interface.status.is_paused      = interface.camera.shutter_timer.is_held();
+      interface.publish_status();
+    };
+
     while ( true ) {
       std::unique_lock<std::mutex> state_lock(interface.state_lock);
       interface.state_monitor_condition.wait(state_lock);
+      update_and_publish();
 
       while ( interface.is_camera_idle() ) {
         selectdev.clear();
@@ -269,10 +397,11 @@ namespace AstroCam {
         }
         if ( selectdev.size() > 0 ) {
           long ret = interface.do_native( selectdev, std::string("IDL") );
-          logwrite( function, (ret==NO_ERROR ? "NOTICE: " : "ERROR")+message.str() );
+          logwrite( function, (ret==NO_ERROR ? "" : "ERROR ")+message.str() );
         }
         // Wait for the conditions to change before checking again
         interface.state_monitor_condition.wait( state_lock );
+        update_and_publish();
       }
     }
 
@@ -449,9 +578,10 @@ namespace AstroCam {
       return ERROR;
     }
 
+    int dev;
     try {
       // validate channel
-      int dev = devnum_from_chan(tokens.at(0));
+      dev = devnum_from_chan(tokens.at(0));
       std::string spat = to_uppercase(tokens.at(1));
       std::string spec = to_uppercase(tokens.at(2));
 
@@ -477,8 +607,17 @@ namespace AstroCam {
       if (!line.empty()) line += ' ';
       line += tokens[i];
     }
-    bool save_as_default = true;
-    long error = this->image_size(line, retstring, save_as_default);
+
+    long error = this->image_size(line, retstring);
+
+    // save these as the defaults
+    //
+    this->controller[dev].defcols = this->controller[dev].detcols;
+    this->controller[dev].defrows = this->controller[dev].detrows;
+    this->controller[dev].defoscols = this->controller[dev].oscols;
+    this->controller[dev].defosrows = this->controller[dev].osrows;
+    this->controller[dev].defbincols = this->controller[dev].info.binning[_COL_];
+    this->controller[dev].defbinrows = this->controller[dev].info.binning[_ROW_];
 
     return error;
   }
@@ -784,14 +923,6 @@ namespace AstroCam {
     // But now check that either the dev# is a known devnum or the tryme is a known channel.
     //
     for ( const auto &con : this->controller ) {
-#ifdef LOGLEVEL_DEBUG
-      message.str(""); message << "[DEBUG] con.first=" << con.first
-                               << " con.second.channel=" << con.second.channel
-                               << " .devnum=" << con.second.devnum
-                               << " .configured=" << (con.second.configured?"T":"F")
-                               << " .active=" << (con.second.active?"T":"F");
-      logwrite( function, message.str() );
-#endif
       if (!con.second.configured) continue;  // skip controllers not configured
       if ( con.second.channel == tryme ) {   // check to see if it matches a configured channel.
         dev  = con.second.devnum;
@@ -836,6 +967,7 @@ namespace AstroCam {
     return( NO_ERROR );
   }
 
+
   /***** AstroCam::Interface::do_bin ******************************************/
   /**
    * @brief      set/get binning factor
@@ -849,7 +981,7 @@ namespace AstroCam {
    */
   long Interface::do_bin( std::string args, std::string &retstring ) {
     std::string function = "AstroCam::Interface::do_bin";
-    std::stringstream message;
+    std::ostringstream message;
     long error = NO_ERROR;
 
     // Help
@@ -879,12 +1011,20 @@ namespace AstroCam {
     //
     if ( this->exposure_pending() ) {
       std::vector<int> pending = this->exposure_pending_list();
-      message.str(""); message << "ERROR: cannot change binning while exposure is pending for chan";
+      message << "ERROR: cannot change binning while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( const auto &dev : pending ) message << this->controller.at(dev).channel << " ";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
       retstring="exposure_in_progress";
-      return(ERROR);
+      return ERROR;
+    }
+
+    // Don't make any changes while frames are still being written.
+    //
+    if ( this->any_writes_pending() ) {
+      logwrite( function, "ERROR: cannot change binning while frame write is in progress" );
+      retstring="write_in_progress";
+      return ERROR;
     }
 
     // Tokenize args to get the axis and possible binning factor. There
@@ -906,6 +1046,13 @@ namespace AstroCam {
         }
       }
 
+      if ( tokens.size() > 2 ) {
+        message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
+        logwrite( function, message.str() );
+        retstring="bad_arguments";
+        return ERROR;
+      }
+
       if ( tokens.size() == 2 ) {
         binfactor = std::stoi( tokens.at(1) );
 
@@ -925,47 +1072,30 @@ namespace AstroCam {
           if (!pcontroller) continue;
 
           // determine which physical axis corresponds to the requested logical axis
-          int physical_axis;
-          if (logical_axis == "spec") {
-            physical_axis = pcontroller->spec_physical_axis();
-          }
-          else {
-            physical_axis = pcontroller->spat_physical_axis();
-          }
+          int physical_axis = logical_axis=="spec" ? pcontroller->spec_physical_axis()
+                                                   : pcontroller->spat_physical_axis();
 
-          // Make a local copy of the class' binning for both (physical) axes
-          //
-          int _binning[2];
-          _binning[_ROW_] = pcontroller->info.binning[_ROW_];
-          _binning[_COL_] = pcontroller->info.binning[_COL_];
-          // then override only the axis requested here.
-          _binning[physical_axis] = binfactor;
+          // update the binning factor in the info class for this axis
+          pcontroller->info.binning[physical_axis] = binfactor;
 
-          // call image_size() with logical coordinates
+          // get the logical coordinates from the class
           int spat, spec, osspat, osspec, binspat, binspec;
-          pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                           spat, spec);
-          pcontroller->physical_to_logical(pcontroller->osrows0, pcontroller->oscols0,
-                                           osspat, osspec);
-          pcontroller->physical_to_logical(_binning[_ROW_], _binning[_COL_],
-                                           binspat, binspec);
-          message.str("");
-          message << dev     << " "
-                  << spat    << " "
-                  << spec    << " "
-                  << osspat  << " "
-                  << osspec  << " "
-                  << binspat << " "
-                  << binspec;
-          error = this->image_size( message.str(), retstring );  // this retstring only used on error
+          this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+
+          // when requested axis is spatial and a BOI is defined,
+          // spat is sum of BOI bands and osspat is removed
+          if (logical_axis=="spat" && pcontroller->has_boi()) {
+            error = this->load_boi_pairs(pcontroller, spat);
+            osspat = 0;
+          }
+
+          if (error==NO_ERROR) error = this->set_image_size(pcontroller,
+                                                            spat,    spec,
+                                                            osspat,  osspec,
+                                                            binspat, binspec);
+
           if (error != NO_ERROR) break;
         }
-      }
-      else if ( tokens.size() > 2 ) {
-        message.str(""); message << "ERROR: expected <axis> [ <binfactor> ] but received \"" << retstring << "\"";
-        logwrite( function, message.str() );
-        retstring="bad_arguments";
-        return( ERROR );
       }
 
       // return binning for the requested logical axis
@@ -973,20 +1103,19 @@ namespace AstroCam {
         int dev = this->active_devnums[0];
         int physical_axis = (logical_axis=="spec") ? this->controller.at(dev).spec_physical_axis() :
                                                      this->controller.at(dev).spat_physical_axis();
-        message.str(""); message << this->controller.at(dev).info.binning[physical_axis];
+        message << this->controller.at(dev).info.binning[physical_axis];
         if ( error == NO_ERROR ) retstring = message.str();
       }
     }
-    catch ( std::exception &e ) {
-      message.str(""); message << "ERROR: parsing \"" << args << "\": " << e.what();
-      logwrite( function, message.str() );
+    catch (const std::exception &e) {
+      logwrite(function, "ERROR parsing '"+args+"': "+std::string(e.what()));
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
     logwrite( function, message.str() );
 
-    return( error );
+    return error;
   }
   /***** AstroCam::Interface::do_bin ******************************************/
 
@@ -1189,7 +1318,7 @@ namespace AstroCam {
       catch ( const std::exception &e ) { // arc::gen3::CArcPCI::open and reset may throw exceptions
         message.str(""); message << "ERROR opening " << this->controller.at(dev).devname
                                  << " channel " << this->controller.at(dev).channel << ": " << e.what();
-        this->camera.async.enqueue_and_log( function, message.str() );
+        logwrite( function, message.str() );
         this->do_disconnect_controller(dev);
         retstring="exception";
         error = ERROR;
@@ -1253,7 +1382,7 @@ namespace AstroCam {
       error = ERROR;
     }
 
-    this->publish_snapshot();
+    this->publish_status();
 
     return( error );
   }
@@ -1533,7 +1662,7 @@ namespace AstroCam {
       if (numapplied > lastapplied) {
         std::ostringstream oss;
         oss << "CAMERAD:config:" << this->config.param[entry] << "=" << this->config.arg[entry];
-        this->camera.async.enqueue_and_log(function, oss.str());
+        logwrite(function, oss.str());
       }
     }
 
@@ -1636,6 +1765,10 @@ namespace AstroCam {
    * @return     NO_ERROR on success, ERROR on error
    *
    */
+  long Interface::do_native(int dev, std::string cmdstr) {
+    std::string dontcare;
+    return this->do_native(dev, cmdstr, dontcare);
+  }
   long Interface::do_native( int dev, std::string cmdstr, std::string &retstring ) {
     std::vector<int> selectdev;
     if ( this->controller.at(dev).active ) selectdev.push_back( dev );
@@ -1903,8 +2036,6 @@ namespace AstroCam {
    * When the shutter closes, this function will notify all threads
    * that are waiting on the camera.shutter condition variable.
    *
-   * @TODO make the shutter timer able to be stopped/paused/resumed!
-   *
    */
   void Interface::dothread_shutter( int expbuf, Interface &interface ) {
     const std::string function("AstroCam::Interface::dothread_shutter");
@@ -1915,13 +2046,13 @@ namespace AstroCam {
     double airmass0, airmass1, airmass;
 
     if ( !interface.in_readout() ) {
-      logwrite( function, "NOTICE: sending command to stop clocks!" );
+      logwrite( function, "sending command to stop clocks!" );
       interface.do_native( "SPC" );
     }
 
-    // get the airmass now
+    // get the latest airmass collected from tcsd telemetry now
     //
-    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass0 );
+    airmass0 = interface.get_live_airmass();
 
     // If configured, send a command to the ARC controller to open
     // the shutter. This is not connected to the shutter but can be
@@ -1932,12 +2063,13 @@ namespace AstroCam {
     //
     if ( interface.camera.ext_shutter ) {
       interface.do_native( "OSH" );
-      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter opened at "+timestring );
+      interface.broadcast.notice( function, "external shutter opened at "+timestring );
     }
 
     // open the Bonn shutter if enabled
     //
     interface.camera.shutter.set_open();
+    interface.state_monitor_condition.notify_all();
 
     // Log shutter open time
     //
@@ -1946,7 +2078,7 @@ namespace AstroCam {
     mjd0 = mjd_from( timenow );              // modified Julian date of start
 
     if ( interface.camera.shutter.is_enabled ) {
-      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+      interface.broadcast.notice( function, "shutter opened at "+timestring );
     }
 
     // spawn a thread to report exposure progress
@@ -1960,6 +2092,7 @@ namespace AstroCam {
     // close the Bonn shutter
     //
     interface.camera.shutter.set_close();
+    interface.state_monitor_condition.notify_all();
 
     // Log shutter close time
     //
@@ -1969,19 +2102,19 @@ namespace AstroCam {
     mjd = (mjd1+mjd0)/2.;                    // average mjd
 
     if ( interface.camera.shutter.is_enabled ) {
-      interface.camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+      interface.broadcast.notice( function, "shutter closed at "+timestring );
     }
 
     // Send external close shutter command, if configured.
     //
     if ( interface.camera.ext_shutter ) {
       interface.do_native( "CSH" );
-      interface.camera.async.enqueue_and_log( function, "NOTICE:external shutter closed at "+timestring );
+      interface.broadcast.notice( function, "external shutter closed at "+timestring );
     }
 
-    // get the airmass again
+    // get the latest airmass again
     //
-    interface.collect_telemetry_key( "tcsd", "AIRMASS", airmass1 );
+    airmass1 = interface.get_live_airmass();
 
     // average airmass
     //
@@ -1994,7 +2127,6 @@ namespace AstroCam {
     // These have to be added to fitsinfo[expbuf] because the exposure has already started,
     // and camera_info keys have already been locked-in to fitsinfo[].
     //
-    interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD0", mjd0, "exposure start time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD1", mjd1, "exposure stop time (modified Julian Date)" );
     interface.fitsinfo[expbuf]->systemkeys.primary().addkey( "MJD", mjd, "average of MJD0 and MJD1" );
@@ -2139,7 +2271,7 @@ namespace AstroCam {
         while ( con.in_readout ) {                      // wait for any previous readout to complete
           if ( get_clock_time() > clock_timeout ) {     // check for a timeout
             con.error = ERROR;
-            cam.async.enqueue_and_log( "CAMERAD", function, "ERROR: timeout waiting for previous readout, FT not started" );
+            logwrite( function, "ERROR: timeout waiting for previous readout, FT not started" );
             cam.set_abortstate( true );
             return;
           }
@@ -2552,10 +2684,9 @@ namespace AstroCam {
     // Log this message once only
     //
     if ( interface.exposure_pending() ) {
-      interface.can_expose.store(false);
-      interface.publish_snapshot();
-      interface.camera.async.enqueue_and_log( function, "NOTICE:exposure pending" );
-      interface.camera.async.enqueue( "CAMERAD:READY:false" );
+      interface.status.can_expose.store(false);
+      interface.publish_status();
+      logwrite( function, "exposure pending" );
     }
 
     // Block on exposure_condition until exposure_pending() returns false,
@@ -2580,20 +2711,55 @@ namespace AstroCam {
     //
     interface.nexp.fetch_sub(1);
     if ( interface.nexp.load() > 0 ) {
-      message.str(""); message << "NOTICE:starting next exposure, " << interface.nexp << " remaining";
-      interface.camera.async.enqueue_and_log( function, message.str() );
+      message.str(""); message << "starting next exposure. " << interface.nexp << " remaining";
+      interface.broadcast.notice( function, message.str() );
       interface.do_expose(interface.nexp);
     }
     else {
-      interface.can_expose.store(true);
-      interface.publish_snapshot();
-      interface.camera.async.enqueue_and_log( function, "NOTICE:ready for next exposure" );
-      interface.camera.async.enqueue( "CAMERAD:READY:true" );
+      interface.status.can_expose.store(true);
+      interface.publish_status();
+      logwrite( function, "ready for next exposure" );
+      // Republish periodically so a subscriber that missed the single-fire
+      // transition (e.g. ZMQ reconnect gap) recovers without manual intervention.
+      std::thread( [&interface]() {
+        for ( int i = 0; i < 5 && interface.status.can_expose.load(); ++i ) {
+          std::this_thread::sleep_for( std::chrono::seconds(2) );
+          if ( interface.status.can_expose.load() ) interface.publish_status(true);
+        }
+      }).detach();
     }
 
     return;
   }
   /***** AstroCam::Interface::dothread_monitor_exposure_pending ***************/
+
+
+  /***** AstroCam::add_cached_telem ******************************************/
+  /**
+   * @brief      add one provider's cached JSON telemetry into a FITS Header
+   * @details    Primary tables route to the primary header; Extension tables
+   *             carry a channel and route to the extension (elmo) map. This is
+   *             the same keyinfo routing the subscriber handlers used to do,
+   *             now applied once at lock-in from the cached JSON snapshot.
+   * @param[in,out] telem  Header to populate
+   * @param[in]  jmsg      cached JSON snapshot for one provider
+   * @param[in]  keys      keyinfo table (Primary[] or Extension[])
+   *
+   */
+  template <typename KeyT, size_t N>
+  static void add_cached_telem( Common::Header &telem,
+                                const nlohmann::json &jmsg,
+                                const KeyT (&keys)[N] ) {
+    for ( const auto &k : keys ) {
+      if constexpr ( std::is_same_v<KeyT, FitsHeaderKeys::Extension> ) {
+        telem.add_json_key( jmsg, k.jkey, k.keyword, k.comment, k.type, EXT, k.chan );
+      }
+      else {
+        telem.add_json_key( jmsg, k.jkey, k.keyword, k.comment, k.type, PRI );
+      }
+    }
+  }
+  /***** AstroCam::add_cached_telem ******************************************/
 
 
   /***** AstroCam::Interface::do_expose ***************************************/
@@ -2637,7 +2803,7 @@ namespace AstroCam {
       message.str(""); message << "ERROR: cannot start new exposure while exposure is pending for chan";
       message << ( pending.size() > 1 ? "s " : " " );
       for ( const auto &dev : pending ) message << this->controller.at(dev).channel << " ";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
       return(ERROR);
     }
 
@@ -2646,15 +2812,14 @@ namespace AstroCam {
     // be handled during readout.
     //
     if ( this->camera.ext_shutter && !this->is_camera_idle() ) {
-      this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: overlapping exposure cannot be started when using ARC shutter" );
+      logwrite( function, "ERROR: overlapping exposure cannot be started when using ARC shutter" );
       return( ERROR );
     }
 
     // check for valid exposure_time
     //
     if ( this->camera.exposure_time < 0 ) {
-      message.str(""); message << "ERROR: exposure time is undefined";
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, "ERROR exposure time is undefined" );
       return( ERROR );
     }
 
@@ -2669,9 +2834,49 @@ namespace AstroCam {
     logwrite( function, message.str() );
 #endif
 
-    // Collect telemetry, which will be stored in camera_info.telemkeys
+    // telemetry is locked-in here --
+    // build the FITS telemetry header from the latest JSON snapshots cached by
+    // the subscriber handlers. Built fresh so a provider that has gone silent
+    // does not leave stale keys behind.
     //
-    this->collect_telemetry();
+    {
+    std::unique_lock<std::mutex> lock(live_telemetry_mtx);
+
+    Common::Header telem;
+
+    // Helper function adds all keys from a table.
+    // The tables are defined in fits_header_defs.h and contain extension
+    // channel name (as appropriate), keyword, value, comment, and type.
+    //
+    auto add = [&]( const std::string &topic, const auto &keytable ) {
+      auto it = this->live_telemetry.find( topic );
+      if ( it != this->live_telemetry.end() ) add_cached_telem( telem, it->second, keytable );
+    };
+
+    add( Topic::CALIBD,     FitsHeaderKeys::CalibInfoKeys   );  // primary
+    add( Topic::POWERD,     FitsHeaderKeys::PowerInfoKeys   );  // primary
+    add( Topic::SLITD,      FitsHeaderKeys::SlitInfoKeys    );  // primary
+    add( Topic::TARGETINFO, FitsHeaderKeys::TargetInfoKeys  );  // primary
+    add( Topic::TCSD,       FitsHeaderKeys::TcsInfoKeys     );  // primary
+    add( Topic::FLEXURED,   FitsHeaderKeys::FlexureInfoKeys );  // extension
+    add( Topic::FOCUSD,     FitsHeaderKeys::FocusInfoKeys   );  // extension
+    add( Topic::THERMALD,   FitsHeaderKeys::ThermalInfoKeys );  // extension
+
+    this->camera_info.telemkeys = telem;
+    }
+
+    // Record what software was running for this exposure. Done outside the
+    // block above because get_live_provenance() takes live_telemetry_mtx
+    // itself.
+    //
+    std::string githash, buildtime;
+    this->get_live_provenance( githash, buildtime );
+    this->camera_info.telemkeys.primary().addkey( FitsHeaderKeys::Provenance::GITHASH_KEY,
+                                                  githash,
+                                                  FitsHeaderKeys::Provenance::GITHASH_COMMENT );
+    this->camera_info.telemkeys.primary().addkey( FitsHeaderKeys::Provenance::BUILDTIME_KEY,
+                                                  buildtime,
+                                                  FitsHeaderKeys::Provenance::BUILDTIME_COMMENT );
 
     // Make a copy of this->camera_info for this particular exposure buffer number.
     // This expinfo will be used for this particular exposure.
@@ -2683,8 +2888,7 @@ namespace AstroCam {
     //
     for ( const auto &dev : this->active_devnums ) {
       if ( this->controller[ dev ].info.readout_name.empty() ) {
-        message.str(""); message << "ERROR: readout undefined";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR readout undefined" );
         return( ERROR );
       }
     }
@@ -2707,7 +2911,7 @@ namespace AstroCam {
     this->camera.set_fitstime( get_timestamp() );
 
     if ( ( error = this->camera.get_fitsname( this->fitsinfo[this_expbuf]->fits_name ) ) != NO_ERROR ) {
-      this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+      logwrite( function, "ERROR assembling fitsname" );
       return( error );
     }
 
@@ -2767,7 +2971,7 @@ namespace AstroCam {
     }
     else {
       logwrite( function, "shutter not opened" );
-      message.str(""); message << "NOTICE: incremented exposure buffer to " << server.get_expbuf();
+      message.str(""); message << "incremented exposure buffer to " << server.get_expbuf();
       logwrite( function, message.str() );
 
       // Save shutter-timed keywords to keyword database now, because dothread_shutter won't run
@@ -2775,11 +2979,9 @@ namespace AstroCam {
       timespec timenow       = Time::getTimeNow();         // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
       double mjd             = mjd_from( timenow );        // modified Julian date of start
-      double airmass=NAN;
-
-      // get the airmass from tcsd telemetry now
+      // get the latest airmass collected from tcsd telemetry now
       //
-      this->collect_telemetry_key( "tcsd", "AIRMASS", airmass );
+      double airmass = this->get_live_airmass();
 
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "EXPSTART", timestring, "exposure start time" );
       this->fitsinfo[this_expbuf]->systemkeys.primary().addkey( "MJD0", mjd, "exposure start time (modified Julian Date)" );
@@ -2811,7 +3013,7 @@ namespace AstroCam {
         // Allocate workspace memory for deinterlacing (each dev has its own workbuf)
         //
         if ( ( error = this->controller.at(dev).alloc_workbuf( ) ) != NO_ERROR ) {
-          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: allocating memory for deinterlacing" );
+          logwrite( function, "ERROR allocating memory for deinterlacing" );
           return( error );
         }
 
@@ -2829,7 +3031,7 @@ namespace AstroCam {
           devstr = "";
         }
         if ( ( error = this->camera.get_fitsname( devstr, this->controller.at(dev).info.fits_name ) ) != NO_ERROR ) {
-          this->camera.async.enqueue_and_log( "CAMERAD", function, "ERROR: assembling fitsname" );
+          logwrite( function, "ERROR: assembling fitsname" );
           return( error );
         }
 ***/
@@ -2847,12 +3049,11 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (const auto &check : this->active_devnums) message << check << " ";
         message << "}";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(...) {
-        message.str(""); message << "ERROR: unknown exception creating fitsname for controller";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR unknown exception creating fitsname for controller" );
         return(ERROR);
       }
     }
@@ -2978,17 +3179,16 @@ namespace AstroCam {
         message.str(""); message << "ERROR: unable to find device " << dev << " in list: { ";
         for (const auto &check : this->active_devnums) message << check << " ";
         message << "}";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(const std::exception &e) {
         message.str(""); message << "ERROR creating read thread: " << e.what();
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
       catch(...) {
-        message.str(""); message << "ERROR: unknown exception creating read thread for controller";
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, "ERROR unknown exception creating read thread for controller" );
         return(ERROR);
       }
     }
@@ -3034,358 +3234,8 @@ namespace AstroCam {
   /***** AstroCam::Interface::do_expose ***************************************/
 
 
-  /***** AstroCam::Interface::make_telemetry_message **************************/
-  /**
-   * @brief      assembles my telemetry message
-   * @details    This creates a JSON message for my telemetry info, then serializes
-   *             it into a std::string ready to be sent over a socket.
-   * @param[out] retstring  string containing the serialization of the JSON message
-   *
-   */
-  void Interface::make_telemetry_message( std::string &retstring ) {
-    // assemble the telemetry I want to report into a json message
-    // Set a messagetype keyword to indicate what kind of message this is.
-    //
-    nlohmann::json jmessage;
-    jmessage["messagetype"] = "camerainfo";
-
-    jmessage["SHUTTIME_SEC"] = this->camera.shutter.get_duration();  // shutter open time in sec
-
-    retstring = jmessage.dump();  // serialize the json message into a string
-
-    retstring.append(JEOF);       // append JSON message terminator
-
-    return;
-  }
-  /***** AstroCam::Interface::make_telemetry_message **************************/
 
 
-  /***** AstroCam::Interface::collect_telemetry *******************************/
-  /**
-   * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
-   * @details    This overloaded version accepts a name, for the case where
-   *             telemetry is needed from one provider only (e.g. TCS)
-   * @param[in]  name       name of provider from TELEM_PROVIDER config key
-   * @param[out] retstring  serialized string of json telemetry message
-   *
-   */
-  void Interface::collect_telemetry(const std::string name, std::string &retstring) {
-    Common::DaemonClient jclient("", "\n", JEOF );
-    auto it = this->telemetry_providers.find(name);
-    if ( it != this->telemetry_providers.end() ) {
-      jclient.set_name(it->first);
-      jclient.set_port(it->second);
-      jclient.connect();
-      jclient.command(TELEMREQUEST, retstring);
-      jclient.disconnect();
-    }
-    return;
-  }
-  /***** AstroCam::Interface::collect_telemetry *******************************/
-  /**
-   * @brief      send the TELEMREQUEST command to each configured daemon to get telemetry
-   *
-   */
-  void Interface::collect_telemetry() {
-    std::string retstring;
-
-    // Instantiate a client to communicate with each daemon,
-    // constructed with no name, newline termination on command writes,
-    // and JEOF termination on reply reads.
-    //
-    Common::DaemonClient jclient("", "\n", JEOF );
-
-    // Loop through each configured telemetry provider, which is a map of
-    // ports indexed by daemon name, both of which are used to update
-    // the jclient object.
-    //
-    // Send the command TELEMREQUEST to each daemon and read back the reply into
-    // retstring, which will be the serialized JSON telemetry message.
-    //
-    // handle_json_message() will parse the reply and set the FITS header
-    // keys in the telemkeys database.
-    //
-    for ( const auto &[name, port] : this->telemetry_providers ) {
-      jclient.set_name(name);
-      jclient.set_port(port);
-      jclient.connect();
-      jclient.command(TELEMREQUEST, retstring);
-      jclient.disconnect();
-      handle_json_message(retstring);
-    }
-
-    return;
-  }
-  /***** AstroCam::Interface::collect_telemetry *******************************/
-
-
-  /***** AstroCam::Interface::handle_json_message *****************************/
-  /**
-   * @brief      parses incoming telemetry messages
-   * @param[in]  message_in  serialized JSON message string
-   * @return     ERROR | NO_ERROR
-   *
-   */
-  long Interface::handle_json_message( std::string message_in ) {
-    const std::string function="AstroCam::Interface::handle_json_message";
-    std::stringstream message;
-    std::string messagetype;
-    long error;
-
-    // nothing to do if the message is empty
-    //
-    if ( message_in.empty() ) {
-      logwrite( function, "empty JSON message" );
-      return ERROR;
-    }
-
-    /**
-     * @struct  PrimaryInfo
-     * @brief   holds info for extracting primary header keys from json message
-     * @details The value in jmessage with key jkey will be added to the primary
-     *          FITS header, using comment and optional keyword. If keyword is
-     *          not specified then the header keyword uses jkey.
-     */
-    struct PrimaryInfo {
-      std::string jkey;     // key to extract from jmessage
-      std::string keyword;  // optional FITS keyword (uses jkey if not specified)
-      std::string comment;  // FITS key comment
-      std::string type="";  // optional keyword datatype
-    };
-
-    /**
-     * @struct  ExtensionInfo
-     * @brief   holds info for extracting extension header keys from json message
-     * @details The value in jmessage with key jkey will be added to the FITS
-     *          header specified by channel chan, using comment and optional keyword.
-     *          If keyword is not specified then the header keyword uses jkey.
-     */
-    struct ExtensionInfo {
-      std::string chan;     // chan name identifies which extension
-      std::string jkey;     // key to extract from jmessage
-      std::string keyword;  // optional FITS keyword (uses jkey if not specified)
-      std::string comment;  // FITS key comment
-      std::string type="";  // optional keyword datatype
-    };
-
-    auto &telemkeys = this->camera_info.telemkeys;
-
-    // use to select whether to write to extension or primary
-    //
-    bool ext = true;
-    bool pri = !ext;
-
-    size_t eof_pos = message_in.find(JEOF);
-    if ( eof_pos != std::string::npos ) message_in.erase(eof_pos);
-
-    try {
-      nlohmann::json jmessage = nlohmann::json::parse( message_in );
-
-      // jmessage must not contain key "error" and must contain key "messagetype"
-      //
-      if ( !jmessage.contains("error") ) {
-        if ( jmessage.contains("messagetype") ) {
-          messagetype = jmessage["messagetype"];
-          error = NO_ERROR;
-        }
-        else {
-          logwrite( function, "ERROR received JSON message with no messagetype" );
-          error = ERROR;
-        }
-      }
-      else {
-        logwrite( function, "ERROR in JSON message" );
-        error = ERROR;
-      }
-
-      // If jmessage contained error or no messagetype then get out now.
-      //
-      if ( error != NO_ERROR ) return error;
-
-      // telemetry from calibd goes in the primary header
-      //
-      if ( messagetype == "calibinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"MODFEAR",  "", "FeAr lamp modulator pow dut per"},
-          {"MODTHAR",  "", "ThAr lamp modulator pow dut per"},
-          {"MODBLCON", "", "Blue continuum modulator pow dut per"},
-          {"MODBLBYP", "", "Blue bypass modulator pow dut per"},
-          {"MODRDCON", "", "Red continuum modulator pow dut per"},
-          {"MODRDBYP", "", "Red bypass modulator pow dut per"},
-          {"CALCOVER", "", "calib cover state"},
-          {"CALDOOR",  "", "calib door state"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
-        }
-      }
-      else
-
-      // telemetry from flexured goes in the extension header corresponding to the channel
-      //
-      if ( messagetype == "flexureinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "FLXSPE_I", "FLXSPE", "I flexure spectral axis 2 (X) in um"},
-          {"I", "FLXSPA_I", "FLXSPA", "I flexure spatial axis 3 (Y) in um"},
-          {"I", "FLXPIS_I", "FLXPIS", "I flexure piston axis 1 (Z) in um"},
-          {"R", "FLXSPE_R", "FLXSPE", "R flexure spectral axis 2 (X) in um"},
-          {"R", "FLXSPA_R", "FLXSPA", "R flexure spatial axis 3 (Y) in um"},
-          {"R", "FLXPIS_R", "FLXPIS", "R flexure piston axis 1 (Z) in um"},
-          {"G", "FLXSPE_G", "FLXSPE", "G flexure spectral axis 2 (X) in um"},
-          {"G", "FLXSPA_G", "FLXSPA", "G flexure spatial axis 3 (Y) in um"},
-          {"G", "FLXPIS_G", "FLXPIS", "G flexure piston axis 1 (Z) in um"},
-          {"U", "FLXSPE_U", "FLXSPE", "U flexure spectral axis 2 (X) in um"},
-          {"U", "FLXSPA_U", "FLXSPA", "U flexure spatial axis 3 (Y) in um"},
-          {"U", "FLXPIS_U", "FLXPIS", "U flexure piston axis 1 (Z) in um"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
-        }
-      }
-      else
-
-      // telemetry from focusd goes in the extension header corresponding to the channel
-      //
-      if ( messagetype == "focusinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "FOCUSI", "FOCUS", "science camera I focus position in mm" },
-          {"R", "FOCUSR", "FOCUS", "science camera R focus position in mm" },
-          {"G", "FOCUSG", "FOCUS", "science camera G focus position in mm" },
-          {"U", "FOCUSU", "FOCUS", "science camera U focus position in mm" }
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
-        }
-      }
-      else
-
-      // telemetry from powerd goes in the primary header
-      //
-      if ( messagetype == "powerinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"LAMPTHAR", "", "is ThAr lamp on"},
-          {"LAMPFEAR", "", "is FeAr lamp on"},
-          {"LAMPBLUC", "", "is blue Xe continuum lamp on"},
-          {"LAMPREDC", "", "is red continuum lamp on"},
-          {"LAMPXE",   "", "is Xe lamp on"},
-          {"LAMPINCA", "", "is Incandescent lamp on"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
-        }
-      }
-      else
-
-      // telemetry from calibd goes in the primary header
-      //
-      if ( messagetype == "slitinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"SLITW",    "", "slit width in arcsec"},
-          {"SLITO",    "", "slit offset in arcsec"},
-          {"SLITPOSA", "", "slit actuator A position in mm"},
-          {"SLITPOSA", "", "slit actuator A position in mm"},
-          {"SLITPOSB", "", "slit actuator B position in mm"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
-        }
-      }
-      else
-
-      // targetinfo telemetry comes from sequencerd and goes in the primary header
-      //
-      if ( messagetype == "targetinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"OBS_ID",   "", "Observation ID", "INT"},
-          {"NAME",     "", "target name", "STRING"},
-//        {"BINSPECT", "", "binning in spectral direction"},
-//        {"BINSPAT",  "", "binning in spatial direction"},
-          {"SLITA",    "", "slit angle in deg", "FLOAT"},
-          {"POINTMDE", "", "pointing mode", "STRING"},
-          {"RA",       "", "requested Right Ascension in J2000", "STRING"},
-          {"DECL",     "", "requested Declination in J2000", "STRING"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          message.str(""); message << "[DEBUG] targetinfo key " << keyinfo.jkey << "=" << jmessage[keyinfo.jkey];
-          logwrite(function,message.str());
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
-        }
-      }
-      else
-
-      // telemetry from tcsd goes into primary header
-      // AIRMASS is intentionally left out since it is handled differently
-      //
-      if ( messagetype == "tcsinfo" ) {
-        const PrimaryInfo keyarray[] = {
-          {"CASANGLE",   "", "TCS reported Cassegrain angle in deg", "FLOAT"},
-          {"HA",         "", "hour angle"},
-          {"RAOFFSET",   "", "offset Right Ascension"},
-          {"DECLOFFS",   "", "offset Declination"},
-          {"TELRA",      "", "TCS reported Right Ascension"},
-          {"TELDEC",     "", "TCS reported Declination"},
-          {"AZ",         "", "TCS reported azimuth"},
-          {"ZENANGLE",   "", "TCS reported Zenith angle", "FLOAT"},
-          {"DOMEAZ",     "", "TCS reported dome azimuth", "FLOAT"},
-          {"DOMESHUT",   "", "dome shutters"},
-          {"TELFOCUS",   "", "TCS reported telescope focus position in mm", "FLOAT"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.jkey, keyinfo.comment, keyinfo.type, pri);
-        }
-      }
-      else
-
-      // telemetry from thermald
-      //
-      if ( messagetype == "thermalinfo" ) {
-        const ExtensionInfo keyarray[] = {
-          {"I", "TCCD_I", "CCDTEMP", "I CCD temperature in Kelvin", "FLOAT"},
-          {"R", "TCCD_R", "CCDTEMP", "R CCD temperature in Kelvin", "FLOAT"},
-          {"G", "TCCD_G", "CCDTEMP", "G CCD temperature in Kelvin", "FLOAT"},
-          {"U", "TCCD_U", "CCDTEMP", "U CCD temperature in Kelvin", "FLOAT"},
-
-          {"I", "TCOLL_I", "COLTEMP", "I collimator temp in deg C", "FLOAT"},
-          {"R", "TCOLL_R", "COLTEMP", "R collimator temp in deg C", "FLOAT"},
-          {"G", "TCOLL_G", "COLTEMP", "G collimator temp in deg C", "FLOAT"},
-
-          {"I", "TFOCUS_I", "FOCTEMP", "I focus temp in deg C", "FLOAT"},
-          {"R", "TFOCUS_R", "FOCTEMP", "R focus temp in deg C", "FLOAT"},
-          {"G", "TFOCUS_G", "FOCTEMP", "G focus temp in deg C", "FLOAT"},
-          {"U", "TFOCUS_U", "FOCTEMP", "U focus temp in deg C", "FLOAT"}
-        };
-        for ( const auto &keyinfo : keyarray ) {
-          telemkeys.add_json_key(jmessage, keyinfo.jkey, keyinfo.keyword, keyinfo.comment, keyinfo.type, ext, keyinfo.chan);
-        }
-      }
-      else
-
-      // test message
-      //
-      if ( messagetype == "test" ) {
-        message.str(""); message << "received JSON test message: \"" << jmessage["test"].get<std::string>() << "\"";
-        logwrite( function, message.str() );
-      }
-      else {
-        message.str(""); message << "ERROR received unhandled JSON message type \"" << messagetype << "\"";
-        logwrite( function, message.str() );
-        error = ERROR;
-      }
-    }
-    catch ( const nlohmann::json::parse_error &e ) {
-      message.str(""); message << "ERROR json exception parsing message: " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-    catch ( const std::exception &e ) {
-      message.str(""); message << "ERROR parsing message: " << e.what();
-      logwrite( function, message.str() );
-      error = ERROR;
-    }
-
-    return error;
-  }
-  /***** AstroCam::Interface::handle_json_message *****************************/
 
 
   /***** AstroCam::Interface::do_load_firmware ********************************/
@@ -3752,6 +3602,14 @@ for ( const auto &dev : selectdev ) {
       return( ERROR );
     }
 
+    // Don't remap the DMA buffer while frames are still being written from it.
+    //
+    if ( this->any_writes_pending() ) {
+      logwrite( function, "ERROR: cannot remap DMA buffer while frame write is in progress" );
+      retstring="write_in_progress";
+      return ERROR;
+    }
+
     int dev;
     std::string chan;
 
@@ -3956,7 +3814,7 @@ for ( const auto &dev : selectdev ) {
    *             number of rows to read. Each successive skip picks up where the
    *             last read left off. This makes use of firmware from NGPS / SWIFT
    *             commit 8080c66aeeae5aafccfd861771e5143ec114e81a
-   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1>]
+   * @param[in]  args       string containing <chan>|<dev#> [full|<nskip1> <nread1> ... ]
    * @param[out] retstring  reference to a string for return values
    * @return     ERROR | NO_ERROR | HELP
    *
@@ -3964,7 +3822,6 @@ for ( const auto &dev : selectdev ) {
   long Interface::band_of_interest( std::string args, std::string &retstring ) {
     const std::string function = "AstroCam::Interface::band_of_interest";
     std::stringstream message;
-    std::stringstream cmd;
 
     // Help
     //
@@ -4017,7 +3874,7 @@ for ( const auto &dev : selectdev ) {
     if ( !this->is_camera_idle() ) {
       logwrite( function, "ERROR: all exposure activity must be stopped before changing image parameters" );
       retstring="camera_busy";
-      return( ERROR );
+      return ERROR;
     }
 
     // Get the requested dev# and channel from supplied args.
@@ -4026,172 +3883,274 @@ for ( const auto &dev : selectdev ) {
     //
     int dev=-1;
     std::string chan;
+    bool readonly=false;
     if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
+
+    // If no args beyond chan then retstring is empty so this is a read-only request
+    //
+    if (retstring.empty()) readonly=true;
 
     Controller* pcontroller = this->get_active_controller(dev);
 
     if (!pcontroller) {
       logwrite(function, "ERROR: controller not available for channel "+chan);
+      retstring="invalid_channel";
       return ERROR;
     }
+
+    long error=NO_ERROR;
 
     // "full" will erase the interest band table and restore the IMAGE_SIZE that
     // was specified in the config file
     //
     if ( args.find("full") != std::string::npos ) {
-      pcontroller->info.interest_bands.clear();
-      // This native 3-letter command with three zeros "BOI 0 0 0" will initialize
-      // the Y:NBOXES address which disables band-of-interest skips/reads in the firmware.
-      // It's the 3rd zero that triggers the initialization.
-      //
-      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
-
-      // restore the image size from the config file, which was stored in the class
-      // when the config file was read
-      //
-      int spat_default, spec_default,
-          osspat_default, osspec_default,
-          binspat_default, binspec_default;
-
-      pcontroller->physical_to_logical(pcontroller->defrows, pcontroller->defcols,
-                                       spat_default, spec_default);
-      pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
-                                       osspat_default, osspec_default);
-      pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                       binspat_default, binspec_default);
-
-      cmd.str("");
-      cmd << chan << " "
-          << spat_default << " "
-          << spec_default << " "
-          << osspat_default << " "
-          << osspec_default << " "
-          << binspat_default << " "
-          << binspec_default;
-      if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      error = this->reset_boi_full(pcontroller, dev, chan, retstring);
     }
-    // if the only thing passed-in is the chan, then extract_dev_chan will
-    // return an empty retstring (which means read-only). If not then there
-    // are args to parse...
+
+    // anything else (other than empty) gets parsed and loaded into the BOI table
     //
-    else if ( !retstring.empty() ) {
+    else
+    if (!readonly) {
+      // parse the args into class interest bands vector
+      error = this->parse_boi_pairs(pcontroller, args);
 
-      // Any args(s) other than "full" are parsed here.
-      // I'm expecting pairs of <nskip> <nread> ...
-      //
-      std::vector<std::string> tokens;
-      Tokenize( args, tokens, " " );
+      // load class interest bands vector into controller
+      int boi_spat;
+      if (error==NO_ERROR) error = this->load_boi_pairs(pcontroller, boi_spat);
 
-      // args must come in pairs so check for an even number of tokens
-      // after removing one token for the dev argument
-      //
-      if ( (tokens.size()-1) % 2 != 0 ) {
-        logwrite( function, "ERROR expected pairs of values <nskip> <nread>" );
-        retstring="invalid_argument";
+      // get the logical coordinates
+      int spat, spec, ospat, ospec, bspat, bspec;
+      this->get_logical(pcontroller, spat, spec, ospat, ospec, bspat, bspec);
+
+      // set the new image size, overriding spatial with boi_spat,
+      // overriding overscan spatial with 0
+      if (error==NO_ERROR) error = this->set_image_size(pcontroller,
+                                                        boi_spat, spec,
+                                                        0, ospec,
+                                                        bspat, bspec);
+    }
+
+    // always return the current table
+    //
+    retstring = print_bands_of_interest(pcontroller);
+
+    return error;
+  }
+  /***** AstroCam::Interface::band_of_interest ********************************/
+
+
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
+  /**
+   * @brief      parses the args for nskip,nread pairs and stores them in the class
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  args         expected: <chan>|<dev#> [full|<nskip1> <nread1> ... ]
+   *
+   */
+  long Interface::parse_boi_pairs(Controller* pcontroller, const std::string &args) {
+    const std::string function = "AstroCam::Interface::parse_boi_pairs";
+
+    std::istringstream iss(args);
+    std::vector<std::pair<int,int>> boi_table;
+    int nskip, nread;
+    std::string dummy;
+    iss >> dummy;       // skip the first token which is chan|dev
+
+    // loop through args string, validating and creating a vector of the BOI table
+    // expecting pairs: nskip nread
+    //
+    while (iss >> nskip >> nread) {
+      if (nread <= 0) {
+        logwrite(function, "ERROR nread must be greater than 0");
         return ERROR;
       }
-
-      // initialize the table before writing
-      //
-      pcontroller->info.interest_bands.clear();
-      if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
-
-      // the total number spatial lines in the image will be the sum of all the nreads
-      // which is initialized here and summed in the loop
-      //
-      int spat_total = 0;
-
-      try {
-        // This loops through the tokens (which have already been checked to be
-        // in pairs). It writes each pair to the BOI table in the controller and
-        // places each pair into the vector of interest_bands.
-        //
-        for ( size_t i=1; i<tokens.size(); i+=2 ) {
-          int nskip = std::stoi( tokens.at(i) );
-          int nread = std::stoi( tokens.at(i+1) );
-
-          // must read at least 1 spatial line
-          //
-          if ( nread<=0 ) {
-            logwrite( function, "ERROR nread must be greater than 0" );
-            retstring="invalid_argument";
-            return ERROR;
-          }
-
-          // don't have to skip but it can't be negative
-          //
-          if ( nskip<0 ) {
-            logwrite( function, "ERROR nskip cannot be negative" );
-            retstring="invalid_argument";
-            return ERROR;
-          }
-
-          // Load this interest band into a table on the controller.
-          // Supply a non-zero 3rd value because the 3rd value = 0 is used
-          // to initialize the number of spatial lines in the firmware.
-          //
-          cmd.str(""); cmd << "BOI " << nskip << " " << nread << " " << 0xFFFF;
-          if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-          logwrite( function, "chan "+chan+": "+cmd.str() );
-
-          // add this spatial line to the interest_bands table for this controller
-          //
-          pcontroller->info.interest_bands.emplace_back( nskip, nread );
-
-          // running summation of spatial lines of each band in the table
-          //
-          spat_total += nread;
-        }
-
-        // Before updating the image size, translate the current dimensions (rows/cols)
-        // to logical (spat/spec).
-        //
-        int spec_current, spat_current;
-        pcontroller->physical_to_logical(pcontroller->detrows, pcontroller->detcols,
-                                         spat_current, spec_current);
-
-        int osspat_current, osspec_current;
-        pcontroller->physical_to_logical(pcontroller->osrows, pcontroller->oscols,
-                                         osspat_current, osspec_current);
-
-        int binspat_current, binspec_current;
-        pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                         binspat_current, binspec_current);
-
-        // Now update the image size
-        //
-        cmd.str("");
-        cmd << chan            << " "  // this channel
-            << spat_total      << " "  // new spatial dimension is sum of all bands
-            << spec_current    << " "  // don't change original spectral dimension
-            << 0               << " "  // force no spatial overscans
-            << osspec_current  << " "  // don't change original spectral overscans
-            << binspat_current << " "  // don't change spatial binning
-            << binspec_current;        // don't change spectral binning
-        if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
-      }
-      catch( const std::exception &e ) {
-        message.str(""); message << "ERROR parsing skip/read pairs: " << e.what();
-        logwrite( function, message.str() );
-        retstring="parsing_exception";
+      if (nskip < 0) {
+        logwrite(function, "ERROR nskip cannot be negative");
         return ERROR;
       }
-    } // end if args != full
-
-    // Whether setting boi or not, the retstring contains the list of
-    // interest bands.
-    //
-    retstring.clear();
-    int boinum=0;
-    for ( const auto &[nskip,nread] : pcontroller->info.interest_bands ) {
-      message.str(""); message << ++boinum << ": " << nskip << " " << nread << "\n";
-      retstring.append( message.str() );
+      boi_table.emplace_back(nskip, nread);
     }
-    if ( boinum==0 ) retstring="full";
+    // clear any remaining whitespace from input stream
+    iss >> std::ws;
+
+    // non-int or odd number of values leaves the input stream before EOF
+    if (!iss.eof() || boi_table.empty()) {
+      logwrite( function, "ERROR expected pairs of integer values <nskip> <nread>" );
+      return ERROR;
+    }
+
+    // overwrite class vector on success
+    pcontroller->info.interest_bands = boi_table;
 
     return NO_ERROR;
   }
-  /***** AstroCam::Interface::band_of_interest ********************************/
+  /***** AstroCam::Interface::parse_boi_pairs *********************************/
+
+
+  /***** AstroCam::Interface::load_boi_pairs **********************************/
+  /**
+   * @brief      loads the interest_bands table into the controller, applying binning
+   * @details    This reads from the Information class interest_bands vector,
+   *             adjusts the nskip,nread pairs for binning, and writes them to
+   *             the controller. The BOI table in the controller is re-written and
+   *             the image_size will be updated.
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[out] spat_total   reference to total number of spatial lines (sum of all bands)
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::load_boi_pairs(Controller* pcontroller, int &spat_total) {
+    const std::string function = "AstroCam::Interface::load_boi_pairs";
+
+    auto chan = pcontroller->channel;
+    auto dev  = pcontroller->devnum;
+
+    if (!pcontroller->has_boi()) {
+      logwrite(function, "ERROR chan "+chan+" BOI table empty");
+      return ERROR;
+    }
+
+    // initialize BOI table in controller firmware
+    if ( this->do_native( dev, "BOI 0 0 0" ) != NO_ERROR ) return ERROR;
+
+    // the total number spatial lines in the image will be the sum of all nreads of all bands
+    spat_total = 0;
+
+    // loop through the class interest bands table
+    // adjust nskip,nread for binning and write the adjusted values
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      if (adjust_boi_for_binning(pcontroller, nskip, nread, adj)==ERROR) {
+        logwrite( function, "ERROR BOI too small for current binning");
+        return ERROR;
+      }
+
+      // Load this interest band into a table on the controller.
+      // Firmware requires a non-zero 3rd arg here.
+      std::ostringstream cmd;
+      cmd << "BOI " << adj.first << " " << adj.second << " " << 0xFFFF;
+      if ( this->do_native( dev, cmd.str() ) != NO_ERROR ) return ERROR;
+      logwrite(function, "chan "+chan+": "+cmd.str());
+
+      // running summation of spatial lines of each band in the table
+      spat_total += adj.second;
+    }
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::load_boi_pairs **********************************/
+
+
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
+  /**
+   * @brief      applies binning factor to BOI table in controller
+   * @details    BOI table is in unbinned units. This applies current binning
+   *             factor to ensure band contains an integral number of pixels and
+   *             ends on the requested unbinned pixel. The band is shortened by
+   *             the number of pixels to make it evenly divisible, which are added
+   *             into the skip portion.
+   * @param[in]  pcontroller   pointer to Controller object
+   * @param[in]  nskip         unbinned number to skip
+   * @param[in]  nread         unbinned number to read
+   * @param[out] <nskip,nread> pair adjusted for binning
+   * @return     ERROR|NO_ERROR
+   *
+   */
+  long Interface::adjust_boi_for_binning(Controller* pcontroller,
+                                         int nskip,
+                                         int nread,
+                                         std::pair<int,int> &adj) {
+    const std::string function = "AstroCam::Interface::adjust_boi_for_binning";
+
+    // bands of interest are always in the spatial axis
+    int spat_bin = pcontroller->info.binning[pcontroller->spat_physical_axis()];
+
+    // ensure nread is evenly divisible by binfactor
+    int modulus   = nread % spat_bin;
+
+    // remove the modulus from nread and add it to nskip
+    adj.first  = nskip + modulus;
+    adj.second = nread - modulus;
+
+    return (adj.second > 0 ? NO_ERROR : ERROR);
+  }
+  /***** AstroCam::Interface::adjust_boi_for_binning **************************/
+
+
+  /***** AstroCam::Interface::reset_boi_full **********************************/
+  /**
+   * @brief      erases BOI table and return to full frame defined in the config file
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  dev          dev number
+   * @param[in]  chan         channel for this dev
+   * @param[out] retstring    return string
+   *
+   */
+  long Interface::reset_boi_full(Controller* pcontroller,
+                                 int dev,
+                                 const std::string &chan,
+                                 std::string &retstring) {
+    const std::string function = "AstroCam::Interface::reset_boi_full";
+
+    // erase the vector containing my copy of the BOI table
+    pcontroller->info.interest_bands.clear();
+
+    // This native 3-letter command with three zeros "BOI 0 0 0" will disable
+    // the BOI table in the controller firmware.
+    //
+    if ( this->do_native( dev, "BOI 0 0 0", retstring ) != NO_ERROR ) return ERROR;
+
+    // restore the image size from the config file, which was stored in the class
+    // when the config file was read
+    //
+    int spat_default, spec_default,
+        osspat_default, osspec_default,
+        binspat_default, binspec_default;
+
+    // convert physical coords to logical coords
+    //
+    pcontroller->physical_to_logical(pcontroller->defrows, pcontroller->defcols,
+                                     spat_default, spec_default);
+    pcontroller->physical_to_logical(pcontroller->defosrows, pcontroller->defoscols,
+                                     osspat_default, osspec_default);
+    pcontroller->physical_to_logical(pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
+                                     binspat_default, binspec_default);
+
+    // use logical coords to set the new image size
+    //
+    std::ostringstream cmd;
+    cmd << chan << " "
+        << spat_default << " "
+        << spec_default << " "
+        << osspat_default << " "
+        << osspec_default << " "
+        << binspat_default << " "
+        << binspec_default;
+    if ( this->image_size( cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+
+    return NO_ERROR;
+  }
+  /***** AstroCam::Interface::reset_boi_full **********************************/
+
+
+  /***** AstroCam::Interface::print_bands_of_interest *************************/
+  /**
+   * @brief      returns current BOI table as a string
+   * @param[in]  pcontroller  pointer to Controller object
+   * @return     string
+   *
+   */
+  std::string Interface::print_bands_of_interest(Controller* pcontroller) {
+    if (!pcontroller->has_boi()) return "full";
+    int boinum=0;
+    std::ostringstream oss;
+    for (const auto &[nskip, nread] : pcontroller->info.interest_bands) {
+      std::pair<int,int> adj;
+      adjust_boi_for_binning(pcontroller, nskip, nread, adj);
+      oss << ++boinum << ": " << adj.first << " " << adj.second << "\n";
+    }
+    return oss.str();
+  }
+  /***** AstroCam::Interface::print_bands_of_interest *************************/
 
 
   /***** AstroCam::Interface::set_camera_mode *********************************/
@@ -4356,7 +4315,7 @@ logwrite(function, message.str());
           if (!con.second.active) continue;  // skip inactive controllers
           if ( con.second.in_readout || con.second.in_frametransfer ) message << con.second.channel << " ";
         }
-        this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+        logwrite( function, message.str() );
         return(ERROR);
       }
 
@@ -4545,11 +4504,12 @@ logwrite(function, message.str());
       this->camera.shutter.set_close();                    // close shutter
       timespec timenow = Time::getTimeNow();               // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
-      this->camera.async.enqueue_and_log( function, "NOTICE:shutter closed at "+timestring );
+      this->broadcast.notice( function, "shutter closed at "+timestring );
     }
 
     logwrite( function, "exposure paused" );
 
+    this->state_monitor_condition.notify_all();
     return NO_ERROR;
   }
   /***** AstroCam::Interface::pause_exposure **********************************/
@@ -4580,11 +4540,12 @@ logwrite(function, message.str());
     if ( this->camera.shutter.is_enabled ) {
       timespec timenow = Time::getTimeNow();               // get the time NOW
       std::string timestring = timestamp_from( timenow );  // format that time as YYYY-MM-DDTHH:MM:SS.sss
-      this->camera.async.enqueue_and_log( function, "NOTICE:shutter opened at "+timestring );
+      this->broadcast.notice( function, "shutter opened at "+timestring );
     }
 
     logwrite( function, "exposure resumed" );
 
+    this->state_monitor_condition.notify_all();
     return NO_ERROR;
   }
   /***** AstroCam::Interface::resume_exposure *********************************/
@@ -4801,7 +4762,7 @@ logwrite(function, message.str());
    * @return     ERROR | NO_ERROR | HELP
    *
    */
-  long Interface::image_size( std::string args, std::string &retstring, const bool save_as_default ) {
+  long Interface::image_size( std::string args, std::string &retstring ) {
     const std::string function("AstroCam::Interface::image_size");
     std::ostringstream message;
 
@@ -4820,7 +4781,6 @@ logwrite(function, message.str());
       retstring.append( "  Camera controller connection must first be open.\n" );
       retstring.append( "  If no args are supplied then the current parameters for dev|chan are returned.\n" );
       retstring.append( "  Specify <chan> from { " );
-      message.str("");
       for ( const auto &con : this->controller ) {
         // skip unconfigured and inactive controllers
         if (!con.second.configured || !con.second.active) continue;
@@ -4854,13 +4814,14 @@ logwrite(function, message.str());
     //
     int dev=-1;
     std::string chan;
+    bool readonly=false;
     if ( this->extract_dev_chan( args, dev, chan, retstring ) != NO_ERROR ) return ERROR;
 
-    // retstring now should contain [ ROWS COLS OSROWS OSCOLS BINROWS BINCOLS ]
-    // It can contain 0 or 6 tokens.
+    // If no args beyond chan then retstring is empty so this is a read-only request
     //
-    std::vector<std::string> tokens;
-    Tokenize( retstring, tokens, " " );
+    if (retstring.empty()) readonly=true;
+
+    std::istringstream iss(retstring);
 
     // Just need to get a configured controller here,
     // it doesn't need to be active or connected at this stage.
@@ -4871,88 +4832,143 @@ logwrite(function, message.str());
 
     if (!pcontroller) {
       logwrite(function, "ERROR: controller not available for channel "+chan);
+      retstring="invalid_channel";
       return ERROR;
     }
 
     int spat=-1, spec=-1, osspat=-1, osspec=-1, binspat=-1, binspec=-1;
-    // start by loading the values in the class
-    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                      binspat, binspec );
 
     // no args returns current settings only
     //
-    if (tokens.empty()) {
-      message.str(""); message << "spat spec osspat osspec binspat binspec = ";
+    if (readonly) {
+      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+      message << "spat spec osspat osspec binspat binspec = ";
       message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
               << ( pcontroller->connected ? "" : " [inactive]" );
       logwrite( function, message.str() );
       retstring = message.str();
       return NO_ERROR;
     }
-    else
 
-    // tokens not empty, first tok is "init" will use the values in the class
-    if (tokens[0]=="init") {
-      // use the values from the class gotten above
+    // if init requested then image size comes from the class
+    if (args.find("init") != std::string::npos) {
+      this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
     }
+    // otherwise parse the input stream
     else
-
-    // check for complete set of args
-    if (tokens.size()==6) {
-      try {
-        spat    = std::stoi( tokens.at(0) );
-        spec    = std::stoi( tokens.at(1) );
-        osspat  = std::stoi( tokens.at(2) );
-        osspec  = std::stoi( tokens.at(3) );
-        binspat = std::stoi( tokens.at(4) );
-        binspec = std::stoi( tokens.at(5) );
-      }
-      catch (const std::exception &e ) {
-        logwrite(function, "ERROR parsing \"" + retstring + "\": " + std::string(e.what()));
-        retstring="invalid_argument";
-        return ERROR;
-      }
-    }
-    else {
+    if (!(iss >> spat >> spec >> osspat >> osspec >> binspat >> binspec)) {
       logwrite(function,
-          "ERROR invalid number of arguments. expected <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
+        "ERROR invalid arguments '"+retstring+"':  expected integer <spat> <spec> <osspat> <osspec> <binspat> <binspec>");
       retstring="invalid_argument";
       return ERROR;
     }
 
-    // If we got here then spat,spec,etc. have been set,
-    // either from the class or the supplied arg list
-
     // Check image size
-    //
     if ( spat<1 || spec<1 || osspat<0 || osspec<0 || binspat<1 || binspec<1 ) {
-      message.str(""); message << "ERROR invalid image size " << spat << " " << spec << " "
-                               << osspat << " " << osspec << " " << binspat << " " << binspec;
+      message << "ERROR invalid image size " << spat << " " << spec << " "
+              << osspat << " " << osspec << " " << binspat << " " << binspec;
       logwrite( function, message.str() );
       retstring="invalid_argument";
-      return( ERROR );
+      return ERROR;
     }
 
+    // set image size
+    //
+    long error = this->set_image_size(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+
+    // Return the physical values stored in the class as logical (spat/spec)
+    //
+    this->get_logical(pcontroller, spat, spec, osspat, osspec, binspat, binspec);
+    message << "spat spec osspat osspec binspat binspec = ";
+    message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
+            << ( pcontroller->connected ? "" : " [inactive]" );
+    logwrite( function, message.str() );
+    retstring = message.str();
+    return error;
+  }
+  /***** AstroCam::Interface::image_size **************************************/
+
+
+  /***** AstroCam::Interface::set_image_size **********************************/
+  /**
+   * @brief      set image size parameters and allocate PCI memory
+   * @details    Sets ROWS COLS OSROWS OSCOLS BINROWS BINCOLS for a
+   *             given device|channel. This calls geometry() and buffer() to
+   *             set the image geometry on the controller and allocate a PCI buffer.
+   *             For internal use.
+   * @param[in]  pcontroller  pointer to Controller object
+   * @param[in]  spat         spatial pixel dimension
+   * @param[in]  spec         spectral pixel dimension
+   * @param[in]  osspat       spatial overscans
+   * @param[in]  osspec       spectral overscans
+   * @param[in]  binspat      spatial binning factor
+   * @param[in]  binspec      spectral binning factor
+   * @return     ERROR | NO_ERROR
+   *
+   */
+  long Interface::set_image_size(Controller* pcontroller,
+                                 int spat,    int spec,
+                                 int osspat,  int osspec,
+                                 int binspat, int binspec) {
+    const std::string function("AstroCam::Interface::set_image_size");
+    std::ostringstream message;
+
+    // If binned by a non-evenly-divisible factor then skip modulo that
+    // many at the start. These will be removed from the image.
+    //
+    int skipspat = spat % binspat;
+    int skipspec = spec % binspec;
+
+    // But this does not apply to BOI because Interface::band_of_interest
+    // automatically adjusts the skip for each band to accommodate
+    // non-integral binning.
+    //
+    if (pcontroller->has_boi()) { skipspat = 0; }
+
+    // Capture the unbinned, unskipped detector dimensions before trimming
+    // so that detrows/detcols remain the full requested size across
+    // repeated bin commands. These are preserved even when the per-call
+    // geometry is shortened by the skip-modulo adjustment below.
+    //
+    int detrows_new, detcols_new;
+    pcontroller->logical_to_physical(spat, spec, detrows_new, detcols_new);
+
+    // Capture the original requested overscan in physical (row/col) form
+    // before any modulo-binning trim below, so that osrows0/oscols0 retain
+    // the true requested overscan across repeated bin commands.
+    //
+    int osrows0_new, oscols0_new;
+    pcontroller->logical_to_physical(osspat, osspec, osrows0_new, oscols0_new);
+
+    // Remove those skipped pixels from the image size
+    spat -= skipspat;
+    spec -= skipspec;
+
+    // adjust overscans for binning
+    osspat -= ( osspat % binspat );
+    osspec -= ( osspec % binspec );
+
+    // negative overscan is non-sensical
+    if (osspat < 0) osspat=0;
+    if (osspec < 0) osspec=0;
+
     // Translate supplied (logical) to physical (row/col) coordinates
-    int rows, cols, osrows, oscols, binrows, bincols;
+    int rows, cols, osrows, oscols, binrows, bincols, skiprows, skipcols;
     pcontroller->logical_to_physical(spat, spec, rows, cols);
     pcontroller->logical_to_physical(osspat, osspec, osrows, oscols);
     pcontroller->logical_to_physical(binspat, binspec, binrows, bincols);
-
-//  message.str(""); message << "[DEBUG] input imsize: " << rows << " " << cols << " "
-//                           << osrows << " " << oscols << " " << binrows << " " << bincols;
-//  logwrite( function, message.str() );
+    pcontroller->logical_to_physical(skipspat, skipspec, skiprows, skipcols);
 
     // Store the geometry in the class. This is the new detector geometry,
     // unchanged by binning, so that when reverting to binning=1 from some
     // binnnig factor, this is the default image size to revert to.
     //
-    pcontroller->detrows = rows;
-    pcontroller->detcols = cols;
-    pcontroller->osrows0 = osrows;
-    pcontroller->oscols0 = oscols;
+    pcontroller->detrows = detrows_new;
+    pcontroller->detcols = detcols_new;
+    pcontroller->osrows0 = osrows0_new;
+    pcontroller->oscols0 = oscols0_new;
+    pcontroller->skipcols = skipcols;
+    pcontroller->skiprows = skiprows;
 
     // Binning is the same for all devices so it's stored in the camera info class.
     //
@@ -4963,30 +4979,6 @@ logwrite(function, message.str());
     //
     pcontroller->info.binning[_ROW_] = binrows;
     pcontroller->info.binning[_COL_] = bincols;
-
-    // If binned by a non-evenly-divisible factor then skip modulo that
-    // many at the start. These will be removed from the image.
-    //
-    pcontroller->skipcols = cols % bincols;
-    pcontroller->skiprows = rows % binrows;
-
-//  message.str(""); message << "[DEBUG] skipcols=" << this->controller.at(dev).skipcols << " skiprows=" << this->controller.at(dev).skiprows;
-//  logwrite( function, message.str() );
-
-    cols -= pcontroller->skipcols;
-    rows -= pcontroller->skiprows;
-
-//  message.str(""); message << "[DEBUG] cols=" << cols << " rows=" << rows;
-//  logwrite( function, message.str() );
-
-    // Adjust the number of overscans to make them evenly divisible
-    // by the binning factor.
-    //
-    oscols -= ( oscols % bincols );
-    osrows -= ( osrows % binrows );
-
-//  message.str(""); message << "[DEBUG] oscols=" << oscols << " osrows=" << osrows;
-//  logwrite( function, message.str() );
 
     // Now that the rows/cols and osrows/oscols have been adjusted for
     // binning, store them in the class as detector_pixels for this controller.
@@ -5018,9 +5010,9 @@ logwrite(function, message.str());
     // the PCI buffer with buffer().
     //
     if ( pcontroller->info.set_axes() != NO_ERROR ) {
-      message.str(""); message << "ERROR setting axes for device " << dev;
-      this->camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
-      return( ERROR );
+      message << "ERROR setting axes for chan " << pcontroller->channel;
+      logwrite( function, message.str() );
+      return ERROR;
     }
 
     // because set_axes() doesn't scale overscan
@@ -5033,18 +5025,6 @@ logwrite(function, message.str());
     pcontroller->osrows = osrows;
     pcontroller->oscols = oscols;
 
-    // if requested, store the imsize values as a string in the class for default recovery
-    //
-    if ( save_as_default ) {
-      message.str(""); message << rows << " " << cols << " " << osrows << " " << oscols << " " << binrows << " " << bincols;
-      pcontroller->imsize_args = message.str();
-      pcontroller->defrows = rows;
-      pcontroller->defcols = cols;
-      pcontroller->defosrows = osrows;
-      pcontroller->defoscols = oscols;
-      logwrite( function, "saved as default for chan "+chan+": "+message.str() );
-    }
-
     // This is as far as we can get without a connected controller.
     // If not connected then all we've done is save this info to the class,
     // which will be used after the controller is connected.
@@ -5055,7 +5035,7 @@ logwrite(function, message.str());
       //
       std::stringstream geostring;
       std::string retstring;
-      geostring << dev << " "
+      geostring << pcontroller->devnum << " "
                 << pcontroller->info.axes[_ROW_] << " "
                 << pcontroller->info.axes[_COL_];
 
@@ -5065,8 +5045,8 @@ logwrite(function, message.str());
 //    logwrite( function, message.str() );
 
       if ( this->buffer( geostring.str(), retstring ) != NO_ERROR ) {
-        message.str(""); message << "ERROR: allocating buffer for chan " << pcontroller->channel
-                                 << " " << pcontroller->devname;
+        message << "ERROR allocating buffer for chan " << pcontroller->channel
+                << " " << pcontroller->devname;
         logwrite( function, message.str() );
         return ERROR;
       }
@@ -5075,7 +5055,7 @@ logwrite(function, message.str());
 //    logwrite(function, message.str());
 
       if ( this->do_geometry( geostring.str(), retstring ) != NO_ERROR ) {
-        message.str(""); message << "ERROR: setting geometry for chan " << pcontroller->channel;
+        message << "ERROR setting geometry for chan " << pcontroller->channel;
         logwrite( function, message.str() );
         return ERROR;
       }
@@ -5089,39 +5069,21 @@ logwrite(function, message.str());
           << pcontroller->skiprows << " "
           << pcontroller->info.binning[_COL_] << " "
           << pcontroller->skipcols;
-      if ( this->do_native( dev, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
+      if ( this->do_native( pcontroller->devnum, cmd.str(), retstring ) != NO_ERROR ) return ERROR;
 
       // finally can set this
       pcontroller->is_imsize_set = true;
     }
     else {
-      message.str(""); message << "saved but not sent to controller because chan " << pcontroller->channel
-                               << (!pcontroller->connected ? " not connected ":"")
-                               << (!pcontroller->firmwareloaded ? " firmware not loaded" :"");
+      message << "saved but not sent to controller because chan " << pcontroller->channel
+              << (!pcontroller->connected ? " not connected ":"")
+              << (!pcontroller->firmwareloaded ? " firmware not loaded" :"");
       logwrite( function, message.str() );
     }
 
-    // Return the physical values stored in the class as logical (spat/spec)
-    //
-    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
-    pcontroller->physical_to_logical( pcontroller->osrows, pcontroller->oscols, osspat, osspec );
-    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
-                                      binspat, binspec );
-
-    message.str(""); message << "spat spec osspat osspec binspat binspec = ";
-    message << spat << " " << spec << " " << osspat << " " << osspec << " " << binspat << " " << binspec
-            << ( pcontroller->connected ? "" : " [inactive]" );
-    logwrite( function, message.str() );
-
-    retstring = message.str();
-
-    message.str(""); message << "[DEBUG] physical rows=" << pcontroller->detrows
-                             << " cols=" << pcontroller->detcols;
-    logwrite( function, message.str() );
-
-    return( NO_ERROR );
+    return NO_ERROR;
   }
-  /***** AstroCam::Interface::image_size **************************************/
+  /***** AstroCam::Interface::set_image_size **********************************/
 
 
   /***** AstroCam::Interface::do_geometry *************************************/
@@ -5338,14 +5300,14 @@ logwrite(function, message.str());
       server.state_monitor_condition.notify_all();
 #ifdef LOGLEVEL_DEBUG
       message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller.at(devnum).channel << " exposure_pending=false";
-      server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+      logwrite( function, message.str() );
 #endif
     }
     server.controller.at(devnum).in_readout = false;
     server.state_monitor_condition.notify_all();
 #ifdef LOGLEVEL_DEBUG
     message.str(""); message << "[DEBUG] dev " << devnum << " chan " << server.controller.at(devnum).channel << " in_readout=false";
-    server.camera.async.enqueue_and_log( "CAMERAD", function, message.str() );
+    logwrite( function, message.str() );
 #endif
 
     server.controller.at(devnum).frameinfo[fpbcount].tid    = fpbcount;  // create this index in the .frameinfo[] map
@@ -5487,7 +5449,7 @@ logwrite(function, message.str());
     while ( interface.writes_pending[ expbuf ].size() > 0 ) {
       std::unique_lock<std::mutex> write_lock( interface.write_lock );
 
-      message.str(""); message << "NOTICE:exposure buffer " << expbuf << " waiting for frames from ";
+      message.str(""); message << "exposure buffer " << expbuf << " waiting for frames from ";
       std::vector<int> pending = interface.writes_pending[ expbuf ];
       for ( const auto &dev : pending ) message << interface.controller.at(dev).channel << " ";
       logwrite( function, message.str() );
@@ -5501,7 +5463,7 @@ logwrite(function, message.str());
       interface.write_condition.wait( write_lock, [&] { return !(interface.writes_pending[ expbuf ].size()>0); } );
     }
 
-    message.str(""); message << "NOTICE:all frames "
+    message.str(""); message << "all frames "
                              << ( interface.camera.get_abortstate() ? "aborted" : "written" )
                              << " for exposure buffer " << expbuf;
     logwrite( function, message.str() );
@@ -5736,6 +5698,30 @@ logwrite(function, message.str());
   /***** AstroCam::Interface::init_framethread_count **************************/
 
 
+  /***** AstroCam::Interface::get_logical *************************************/
+  /**
+   * @brief      return the class physical coords in logical coords
+   * @details    This is for internal use.
+   * @param[in]  pcontroller pointer to Controller object
+   * @param[out] spat        reference to spat
+   * @param[out] spec        reference to spec
+   * @param[out] osspat      reference to osspat
+   * @param[out] osspec      reference to osspec
+   * @param[out] binspat     reference to binspat
+   * @param[out] binspec     reference to binspec
+   *
+   */
+  void Interface::get_logical(Controller* pcontroller,
+                              int &spat, int &spec, int &osspat, int &osspec, int &binspat, int &binspec) {
+    if (!pcontroller) return;
+    pcontroller->physical_to_logical( pcontroller->detrows, pcontroller->detcols, spat, spec );
+    pcontroller->physical_to_logical( pcontroller->osrows0, pcontroller->oscols0, osspat, osspec );
+    pcontroller->physical_to_logical( pcontroller->info.binning[_ROW_], pcontroller->info.binning[_COL_],
+                                      binspat, binspec );
+  }
+  /***** AstroCam::Interface::get_logical *************************************/
+
+
   /***** AstroCam::Interface::Controller::logical_to_physical *****************/
   /**
    * @brief      translates logical (spat,spec) to physical (rows,cols)
@@ -5894,7 +5880,7 @@ logwrite(function, message.str());
 
     int nthreads = cores_available();
     nthreads=2;  ///< TODO @todo need to optimize this for number of cores
-    server.camera.async.enqueue_and_log( "CAMERAD", function, "NOTICE: override nthreads=2 !!!" );
+    logwrite( function, "override nthreads=2 !!!" );
 
 #ifdef LOGLEVEL_DEBUG
     message << "[DEBUG] devnum=" << this->devnum << " nthreads=" << nthreads << " imbuf=" << std::hex << imbuf << " workbuf=" << std::hex << this->workbuf
@@ -6037,7 +6023,6 @@ logwrite(function, message.str());
       retstring = CAMERAD_TEST;
       retstring.append( "\n" );
       retstring.append( "  Test Routines\n" );
-      retstring.append( "   async [ ? | <message> ]\n" );
       retstring.append( "   bw [ ? ]\n" );
       retstring.append( "   fitsname [ ? ]\n" );
       retstring.append( "   frametransfer ? | R | I | U | G \n" );
@@ -6088,45 +6073,14 @@ logwrite(function, message.str());
       if ( this->active_devnums.size() > 1 ) {
         for (const auto &dev : this->active_devnums) {
           this->camera.get_fitsname( std::to_string(dev), msg );     // get the fitsname (by reference)
-          this->camera.async.enqueue( msg );                         // queue the fitsname
-          logwrite( function, msg );                                 // log ths fitsname
+          this->broadcast.notice( function, msg );                   // broadcast/log ths fitsname
         }
       }
       else {
         this->camera.get_fitsname( msg );                            // get the fitsname (by reference)
-        this->camera.async.enqueue( msg );                           // queue the fitsname
-        logwrite( function, msg );                                   // log ths fitsname
+        this->broadcast.notice( function, msg );                     // broadcast/log ths fitsname
       }
     } // end if (testname == fitsname)
-    else
-
-    // ----------------------------------------------------
-    // async [message]
-    // ----------------------------------------------------
-    // queue an asynchronous message
-    // The [message] param is optional. If not provided then "test" is queued.
-    //
-    if (testname == "async") {
-      if ( tokens.size() > 1 && tokens[1] == "?" ) {                              // help
-        retstring = CAMERAD_TEST;
-        retstring.append( " async [ <message > ]\n" );
-        retstring.append( "  Queue an async broadcast message. If no <message> provided,\n" );
-        retstring.append( "  then \"test\" will be queued. Use double-quotes to send\n" );
-        retstring.append( "  compound message strings.\n" );
-        return HELP;
-      }
-      if (tokens.size() > 1) {
-        if (tokens.size() > 2) {
-          logwrite(function, "NOTICE: received multiple strings -- only the first will be queued");
-        }
-        logwrite( function, tokens[1] );
-        this->camera.async.enqueue( tokens[1] );
-      }
-      else {                                // if no string passed then queue a simple test message
-        logwrite(function, "test");
-        this->camera.async.enqueue("test");
-      }
-    } // end if (testname == async)
     else
 
     // ----------------------------------------------------
@@ -6403,7 +6357,7 @@ logwrite(function, message.str());
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
-      message.str(""); message << "can_expose=" << ( this->can_expose.load() ? "true" : "false" );
+      message.str(""); message << "can_expose=" << ( this->status.can_expose.load() ? "true" : "false" );
       logwrite( function, message.str() );
       retstring.append( message.str() ); retstring.append( "\n" );
 
@@ -6546,88 +6500,11 @@ logwrite(function, message.str());
     }
     else
     // ----------------------------------------------------
-    // telem
-    // ----------------------------------------------------
-    // test sending the telem command
-    //
-    if ( testname == "telem" ) {
-      if ( tokens.size() < 2 ) {
-        logwrite( function, "ERROR expected an argument" );
-        retstring="invalid_argument";
-        return ERROR;
-      }
-
-      if ( tokens[1] == "?" || tokens[1] == "help" ) {
-        retstring = CAMERAD_TEST;
-        retstring.append( " telem collect | test | calibd | flexured | focusd | tcsd\n" );
-        retstring.append( "  collect   collects telemetry from all daemons\n" );
-        retstring.append( "  test      sends a test JSON message back to myself (camerad)\n" );
-        retstring.append( "  <xxx>     all other args collect telemetry from named daemon only\n" );
-        return HELP;
-      }
-
-      if ( tokens[1] == "collect" ) {
-        this->collect_telemetry();
-        return NO_ERROR;
-      }
-
-      Common::DaemonClient jclient("", "\n", JEOF );
-
-      if ( tokens[1]=="calibd" ) {
-        jclient.set_name("calibd");
-        jclient.set_port(9101);
-        jclient.connect();
-        jclient.command(TELEMREQUEST, retstring);
-        jclient.disconnect();
-      }
-      else
-      if ( tokens[1]=="flexured" ) {
-        jclient.set_name("flexured");
-        jclient.set_port(9103);
-        jclient.connect();
-        jclient.command(TELEMREQUEST, retstring);
-        jclient.disconnect();
-      }
-      else
-      if ( tokens[1]=="focusd" ) {
-        jclient.set_name("focusd");
-        jclient.set_port(9104);
-        jclient.connect();
-        jclient.command(TELEMREQUEST, retstring);
-        jclient.disconnect();
-      }
-      else
-      if ( tokens[1]=="tcsd" ) {
-        jclient.set_name("tcsd");
-        jclient.set_port(9107);
-        jclient.connect();
-        jclient.command(TELEMREQUEST, retstring);
-        jclient.disconnect();
-      }
-      else
-      if ( tokens[1]=="test" ) {
-        nlohmann::json jmessage;
-        jmessage["messagetype"] = "test";
-        jmessage["test"]  = "Hello, world!";
-        logwrite( function, "returning JSON test message" );
-        retstring = jmessage.dump();
-      }
-      else {
-        jclient.set_name("camerd");
-        jclient.set_port(server.nbport);
-        jclient.connect();
-        jclient.command("test json test", retstring);
-        jclient.disconnect();
-      }
-      this->handle_json_message( retstring );
-    }
-    else
-    // ----------------------------------------------------
     // isready
     // ----------------------------------------------------
     // am I ready for an exposure?
     if (testname=="canexpose") {
-      retstring=(this->can_expose?"yes":"no");
+      retstring=(this->status.can_expose?"yes":"no");
       logwrite(function, retstring);
       return NO_ERROR;
     }

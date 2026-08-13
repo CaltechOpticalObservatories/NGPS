@@ -137,7 +137,7 @@ namespace Network {
 
     // now that there is a group and port, create the socket
     //
-    if ( (this->fd = socket(AF_INET, SOCK_DGRAM, 0)) == -1 ) {
+    if ( (this->fd = socket(AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0)) == -1 ) {
       errstm << "error " << errno << " creating socket: " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
@@ -240,7 +240,7 @@ namespace Network {
 
     // now that there is a group and port, create the socket
     //
-    if ( ( this->fd = socket( AF_INET, SOCK_DGRAM, 0 ) ) < 0 ) {
+    if ( ( this->fd = socket( AF_INET, SOCK_DGRAM | SOCK_CLOEXEC, 0 ) ) < 0 ) {
       message << "error " << errno << " creating socket: " << strerror( errno );
       logwrite(function, message.str());
       return(-1);
@@ -474,7 +474,7 @@ namespace Network {
     asyncflag = obj.asyncflag;
     totime = obj.totime;
     id = obj.id;
-    fd = obj.fd;
+    fd = obj.fd.load();
     listenfd = obj.listenfd;
     host = obj.host;
     connection_open = obj.connection_open;
@@ -524,6 +524,37 @@ namespace Network {
   /***** Network::TcpSocket::TcpSocket ****************************************/
 
 
+  /***** Network::TcpSocket::operator= ****************************************/
+  /**
+   * @brief      TcpSocket copy-assignment operator
+   * @param[in]  obj  reference to class object
+   * @return     reference to this object
+   *
+   * Memberwise copy, matching the implicitly-generated operator that existed
+   * before fd became std::atomic<int> (which deletes the implicit one). The
+   * only difference is fd is loaded from the source atomic. addrs is copied
+   * shallowly, exactly as before; assignment is only used to (re)seed a fresh
+   * pre-Connect client socket, where addrs is null.
+   *
+   */
+  TcpSocket& TcpSocket::operator=( const TcpSocket &obj ) {
+    if ( this != &obj ) {
+      port = obj.port;
+      blocking = obj.blocking;
+      asyncflag = obj.asyncflag;
+      totime = obj.totime;
+      id = obj.id;
+      fd = obj.fd.load();
+      listenfd = obj.listenfd;
+      host = obj.host;
+      connection_open = obj.connection_open;
+      addrs = obj.addrs;
+    }
+    return *this;
+  }
+  /***** Network::TcpSocket::operator= ****************************************/
+
+
   /***** Network::TcpSocket::Accept *******************************************/
   /**
    * @brief      creates a new connected socket for pending connection
@@ -532,10 +563,15 @@ namespace Network {
    * Create new listening socket for pending connection on this->listenfd
    * and returns a new connected socket this->fd
    *
+   * accept4() with SOCK_CLOEXEC is used here rather than accept() because a
+   * descriptor from accept() never inherits close-on-exec from the listening
+   * socket, and setting it afterwards would leave a window in which a fork
+   * from another thread could inherit the connection.
+   *
    */
   int TcpSocket::Accept() {
     this->clilen = (socklen_t)sizeof(this->cliaddr);
-    this->fd = accept(this->listenfd, (struct sockaddr *) &this->cliaddr, &this->clilen);
+    this->fd = accept4(this->listenfd, (struct sockaddr *) &this->cliaddr, &this->clilen, SOCK_CLOEXEC);
     if (this->fd < 0) { perror("(Network::TcpSocket::Accept) error calling accept"); return -1; }
     return (this->fd);
   }
@@ -555,9 +591,11 @@ namespace Network {
     std::string function = "Network::TcpSocket::Listen";
     std::stringstream errstm;
 
-    // create the socket
+    // create the socket, close-on-exec so that a process spawned by this one
+    // (E.G. Sequencer::Sequence::daemon_restart) cannot inherit the listening
+    // port and hold it after this process exits
     //
-    if ( (this->listenfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1 ) {
+    if ( (this->listenfd = socket(PF_INET, SOCK_STREAM | SOCK_CLOEXEC, IPPROTO_TCP)) == -1 ) {
       errstm << "error " << errno << " creating socket: " << strerror(errno);
       logwrite(function, errstm.str());
       return(-1);
@@ -700,7 +738,7 @@ namespace Network {
     for (struct addrinfo *sa = this->addrs; sa != NULL; sa = sa->ai_next) {
       // create the socket, which returns a file descriptor on success
       //
-      this->fd = socket(sa->ai_family, sa->ai_socktype, sa->ai_protocol);
+      this->fd = socket(sa->ai_family, sa->ai_socktype | SOCK_CLOEXEC, sa->ai_protocol);
 
       if (this->fd == -1) continue;    // try another entry in the sock addr struct
 
@@ -745,17 +783,23 @@ namespace Network {
     std::stringstream message;
     int error = -1;
 
-    if (this->fd >= 0) {               // if the file descriptor is valid
-      if (close(this->fd) == 0) {      // then close it
+    // Atomically claim the fd and reset it to -1 in one step, so that if two
+    // threads share this socket object only one of them ever calls close() on
+    // the descriptor. The loser sees -1 and no-ops, which prevents a double
+    // close() from closing an unrelated fd that the kernel has since recycled.
+    //
+    int closefd = this->fd.exchange( -1 );
+
+    if (closefd >= 0) {                // if the file descriptor was valid
+      if (close(closefd) == 0) {       // then close it
 #ifdef LOGLEVEL_DEBUG
-//      message.str(""); message << "[DEBUG] connection to " << this->host << ":" << this->port << " on fd " << this->fd << " closed";
-//      logwrite( function, message.str() );
+        message.str(""); message << "[DEBUG] connection to " << this->host << "/" << this->port << " on fd " << closefd << " closed";
+        logwrite( function, message.str() );
 #endif
         error = 0;
-        this->fd = -1;
       }
       else {
-        message.str(""); message << "ERROR closing fd " << this->fd << " on port " << this->port
+        message.str(""); message << "ERROR closing fd " << closefd << " on port " << this->port
                                  << " returned " << errno << ": " << strerror(errno);
         logwrite( function, message.str() );
         error = -1;                    // error closing file descriptor
@@ -928,10 +972,9 @@ namespace Network {
         return -1;                       // indicates error
       }
       if ( nread == 0 ) {
-#ifdef LOGLEVEL_DEBUG
-        message << "[DEBUG] no data on socket " << this->host << ":" << this->port << " fd " << this->fd << ". closing connection";
+        message.str(""); message << "peer closed connection (EOF) on fd " << this->fd
+                                 << " for " << this->host << "/" << this->port << "; closing";
         logwrite( function, message.str() );
-#endif
         this->Close();
         return 0;                        // not an error
       }
@@ -1000,8 +1043,10 @@ namespace Network {
         break;
       }
       if ( nread == 0 ) {
-        message << "ERROR no data from socket " << this->host << ":" << this->port << " on fd " << this->fd << ": closing connection";
+#ifdef LOGLEVEL_DEBUG
+        message << "[DEBUG] no data from socket " << this->host << "/" << this->port << " on fd " << this->fd << ": closing connection";
         logwrite( function, message.str() );
+#endif
         this->Close();
         break;
       }

@@ -153,10 +153,12 @@ long init_log( std::string logpath, std::string name, bool stderr_in ) {
  *
  */
 void close_log() {
+  std::lock_guard<std::mutex> lock(loglock);     // lock mutex to protect from concurrent logwrite()
   if (filestream.is_open() == true) {
     std::cerr << std::flush;
     filestream.flush();
     filestream.close();
+    filestream.clear();                          // drop any sticky failbit/badbit so the next open() is usable
   }
 }
 /***** close_log **************************************************************/

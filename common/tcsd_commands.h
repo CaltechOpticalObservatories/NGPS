@@ -20,12 +20,14 @@ const std::string TCSD_GET_OFFSETS = "getoffsets";
 const std::string TCSD_GET_PA = "getpa";
 const std::string TCSD_GET_NAME = "getname";
 const std::string TCSD_ISOPEN = "isopen";
+const std::string TCSD_LAMP = "lamp";
 const std::string TCSD_LIST = "list";
 const std::string TCSD_LLIST = "llist";
 const std::string TCSD_NATIVE = "native";
 const std::string TCSD_OFFSETRATE = "offsetrate";
 const std::string TCSD_OPEN = "open";
 const std::string TCSD_PTOFFSET = "offset";
+const std::string TCSD_PUBLISHSTATE = "publishstate";
 const std::string TCSD_RETOFFSETS = "retoffsets";
 const std::string TCSD_RINGGO = "ringgo";
 const std::string TCSD_SET_FOCUS = "setfocus";
@@ -45,16 +47,17 @@ const std::vector<std::string> TCSD_SYNTAX = {
                                                TCSD_GET_PA+" [ ? ]",
                                                TCSD_GET_NAME+" [ ? ]",
                                                TCSD_ISOPEN+" [ ? ]",
+                                               TCSD_LAMP+" ? | <lamp> [on|off]",
                                                TCSD_LIST+" [ ? ]",
                                                TCSD_LLIST+" [ ? ]",
                                                TCSD_NATIVE+" ? | <cmd>",
                                                TCSD_OFFSETRATE+" [ ? | <raoff> <decoff> ]",
                                                TCSD_OPEN+" ? | <name>",
                                                TCSD_PTOFFSET+" ? | <ra> <dec>",
+                                               TCSD_PUBLISHSTATE+" ? | on | off",
                                                TCSD_RETOFFSETS+" [ ? ]",
                                                TCSD_RINGGO+" ? | <angle>",
                                                TCSD_SET_FOCUS+" ? | <value>",
-                                               TELEMREQUEST+" [ ? ]",
                                                TCSD_WEATHER_COORDS+" [ ? ]",
                                                TCSD_ZERO_OFFSETS+" [ ? ]"
                                              };

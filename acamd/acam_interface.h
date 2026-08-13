@@ -24,6 +24,7 @@
 #include "tcsd_client.h"
 #include "skyinfo.h"
 #include "database.h"
+#include "message_keys.h"
 
 #ifdef ANDORSIM
 #include "andorsim.h"
@@ -350,6 +351,7 @@ namespace Acam {
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
 
       double tcs_max_offset;
+      double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for a deliberate goal offset (put-on-slit etc.) applied while guiding; defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
 
       double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
@@ -358,6 +360,7 @@ namespace Acam {
 
       std::vector<double> ra_offs, dec_offs;          ///< lists of offsets for median filtering
       std::vector<std::chrono::steady_clock::time_point> time_offs;
+      std::mutex offset_params_mtx;                   ///< guards ra_offs/dec_offs/time_offs (median_filter vs reset_offset_params)
       std::chrono::seconds::rep tcs_offset_period;    ///< period at which to send offsets while guiding
 
       struct coords_t {
@@ -377,6 +380,7 @@ namespace Acam {
 
       inline std::chrono::seconds::rep get_tcs_offset_period() { return this->tcs_offset_period; }
       inline void reset_offset_params(std::chrono::seconds::rep val) {
+        std::lock_guard<std::mutex> lock(this->offset_params_mtx);  // P2: serialize vs median_filter
         this->ra_offs.clear();
         this->dec_offs.clear();
         this->time_offs.clear();
@@ -411,6 +415,16 @@ namespace Acam {
       }
 
       inline double get_tcs_max_offset() { return this->tcs_max_offset; }
+
+      inline long set_tcs_max_putonslit_offset( const double _offset ) {
+        if ( std::isnan( _offset ) || _offset <= 0 ) return ERROR;
+        else {
+          this->tcs_max_putonslit_offset = _offset;
+          return NO_ERROR;
+        }
+      }
+
+      inline double get_tcs_max_putonslit_offset() { return this->tcs_max_putonslit_offset; }
 
       inline void set_max_attempts( int _max ) { this->max_attempts = _max; }
       inline void set_min_repeat( int _repeat ) { this->min_repeat = _repeat; }
@@ -471,7 +485,7 @@ namespace Acam {
         double angle;
       } acam_goal;
 
-      double putonslit_offset, last_putonslit_offset;
+      std::atomic<bool> allow_large_offset{false};  ///< one-shot: allow the next guiding correction up to tcs_max_putonslit_offset
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  is_acquired(false),
@@ -481,8 +495,7 @@ namespace Acam {
                  tcs_offset_period(1),
                  pointmode(Acam::POINTMODE_SLIT),
                  acquire_mode(Acam::TARGET_NOP),
-                 dRA(0), dDEC(0),
-                 putonslit_offset(0), last_putonslit_offset(0) { }
+                 dRA(0), dDEC(0) { }
   };
   /***** Acam::Target *********************************************************/
 
@@ -510,6 +523,15 @@ namespace Acam {
       std::mutex framegrab_mtx;
       std::condition_variable cv;
 
+      struct {
+        std::string acquire_mode = "";
+        bool        is_acquired  = false;
+        int         nacquired    = 0;
+        int         attempts     = 0;
+        std::string filter       = "";
+        std::string cover        = "";
+      } last_status;
+
     public:
 
       std::string motion_host;
@@ -532,8 +554,6 @@ namespace Acam {
 
       std::vector<std::string> db_info;        ///< info for constructing telemetry Database object
 
-      std::map<std::string, int> telemetry_providers;  ///< map of port[daemon_name] for external telemetry providers
-
       struct {
         std::string tcsname;
         bool is_tcs_open;
@@ -547,7 +567,9 @@ namespace Acam {
         double az;
         double telfocus;
         double airmass;
-      } telem;
+      } tcsdata;
+
+      std::mutex tcsdata_mtx;
 
       std::mutex snapshot_mtx;
       std::unordered_map<std::string, bool> snapshot_status;
@@ -567,8 +589,10 @@ namespace Acam {
           nskip_preserve_frames(0),
           newframe_ready(false),
           snapshot_status {
-            {"tcsd",       false},
-            {"slitd",      false}
+            {Topic::TCSD,       false},
+            {Topic::SLITD,      false},
+            {Topic::TARGETINFO, false},
+            {Topic::ACAMD,      false}
           },
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
@@ -576,13 +600,13 @@ namespace Acam {
       {
             target.set_interface_instance( this ); ///< Set the Interface instance in Target
             topic_handlers = {
-              { "_snapshot", std::function<void(const nlohmann::json&)>(
+              { Topic::SNAPSHOT, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_snapshot(msg); } ) },
-              { "tcsd", std::function<void(const nlohmann::json&)>(
+              { Topic::TCSD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_tcsd(msg); } ) },
-              { "targetinfo", std::function<void(const nlohmann::json&)>(
+              { Topic::TARGETINFO, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_targetinfo(msg); } ) },
-              { "slitd", std::function<void(const nlohmann::json&)>(
+              { Topic::SLITD, std::function<void(const nlohmann::json&)>(
                          [this](const nlohmann::json &msg) { handletopic_slitd(msg); } ) }
             };
       }
@@ -603,8 +627,14 @@ namespace Acam {
       inline std::string get_imagename() { return this->imagename; }
       inline std::string get_wcsname()   { return this->wcsname;   }
 
-      inline void set_imagename( std::string name_in ) { this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : name_in ); return; }
-      inline void set_wcsname( std::string name_in )   { this->wcsname = name_in;   return; }
+      inline void set_imagename( std::string name_in ) {
+        this->imagename = ( name_in.empty() ? DEFAULT_IMAGENAME : std::move(name_in) );
+        return;
+      }
+      inline void set_wcsname( std::string name_in ) {
+        this->wcsname = std::move(name_in);
+          return;
+      }
 
       GuideManager guide_manager;
 
@@ -645,9 +675,10 @@ namespace Acam {
 
       long bin( std::string args, std::string &retstring );
       void publish_snapshot();
+      void publish_status(bool force=false);
+      void publish_temperature();                ///< publish only the andor temperature on Topic::ACAMD (periodic)
       void request_snapshot();
       bool wait_for_snapshots();
-      long handle_json_message( std::string message_in );
       long initialize_python_objects();        /// provides interface to initialize all Python modules for objects in this class
       long test_image();                       ///
       long open( std::string args, std::string &help);    /// wrapper to open all acam-related hardware components
@@ -677,7 +708,7 @@ namespace Acam {
       long exptime( const std::string args, std::string &retstring );
       long fan_mode( std::string args, std::string &retstring );
 
-      long collect_header_info();
+      long assemble_header_info();
 
       inline void init_names() { imagename=""; wcsname=""; return; }  // TODO still needed?
 

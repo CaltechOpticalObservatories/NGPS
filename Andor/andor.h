@@ -197,6 +197,7 @@ namespace Andor {
   class AndorBase {
     public:
       virtual ~AndorBase() {}
+      virtual long _IsInternalMechanicalShutter(int &internal_shutter) = 0;
       virtual long _GetCapabilities( AndorCapabilities* caps ) = 0;
       virtual long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) = 0;
       virtual long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) = 0;
@@ -264,6 +265,7 @@ namespace Andor {
    */
   class SDK : public AndorBase {
     public:
+      long _IsInternalMechanicalShutter(int &internal_shutter) override;
       long _GetCapabilities( AndorCapabilities* caps ) override;
       long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;
@@ -355,6 +357,7 @@ namespace Andor {
 
       inline float get_exptime() { return this->exptime; }
 
+      long _IsInternalMechanicalShutter(int &internal_shutter) override;
       long _GetCapabilities( AndorCapabilities* caps ) override;
       long _GetAcquiredData16( unsigned short* buf, at_u32 bufsize ) override;
       long _GetMostRecentImage16( unsigned short* buf, at_u32 bufsize ) override;

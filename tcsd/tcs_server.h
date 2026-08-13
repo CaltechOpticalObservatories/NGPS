@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <csignal>
 #include <map>
+#include <set>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -85,6 +86,7 @@ namespace TCS {
       uint16_t blkport;                  ///< blocking port
       uint16_t asyncport;                ///< asynchronous message port
       std::atomic<int> cmd_num;          ///< keep a running tally of number of commands received by tcsd
+      Common::CorrIdCache corr_cache;    ///< dedup cache for tagged inter-daemon commands
       std::atomic<int> threads_active;   ///< number of blocking threads that exist
 
       std::string asyncgroup;            ///< asynchronous multicast group

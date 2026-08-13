@@ -19,6 +19,7 @@
 #include <cstring>
 #include <iostream>
 #include <mutex>
+#include <atomic>
 
 #include <sys/ioctl.h>                 // for ioctl, FIONREAD
 #include <poll.h>                      // for pollfd
@@ -68,7 +69,7 @@ namespace Network {
       bool blocking;
       bool asyncflag;
       int totime;                      ///< timeout time for poll
-      int fd;                          ///< connected socket file descriptor
+      std::atomic<int> fd;             ///< connected socket file descriptor (atomic: shared across threads in some daemons)
       int listenfd;                    ///< listening socket file descriptor
       std::string host;
       bool connection_open;
@@ -83,6 +84,7 @@ namespace Network {
       TcpSocket( std::string host, uint16_t port_in, bool block_in, bool async_in, int totime_in, int id_in);  ///< useful constructor for a server
       TcpSocket( std::string host, uint16_t port );                          ///< client constructor
       TcpSocket(const TcpSocket &obj);   ///< copy constructor
+      TcpSocket& operator=(const TcpSocket &obj);  ///< copy assignment (explicit: atomic fd deletes the implicit one)
 
       struct addrinfo *addrs;            ///< dynamically allocated linked list returned by getaddrinfo()
 

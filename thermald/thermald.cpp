@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     thermald.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << thermald.config.n_entries << " lines read from " << thermald.config.filename;
@@ -122,6 +122,24 @@ int main(int argc, char **argv) {
     logwrite(function, "ERROR: thermald ports not configured");
     thermald.exit_cleanly();
   }
+
+  // initialize the pub/sub handler, subscribing to the camera daemons whose
+  // andor CCD temperatures I fold into my telemetry
+  //
+  if ( thermald.interface.init_pubsub( { Topic::ACAMD_TEMP,
+                                         Topic::SLICECAMD } ) == ERROR ) {
+    logwrite(function, "ERROR initializing publisher-subscriber handler");
+    thermald.exit_cleanly();
+  }
+
+  // unconditionally publish current telemetry so the world knows I'm online,
+  // then request a snapshot so I collect the current status of those I
+  // subscribe to (in case they came online before I subscribed)
+  //
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  thermald.interface.publish_status();
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  thermald.interface.request_snapshot();
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

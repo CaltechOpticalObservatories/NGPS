@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
     slicecamd.exit_cleanly();
   }
 
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << slicecamd.config.n_entries << " lines read from " << slicecamd.config.filename;
@@ -146,16 +146,29 @@ int main(int argc, char **argv) {
   // initialize the pub/sub handler, which
   // takes a list of subscription topics
   //
-  if ( slicecamd.interface.init_pubsub({"slitd", "tcsd"}) == ERROR ) {
+  if ( slicecamd.interface.init_pubsub( { Topic::SLITD,
+                                          Topic::ACAMD,
+                                          Topic::TCSD,
+                                          Topic::TARGETINFO }) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     slicecamd.exit_cleanly();
   }
 
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  std::this_thread::sleep_for( std::chrono::milliseconds(250) );
   slicecamd.interface.publish_snapshot();
 
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
+  std::this_thread::sleep_for( std::chrono::milliseconds(250) );
   slicecamd.interface.request_snapshot();
+
+  // publish the andor CCD temperatures on a fixed 60-second interval
+  // (temperature varies continuously, so it is not published on change)
+  //
+  std::thread( []( Slicecam::Interface &iface ) {
+    while ( true ) {
+      iface.publish_temperature();
+      std::this_thread::sleep_for( std::chrono::seconds(60) );
+    }
+  }, std::ref(slicecamd.interface) ).detach();
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

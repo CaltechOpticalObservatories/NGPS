@@ -172,9 +172,9 @@ namespace LKS {
     long retval=0;
 
 #ifdef LOGLEVEL_DEBUG
-//  message << "[DEBUG] send to LKS " << this->model << " (" << this->name << ") on socket " 
-//          << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
-//  logwrite( function, message.str() );
+    message << "[DEBUG] send to LKS " << this->model << " (" << this->name << ") on socket " 
+            << this->sock.gethost() << "/" << this->sock.getport() << ": " << cmd;
+    logwrite( function, message.str() );
 #endif
 
     std::lock_guard<std::mutex> lock( this->mtx );
@@ -227,10 +227,6 @@ namespace LKS {
     }
 
     retstring = reply;
-
-#ifdef LOGLEVEL_DEBUG
-//  message << " reply=" << reply; logwrite( function, message.str() );
-#endif
 
     return( error );
   }

@@ -13,6 +13,8 @@
 #include "common.h"
 #include "tcs_constants.h"
 #include "tcsd_commands.h"
+#include "message_keys.h"
+#include "calib_defs.h"
 #include <sys/stat.h>
 #include <map>
 #include <memory>
@@ -50,6 +52,13 @@ namespace TCS {
    *
    */
   class TcsInfo {
+    private:
+      struct lamp_t {
+        std::string key;    ///< key from message_keys, used for published JSON message
+        size_t num;         ///< lamp number assigned in the TCS, 1-based { 1, 2, 3, 4 }
+        int state;          ///< lamp state reported by the TCS: 0=off, 1=on, -1=undefined
+      };
+
     public:
       bool isopen;          /// is connection open to TCS
       std::string tcsname;  /// name of connected TCS { real sim }
@@ -76,8 +85,21 @@ namespace TCS {
 
       int domeshutters;
 
+      std::map<std::string,lamp_t> lampinfo;  ///< lamp info indexed by a UI key
+
       TcsInfo()
-        : isopen(false) { this->init(); }
+        : isopen(false)
+      {
+        // The map indices are the lamp names accepted by the UI. Those names,
+        // the message keys, and the TCS lamp numbers all come from the shared
+        // table in calib_defs.h, which is where they are defined.
+        //
+        for ( const auto &dev : CalibDefs::domelamps() ) {
+          lampinfo[dev.name] = { dev.jkey, static_cast<size_t>(dev.num), -1 };
+        }
+
+        this->init();
+      }
 
       /**
        * @brief  initialize all class member variables to "non-values"
@@ -95,9 +117,13 @@ namespace TCS {
         domeazimuth=NAN;
         airmass=NAN;
         focus=NAN;
+        offsetra=NAN;
+        offsetdec=NAN;
         offsetrate=NAN;
         cassangle=NAN;
+        pa=NAN;
         domeshutters=-1;
+        for (auto &[name,info] : lampinfo) { info.state=-1; }
       }
 
       // These functions parse the return string from native TCS commands
@@ -107,6 +133,7 @@ namespace TCS {
       void parse_reqstat( std::string &input );  ///< parse retstring from native REQSTAT
       void parse_reqpos( std::string &input );   ///< parse retstring from native REQPOS
       void parse_pa( std::string &input );       ///< parse retstring from native ?PARALLACTIC
+      void parse_lamps( std::string &input );    ///< parse retstring from native LAMPS?
   };
   /***** TCS::TcsInfo *********************************************************/
 
@@ -227,8 +254,6 @@ namespace TCS {
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command, lock and return the slow command socket connection
           std::lock_guard<std::mutex> lock( mtx_slow );
-//        logwrite( function, "[DEBUG] slow command socket connection acquired on fd "
-//                            +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           return sock_slow;
         }
         else {
@@ -236,9 +261,6 @@ namespace TCS {
           // fast command, take a socket connection from the pool
           while ( true ) {
             for ( auto &conn : pool ) {
-//            logwrite(function, "[DEBUG] checking connection: fd " + std::to_string(conn.socket->sock.getfd()) +
-//                               ", inuse: " + std::to_string(conn.inuse) +
-//                               ", connected: " + std::to_string(conn.socket->sock.isconnected()));
               if ( !conn.socket->sock.isconnected() ) {
                 logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())
                                     +" not open, attempting to reconnect" );
@@ -246,14 +268,10 @@ namespace TCS {
                   logwrite( function, "ERROR opening fast command socket connection" );
                   return nullptr;
                 }
-//              logwrite( function, "[DEBUG] returning fast command socket connection on fd "
-//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               if ( !conn.inuse ) {
                 conn.inuse=true;
-//              logwrite( function, "[DEBUG] fast command socket connection acquired on fd "
-//                                  +std::to_string(conn.socket->sock.getfd()) );
                 return conn.socket;
               }
               logwrite( function, "fast command socket fd "+std::to_string(conn.socket->sock.getfd())+" inuse, trying another" );
@@ -281,9 +299,6 @@ namespace TCS {
        *
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type ) {
-std::stringstream message;
-message << "[DEBUG] in 3 arg version and using polltimeout=" << POLLTIMEOUT;
-logwrite("TCS::TcsIO::execute_command", message.str());
         return execute_command( cmd, reply, conn_type, POLLTIMEOUT );
       }
       /***** TCS::TcsIO::execute_command **************************************/
@@ -300,33 +315,21 @@ logwrite("TCS::TcsIO::execute_command", message.str());
        */
       long execute_command( const std::string &cmd, std::string &reply, TCS::ConnectionType conn_type, int timeout ) {
         const std::string function("TCS::TcsIO::execute_command");
-std::stringstream message;
-message << "[DEBUG] in 4 arg version with timeout=" << timeout;
-logwrite(function,message.str());
         long ret=ERROR;
 
         if ( conn_type == TCS::SLOW_RESPONSE ) {
           // slow command
           {
           std::lock_guard<std::mutex> lock( mtx_slow );
-          logwrite( function, "[DEBUG] slow command socket acquired on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port)
-                              +" timeout="+std::to_string(timeout) );
           ret = sock_slow->send_command( cmd, reply, timeout );
           }
-          logwrite( function, "[DEBUG] releasing slow command socket connection on fd "
-                              +std::to_string(sock_slow->sock.getfd())+" for "+name+" at "+host+":"+std::to_string(port) );
           if (ret!=NO_ERROR) sock_slow->reconnect();
           return ret;
         }
         else {
-//        logwrite(function,"[DEBUG] asking for fast connection");
           auto conn = this->get_connection( TCS::FAST_RESPONSE );
           if (conn) {
-//          logwrite(function,"[DEBUG] sending fast command");
             ret = conn->send_command( cmd, reply );
-//          logwrite(function,"[DEBUG] fast command sent");
-//          logwrite(function,"[DEBUG] returning fast connection");
             return_connection( conn );
           }
           else {
@@ -353,8 +356,6 @@ logwrite(function,message.str());
         for ( auto &conn : pool ) {
           if ( conn.socket == sock ) {
             conn.inuse = false;
-//          logwrite( function, "[DEBUG] returned socket connection to pool for fd "
-//                              +std::to_string(conn.socket->sock.getfd()) );
             cv.notify_one();  // notifies any waiting get_connections()
             return;
           }
@@ -427,6 +428,8 @@ logwrite(function,message.str());
     private:
       zmqpp::context context;
       std::string default_tcs;                     ///< default TCS to use specified in .cfg
+      std::mutex tcs_info_mtx;                     ///< protects tcs_info
+      std::string last_published_motion;           ///< last published motion (publish on change)
 
     public:
       inline void set_default_tcs(const std::string &which) { this->default_tcs=which; }
@@ -445,13 +448,13 @@ logwrite(function,message.str());
       std::condition_variable publish_condition;
       std::condition_variable collect_condition;
 
-      std::atomic<bool> publish_enable;
+      std::atomic<bool> should_publish;
       std::atomic<bool> collect_enable;
 
       Interface()
         : context(),
           offsetrate(0),
-          publish_enable(false),
+          should_publish(true),
           collect_enable(false),
           subscriber(std::make_unique<Common::PubSub>(context, Common::PubSub::Mode::SUB)),
           is_subscriber_thread_running(false),
@@ -487,6 +490,7 @@ logwrite(function,message.str());
 
       void publish_snapshot();
       void publish_snapshot(std::string &retstring);
+      void do_continuous_snapshot();
 
       /**
        * These are the functions for communicating with the TCS
@@ -499,6 +503,7 @@ logwrite(function,message.str());
       long isopen( std::string &retstring );
       long isopen( const std::string &arg, std::string &retstring );
       long close();
+      long publish_state( const std::string &arg, std::string &retstring );
       long get_name( const std::string &arg, std::string &retstring );
       long get_weather_coords( const std::string &arg, std::string &retstring );
       long get_coords( const std::string &arg, std::string &retstring );
@@ -514,6 +519,9 @@ logwrite(function,message.str());
       long get_motion( const std::string &arg, std::string &retstring );
       long ringgo( const std::string &arg, std::string &retstring );
       long coords( std::string args, std::string &retstring );
+      long lamp( std::string args, std::string &retstring );
+      long set_lamp( const std::string &which, int state );
+      long get_lamp( const std::string &which, std::string &retstring );
       long pt_offset( std::string args, std::string &retstring );
       long zero_offsets( const std::string args, std::string &retstring );
       long ret_offsets( std::string args, std::string &retstring );
@@ -527,6 +535,7 @@ logwrite(function,message.str());
       long get_tcs_info();                         ///< fills the tcs_info class
 
       Common::Queue async;                         ///< asynchronous message queue object
+      Common::Broadcaster broadcast { this->publisher, Daemon::TCSD };
   };
   /***** TCS::Interface *******************************************************/
 

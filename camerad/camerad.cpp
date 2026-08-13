@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
 
   // log build date and hash
   //
-  message.str(""); message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message.str(""); message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite( function, message.str() );
 
   message.str(""); message << server.config.n_entries << " lines read from " << server.config.filename;
@@ -178,13 +178,26 @@ int main(int argc, char **argv) {
     server.exit_cleanly();
   }
 
-  if (server.init_pubsub()==ERROR) {
+  // initialize the pub-sub handler with my subscriber topics
+  //
+  if ( server.init_pubsub( { Topic::ACAMD,
+                             Topic::CALIBD,
+                             Topic::FLEXURED,
+                             Topic::FOCUSD,
+                             Topic::POWERD,
+                             Topic::SLICECAMD,
+                             Topic::SLITD,
+                             Topic::TARGETINFO,
+                             Topic::TCSD,
+                             Topic::THERMALD } ) == ERROR ) {
     logwrite(function, "ERROR initializing publisher-subscriber handler");
     server.exit_cleanly();
   }
 
-  std::this_thread::sleep_for(std::chrono::milliseconds(100));
-  server.publish_snapshot();
+  // publish my status
+  //
+  std::this_thread::sleep_for(std::chrono::milliseconds(250));
+  server.publish_status(true);
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.
@@ -251,7 +264,14 @@ void new_log_day() {
     auto newlogtime = next_occurrence( 12, 01, 00 );
     std::this_thread::sleep_until( newlogtime );
     close_log();
-    init_log( logpath, Camera::DAEMON_NAME );
+    // retry the re-open on a short timer so a transient failure (missing
+    // datedir, permission/owner drift, full disk) doesn't silence logging
+    // for ~24h until the next rotation
+    while ( init_log( logpath, Camera::DAEMON_NAME ) != 0 ) {
+      std::cerr << get_timestamp() << "  (Camera::new_log_day) "
+                << "ERROR: log rotation failed to open new logfile; retrying in 60s\n";
+      std::this_thread::sleep_for( std::chrono::seconds(60) );
+    }
     // ensure it doesn't immediately re-open
     std::this_thread::sleep_for( std::chrono::seconds(1) );
   }
@@ -377,8 +397,10 @@ void doit(Network::TcpSocket &sock) {
 
   bool connection_open=true;
 
-  message.str(""); message << "thread " << sock.id << " accepted connection on fd " << sock.getfd();
+#ifdef LOGLEVEL_DEBUG
+  message.str(""); message << "[DEBUG] thread " << sock.id << " accepted connection on fd " << sock.getfd();
   logwrite( function, message.str() );
+#endif
 
   while (connection_open) {
     memset(buf,  '\0', BUFSIZE);  // init buffers
@@ -401,18 +423,14 @@ void doit(Network::TcpSocket &sock) {
     // Data available, now read from connected socket...
     //
     std::string sbuf;
+    const int fd_before_read = sock.getfd();
     if ( ( ret=sock.Read( sbuf, '\n' ) ) <= 0 ) {
-      if (ret<0) {                // could be an actual read error
-        message.str(""); message << "Read error on fd " << sock.getfd() << ": " << strerror(errno); logwrite(function, message.str());
+      if (ret<0) {                // real read error
+        message.str(""); message << "Read error on fd " << fd_before_read << ": " << strerror(errno);
+        logwrite(function, message.str());
       }
-      if (ret==0) {
-        message.str(""); message << "timeout reading from fd " << sock.getfd();
-        logwrite( function, message.str() );
-      }
-      break;                      // Breaking out of the while loop will close the connection.
-                                  // This probably means that the client has terminated abruptly, 
-                                  // having sent FIN but not stuck around long enough
-                                  // to accept CLOSE and give the LAST_ACK.
+      // ret==0 is orderly peer shutdown (TCP FIN); not an error, lower layer logs at DEBUG
+      break;
     }
 
     // convert the input buffer into a string and remove any trailing linefeed
@@ -420,6 +438,31 @@ void doit(Network::TcpSocket &sock) {
     //
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\r' ), sbuf.end());
     sbuf.erase(std::remove(sbuf.begin(), sbuf.end(), '\n' ), sbuf.end());
+
+    // Detect and strip an optional correlation ID prefix. Inter-daemon clients
+    // tag every command with "#cid:HHHHHHHH " so stale or out-of-order replies
+    // can be rejected by the client. CLI users send no prefix and corr_id is
+    // left empty; the server then echoes no prefix on reply.
+    //
+    std::string corr_id;
+    {
+      std::string payload;
+      Common::extract_correlation_id( sbuf, corr_id, payload );
+      sbuf = std::move( payload );
+    }
+
+    // Replay a cached reply if this command's ID matches a recent one.
+    // This makes DaemonClient retries idempotent: the underlying handler
+    // is invoked at most once per correlation ID within the cache TTL.
+    //
+    if ( !corr_id.empty() ) {
+      std::string cached_reply;
+      if ( server.corr_cache.lookup( corr_id, cached_reply ) ) {
+        std::string out = CID_PREFIX + corr_id + " " + cached_reply;
+        if ( sock.Write( out ) < 0 ) connection_open=false;
+        continue;
+      }
+    }
 
     if ( sbuf.empty() ) sbuf="help";                 // no command automatically displays help
 
@@ -482,21 +525,6 @@ void doit(Network::TcpSocket &sock) {
                     sock.Write( " " );
                     ret = NO_ERROR;
                     }
-    // send telemetry as json message
-    //
-    if ( cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing my telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      server.make_telemetry_message( retstring );
-                      ret = JSON;
-                    }
-    }
-    else
     if ( cmd == CAMERAD_OPEN ) {
                     ret = server.connect_controller(args, retstring);
                     }
@@ -662,7 +690,7 @@ void doit(Network::TcpSocket &sock) {
                     }
     else
     if ( cmd == CAMERAD_IMSIZE ) {
-                    ret = server._image_size(args, retstring);
+                    ret = server.image_size(args, retstring);
                     }
     else
     if ( cmd == CAMERAD_READOUT ) {
@@ -789,20 +817,6 @@ void doit(Network::TcpSocket &sock) {
     if ( cmd == CAMERAD_TEST ) {
                     ret = server.test(args, retstring);
                     }
-    else
-    if ( cmd == SNAPSHOT || cmd == TELEMREQUEST ) {
-                    if ( args=="?" || args=="help" ) {
-                      retstring=TELEMREQUEST+"\n";
-                      retstring.append( "  Returns a serialized JSON message containing telemetry\n" );
-                      retstring.append( "  information, terminated with \"EOF\\n\".\n" );
-                      ret=HELP;
-                    }
-                    else {
-                      server.publish_snapshot( &retstring );
-                      if (retstring.empty()) retstring="(empty)";
-                      ret = JSON;
-                    }
-    }
 
     // Unknown commands generate an error
     //
@@ -830,6 +844,21 @@ void doit(Network::TcpSocket &sock) {
         retstring.append( "\n" );
         message.str(""); message << "command (" << server.cmd_num << ") reply: " << retstring;
         logwrite( function, message.str() );
+      }
+
+      // Cache the bare reply (without prefix) so retries with the same
+      // correlation ID can be replayed without re-running the handler.
+      //
+      if ( !corr_id.empty() ) {
+        server.corr_cache.insert( corr_id, retstring );
+      }
+
+      // Echo the correlation ID back to inter-daemon clients so they can
+      // verify the reply belongs to the command they just sent. CLI users
+      // sent no prefix, so corr_id is empty and nothing is prepended.
+      //
+      if ( !corr_id.empty() ) {
+        retstring = CID_PREFIX + corr_id + " " + retstring;
       }
 
       if ( sock.Write( retstring ) < 0 ) connection_open=false;

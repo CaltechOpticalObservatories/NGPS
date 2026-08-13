@@ -324,6 +324,7 @@ namespace PowerEmulator {
       std::cerr << get_timestamp() << function << "[DEBUG] plugmap for nps" << npsnum << ": "
                 << it->first << " " << it->second << "\n";
     }
+#endif
 
     }
     catch( std::out_of_range &e ) {
@@ -332,7 +333,6 @@ namespace PowerEmulator {
       retstring = retstream.str();
       return( ERROR );
     }
-#endif
 
     return ( NO_ERROR );
   }

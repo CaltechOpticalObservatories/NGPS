@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     slitd.exit_cleanly();
   }
 
-  message << "this version built " << BUILD_DATE << " " << BUILD_TIME;
+  message << "this version built " << get_build_time() << " from " << GIT_HASH_STR;
   logwrite(function, message.str());
 
   message.str(""); message << slitd.config.n_entries << " lines read from " << slitd.config.filename;
@@ -126,8 +126,8 @@ int main(int argc, char **argv) {
     slitd.exit_cleanly();
   }
 
-  std::this_thread::sleep_for( std::chrono::milliseconds(100) );
-  slitd.interface.publish_snapshot();
+  std::this_thread::sleep_for( std::chrono::milliseconds(250) );
+  slitd.interface.publish_status(true);
 
   // This will pre-thread N_THREADS threads.
   // The 0th thread is reserved for the blocking port, and the rest are for the non-blocking port.

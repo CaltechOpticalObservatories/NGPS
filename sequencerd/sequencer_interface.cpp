@@ -735,9 +735,10 @@ namespace Sequencer {
       }
     }
 
-    // number of exposures must be >= 1
+    // number of exposures must be >= 0
+    // class constructed with 1 but an intentional 0 means skip this target
     //
-    if (this->nexp <= 0) this->nexp=1;
+    if (this->nexp < 0) this->nexp=1;
 
     return NO_ERROR;
   }
@@ -959,9 +960,9 @@ namespace Sequencer {
 
     auto size = Tokenize( args, tokens, " \t" );
 
-    // there must be 19 args. see cfg file for complete description
-    if ( size != 19 ) {
-      logwrite(function, "ERROR bad config file. expected 19 but received "
+    // there must be 22 args. see cfg file for complete description
+    if ( size != 22 ) {
+      logwrite(function, "ERROR bad config file. expected 22 but received "
                          +std::to_string(size)+" parameters");
       return ERROR;
     }
@@ -990,20 +991,24 @@ namespace Sequencer {
         info.channel_active[chans.at(i)] = on_off(tokens.at(3+i));
       }
 
-      // tokens 7-10 are lamp states LAMPTHAR, LAMPFEAR, LAMPBLUC, LAMPREDC
+      // tokens 7-10 are the cal lamps and 11-14 the dome lamps, each in the
+      // order the tables in calib_defs.h list them
+      const auto &callamps  = CalibDefs::callamps();
+      const auto &domelamps = CalibDefs::domelamps();
       for (size_t i=0; i < 4; i++) {
-        info.lamp[lampnames.at(i)] = on_off(tokens.at(7+i));
+        info.lamp[callamps.at(i).name] = on_off(tokens.at(7+i));
+        info.domelamp[domelamps.at(i).name] = on_off(tokens.at(11+i));
       }
 
-      // tokens 11-12 are dome lamps
-      for (size_t i=0; i < 2; i++) {
-        info.domelamp[i] = on_off(tokens.at(11+i));
-      }
-
-      // tokens 13-19
+      // tokens 15-20 are the modulators in channel order, indexed by name
+      // because that's how calibd publishes them
+      const auto &modulators = CalibDefs::modulators();
       for (size_t i=0; i<6; i++) {
-        info.lampmod[i] = on_off(tokens.at(13+i));
+        info.lampmod[modulators.at(i).name] = on_off(tokens.at(15+i));
       }
+
+      // token[21] is FITS IMGTYPE
+      info.imgtype = tokens.at(21);
     }
     catch (const std::exception &e) {
       logwrite(function, "ERROR: "+std::string(e.what()));

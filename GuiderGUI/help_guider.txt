@@ -21,6 +21,9 @@ BUTTONS:
 
 [grab header] -- Display fits header for the current frame.
 
+[save series] -- Continuously save every Nth ACAM image.  
+      To stop, click again and select STOP from the dropdown.
+
 [gui help] -- This message
 
 [show slit] -- Zoom to show the location of the spectrograph slit.
@@ -33,7 +36,7 @@ BUTTONS:
 
 [guide] -- Start guiding to hold the current telescope position.
 
-[stop] -- Stop guiding.
+[stop guiding] -- Stop guiding.
 
 
 TROUBLESHOOTING:
