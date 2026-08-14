@@ -60,6 +60,10 @@ namespace Slicecam {
       const bool was_running = this->is_fineacquire_running.load(std::memory_order_acquire);
       this->is_fineacquire_locked.store(false, std::memory_order_release);
       this->is_fineacquire_running.store(false, std::memory_order_release);
+      {
+      std::lock_guard<std::mutex> lock(this->acam_mtx);
+      this->acam_cv.notify_all();
+      }
       this->publish_status();
       logwrite(function, was_running ? "stop requested" : "stopped");
       retstring=this->is_fineacquire_running.load(std::memory_order_acquire)?"running":"stopped";
@@ -562,11 +566,44 @@ namespace Slicecam {
     const double cmd_dra  = effective_gain * med_dra;
     const double cmd_ddec = effective_gain * med_ddec;
 
+    const int64_t send_time = get_time_us();
+    const bool was_guiding = this->is_acam_guiding.load();
+
     if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
       logwrite( function, "ERROR failed to send offset to ACAM" );
       this->is_fineacquire_running.store( false, std::memory_order_release );
       this->publish_status();
       return;
+    }
+
+    // while guiding the correction only re-points acamd's goal; wait until
+    // acamd reports the goal change applied before settling
+    if ( was_guiding && this->fineacquire_state.move_timeout_sec > 0.0 ) {
+      std::unique_lock<std::mutex> lock(this->acam_mtx);
+      // completion requires seeing THIS request registered (pending true on a
+      // status after the send) and then cleared; statuses arrive in publish
+      // order, so the false cannot predate the request
+      bool seen_pending = false;
+      const bool applied = this->acam_cv.wait_for( lock,
+          std::chrono::duration<double>( this->fineacquire_state.move_timeout_sec ),
+          [this, send_time, &seen_pending]() {
+            if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ||
+                 !this->should_framegrab_run.load(std::memory_order_acquire) ) return true;
+            if ( this->last_acam_pubtime.load(std::memory_order_acquire) <= send_time ) return false;
+            if ( this->acam_goalshift_pending.load(std::memory_order_acquire) ) {
+              seen_pending = true;
+              return false;
+            }
+            return seen_pending;
+          });
+      if ( !this->should_framegrab_run.load(std::memory_order_acquire) ) return;
+      if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ) return;
+      if ( !applied ) {
+        std::ostringstream w;
+        w << "WARNING goal change not applied within "
+          << this->fineacquire_state.move_timeout_sec << " s; proceeding";
+        logwrite( function, w.str() );
+      }
     }
 
     // time-based settle: wait for the TCS to physically finish the move before
@@ -923,6 +960,10 @@ namespace Slicecam {
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
     this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
+
+    bool goalshift_pending=false;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::GOALSHIFT_PENDING, goalshift_pending );
+    this->acam_goalshift_pending.store( goalshift_pending, std::memory_order_relaxed );
 
     // wake any thread waiting on ACAM state (e.g. fineacquire)
     std::lock_guard<std::mutex> lock(this->acam_mtx);
@@ -1409,6 +1450,19 @@ namespace Slicecam {
         try { this->fineacquire_state.settle_sec = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_SEC "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_MOVE_TIMEOUT" ) {
+        try { this->fineacquire_state.move_timeout_sec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_MOVE_TIMEOUT "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
@@ -2101,6 +2155,10 @@ namespace Slicecam {
     //
     if ( whattodo == "stop" ) {
       this->should_framegrab_run.store( false, std::memory_order_release );  // tells framegrab loop to stop
+      {
+      std::lock_guard<std::mutex> lock(this->acam_mtx);
+      this->acam_cv.notify_all();
+      }
       if ( this->is_framegrab_running.load(std::memory_order_acquire) ) {    // wait for it to stop
         int wait_ms = std::max( static_cast<int>(3000*(this->camera.andor.begin()->second->camera_info.exptime+1)), 5000 );
         // alert user that framegrabbing has stopped
@@ -2180,6 +2238,10 @@ namespace Slicecam {
       // frame will be grabbed.
       //
       this->should_framegrab_run.store( false, std::memory_order_release );
+      {
+      std::lock_guard<std::mutex> lock(this->acam_mtx);
+      this->acam_cv.notify_all();
+      }
       if ( this->is_framegrab_running.load(std::memory_order_acquire) ) return;
     }
     else
@@ -2596,6 +2658,10 @@ namespace Slicecam {
     //
     bool is_guiding = this->is_acam_guiding.load();
 
+    // arcsec for the log; the guiding path sends degrees
+    const double ra_off_arcsec  = ra_off  * 3600.;
+    const double dec_off_arcsec = dec_off * 3600.;
+
     // send the offsets now
     //
     if ( is_guiding ) {
@@ -2632,7 +2698,7 @@ namespace Slicecam {
     }
 
     std::ostringstream message;
-    message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";
+    message << "requested offsets dRA=" << ra_off_arcsec << " dDEC=" << dec_off_arcsec << " arcsec";
     logwrite(function, message.str());
 
     return NO_ERROR;
