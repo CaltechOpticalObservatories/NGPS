@@ -349,6 +349,7 @@ namespace Acam {
 
       std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
+      std::atomic<int64_t> ptoffset_seq{0};  ///< count of pt_offsets executed by do_acquire
 
       double tcs_max_offset;
       double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for a deliberate goal offset (put-on-slit etc.) applied while guiding; defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
@@ -530,6 +531,7 @@ namespace Acam {
         int         attempts     = 0;
         std::string filter       = "";
         std::string cover        = "";
+        int64_t     ptoffset_seq = 0;
       } last_status;
 
     public:

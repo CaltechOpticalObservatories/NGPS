@@ -95,6 +95,7 @@ namespace Slicecam {
     int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
     int    settle_count  = 2;       ///< configured: frames to discard after each move
     double settle_sec    = 3.0;     ///< time-based settle (sec) after each move; 0 disables (needed when autoexpose shortens frames so the frame-count settle is too brief in wall-clock)
+    double move_timeout_sec = 60.0; ///< max wait (sec) for acamd to report the goal-shift move executed; 0 disables the wait
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
     // exposure compensation (shared by the reactive trim and, later, autoexpose)
     double exptime_min     = 0.1;   ///< clamp: minimum auto-adjusted exposure (sec)
@@ -193,6 +194,7 @@ namespace Slicecam {
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
       std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
+      std::atomic<int64_t> acam_ptoffset_seq{0};   ///< pt_offset execution counter from latest acamd status
 
       // Latest target (goal) coords published on Topic::TARGETINFO
       // NAN until a TARGETINFO arrives, so manual runs with no sequencer target log nan.
@@ -355,7 +357,7 @@ namespace Slicecam {
       long fan_mode( std::string args, std::string &retstring );
       long gain( std::string args, std::string &retstring );
 
-      long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt);
+      long offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire=std::nullopt, bool *sent_to_acam=nullptr);
 
       long collect_header_info( std::unique_ptr<Andor::Interface> &slicecam );
 

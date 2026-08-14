@@ -98,6 +98,13 @@ FINE_ACQUIRE_SETTLE_FRAMES=2
 #
 FINE_ACQUIRE_SETTLE_SEC=3.0
 
+# FINE_ACQUIRE_MOVE_TIMEOUT=<sec>
+# Max time <sec> to wait for acamd to report a goal-shift correction executed
+# before the settle begins. On timeout the settle proceeds anyway. Set to 0
+# to disable the wait.
+#
+FINE_ACQUIRE_MOVE_TIMEOUT=60.0
+
 # FINE_ACQUIRE_GAIN=<g>
 # Proportional gain <g> = {0..1} applied to the commanded offset when the residual
 # is at or below FINE_ACQUIRE_GAIN_THRESHOLD arcsec.

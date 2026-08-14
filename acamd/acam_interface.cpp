@@ -1443,6 +1443,7 @@ namespace Acam {
     const int         attempts     = this->target.attempts;
     const std::string filter       = this->motion.get_current_filtername();
     const std::string cover        = this->motion.get_current_coverpos();
+    const int64_t     ptoffset_seq = this->target.ptoffset_seq.load();
 
     // unless forced, only publish if there was a change in any one of these
     //
@@ -1452,7 +1453,8 @@ namespace Acam {
          nacquired    == this->last_status.nacquired    &&
          attempts     == this->last_status.attempts     &&
          filter       == this->last_status.filter       &&
-         cover        == this->last_status.cover ) return;
+         cover        == this->last_status.cover        &&
+         ptoffset_seq == this->last_status.ptoffset_seq ) return;
 
     this->last_status.acquire_mode = acquire_mode;
     this->last_status.is_acquired  = is_acquired;
@@ -1460,6 +1462,7 @@ namespace Acam {
     this->last_status.attempts     = attempts;
     this->last_status.filter       = filter;
     this->last_status.cover        = cover;
+    this->last_status.ptoffset_seq = ptoffset_seq;
 
     // assemble the telemetry into a json message
     //
@@ -1473,6 +1476,7 @@ namespace Acam {
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
     jmessage_out[Key::Acamd::FILTER]       = filter;
     jmessage_out[Key::Acamd::COVER]        = cover;
+    jmessage_out[Key::Acamd::PTOFFSET_SEQ] = ptoffset_seq;
     jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
@@ -3692,6 +3696,7 @@ logwrite( function, message.str() );
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
           this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
+          this->ptoffset_seq.fetch_add(1, std::memory_order_release);
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 

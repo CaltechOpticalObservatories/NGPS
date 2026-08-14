@@ -106,6 +106,7 @@ namespace Key {
     inline const std::string ATTEMPTS     = "attempts";
     inline const std::string SEEING       = "seeing";
     inline const std::string BACKGROUND   = "background";
+    inline const std::string PTOFFSET_SEQ = "ptoffset_seq";  ///< count of pt_offsets executed by the acquire/guide loop
   }
 
   namespace Slicecamd {

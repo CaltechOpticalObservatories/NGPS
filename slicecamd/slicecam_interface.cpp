@@ -562,17 +562,40 @@ namespace Slicecam {
     const double cmd_dra  = effective_gain * med_dra;
     const double cmd_ddec = effective_gain * med_ddec;
 
-    if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true ) != NO_ERROR ) {
+    // record the executed-move counter before sending so nothing is missed
+    const int64_t seq_before = this->acam_ptoffset_seq.load(std::memory_order_acquire);
+
+    bool sent_to_acam = false;
+    if ( this->offset_acam_goal( { cmd_dra, cmd_ddec }, true, &sent_to_acam ) != NO_ERROR ) {
       logwrite( function, "ERROR failed to send offset to ACAM" );
       this->is_fineacquire_running.store( false, std::memory_order_release );
       this->publish_status();
       return;
     }
 
-    // time-based settle: wait for the TCS to physically finish the move before
-    // sampling resumes. The frame-count settle (settle_frames) is too short in
-    // wall-clock when autoexpose shortens the exposure (e.g. bright targets), so
-    // apply a configurable time-based settle on top of it; settle_sec=0 disables.
+    // On the guiding path the correction only shifts acamd's goal; the
+    // telescope moves at acamd's next guide solve. Wait for that executed
+    // move so the settle below is anchored to the move, not the send. A
+    // stop interrupts the wait; on timeout proceed on the old timer.
+    if ( sent_to_acam && this->fineacquire_state.move_timeout_sec > 0.0 ) {
+      std::unique_lock<std::mutex> lock(this->acam_mtx);
+      const bool moved = this->acam_cv.wait_for( lock,
+          std::chrono::duration<double>( this->fineacquire_state.move_timeout_sec ),
+          [this, seq_before]() {
+            return this->acam_ptoffset_seq.load(std::memory_order_acquire) > seq_before
+                   || !this->is_fineacquire_running.load(std::memory_order_acquire);
+          });
+      if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ) return;
+      if ( !moved ) {
+        oss.str("");
+        oss << "WARNING goal shift not executed within "
+            << this->fineacquire_state.move_timeout_sec
+            << " s; proceeding on the old timer";
+        logwrite( function, oss.str() );
+      }
+    }
+
+    // time-based settle after the executed move; settle_sec=0 disables
     if ( this->fineacquire_state.settle_sec > 0.0 ) {
       std::this_thread::sleep_for( std::chrono::duration<double>( this->fineacquire_state.settle_sec ) );
     }
@@ -923,6 +946,10 @@ namespace Slicecam {
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
     this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
+
+    int64_t seq=0;
+    Common::extract_telemetry_value( jmessage, Key::Acamd::PTOFFSET_SEQ, seq );
+    this->acam_ptoffset_seq.store( seq, std::memory_order_relaxed );
 
     // wake any thread waiting on ACAM state (e.g. fineacquire)
     std::lock_guard<std::mutex> lock(this->acam_mtx);
@@ -1409,6 +1436,19 @@ namespace Slicecam {
         try { this->fineacquire_state.settle_sec = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
           message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_SEC "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_MOVE_TIMEOUT" ) {
+        try { this->fineacquire_state.move_timeout_sec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_MOVE_TIMEOUT "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
           return ERROR;
@@ -2579,11 +2619,16 @@ namespace Slicecam {
    * @details    When guiding is enabled, the offsets will be applied to the ACAM
    *             goal so that the ACAM will guide on the offset position. When
    *             not guiding, the offsets are sent directly to the TCS as PT offsets.
-   * @param[in]  offsets  pair { dRA, dDEC }
+   * @param[in]  offsets       pair { dRA, dDEC }
+   * @param[in]  fineacquire   optional: add the fineguiding token for acamd
+   * @param[out] sent_to_acam  optional: set true when the guiding path was
+   *                           taken (goal shift sent to acamd, executed at
+   *                           its next guide solve), false when the offset
+   *                           went directly (and synchronously) to the TCS
    * @return     ERROR | NO_ERROR
    *
    */
-  long Interface::offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire) {
+  long Interface::offset_acam_goal(const std::pair<double, double> &offsets, std::optional<bool> fineacquire, bool *sent_to_acam) {
     const char* function = "Slicecam::Interface::offset_acam_goal";
 
     auto [ra_off, dec_off] = offsets;  // local copy
@@ -2595,6 +2640,11 @@ namespace Slicecam {
     // but must allow ACAM to perform the offset.
     //
     bool is_guiding = this->is_acam_guiding.load();
+    if (sent_to_acam) *sent_to_acam = is_guiding;
+
+    // arcsec copies for the log line (the guiding path sends degrees)
+    const double ra_off_arcsec  = ra_off  * 3600.;
+    const double dec_off_arcsec = dec_off * 3600.;
 
     // send the offsets now
     //
@@ -2632,7 +2682,7 @@ namespace Slicecam {
     }
 
     std::ostringstream message;
-    message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";
+    message << "requested offsets dRA=" << ra_off_arcsec << " dDEC=" << dec_off_arcsec << " arcsec";
     logwrite(function, message.str());
 
     return NO_ERROR;
