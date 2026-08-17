@@ -112,15 +112,14 @@ sudo_bounded "9" groupadd ngpsops        # 9 = group already exists
 sudo_bounded ""  usermod -aG ngpsops developer
 sudo_bounded ""  usermod -aG ngpsops observer
 
-# Tell systemd about the new units and start them. The two enables below are
-# deliberately NOT sudo_bounded: readme.txt documents that bringing a daemon
-# up without its real hardware reachable can legitimately run past
-# TimeoutStartSec=60, and a 15s cap here would fail healthy installs, not
-# just hung ones.
+# Tell systemd about the new units and start them. --no-block is required,
+# not optional: `enable --now` on a target blocks until every unit pulled in
+# by its Wants= reaches a terminal state (active or failed), even without any
+# After= ordering 
 sudo_bounded "" systemctl daemon-reload
 sudo_bounded "" systemctl reset-failed
-sudo systemctl enable --now ngps.target
-sudo systemctl enable --now ngps-watchdog.service
+sudo systemctl enable --now --no-block ngps.target
+sudo systemctl enable --now --no-block ngps-watchdog.service
 
 # install convenience wrapper for developer only
 # other operators use systemctl
@@ -147,7 +146,10 @@ wrapper is also installed at run/ngps (see readme.txt). Quick reference:
     systemctl status ngps.target 'ngps@*'                 # status
     systemctl kill ngps.target                            # SIGKILL the lot
 
-Verify:
+This script returns as soon as the daemons' start jobs are queued -- it does
+NOT wait for them to actually come up (a daemon that can't reach its hardware
+can take up to 60s per unit to fail, and this exit doesn't block on that).
+Verify actual daemon health separately:
 
     systemctl is-enabled ngps.target                                # -> enabled
     ls -l /etc/systemd/system/multi-user.target.wants/ngps.target   # must exist
