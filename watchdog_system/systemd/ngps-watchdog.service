@@ -16,6 +16,7 @@ StartLimitIntervalSec=0
 
 [Service]
 Type=simple
+NotifyAccess=main
 User=dataowner
 Group=datawriters
 EnvironmentFile=-/etc/sysconfig/ngps

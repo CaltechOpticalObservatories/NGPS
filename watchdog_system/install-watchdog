@@ -42,50 +42,91 @@ fi
 # manual step, not automated here -- see readme.txt Requirements for the
 # exact commands.
 
+# Verify the accounts this script will modify already exist (see readme.txt
+# Requirements), and prime the sudo ticket, before touching any system state --
+# both failures should be visible immediately, not partway through the install.
+if ! id developer >/dev/null 2>&1 || ! id observer >/dev/null 2>&1; then
+  echo "ERROR: accounts 'developer' and 'observer' must already exist" >&2
+  echo "       (see readme.txt Requirements) before running install-watchdog." >&2
+  exit 1
+fi
+if ! sudo -v; then
+  echo "ERROR: this script must be run by a user with sudo privileges." >&2
+  exit 1
+fi
+
+# Bound sudo calls that have no legitimate reason to take more than a few
+# seconds fail loud in 15s instead of hanging forever.
+# $1: exit codes to tolerate as non-fatal -- "*" for any (matches a call's
+#     pre-existing "|| true" leniency), a colon-separated list for specific
+#     idempotent-command codes (e.g. groupadd's "9" = already exists), or
+#     "" to tolerate nothing. A 15s timeout (124) is always fatal regardless
+#     of $1. $2+: the command.
+sudo_bounded() {
+  local tolerate=":$1:"; shift
+  local rc=0
+  timeout -k 5 15 sudo "$@" || rc=$?
+  if [ "$rc" -eq 124 ]; then
+    echo "ERROR: 'sudo $*' timed out after 15s -- check for a stuck process" >&2
+    echo "       or stale lock: ps -ef | grep -E 'usermod|groupadd|passwd'," >&2
+    echo "       ls -la /etc/{passwd,group,gshadow}.lock" >&2
+    exit 1
+  fi
+  if [ "$rc" -ne 0 ] && [ "$tolerate" != ":*:" ] && [[ "$tolerate" != *":$rc:"* ]]; then
+    exit "$rc"
+  fi
+  return 0
+}
+
 # Take down the legacy launcher so its Restart= behavior does not fight us,
 # and remove any live legacy/leftover ngps wrapper (run/ngps, run/_ngps, and
 # the older /usr/local/bin/ngps location) so nothing stale can be invoked
 # while the watchdog is active.
-sudo systemctl disable --now ngps-daemon.timer    2>/dev/null || true
-sudo systemctl disable --now ngps-daemon.service  2>/dev/null || true
-sudo rm -f "$RUN_DIR/ngps" "$RUN_DIR/_ngps" /usr/local/bin/ngps
+sudo_bounded "*" systemctl disable --now ngps-daemon.timer
+sudo_bounded "*" systemctl disable --now ngps-daemon.service
+sudo_bounded ""  rm -f "$RUN_DIR/ngps" "$RUN_DIR/_ngps" /usr/local/bin/ngps
 
 # Install systemd units
-sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@.service"         /etc/systemd/system/ngps@.service
-sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.target"           /etc/systemd/system/ngps.target
-sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps-watchdog.service" /etc/systemd/system/ngps-watchdog.service
-sudo mkdir -p /etc/systemd/system/ngps@sequencerd.service.d
-sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps@sequencerd.service.d/order.conf" \
+sudo_bounded "" install -m 0644 "$WATCHDOG_DIR/systemd/ngps@.service"         /etc/systemd/system/ngps@.service
+sudo_bounded "" install -m 0644 "$WATCHDOG_DIR/systemd/ngps.target"           /etc/systemd/system/ngps.target
+sudo_bounded "" install -m 0644 "$WATCHDOG_DIR/systemd/ngps-watchdog.service" /etc/systemd/system/ngps-watchdog.service
+sudo_bounded "" mkdir -p /etc/systemd/system/ngps@sequencerd.service.d
+sudo_bounded "" install -m 0644 "$WATCHDOG_DIR/systemd/ngps@sequencerd.service.d/order.conf" \
                      /etc/systemd/system/ngps@sequencerd.service.d/order.conf
 
 # Install environment file (only on first install -- preserve operator edits)
 if [ ! -f /etc/sysconfig/ngps ]; then
-  sudo install -m 0644 "$WATCHDOG_DIR/systemd/ngps.env" /etc/sysconfig/ngps
+  sudo_bounded "" install -m 0644 "$WATCHDOG_DIR/systemd/ngps.env" /etc/sysconfig/ngps
   echo "NOTE: created /etc/sysconfig/ngps -- edit to set PYTHONPATH /"
   echo "      RUBIN_SIM_DATA_DIR / XPA_NSUSERS for this host"
 fi
 
 # Install polkit rule and reload polkit so it sees the new rule
-sudo install -m 0644 "$WATCHDOG_DIR/polkit/10-ngps.rules" /etc/polkit-1/rules.d/10-ngps.rules
-sudo systemctl restart polkit 2>/dev/null || true
+sudo_bounded ""  install -m 0644 "$WATCHDOG_DIR/polkit/10-ngps.rules" /etc/polkit-1/rules.d/10-ngps.rules
+sudo_bounded "*" systemctl restart polkit
 
 # Create the operator group and add the accounts the watchdog system
-# itself depends on for passwordless systemctl access.
-sudo groupadd ngpsops 2>/dev/null || true
-sudo usermod -aG ngpsops developer
-sudo usermod -aG ngpsops observer
+# itself depends on for passwordless systemctl access. (Existence of the
+# accounts themselves was already verified above.)
+sudo_bounded "9" groupadd ngpsops        # 9 = group already exists
+sudo_bounded ""  usermod -aG ngpsops developer
+sudo_bounded ""  usermod -aG ngpsops observer
 
-# Tell systemd about the new units and start them
-sudo systemctl daemon-reload
-sudo systemctl reset-failed
+# Tell systemd about the new units and start them. The two enables below are
+# deliberately NOT sudo_bounded: readme.txt documents that bringing a daemon
+# up without its real hardware reachable can legitimately run past
+# TimeoutStartSec=60, and a 15s cap here would fail healthy installs, not
+# just hung ones.
+sudo_bounded "" systemctl daemon-reload
+sudo_bounded "" systemctl reset-failed
 sudo systemctl enable --now ngps.target
 sudo systemctl enable --now ngps-watchdog.service
 
 # install convenience wrapper for developer only
 # other operators use systemctl
-sudo chown developer:developer "$WATCHDOG_DIR/bin/ngps"
-sudo chmod 744 "$WATCHDOG_DIR/bin/ngps"
-sudo install -o developer -g developer -m 700 \
+sudo_bounded "" chown developer:developer "$WATCHDOG_DIR/bin/ngps"
+sudo_bounded "" chmod 744 "$WATCHDOG_DIR/bin/ngps"
+sudo_bounded "" install -o developer -g developer -m 700 \
      "$WATCHDOG_DIR/bin/ngps" "$RUN_DIR/ngps"
 
 cat <<'EOF'
