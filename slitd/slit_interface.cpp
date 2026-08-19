@@ -216,7 +216,16 @@ namespace Slit {
     // The work is done by the PI motor interface class, which blocks until
     // homing is complete.
     //
-    long error = this->motors.at(arg).home(&retstring);
+    long error = NO_ERROR;
+    try {
+      for (auto &mot : this->motors) {
+        error |= mot.second.home(&retstring);
+      }
+    }
+    catch (const std::exception &e) {
+      retstring = std::string(e.what());
+      return ERROR;
+    }
 
     // Homing changes the home state and the actuator positions. Refresh the
     // home state (as open() does) and read back the positions with get(),

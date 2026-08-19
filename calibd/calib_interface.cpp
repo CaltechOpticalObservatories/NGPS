@@ -181,7 +181,20 @@ namespace Calib {
 
     // All the work is done by the PI motor interface class
     //
-    return this->motors.at(name_in).home(&retstring);
+    try {
+      if (name_in.empty()) {
+        long error = NO_ERROR;
+        for (auto &mot : this->motors) {
+          error |= mot.second.home(&retstring);
+        }
+        return error;
+      }
+      return this->motors.at(name_in).home(&retstring);
+    }
+    catch (const std::exception &e) {
+      retstring = std::string(e.what());
+      return ERROR;
+    }
   }
   /***** Calib::Motion::home **************************************************/
 
@@ -213,8 +226,22 @@ namespace Calib {
 
     // All the work is done by the PI motor interface class
     //
-    bool _ishome = this->motors.at(name_in).is_home();
-    retstring = name_in+":"+(_ishome ? "true" : "false");
+    try {
+      if (name_in.empty()) {
+        bool all_home = true;
+        for (auto &mot : this->motors) {
+          if (!mot.second.is_home()) all_home = false;
+        }
+        retstring = ( all_home ? "true" : "false" );
+        return NO_ERROR;
+      }
+      bool _ishome = this->motors.at(name_in).is_home();
+      retstring = name_in + ":" + ( _ishome ? "true" : "false" );
+    }
+    catch (const std::exception &e) {
+      retstring = std::string(e.what());
+      return ERROR;
+    }
     return NO_ERROR;
   }
   /***** Calib::Motion::is_home ***********************************************/

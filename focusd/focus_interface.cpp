@@ -209,7 +209,20 @@ namespace Focus {
 
     // All the work is done by the motor interface class
     //
-    return this->motors.at(name_in).home(&retstring);
+    try {
+      if (name_in.empty()) {
+        long error = NO_ERROR;
+        for (auto &mot : this->motors) {
+          error |= mot.second.home(&retstring);
+        }
+        return error;
+      }
+      return this->motors.at(name_in).home(&retstring);
+    }
+    catch (const std::exception &e) {
+      retstring = std::string(e.what());
+      return ERROR;
+    }
   }
   /***** Focus::Interface::home ***********************************************/
 

@@ -6,6 +6,8 @@
 #          Listing is in numerical order by port# to help avoid any conflicts
 # ----------------------------------------------------------------------------
 
+set( TELNET_PORT                   23 )
+
 set( MESSAGEPORT                 1300 )
 
 set( MESSAGE_BROKER_SUB_PORT     5555 )  # message broker XSUB port
