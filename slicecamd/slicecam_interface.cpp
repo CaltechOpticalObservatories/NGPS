@@ -423,6 +423,39 @@ namespace Slicecam {
     const int max_samples = this->fineacquire_state.max_samples;
     const int min_samples = this->fineacquire_state.min_samples;
 
+    // Verification pass, accept-only early exit: once a correction has been
+    // applied this run, a single frame already inside the goal is sufficient
+    // proof. A frame may only ACCEPT -- anything larger falls through to the
+    // usual median machinery, so a noisy frame can never trigger a
+    // correction or an extra cycle.
+    //
+    if ( this->fineacq_total_dra != 0.0 || this->fineacq_total_ddec != 0.0 ) {
+      const double r1 = std::hypot( offsets.first, offsets.second ) * 3600.0;
+      if ( r1 <= this->fineacquire_state.goal_arcsec ) {
+        std::ostringstream oss;
+        oss << "fine acquisition converged: single-frame offset r=" << r1
+            << " arcsec <= goal=" << this->fineacquire_state.goal_arcsec
+            << " arcsec (n=" << n << ")";
+        logwrite( function, oss.str() );
+
+        std::ostringstream acqmodel;
+        acqmodel << "[ACQMODEL] acam2slit dRA=" << this->fineacq_total_dra
+                 << " dDEC="     << this->fineacq_total_ddec << " arcsec"
+                 << " GOALRA="   << this->fineacq_goal_ra
+                 << " GOALDEC="  << this->fineacq_goal_dec
+                 << " CASANGLE=" << this->telem.angle_scope
+                 << " n="        << n
+                 << " cam="      << which;
+        logwrite( function, acqmodel.str() );
+
+        this->is_fineacquire_locked.store( true,  std::memory_order_release );
+        this->is_fineacquire_running.store( false,  std::memory_order_release );
+        this->fineacquire_state.reset();
+        this->publish_status();
+        return;
+      }
+    }
+
     // wait for the minimum number of samples before evaluating anything
     //
     if ( n < min_samples ) return;

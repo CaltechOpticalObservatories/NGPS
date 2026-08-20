@@ -86,9 +86,10 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 
 # FINE_ACQUIRE_SETTLE_FRAMES=<n>
 # <n> frames discarded after each telescope move to allow settling before
-# centroid measurements resume.
+# centroid measurements resume. The wall-clock settle (FINE_ACQUIRE_SETTLE_SEC,
+# applied after acamd confirms the goal change) covers the move itself.
 #
-FINE_ACQUIRE_SETTLE_FRAMES=2
+FINE_ACQUIRE_SETTLE_FRAMES=0
 
 # FINE_ACQUIRE_SETTLE_SEC=<sec>
 # Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
