@@ -173,8 +173,10 @@ int main( int argc, char **argv ) {
  * @param[in]  Network::TcpSocket sock, socket object
  * @return     nothing
  *
- * accepts a socket connection and processes the request by
- * calling function doit()
+ * Accepts socket connections in a loop and spawns a detached thread per
+ * accepted connection to call doit(), so that multiple simultaneous clients
+ * (e.g. focusd's separate I/R/G and U connections) can each be serviced
+ * concurrently instead of one blocking out all the others.
  *
  * This thread never terminates.
  *
@@ -183,8 +185,12 @@ void block_main( Network::TcpSocket sock ) {
   while(1) {
     int fd = sock.Accept();
     std::cerr << get_timestamp() << "  (Emulator::block_main) Accept returns connection on fd = " << fd << "\n";
-    doit( sock );                  // call function to do the work
-    sock.Close();
+    if ( fd < 0 ) continue;
+    Network::TcpSocket connsock = sock; // copy so this connection's fd survives the next Accept()
+    std::thread( [connsock]() mutable {
+      doit( connsock ); // call function to do the work
+      connsock.Close();
+    } ).detach();
   }
   return;
 }

@@ -131,6 +131,18 @@ namespace Emulator {
             return( ERROR );
           }
 
+          // MOTOR_CONTROLLER -- only PI-type entries are loaded (I/R/G);
+          // GALIL (U) has no protocol emulation yet.
+          //
+          if ( config.param[entry].compare( 0, 16, "MOTOR_CONTROLLER" ) == 0 ) {
+            Focus::ControllerInfo c;
+            if ( c.load_info( config.arg[entry] ) == NO_ERROR && c.addr >= 0 ) {
+              this->interface.controller_info.push_back( c );
+              std::cerr << get_timestamp() << function << " loaded " << config.arg[entry] << "\n";
+              applied++;
+            }
+          }
+
         } // end loop through the entries in the configuration file
 
         std::cerr << get_timestamp() << function ;
