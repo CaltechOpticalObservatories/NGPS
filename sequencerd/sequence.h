@@ -399,6 +399,12 @@ namespace Sequencer {
         this->is_ontarget.store(false);
       }
 
+      /** @brief  satisfies the TCSOP wait when the TCS itself reports arrival
+       *          (config TCS_AUTO_ONTARGET); coords are the commanded SCOPE
+       *          frame position in degrees; see sequence.cpp */
+      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg );
+      std::atomic<bool> auto_ontarget_active{false};  ///< true only while move_to_target's TCSOP wait is open
+
       /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
         this->cancel_flag.store(false);
@@ -421,6 +427,8 @@ namespace Sequencer {
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
+      bool   tcs_auto_ontarget = false;    ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default no)
+      double tcs_auto_ontarget_sep = 5.0;  ///< max |telescope-target| arcsec for auto-ontarget (config TCS_AUTO_ONTARGET_SEP)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;

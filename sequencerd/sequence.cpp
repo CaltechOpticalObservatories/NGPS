@@ -2149,6 +2149,88 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_shutdown *********************************/
 
 
+  /***** Sequencer::Sequence::dothread_auto_ontarget **************************/
+  /**
+   * @brief      satisfies the TCSOP wait when the TCS itself reports arrival
+   * @details    Spawned by move_to_target when TCS_AUTO_ONTARGET is enabled and
+   *             lives only while that wait is open (auto_ontarget_active).
+   *             Acknowledges when two consecutive 1 Hz reads show
+   *             ?ONTARGET==1 AND motion tracking AND |telescope-commanded| <
+   *             tcs_auto_ontarget_sep. All three predicates are required:
+   *             the flag alone is position-agnostic, the separation alone
+   *             cannot see a sub-threshold hop in progress, and motion alone
+   *             says nothing about settling. The coords are the SCOPE-frame
+   *             position move_to_target actually commanded. A wrong
+   *             acknowledgment is self-limiting -- ACAM cannot solve a field
+   *             that is not there and the acquisition retry machinery
+   *             handles the failure -- so the conditions make wrong acks
+   *             rare, not impossible. The operator's press works unchanged;
+   *             whichever arrives first wins. The acknowledgment
+   *             deliberately does not go through ontarget(): that clears
+   *             cancel_flag, and a concurrent cancel must always win
+   *             against this automatic path.
+   */
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg ) {
+    const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
+    std::stringstream message;
+
+    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) ) {
+      logwrite( function, "ERROR invalid commanded coords; auto-ontarget sits this wait out" );
+      return;
+    }
+
+    int consecutive = 0;
+
+    while ( this->auto_ontarget_active.load() &&
+            !this->cancel_flag.load() && !this->is_ontarget.load() ) {
+
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
+
+      // the TCS's own settled flag (0|1), returned verbatim
+      //
+      std::string reply;
+      if ( this->tcsd.send( TCSD_NATIVE+" ?ONTARGET", reply ) != NO_ERROR ) { consecutive=0; continue; }
+      bool flag_on = ( reply.rfind( "1", 0 ) == 0 );
+
+      // motion state and separation from the cached 1 Hz tcsd telemetry
+      //
+      bool   fresh    = false;
+      bool   tracking = false;
+      double sep_as   = NAN;
+      {
+      std::lock_guard<std::mutex> lock( tcsd_mtx );
+      fresh = this->tcsinfo.is_fresh();
+      if ( fresh ) {
+        tracking = ( this->tcsinfo.motion == TCS_MOTION_TRACKING_STR );
+        double dra_deg = this->tcsinfo.ra_h * 15.0 - tgt_ra_deg;
+        dra_deg = std::fmod( dra_deg + 540.0, 360.0 ) - 180.0;    // shortest arc across RA wrap
+        double dra_as  = dra_deg * cos( tgt_dec_deg * M_PI / 180.0 ) * 3600.0;
+        double ddec_as = ( this->tcsinfo.dec_d - tgt_dec_deg ) * 3600.0;
+        sep_as = std::hypot( dra_as, ddec_as );
+      }
+      }
+
+      if ( !fresh || !flag_on || !tracking ||
+           !( sep_as < this->tcs_auto_ontarget_sep ) )                      { consecutive=0; continue; }
+
+      if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
+
+      // Re-check at the last instant; do NOT clear cancel_flag (see @details).
+      //
+      if ( !this->auto_ontarget_active.load() || this->cancel_flag.load() ) return;
+
+      message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
+                               << std::fixed << std::setprecision(1) << sep_as
+                               << " arcsec x2) -- sending ontarget";
+      this->broadcast.notice( function, message.str() );
+      this->is_ontarget.store( true );
+      this->cv.notify_all();
+      return;
+    }
+  }
+  /***** Sequencer::Sequence::dothread_auto_ontarget **************************/
+
+
   /***** Sequencer::Sequence::move_to_target **********************************/
   /**
    * @brief      send request to TCS to move to target coordinates
@@ -2297,10 +2379,24 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
+    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default no): the TCS itself can
+    // satisfy this wait through the same ontarget() the operator's press uses.
+    // The watcher lives exactly as long as this wait (auto_ontarget_active).
+    //
+    this->auto_ontarget_active.store( this->tcs_auto_ontarget );
+    if ( this->tcs_auto_ontarget ) {
+      // ra_out/dec_out are the SCOPE-frame coordinates this function actually
+      // commanded, which is the position REQPOS telemetry will report -- the
+      // database coordinates differ by the pointmode focal-plane offset.
+      std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
+                   ra_out, dec_out ).detach();
+    }
+
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
       this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
     }
+    this->auto_ontarget_active.store( false );
 
     this->broadcast.notice( function, "received "
                                                  +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
