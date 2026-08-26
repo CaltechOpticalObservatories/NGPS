@@ -22,6 +22,7 @@ class LayoutService:
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
         self.modulator_checkboxes = {}
+        self._last_known_exptime_sec = None  # last max exptime shown in new_exptime_box
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -549,7 +550,7 @@ class LayoutService:
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
-        self.parent.exposure_progress.setMaximumWidth(600)
+        self.parent.exposure_progress.setMaximumWidth(300)
         self.parent.exposure_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.exposure_progress.setTextVisible(True)
         self.parent.exposure_progress.setFormat("0%")
@@ -557,6 +558,20 @@ class LayoutService:
         exposure_layout.setSpacing(5)
         exposure_layout.addWidget(QLabel("Exposure Progress:"))
         exposure_layout.addWidget(self.parent.exposure_progress)
+
+        # Modify the exposure time of the exposure currently in progress.
+        # Sends "modexptime <sec>" straight to the sequencer
+        self.parent.new_exptime_box = QLineEdit()
+        self.parent.new_exptime_box.setPlaceholderText("New exptime (sec)")
+        self.parent.new_exptime_box.setFixedWidth(70)
+        self.parent.new_exptime_box.setValidator(QDoubleValidator(0.0, 99999.0, 3, self.parent.new_exptime_box))
+        self.parent.new_exptime_box.setToolTip(
+            "Change the exposure time of the exposure currently in progress. Press Enter to apply."
+        )
+        self.parent.new_exptime_box.returnPressed.connect(self.on_modify_exptime_clicked)
+
+        exposure_layout.addSpacing(12)
+        exposure_layout.addWidget(self.parent.new_exptime_box)
 
         # Readout/Overhead Progress
         overhead_layout = QHBoxLayout()  # Horizontal layout for overhead row
@@ -602,6 +617,54 @@ class LayoutService:
         label_text = f"{progress_percentage}% ({remaining_sec} sec remaining)"
         self.parent.exposure_progress.setValue(progress_percentage)
         self.parent.exposure_progress.setFormat(label_text)
+
+    def update_new_exptime_field(self, max_exptime_sec):
+        """Keep the modexptime input showing the exptime currently in effect.
+        """
+        box = self.parent.new_exptime_box
+
+        if max_exptime_sec <= 0:
+            self._last_known_exptime_sec = None
+            if not box.hasFocus():
+                box.clear()
+            return
+
+        if max_exptime_sec == self._last_known_exptime_sec or box.hasFocus():
+            return
+
+        self._last_known_exptime_sec = max_exptime_sec
+        box.setText(f"{max_exptime_sec:g}")
+
+    def on_modify_exptime_clicked(self):
+        """Request a new exposure time for the exposure currently in progress.
+
+        Sends "modexptime <sec>" directly to the sequencer, which forwards it
+        to camerad to update the live shutter timer.
+        """
+        text = self.parent.new_exptime_box.text().strip()
+        if not text:
+            return
+
+        try:
+            new_exptime = float(text)
+        except ValueError:
+            QMessageBox.warning(
+                self.parent, "Invalid exposure time",
+                f"'{text}' is not a valid number of seconds."
+            )
+            return
+
+        if new_exptime < 5:
+            QMessageBox.warning(
+                self.parent, "Exposure time too short",
+                "The camera won't accept an exposure time change to less than "
+                "5 seconds, and won't apply a change with less than 5 seconds "
+                "remaining in the current exposure."
+            )
+            return
+
+        self.parent.send_command(f"modexptime {new_exptime}\n")
+        self.parent.new_exptime_box.clear()
 
     def update_readout_progress(self, progress_percentage):
         """Update the readout progress bar based on the received percentage."""
