@@ -150,6 +150,8 @@ TCS_OFFSET_RATE_RA=45                # TCS offset rate for RA ("MRATE") in arcse
 TCS_OFFSET_RATE_DEC=45               # TCS offset rate for DEC ("MRATE") in arcsec per second
 TCS_SETTLE_TIMEOUT=20                # seconds to wait for telescope to settle (for "TRACKING_STABLY")
 TCS_SETTLE_STABLE=1.5                # time in fractional seconds (to 0.1) that TCS must report TRACKING before it is really stable
+TCS_AUTO_ONTARGET=no                 # yes: TCS ?ONTARGET=1 + tracking + sep < TCS_AUTO_ONTARGET_SEP (2 consecutive 1 Hz reads) satisfies the ontarget wait; operator press always works
+TCS_AUTO_ONTARGET_SEP=5.0            # arcsec: max |telescope-target| for auto-ontarget
 TCS_DOMEAZI_READY=10                 # max degrees azimuth that dome and telescope can differ before ready to observe
 TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify TCS of next target's coords (0 to disable)
 
