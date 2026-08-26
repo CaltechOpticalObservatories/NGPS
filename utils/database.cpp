@@ -19,7 +19,10 @@ namespace Database {
   SessionPool::SessionPool(const std::string &host, int port, const std::string &user, const std::string &pass):
     _dbhost(host), _dbport(port), _dbuser(user), _dbpass(pass) {
     // create the pool of sessions
-    for (int i = 0; i < DBPOOLSIZE; ++i) { _queue.push(_create_session()); }
+    for (int i = 0; i < DBPOOLSIZE; ++i) {
+      auto db = _create_session();
+      if (db) _queue.push(db);
+    }
   }
   /***** SessionPool::SessionPool *********************************************/
 
@@ -39,6 +42,7 @@ namespace Database {
     while (!_queue.empty()) {
       auto db = _queue.front();
       _queue.pop();
+      if (!db) continue;
       try { db->close(); }
       catch (...) { }
     }
