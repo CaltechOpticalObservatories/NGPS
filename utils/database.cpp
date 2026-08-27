@@ -19,7 +19,10 @@ namespace Database {
   SessionPool::SessionPool(const std::string &host, int port, const std::string &user, const std::string &pass):
     _dbhost(host), _dbport(port), _dbuser(user), _dbpass(pass) {
     // create the pool of sessions
-    for (int i = 0; i < DBPOOLSIZE; ++i) { _queue.push(_create_session()); }
+    for (int i = 0; i < DBPOOLSIZE; ++i) {
+      auto db = _create_session();
+      if (db) _queue.push(db);
+    }
   }
   /***** SessionPool::SessionPool *********************************************/
 
@@ -39,6 +42,7 @@ namespace Database {
     while (!_queue.empty()) {
       auto db = _queue.front();
       _queue.pop();
+      if (!db) continue;
       try { db->close(); }
       catch (...) { }
     }
@@ -77,6 +81,7 @@ namespace Database {
    */
   bool SessionPool::_test_session(std::shared_ptr<mysqlx::Session> db) {
     // pass-fail
+    if ( !db ) return false;
     try {
       db->sql("SELECT 1").execute();
       return true;                             // it either works,
@@ -104,6 +109,7 @@ namespace Database {
 
     // make a new session if this one is bad
     if (!_test_session(db)) db = _create_session();
+    if ( !db ) throw std::runtime_error( "failed to obtain a valid database connection" );
 
     return db;
   }
@@ -117,11 +123,17 @@ namespace Database {
    *
    */
   void SessionPool::_return_session(std::shared_ptr<mysqlx::Session> db) {
-    {
-    std::lock_guard<std::mutex> lock(_mtx);
-    _queue.push(db);
+    // never let an exception escape -- this is called from ~SessionGuard(),
+    // which is implicitly noexcept
+    try {
+      {
+        std::lock_guard<std::mutex> lock( _mtx );
+        _queue.push( db );
+      }
+      _cv.notify_one();
     }
-    _cv.notify_one();
+    catch ( ... ) {
+    }
   }
   /***** SessionPool::_return_session *****************************************/
 
