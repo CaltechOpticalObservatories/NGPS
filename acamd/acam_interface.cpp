@@ -3644,7 +3644,10 @@ logwrite( function, message.str() );
       // and is unaffected.
       //
       double maxoffset = this->tcs_max_offset;
-      if ( this->acquire_mode == Acam::TARGET_GUIDE && this->allow_large_offset.load() ) {
+      if ( this->allow_large_offset.load() ) {
+        // A deliberate goal offset is correct by construction and must not
+        // be capped as a guide correction, whatever mode the loop is in
+        // when the correction lands.
         maxoffset = this->tcs_max_putonslit_offset;
       }
 
