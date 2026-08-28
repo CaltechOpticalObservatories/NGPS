@@ -349,6 +349,7 @@ namespace Acam {
 
       std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
+      std::atomic<bool> goalshift_pending{false};  ///< a requested goal change awaits execution by the guide loop
 
       double tcs_max_offset;
       double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for a deliberate goal offset (put-on-slit etc.) applied while guiding; defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
@@ -530,6 +531,7 @@ namespace Acam {
         int         attempts     = 0;
         std::string filter       = "";
         std::string cover        = "";
+        bool        goalshift_pending = false;
       } last_status;
 
     public:
