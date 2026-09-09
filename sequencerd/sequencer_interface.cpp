@@ -247,7 +247,7 @@ namespace Sequencer {
       std::map<std::string, mysqlx::Value> bindings;
 
       if ( use_id ) {
-        condition = "SET_ID like :setid";
+        condition = "SET_ID = :setid";
         bindings = { { "setid", mysqlx::Value(setid_in) } };
       }
       else {
@@ -403,7 +403,7 @@ namespace Sequencer {
     }
 
     try {
-      const std::string condition("OBSERVATION_ID like :obsid");
+      const std::string condition("OBSERVATION_ID = :obsid");
       const std::string order("OBSERVATION_ID");
       std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(obsid) } };
 
@@ -533,7 +533,7 @@ namespace Sequencer {
       // Find a row in the SQL active observations table,
       // the next one (in order) where state is state_in.
       //
-      const std::string condition("SET_ID like :setid && STATE like :state");
+      const std::string condition("SET_ID = :setid && STATE like :state");
       const std::string order("OBS_ORDER");
       std::map<std::string, mysqlx::Value> bindings = { { "state", mysqlx::Value(state_in) },
                                                         { "setid", mysqlx::Value(this->setid) } };
@@ -773,7 +773,7 @@ namespace Sequencer {
       // vector identifies the fields to retrieve and is initialized by the TargetInfo()
       // class initializer list.
       //
-      const std::string condition("OBSERVATION_ID like :obsid");
+      const std::string condition("OBSERVATION_ID = :obsid");
       std::map<std::string, mysqlx::Value> bindings = { { "obsid", mysqlx::Value(this->obsid) } };
 
       // read from active targets table
