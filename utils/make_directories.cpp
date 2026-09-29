@@ -11,6 +11,8 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
+#include "utilities.h"
 
 namespace fs = std::filesystem;
 
@@ -19,14 +21,17 @@ std::string get_date() {
   std::time_t t=std::time(nullptr);  // Container for system time
   struct tm mytime;                  // time container
 
-  // UTC now
-  if ( gmtime_r( &t, &mytime ) == nullptr ) return( "" );
+  // local now
+  if ( localtime_r( &t, &mytime ) == nullptr ) return ( "" );
 
-  // at local noon we want tonight's UTC
+  // back 12h so the date changes at local noon, then ahead one day for
+  // the UTC date of that night; never ahead of the night in progress
+  mytime.tm_hour -= 12;
   mytime.tm_mday += 1;
+  mytime.tm_isdst = -1; // let mktime determine DST
 
   // normalize struct handles rollovers
-  if (timegm(&mytime)==-1) return "";
+  if ( mktime( &mytime ) == -1 ) return "";
 
   current_date << std::setfill('0') << std::setprecision(0)
                << std::setw(4) << mytime.tm_year + 1900
@@ -76,9 +81,25 @@ int main() {
       fs::create_directory(logdir);
       std::cout << "created directory " << logdir << std::endl;
     }
+
+    // point <base>/latest at the latest date directory, which is where the
+    // daemons write, replacing it atomically so readers never see it missing
+    std::string latest = get_latest_datedir( base );
+    if ( !latest.empty() ) {
+      fs::path target = fs::path( base ) / latest;
+      fs::path linkdir = fs::path( base ) / "latest";
+      fs::path tmplink = fs::path( base ) / ".latest.tmp";
+      if ( !fs::is_symlink( linkdir ) || fs::read_symlink( linkdir ) != target ) {
+        fs::remove( tmplink ); // leftover from a failed run
+        fs::create_directory_symlink( target, tmplink );
+        fs::rename( tmplink, linkdir );
+        std::cout << "linked " << linkdir << " -> " << target << std::endl;
+      }
+    }
   }
   catch ( const fs::filesystem_error &e ) {
-    std::cerr << "ERROR creating " << newdir << ": " << e.what();
+    std::cerr << "ERROR: " << e.what() << std::endl;
+    return 1;
   }
 
   return 0;
