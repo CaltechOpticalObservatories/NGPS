@@ -2676,6 +2676,22 @@ namespace Slicecam {
       return ERROR;
     }
 
+    // Lock out user-initiated moves while ACAM is acquiring (converging on the
+    // target). Jog (LEFT/RIGHT/UP/DOWN), put-on-slit and put-on-guider on both
+    // GUIs all arrive here via "scam putonslit"; a manual move mid-acquisition
+    // would disrupt it. Ask acamd for its mode directly; moves are allowed
+    // while guiding or stopped, only blocked while actively acquiring.
+    //
+    {
+      std::string acam_mode;
+      if ( this->acamd.command( ACAMD_ACQUIRE, acam_mode ) == NO_ERROR &&
+           acam_mode.find("acquiring") != std::string::npos ) {
+        logwrite( function, "ERROR cannot move while ACAM is acquiring" );
+        retstring="acquiring";
+        return ERROR;
+      }
+    }
+
     // outputs: result from solve_offset in degrees
     //
     double ra_off, dec_off;
