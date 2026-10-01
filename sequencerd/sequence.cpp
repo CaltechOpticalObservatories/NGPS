@@ -2891,6 +2891,7 @@ namespace Sequencer {
     if ( this->tcs_preauth_time > 0 ) this->notify_tcs_next_target = true; else this->notify_tcs_next_target = false;
 
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
+    this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );          // set EXPOSE bit
 
     this->set_imgtype();
 
@@ -2913,7 +2914,6 @@ namespace Sequencer {
     }
 
     error = this->target.update_state( Sequencer::TARGET_EXPOSING );     // set EXPOSE state in database
-    this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );          // set EXPOSE bit
 
     return error;
   }
