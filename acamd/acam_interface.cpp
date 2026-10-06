@@ -3643,8 +3643,15 @@ logwrite( function, message.str() );
       // (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET). The ACQUIRE path uses tcs_max_offset
       // and is unaffected.
       //
+      // `large` is latched HERE, and only the correction that was decided under
+      // the allowance may consume it below. Clearing the flag unconditionally
+      // after a send let an ordinary correction consume an allowance that
+      // offset_goal armed while that correction's blocking pt_offset was still
+      // in flight (UT 2026-10-06 09:10:41, ZTF26abydudp: armed at .026,
+      // cleared at .031, the 136" science offset refused against 60").
+      const bool large = this->allow_large_offset.load();
       double maxoffset = this->tcs_max_offset;
-      if ( this->allow_large_offset.load() ) {
+      if ( large ) {
         // A deliberate goal offset is correct by construction and must not
         // be capped as a guide correction, whatever mode the loop is in
         // when the correction lands.
@@ -3657,7 +3664,7 @@ logwrite( function, message.str() );
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
-        this->allow_large_offset.store(false);  // deliberate-offset allowance consumed even when rejected
+        if ( large ) this->allow_large_offset.store(false);  // consumed even when rejected -- only by the correction that used it
 
         // Match found but failure to send an offset is considered an attempt
         // so attempts is incremented.
@@ -3694,7 +3701,7 @@ logwrite( function, message.str() );
         if ( should_offset ) {
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
-          this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
+          if ( large ) this->allow_large_offset.store(false);  // consumed -- only by the correction that used it
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 
