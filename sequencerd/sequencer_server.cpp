@@ -362,6 +362,31 @@ namespace Sequencer {
         applied++;
       }
 
+      // TCS_AUTO_ONTARGET
+      if (config.param[entry] == "TCS_AUTO_ONTARGET") {
+        this->sequence.tcs_auto_ontarget = ( config.arg[entry] == "yes"  ||
+                                             config.arg[entry] == "true" ||
+                                             config.arg[entry] == "1" );
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      // TCS_AUTO_ONTARGET_SEP
+      if (config.param[entry] == "TCS_AUTO_ONTARGET_SEP") {
+        try {
+          this->sequence.tcs_auto_ontarget_sep = std::stod( config.arg[entry] );
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing TCS_AUTO_ONTARGET_SEP: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       // OFFSET_SETTLE_SEC
       if (config.param[entry] == "OFFSET_SETTLE_SEC") {
         try {
