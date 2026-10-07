@@ -11,7 +11,16 @@
 #          leave OUT_FILE alone when nothing changed, avoiding a rebuild.
 # ----------------------------------------------------------------------------
 
-execute_process( COMMAND git rev-parse --short HEAD
+# Name the build relative to the most recent release tag, e.g.
+# v1.10.0-12-gc719a4ac is 12 commits past v1.10.0 at commit c719a4ac.
+#
+# --long keeps the hash even on a tagged commit (v1.10.0-0-g...), because a
+# tag can be moved or deleted but the hash always names the commit.
+# --match restricts this to annotated release tags of the form vX.Y.Z.
+# --always falls back to the bare hash when no tag is reachable, such as in
+# a shallow clone.
+#
+execute_process( COMMAND git describe --long --always --match "v[0-9]*"
                  WORKING_DIRECTORY ${SRC_DIR}
                  OUTPUT_VARIABLE GIT_COMMIT_HASH
                  OUTPUT_STRIP_TRAILING_WHITESPACE

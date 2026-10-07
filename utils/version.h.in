@@ -11,4 +11,6 @@
  */
 #pragma once
 
-#define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"  ///< hash, hash-dirty, or "unknown"
+/// git describe output, e.g. v1.10.0-12-gc719a4ac[-dirty]; a bare hash if no
+/// release tag is reachable; or "unknown" if git is unavailable
+#define GIT_COMMIT_HASH "@GIT_COMMIT_HASH@"
