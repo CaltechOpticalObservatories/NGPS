@@ -72,9 +72,66 @@ class LogicService:
         except Exception as e:
             print(f"Error loading CSV file: {e}")
 
-    def upload_csv_to_mysql(self, file_path, target_set_name):
-        """Upload the CSV to MySQL and associate it with a new target set."""
-        
+    def find_owned_target_set_ids(self, target_set_name):
+        """
+        Return the SET_IDs of the current user's target sets named target_set_name.
+        Empty list if there are none (or on DB error).
+        """
+        owner = getattr(self.parent, "current_owner", None)
+        target_set_name = (target_set_name or "").strip()
+        if not owner or not target_set_name:
+            return []
+
+        conn = self.connect_to_mysql("config/db_config.ini")
+        if conn is None:
+            print("DB connect failed; cannot check for existing target set.")
+            return []
+
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT SET_ID FROM target_sets WHERE OWNER = %s AND SET_NAME = %s",
+                (owner, target_set_name),
+            )
+            set_ids = [int(row[0]) for row in cur.fetchall()]
+            cur.close()
+            return set_ids
+        except mysql.connector.Error as err:
+            print(f"Error checking for existing target set: {err}")
+            return []
+        finally:
+            conn.close()
+
+    def _delete_owned_target_sets(self, cursor, target_set_name):
+        """
+        Delete the current user's target set(s) named target_set_name, along with
+        their targets. Does not commit; the caller owns the transaction.
+        """
+        cursor.execute(
+            "SELECT SET_ID FROM target_sets WHERE OWNER = %s AND SET_NAME = %s",
+            (self.parent.current_owner, target_set_name),
+        )
+        set_ids = [row[0] for row in cursor.fetchall()]
+
+        for set_id in set_ids:
+            cursor.execute("DELETE FROM targets WHERE SET_ID = %s", (set_id,))
+            cursor.execute("DELETE FROM target_sets WHERE SET_ID = %s", (set_id,))
+
+        if set_ids:
+            print(f"Overwriting target set '{target_set_name}' (removed SET_IDs {set_ids})")
+
+    def upload_csv_to_mysql(self, file_path, target_set_name, overwrite=False):
+        """
+        Upload the CSV to MySQL and associate it with a new target set.
+
+        If overwrite is True, any existing target set(s) owned by the current user
+        with the same name are replaced. Everything happens in one transaction, so
+        a failed ingest leaves the database untouched (no orphaned empty set, and
+        an overwritten list is preserved).
+
+        Returns True on success, False on failure.
+        """
+
         # Step 1: Read the CSV
         try:
             with open(file_path, 'r') as file:
@@ -83,20 +140,26 @@ class LogicService:
                 print(f"CSV file loaded. Total rows: {len(data)}")
         except Exception as e:
             print(f"Error reading CSV file: {e}")
-            return
+            self.parent.show_popup(f"Error reading CSV file:\n{e}")
+            return False
 
         # Step 2: Insert a new entry into the `target_sets` table
+        connection = None
         try:
             connection = self.connect_to_mysql("config/db_config.ini")  # Assuming you have a method to connect to the DB
 
             if connection is None:
                 print("Failed to connect to MySQL. Cannot refresh table.")
-                return
+                self.parent.show_popup("Failed to connect to MySQL.")
+                return False
 
-            cursor = self.connection.cursor()
+            cursor = connection.cursor()
+
+            if overwrite:
+                self._delete_owned_target_sets(cursor, target_set_name)
+
             cursor.execute("INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
                         (target_set_name, self.parent.current_owner))  # Use the current owner's info
-            self.connection.commit()
 
             # Step 3: Fetch the new SET_ID (for the newly inserted target set)
             cursor.execute("SELECT LAST_INSERT_ID()")
@@ -105,7 +168,7 @@ class LogicService:
             cursor.close()
 
             # Step 4: Dynamically construct the insert query
-            cursor = self.connection.cursor()
+            cursor = connection.cursor()
 
             # Get the columns in the CSV file (i.e., DictReader's fieldnames)
             csv_columns = reader.fieldnames  # List of column names from the CSV
@@ -188,16 +251,23 @@ class LogicService:
                 # Execute the insert query with dynamically generated values
                 cursor.execute(insert_query, row_data)
 
-            # Commit the transaction
-            self.connection.commit()
+            # Commit the transaction (overwrite delete + new set + targets together)
+            connection.commit()
 
             print(f"Successfully uploaded {len(data)} targets to the new set {target_set_name}.")
-            # Emit the signal after the upload is complete
-            self.fetch_and_update_target_list()
 
-        except mysql.connector.Error as err:
+        except Exception as err:
             print(f"Error inserting data into MySQL: {err}")
-            self.parent.show_popup("Error uploading target list! Please try again.")
+            if connection is not None:
+                connection.rollback()
+                connection.close()
+            self.parent.show_popup(f"Error uploading target list! Please try again.\n\n{err}")
+            return False
+
+        connection.close()
+        # Emit the signal after the upload is complete
+        self.fetch_and_update_target_list()
+        return True
 
     def upload_generated_targets_to_mysql(self, rows, target_set_name):
         """
@@ -1325,9 +1395,10 @@ class LogicService:
 
         return deleted_count
 
-    def create_empty_target_set(self, set_name: str):
+    def create_empty_target_set(self, set_name: str, overwrite: bool = False):
         """
         Create a new empty target set for the current user, then refresh UI to show it.
+        If overwrite is True, any existing set(s) of the same name are replaced.
         """
         set_name = (set_name or "").strip()
         if not set_name:
@@ -1346,6 +1417,8 @@ class LogicService:
 
         try:
             cur = conn.cursor()
+            if overwrite:
+                self._delete_owned_target_sets(cur, set_name)
             cur.execute(
                 "INSERT INTO target_sets (SET_NAME, OWNER, SET_CREATION_TIMESTAMP) VALUES (%s, %s, NOW())",
                 (set_name, owner),
@@ -1359,6 +1432,7 @@ class LogicService:
             setattr(self.parent, "current_target_list_name", set_name)
         except Exception as e:
             print("create_empty_target_set failed:", e)
+            conn.rollback()
 
     def normalize_target_state(self, state):
         """Normalize target STATE values for display and DB writes."""
