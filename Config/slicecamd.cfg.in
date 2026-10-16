@@ -119,6 +119,17 @@ FINE_ACQUIRE_GAIN_LARGE=1.0
 #
 FINE_ACQUIRE_GAIN_THRESHOLD=2.0
 
+# FINE_ACQUIRE_GOAL=<arcsec>
+# Residual (arcsec) at or below which fine acquisition is converged.
+#
+FINE_ACQUIRE_GOAL=0.4
+
+# FINE_ACQUIRE_PRECISION=<arcsec>
+# MAD scatter per axis (arcsec) at or below which a cycle's samples are
+# considered settled enough to evaluate a move.
+#
+FINE_ACQUIRE_PRECISION=0.35
+
 # FINE_ACQUIRE_EXPTIME_MIN / _MAX = <sec>
 # Clamp range for auto-adjusted fine-acquisition exposure time.
 #

@@ -1457,6 +1457,32 @@ namespace Slicecam {
         applied++;
       }
 
+      if ( config.param[entry] == "FINE_ACQUIRE_GOAL" ) {
+        try { this->fineacquire_state.goal_arcsec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_GOAL "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
+      if ( config.param[entry] == "FINE_ACQUIRE_PRECISION" ) {
+        try { this->fineacquire_state.prec_arcsec = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_PRECISION "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       if ( config.param[entry] == "FINE_ACQUIRE_EXPTIME_MIN" ) {
         try { this->fineacquire_state.exptime_min = std::stod( config.arg[entry] ); }
         catch ( const std::exception &e ) {
