@@ -95,6 +95,8 @@ namespace Slicecam {
     int    settle_frames = 0;       ///< countdown of frames to discard while telescope settles
     int    settle_count  = 2;       ///< configured: frames to discard after each move
     double settle_sec    = 3.0;     ///< time-based settle (sec) after each move; 0 disables (needed when autoexpose shortens frames so the frame-count settle is too brief in wall-clock)
+    int    max_adjustments = 0;     ///< relaxed accept: after this many commanded corrections a residual within relaxed_factor x goal_arcsec counts as converged; 0 disables
+    double relaxed_factor  = 2.0;   ///< relaxed accept: multiple of goal_arcsec accepted once max_adjustments is reached
     double move_timeout_sec = 60.0; ///< max wait (sec) for acamd to report the goal change applied; 0 disables the wait
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
     // exposure compensation (shared by the reactive trim and, later, autoexpose)
@@ -150,6 +152,7 @@ namespace Slicecam {
       // the ACAM->slit pointing offset vs geometry over time. Touched only from the
       // single framegrab thread, so plain doubles are sufficient.
       double fineacq_total_dra  = 0.0;     ///< sum of applied dRA corrections this run [arcsec]
+      int    fineacq_adjustments = 0;  ///< corrections commanded this run (relaxed accept counter; survives FineAcqState::reset())
       double fineacq_total_ddec = 0.0;     ///< sum of applied dDEC corrections this run [arcsec]
       double fineacq_goal_ra    = NAN;     ///< per-run snapshot of goal RA  [deg], taken at fineacquire start, logged at lock
       double fineacq_goal_dec   = NAN;     ///< per-run snapshot of goal DEC [deg], taken at fineacquire start, logged at lock

@@ -169,6 +169,7 @@ namespace Slicecam {
     this->fineacquire_state.reset();
     this->fineacq_total_dra  = 0.0;   // reset per-run ACAM->slit residual accumulators
     this->fineacq_total_ddec = 0.0;
+    this->fineacq_adjustments = 0;    // relaxed-accept counter, per run
 
     // snapshot this run's goal (DB target) coords from the TARGETINFO published message; NAN if no target
     // has been published (manual runs log nan). Frozen for the run via the is_fineacquire_running handoff.
@@ -497,14 +498,34 @@ namespace Slicecam {
 
     // convergence check
     //
-    if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
+    // RELAXED ACCEPT (CF, 2026-10-20): a target that keeps landing just outside
+    // the goal is otherwise corrected again and again until the sequencer's
+    // acquisition timeout. Once FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have
+    // been commanded this run, a median residual within
+    // FINE_ACQUIRE_RELAXED_FACTOR x goal is accepted as converged and logged
+    // as such. MAX_ADJUSTMENTS=0 disables; the single-frame verification
+    // accept above is unchanged (goal only).
+    //
+    const bool within_goal = ( offset_arcsec <= this->fineacquire_state.goal_arcsec );
+    const bool relaxed_ok  = ( !within_goal
+                               && this->fineacquire_state.max_adjustments > 0
+                               && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
+                               && offset_arcsec <= this->fineacquire_state.relaxed_factor
+                                                   * this->fineacquire_state.goal_arcsec );
+    if ( within_goal || relaxed_ok ) {
       std::ostringstream oss;
-      oss << "fine acquisition converged: offset dRA=" << med_dra * 3600.0
+      oss << "fine acquisition converged" << ( relaxed_ok ? " (RELAXED)" : "" )
+          << ": offset dRA=" << med_dra * 3600.0
           << " dDEC=" << med_ddec * 3600.0
           << " arcsec (r=" << offset_arcsec
           << " arcsec, n=" << n
           << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
           << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
+      if ( relaxed_ok ) {
+        oss << " -- accepted after " << this->fineacq_adjustments
+            << " adjustment(s): r <= " << this->fineacquire_state.relaxed_factor
+            << " x goal";
+      }
       logwrite( function, oss.str() );
 
       // One structured per-run line for building an ACAM->slit geometric (flexure) model
@@ -608,6 +629,7 @@ namespace Slicecam {
       this->publish_status();
       return;
     }
+    this->fineacq_adjustments++;   // one more commanded correction this run (relaxed accept)
 
     // while guiding the correction only re-points acamd's goal; wait until
     // acamd reports the goal change applied before settling
@@ -1485,6 +1507,36 @@ namespace Slicecam {
           message.str(""); message << "ERROR invalid FINE_ACQUIRE_SETTLE_SEC "
                                    << config.arg[entry] << ": " << e.what();
           logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_MAX_ADJUSTMENTS" ) {
+        try { this->fineacquire_state.max_adjustments = std::stoi( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_MAX_ADJUSTMENTS "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_RELAXED_FACTOR" ) {
+        try { this->fineacquire_state.relaxed_factor = std::stod( config.arg[entry] ); }
+        catch ( const std::exception &e ) {
+          message.str(""); message << "ERROR invalid FINE_ACQUIRE_RELAXED_FACTOR "
+                                   << config.arg[entry] << ": " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        if ( this->fineacquire_state.relaxed_factor < 1.0 ) {
+          logwrite( function, "ERROR FINE_ACQUIRE_RELAXED_FACTOR must be >= 1" );
           return ERROR;
         }
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
