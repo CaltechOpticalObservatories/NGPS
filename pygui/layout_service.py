@@ -22,6 +22,7 @@ class LayoutService:
         self.save_button = QPushButton()
         self.lamp_checkboxes = {}
         self.modulator_checkboxes = {}
+        self._last_known_exptime_sec = None  # last max exptime shown in new_exptime_box
 
         # Create the control tab instance
         self.control_tab = ControlTab(self.parent)
@@ -549,7 +550,7 @@ class LayoutService:
         self.parent.exposure_progress = QProgressBar()
         self.parent.exposure_progress.setRange(0, 100)
         self.parent.exposure_progress.setValue(0)
-        self.parent.exposure_progress.setMaximumWidth(600)
+        self.parent.exposure_progress.setMaximumWidth(300)
         self.parent.exposure_progress.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.parent.exposure_progress.setTextVisible(True)
         self.parent.exposure_progress.setFormat("0%")
@@ -557,6 +558,20 @@ class LayoutService:
         exposure_layout.setSpacing(5)
         exposure_layout.addWidget(QLabel("Exposure Progress:"))
         exposure_layout.addWidget(self.parent.exposure_progress)
+
+        # Modify the exposure time of the exposure currently in progress.
+        # Sends "modexptime <sec>" straight to the sequencer
+        self.parent.new_exptime_box = QLineEdit()
+        self.parent.new_exptime_box.setPlaceholderText("New exptime (sec)")
+        self.parent.new_exptime_box.setFixedWidth(70)
+        self.parent.new_exptime_box.setValidator(QDoubleValidator(0.0, 99999.0, 3, self.parent.new_exptime_box))
+        self.parent.new_exptime_box.setToolTip(
+            "Change the exposure time of the exposure currently in progress. Press Enter to apply."
+        )
+        self.parent.new_exptime_box.returnPressed.connect(self.on_modify_exptime_clicked)
+
+        exposure_layout.addSpacing(12)
+        exposure_layout.addWidget(self.parent.new_exptime_box)
 
         # Readout/Overhead Progress
         overhead_layout = QHBoxLayout()  # Horizontal layout for overhead row
@@ -602,6 +617,54 @@ class LayoutService:
         label_text = f"{progress_percentage}% ({remaining_sec} sec remaining)"
         self.parent.exposure_progress.setValue(progress_percentage)
         self.parent.exposure_progress.setFormat(label_text)
+
+    def update_new_exptime_field(self, max_exptime_sec):
+        """Keep the modexptime input showing the exptime currently in effect.
+        """
+        box = self.parent.new_exptime_box
+
+        if max_exptime_sec <= 0:
+            self._last_known_exptime_sec = None
+            if not box.hasFocus():
+                box.clear()
+            return
+
+        if max_exptime_sec == self._last_known_exptime_sec or box.hasFocus():
+            return
+
+        self._last_known_exptime_sec = max_exptime_sec
+        box.setText(f"{max_exptime_sec:g}")
+
+    def on_modify_exptime_clicked(self):
+        """Request a new exposure time for the exposure currently in progress.
+
+        Sends "modexptime <sec>" directly to the sequencer, which forwards it
+        to camerad to update the live shutter timer.
+        """
+        text = self.parent.new_exptime_box.text().strip()
+        if not text:
+            return
+
+        try:
+            new_exptime = float(text)
+        except ValueError:
+            QMessageBox.warning(
+                self.parent, "Invalid exposure time",
+                f"'{text}' is not a valid number of seconds."
+            )
+            return
+
+        if new_exptime < 5:
+            QMessageBox.warning(
+                self.parent, "Exposure time too short",
+                "The camera won't accept an exposure time change to less than "
+                "5 seconds, and won't apply a change with less than 5 seconds "
+                "remaining in the current exposure."
+            )
+            return
+
+        self.parent.send_command(f"modexptime {new_exptime}\n")
+        self.parent.new_exptime_box.clear()
 
     def update_readout_progress(self, progress_percentage):
         """Update the readout progress bar based on the received percentage."""
@@ -1793,6 +1856,34 @@ class LayoutService:
             self.on_target_set_changed()
             self.hide_default_columns()
 
+    def prompt_target_set_name(self, title, label):
+        """
+        Ask for a target set name. If the user already owns a set with that name,
+        ask whether to overwrite it; declining re-opens the name prompt.
+
+        Returns (name, overwrite), or (None, False) if cancelled.
+        """
+        name = ""
+        while True:
+            name, ok = QInputDialog.getText(self.parent, title, label, QLineEdit.Normal, name)
+            name = name.strip()
+            if not ok or not name:
+                return None, False
+
+            if not self.logic_service.find_owned_target_set_ids(name):
+                return name, False
+
+            confirm = QMessageBox.question(
+                self.parent,
+                "Target List Exists",
+                f"A target list named '{name}' already exists.\n\n"
+                "Do you want to overwrite it? Its current targets will be replaced.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if confirm == QMessageBox.Yes:
+                return name, True
+
     def upload_new_target_list(self):
         """Handle creating a new target list, uploading CSV, and creating a new target set."""
         # remember where we were, so we can revert on cancel
@@ -1807,17 +1898,15 @@ class LayoutService:
             file_path = file_dialog.selectedFiles()[0]
 
             # 2) Ask for a name
-            target_set_name, ok = QInputDialog.getText(self.parent, "Enter Target Set Name", "Target Set Name:")
-            if ok and target_set_name:
-                # Avoid cascaded signals while we clear/update the combo
-                with QSignalBlocker(self.target_list_name):
-                    self.target_list_name.clear()
-                # 3) Do the upload (your upload already refreshes + rebuilds lists)
-                self.logic_service.upload_csv_to_mysql(file_path, target_set_name)
-                # (Optional) set the selection to the new name without firing handler
-                with QSignalBlocker(self.target_list_name):
-                    self.target_list_name.setCurrentText(target_set_name)
-                self.parent.reload_table()
+            target_set_name, overwrite = self.prompt_target_set_name("Enter Target Set Name", "Target Set Name:")
+            if target_set_name:
+                # 3) Do the upload (on success it refreshes + rebuilds lists; on
+                #    failure the DB and combo are left as they were)
+                if self.logic_service.upload_csv_to_mysql(file_path, target_set_name, overwrite=overwrite):
+                    # (Optional) set the selection to the new name without firing handler
+                    with QSignalBlocker(self.target_list_name):
+                        self.target_list_name.setCurrentText(target_set_name)
+                    self.parent.reload_table()
             else:
                 # Cancelled name → put the combo back to a normal item
                 with QSignalBlocker(self.target_list_name):
@@ -1871,14 +1960,13 @@ class LayoutService:
             with QSignalBlocker(combo):
                 combo.setCurrentIndex(last_real)
 
-            name, ok = QInputDialog.getText(
-                self.parent,
+            name, overwrite = self.prompt_target_set_name(
                 "Create empty target list",
                 "Target list name:"
             )
 
-            if ok and name.strip():
-                self.logic_service.create_empty_target_set(name.strip())
+            if name:
+                self.logic_service.create_empty_target_set(name, overwrite=overwrite)
 
             return
 

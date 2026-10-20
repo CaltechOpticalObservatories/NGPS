@@ -11,6 +11,7 @@ class StatusService(QObject):
     # Signals to communicate with the main GUI thread
     status_updated_signal = pyqtSignal(str)
     progress_updated_signal = pyqtSignal(int, int)  # Signal to update exposure progress bar (0-100)
+    max_exptime_updated_signal = pyqtSignal(float)  # Total exptime (sec) of the exposure currently running
     readout_progress_updated_signal = pyqtSignal(int)  # Signal to update readout progress bar (0-100)
     image_number_updated_signal = pyqtSignal(int)  # Signal to update image number
     image_name_updated_signal = pyqtSignal(str)
@@ -124,6 +125,7 @@ class StatusService(QObject):
         elif "ready for next exposure" in message:
             self.progress_updated_signal.emit(int(0), int(0))
             self.readout_progress_updated_signal.emit(int(0))
+            self.max_exptime_updated_signal.emit(0.0)
         elif '''waiting for USER to send "continue" signal''' in message:
              self.user_can_expose_signal.emit(True)
         elif "NOTICE:shutter opened" in message:
@@ -151,6 +153,9 @@ class StatusService(QObject):
 
             # Emit signal with progress and remaining time in seconds
             self.progress_updated_signal.emit(progress, exposure_time_sec)
+
+            # Emit the exposure's total exptime
+            self.max_exptime_updated_signal.emit(max_time_sec)
 
             # self.log_message(
             #     f"{progress}% complete — {exposure_time_sec:.1f} min remaining of {max_time_sec:.1f} min total"

@@ -601,14 +601,46 @@ class ControlTab(QDialog):
 
     def on_slit_angle_changed(self):
         slit_angle = self.slit_angle_box.text()
+
         if slit_angle == "PA":
-            slit_angle = self.logic_service.compute_parallactic_angle_astroplan(self.parent.current_ra, self.parent.current_dec)
+            slit_angle = self.logic_service.compute_parallactic_angle_astroplan(
+                self.parent.current_ra,
+                self.parent.current_dec,
+            )
             print(f"Parallactic Angle: {slit_angle}")
-            self.slit_angle_box.setText(slit_angle)
+            self.slit_angle_box.setText(str(slit_angle))
 
         if self.parent.current_observation_id:
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "OTMslitangle", slit_angle)
-            self.logic_service.send_update_to_db(self.parent.current_observation_id, "slitangle", slit_angle)
+            self.logic_service.send_update_to_db(
+                self.parent.current_observation_id,
+                "OTMslitangle",
+                slit_angle,
+            )
+
+            self.logic_service.send_update_to_db(
+                self.parent.current_observation_id,
+                "slitangle",
+                slit_angle,
+            )
+
+            theta0 = self._read_theta0()
+            slit_angle_float = self._parse_angle_float(slit_angle)
+
+            if theta0 is not None and slit_angle_float is not None:
+                otm_cass = slit_angle_float - theta0
+
+                print(
+                    f"Updating OTMcass: slit_angle({slit_angle_float}) - "
+                    f"Theta0({theta0}) = {otm_cass}"
+                )
+
+                self.logic_service.send_update_to_db(
+                    self.parent.current_observation_id,
+                    "OTMcass",
+                    f"{otm_cass:.6f}",
+                )
+            else:
+                print("Could not update OTMcass because slit_angle or Theta0 was invalid.")
 
     def num_of_exposures_changed(self):
         num_of_exposures = self.num_of_exposures_box.text()
