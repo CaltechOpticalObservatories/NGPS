@@ -100,11 +100,13 @@ FINE_ACQUIRE_SETTLE_FRAMES=0
 FINE_ACQUIRE_SETTLE_SEC=3.0
 
 # FINE_ACQUIRE_MAX_ADJUSTMENTS=<n>
-# Relaxed convergence. A target that keeps landing just outside the goal is
-# otherwise corrected again and again until the sequencer's acquisition
-# timeout. After <n> corrections have been commanded in one run, a median
-# residual within FINE_ACQUIRE_RELAXED_FACTOR x goal is accepted as converged
-# (logged as "converged (RELAXED)"). 0 disables.
+# Correction budget and relaxed convergence. At most <n> corrections are
+# commanded in one run. After the <n>-th, the FIRST frame whose residual is
+# within FINE_ACQUIRE_RELAXED_FACTOR x goal ends the run (logged as
+# "converged (RELAXED)"); no more corrections are sent and no further median
+# is waited for. If no such frame comes, the sequencer's acquisition timeout
+# ends the run as a failed acquisition. 0 disables (old behaviour: correct
+# until the goal is met or the sequencer times out).
 FINE_ACQUIRE_MAX_ADJUSTMENTS=3
 
 # FINE_ACQUIRE_RELAXED_FACTOR=<f>

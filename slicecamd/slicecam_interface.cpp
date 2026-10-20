@@ -615,6 +615,27 @@ namespace Slicecam {
       }
     }
 
+    // CORRECTION BUDGET (CF, 2026-10-20): once FINE_ACQUIRE_MAX_ADJUSTMENTS
+    // corrections have been commanded this run, no further correction is
+    // sent. Waiting for a median of several frames only to decide on a
+    // correction that will not be applied is pointless, so from here on the
+    // run ends at the first single frame inside the relaxed goal (the
+    // verification pass above), or at the sequencer's acquisition timeout,
+    // which reports the acquisition as failed. 0 disables the budget.
+    //
+    if ( this->fineacquire_state.max_adjustments > 0
+         && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {
+      std::ostringstream oss;
+      oss << "correction budget exhausted (" << this->fineacq_adjustments << " of "
+          << this->fineacquire_state.max_adjustments << "): median residual r="
+          << offset_arcsec << " arcsec is outside the relaxed goal "
+          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+          << " arcsec; no further correction, waiting for a frame within it";
+      logwrite( function, oss.str() );
+      this->fineacquire_state.reset();
+      return;
+    }
+
     // select gain: use gain_large when offset is well above the goal threshold
     //
     const double effective_gain = ( offset_arcsec > this->fineacquire_state.gain_threshold_arcsec )
