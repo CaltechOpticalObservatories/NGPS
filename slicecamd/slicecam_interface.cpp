@@ -432,27 +432,11 @@ namespace Slicecam {
     //
     if ( this->fineacq_total_dra != 0.0 || this->fineacq_total_ddec != 0.0 ) {
       const double r1 = std::hypot( offsets.first, offsets.second ) * 3600.0;
-      // RELAXED ACCEPT applies here too (CF, 2026-10-20): once
-      // FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have been commanded, the
-      // first verification frame within FINE_ACQUIRE_RELAXED_FACTOR x goal
-      // ends the run -- no further median evaluation, no further correction.
-      const bool r1_goal    = ( r1 <= this->fineacquire_state.goal_arcsec );
-      const bool r1_relaxed = ( !r1_goal
-                                && this->fineacquire_state.max_adjustments > 0
-                                && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
-                                && r1 <= this->fineacquire_state.relaxed_factor
-                                         * this->fineacquire_state.goal_arcsec );
-      if ( r1_goal || r1_relaxed ) {
+      if ( r1 <= this->fineacquire_state.goal_arcsec ) {
         std::ostringstream oss;
-        oss << "fine acquisition converged" << ( r1_relaxed ? " (RELAXED)" : "" )
-            << ": single-frame offset r=" << r1
-            << " arcsec <= " << ( r1_relaxed ? "relaxed " : "" ) << "goal="
-            << ( r1_relaxed ? this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
-                            : this->fineacquire_state.goal_arcsec )
+        oss << "fine acquisition converged: single-frame offset r=" << r1
+            << " arcsec <= goal=" << this->fineacquire_state.goal_arcsec
             << " arcsec (n=" << n << ")";
-        if ( r1_relaxed ) {
-          oss << " -- accepted after " << this->fineacq_adjustments << " adjustment(s)";
-        }
         logwrite( function, oss.str() );
 
         std::ostringstream acqmodel;
@@ -514,34 +498,14 @@ namespace Slicecam {
 
     // convergence check
     //
-    // RELAXED ACCEPT (CF, 2026-10-20): a target that keeps landing just outside
-    // the goal is otherwise corrected again and again until the sequencer's
-    // acquisition timeout. Once FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have
-    // been commanded this run, a median residual within
-    // FINE_ACQUIRE_RELAXED_FACTOR x goal is accepted as converged and logged
-    // as such. MAX_ADJUSTMENTS=0 disables; the single-frame verification
-    // accept above is unchanged (goal only).
-    //
-    const bool within_goal = ( offset_arcsec <= this->fineacquire_state.goal_arcsec );
-    const bool relaxed_ok  = ( !within_goal
-                               && this->fineacquire_state.max_adjustments > 0
-                               && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
-                               && offset_arcsec <= this->fineacquire_state.relaxed_factor
-                                                   * this->fineacquire_state.goal_arcsec );
-    if ( within_goal || relaxed_ok ) {
+    if ( offset_arcsec <= this->fineacquire_state.goal_arcsec ) {
       std::ostringstream oss;
-      oss << "fine acquisition converged" << ( relaxed_ok ? " (RELAXED)" : "" )
-          << ": offset dRA=" << med_dra * 3600.0
+      oss << "fine acquisition converged: offset dRA=" << med_dra * 3600.0
           << " dDEC=" << med_ddec * 3600.0
           << " arcsec (r=" << offset_arcsec
           << " arcsec, n=" << n
           << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
           << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec";
-      if ( relaxed_ok ) {
-        oss << " -- accepted after " << this->fineacq_adjustments
-            << " adjustment(s): r <= " << this->fineacquire_state.relaxed_factor
-            << " x goal";
-      }
       logwrite( function, oss.str() );
 
       // One structured per-run line for building an ACAM->slit geometric (flexure) model
@@ -613,27 +577,6 @@ namespace Slicecam {
         this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
         return;
       }
-    }
-
-    // CORRECTION BUDGET (CF, 2026-10-20): once FINE_ACQUIRE_MAX_ADJUSTMENTS
-    // corrections have been commanded this run, no further correction is
-    // sent. Waiting for a median of several frames only to decide on a
-    // correction that will not be applied is pointless, so from here on the
-    // run ends at the first single frame inside the relaxed goal (the
-    // verification pass above), or at the sequencer's acquisition timeout,
-    // which reports the acquisition as failed. 0 disables the budget.
-    //
-    if ( this->fineacquire_state.max_adjustments > 0
-         && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {
-      std::ostringstream oss;
-      oss << "correction budget exhausted (" << this->fineacq_adjustments << " of "
-          << this->fineacquire_state.max_adjustments << "): median residual r="
-          << offset_arcsec << " arcsec is outside the relaxed goal "
-          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
-          << " arcsec; no further correction, waiting for a frame within it";
-      logwrite( function, oss.str() );
-      this->fineacquire_state.reset();
-      return;
     }
 
     // select gain: use gain_large when offset is well above the goal threshold
@@ -710,19 +653,37 @@ namespace Slicecam {
     this->fineacq_total_dra  += cmd_dra  * 3600.0;
     this->fineacq_total_ddec += cmd_ddec * 3600.0;
 
-    // ACCEPT ON THE FINAL CORRECTION (CF, 2026-10-20; config
-    // FINE_ACQUIRE_ACCEPT_FINAL_CORRECTION): when the correction just applied
-    // was the last one in the budget and the residual it corrected was within
-    // the relaxed goal, the run ends here. The move has executed and settled
-    // above; no verification frame is waited for. "One correction and call
-    // it a day" = MAX_ADJUSTMENTS=1 with this on; "two corrections, accept if
-    // the second was small enough" = MAX_ADJUSTMENTS=2 with this on.
+    // THE BUDGET'S LAST CORRECTION DECIDES (CF, 2026-10-20: "i never want to
+    // sit and evaluate, if no correction is going to be applied"). Once
+    // FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have been commanded, nothing
+    // further is sampled or evaluated: the move above has executed and
+    // settled, and the run ends NOW -- converged if the residual this last
+    // correction removed was within FINE_ACQUIRE_RELAXED_FACTOR x goal, else
+    // failed (running cleared without a lock: the sequencer reports a failed
+    // acquisition and the robot retries on another star). 0 disables the
+    // budget (old behaviour: correct until the goal or the sequencer timeout).
+    // "One correction and call it a day" = MAX_ADJUSTMENTS=1; "two corrections,
+    // accept if the second was small enough" = MAX_ADJUSTMENTS=2.
     //
-    if ( this->fineacquire_state.accept_final_correction
-         && this->fineacquire_state.max_adjustments > 0
+    if ( this->fineacquire_state.max_adjustments > 0
          && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
-         && offset_arcsec <= this->fineacquire_state.relaxed_factor
-                             * this->fineacquire_state.goal_arcsec ) {
+         && offset_arcsec > this->fineacquire_state.relaxed_factor
+                            * this->fineacquire_state.goal_arcsec ) {
+      std::ostringstream oss;
+      oss << "fine acquisition FAILED: correction budget spent (" << this->fineacq_adjustments
+          << " of " << this->fineacquire_state.max_adjustments << ") and the last correction removed r="
+          << offset_arcsec << " arcsec > relaxed goal="
+          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+          << " arcsec; not evaluating further";
+      logwrite( function, oss.str() );
+      this->is_fineacquire_locked.store( false, std::memory_order_release );
+      this->is_fineacquire_running.store( false, std::memory_order_release );
+      this->fineacquire_state.reset();
+      this->publish_status();
+      return;
+    }
+    if ( this->fineacquire_state.max_adjustments > 0
+         && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {
       std::ostringstream oss;
       oss << "fine acquisition converged (FINAL CORRECTION): correction "
           << this->fineacq_adjustments << " of " << this->fineacquire_state.max_adjustments
@@ -1597,14 +1558,6 @@ namespace Slicecam {
           logwrite( function, message.str() );
           return ERROR;
         }
-        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
-        logwrite( function, message.str() );
-        applied++;
-      }
-      else
-      if ( config.param[entry] == "FINE_ACQUIRE_ACCEPT_FINAL_CORRECTION" ) {
-        const std::string v = config.arg[entry];
-        this->fineacquire_state.accept_final_correction = ( v == "yes" || v == "true" || v == "1" );
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;

@@ -97,7 +97,6 @@ namespace Slicecam {
     double settle_sec    = 3.0;     ///< time-based settle (sec) after each move; 0 disables (needed when autoexpose shortens frames so the frame-count settle is too brief in wall-clock)
     int    max_adjustments = 0;     ///< relaxed accept: after this many commanded corrections a residual within relaxed_factor x goal_arcsec counts as converged; 0 disables
     double relaxed_factor  = 2.0;   ///< relaxed accept: multiple of goal_arcsec accepted once max_adjustments is reached
-    bool   accept_final_correction = false; ///< end the run right after the budget's last correction when that correction was within relaxed_factor x goal (no verification frame)
     double move_timeout_sec = 60.0; ///< max wait (sec) for acamd to report the goal change applied; 0 disables the wait
     int    consecutive_centroid_failures = 0; ///< counts consecutive centroid failures
     // exposure compensation (shared by the reactive trim and, later, autoexpose)
