@@ -2379,7 +2379,7 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
-    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default no): the TCS itself can
+    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default yes): the TCS itself can
     // satisfy this wait through the same ontarget() the operator's press uses.
     // The watcher lives exactly as long as this wait (auto_ontarget_active).
     //

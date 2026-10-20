@@ -427,7 +427,7 @@ namespace Sequencer {
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
       double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
-      bool   tcs_auto_ontarget = false;    ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default no)
+      bool   tcs_auto_ontarget = true;     ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default yes)
       double tcs_auto_ontarget_sep = 5.0;  ///< max |telescope-target| arcsec for auto-ontarget (config TCS_AUTO_ONTARGET_SEP)
 
 ///   std::mutex              tcs_ontarget_mtx;
