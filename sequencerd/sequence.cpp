@@ -52,6 +52,12 @@ namespace Sequencer {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
       this->can_expose.store(isready);
     }
+    // A shutter-open report marks a sub-exposure. The async listener turns the
+    // first PIXELCOUNT that follows into "readout started" (readouts_started),
+    // which the early slew and the between-exposure flexure re-apply key on.
+    if ( jmessage.contains(Key::Camerad::SHUTTEROPEN) && jmessage[Key::Camerad::SHUTTEROPEN].get<bool>() ) {
+      this->shutter_opened_since_readout = true;
+    }
     this->camerad_cv.notify_all();
   }
   /***** Sequencer::Sequence::handletopic_camerad ****************************/
@@ -512,10 +518,22 @@ namespace Sequencer {
         // Set READOUT flag and clear EXPOSE flag when pixels start coming in
         // ------------------------------------------------------------------
         //
-        if ( seq.arm_readout_flag && statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {  // async message tag PIXELCOUNT
-          seq.arm_readout_flag = false;
-          seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},      // set READOUT
-                                                {Sequencer::SEQ_WAIT_EXPOSE} );     // clear EXPOSE
+        if ( statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {                          // async message tag PIXELCOUNT
+          if ( seq.arm_readout_flag ) {
+            seq.arm_readout_flag = false;
+            seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},    // set READOUT
+                                                  {Sequencer::SEQ_WAIT_EXPOSE} );   // clear EXPOSE
+          }
+          // Count this sub-exposure's readout exactly once: the first PIXELCOUNT
+          // after camerad reported the shutter open (see handletopic_camerad).
+          {
+          std::lock_guard<std::mutex> lock(seq.camerad_mtx);
+          if ( seq.shutter_opened_since_readout ) {
+            seq.shutter_opened_since_readout = false;
+            seq.readouts_started++;
+            seq.camerad_cv.notify_all();
+          }
+          }
         }
 
         // ---------------------
@@ -640,6 +658,12 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
+    // A fresh run always slews for its first target: nothing sent ahead by a
+    // previous run counts, and no auto-ontarget watcher survives into this one.
+    //
+    this->early_slew = EarlySlew();
+    this->auto_ontarget_active.store(false);
+
     // This is the main loop which runs as long as there are targets in the database,
     // or until cancelled. Or, this will run once in the case of single-target-mode,
     // which is invoked by storing an OBSID in the class variable single_obsid.
@@ -739,10 +763,12 @@ namespace Sequencer {
 
         // threads to start, pair their ThreadStatusBit with the function to call
         //
+        // flexure_set is deliberately NOT here: the compensation is computed
+        // from the telescope position at the moment it is applied, so it is
+        // applied at the start of the exposure (below), after the slew.
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
                            { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
-                           { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this)    },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
@@ -830,6 +856,16 @@ namespace Sequencer {
         }
       }
 
+      // Flexure compensation is computed from the telescope position at the
+      // moment flexured applies it, so it is applied here -- telescope on
+      // target, acquisition and target offset done -- and not in the pre-slew
+      // worker set, where it used the PREVIOUS target's pointing. It runs
+      // alongside the slit move and the offset settle and is joined before the
+      // expose command. For NEXP>1 it is re-applied during each readout
+      // (flexure_reapply, in the readout wait below).
+      //
+      std::future<long> flexure_future;
+
       if ( !this->target.iscal ) {
         // send offsets only on fineacquire, otherwise user needs to fix things
         if ( !this->is_repeat_target.load()      &&
@@ -840,6 +876,7 @@ namespace Sequencer {
             return;
           }
         }
+        flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
         // ensure slit offset is in "expose" position when needed
         try {
           error |= this->slit_set(Sequencer::VSM_EXPOSE);
@@ -848,6 +885,9 @@ namespace Sequencer {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
           return;
         }
+      }
+      else {
+        flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
       }
 
       // The offset-star offset is applied asynchronously by the ACAM guide loop;
@@ -859,6 +899,26 @@ namespace Sequencer {
         logwrite( function, "NOTICE: waiting "+std::to_string(this->offset_settle_sec)+
                             " sec for target offset to settle onto slit before exposing" );
         std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
+      }
+
+      // The compensator must be set before the shutter opens. A failure keeps
+      // the semantics flexure_set had in the worker set: the sequence stops.
+      //
+      try {
+        long flexure_error = flexure_future.get();
+        error |= flexure_error;
+        if ( flexure_error != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+        }
+      }
+      catch (const std::exception& e) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" : "+std::string(e.what()) );
+        return;
+      }
+
+      if ( this->cancel_flag.load() ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -907,14 +967,43 @@ namespace Sequencer {
       // of the last exposure finishes — the correct completion signal for both
       // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
+      // While waiting, every sub-exposure readout start (readouts_started, see
+      // the async listener) is acted on once: a readout that more sub-exposures
+      // follow gets the flexure compensation re-applied during it; the final
+      // readout releases the slew to the next target (early_slew_to_next).
+      // The current target, its database rows and its FITS header are not
+      // touched by either -- camerad took the header telemetry at exposure
+      // start and AIRMASS1/MJD1 at shutter close, before any PIXELCOUNT.
+      //
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
+        int readouts_handled = 0;
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
-                                            [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
-          logwrite( function, "waiting for readout — requesting snapshot" );
+        while ( true ) {
+          const bool signalled = this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                   [this,&readouts_handled]() { return this->can_expose.load() || this->cancel_flag.load() ||
+                                                                       this->readouts_started > readouts_handled; } );
+          if ( this->can_expose.load() || this->cancel_flag.load() ) break;
+          if ( !signalled ) {
+            logwrite( function, "waiting for readout — requesting snapshot" );
+            lock.unlock();
+            this->request_snapshot();
+            lock.lock();
+            continue;
+          }
+          const int sub = ++readouts_handled;   // readout of sub-exposure number sub (1-based) has begun
           lock.unlock();
-          this->request_snapshot();
+          if ( sub < this->target.nexp ) {
+            this->flexure_reapply( sub );
+          }
+          else if ( sub == this->target.nexp ) {
+            this->early_slew_to_next();
+          }
+          else {
+            message.str(""); message << "NOTICE: readout " << sub << " seen for a " << this->target.nexp
+                                     << "-exposure command; ignored";
+            logwrite( function, message.str() );
+          }
           lock.lock();
         }
         this->broadcast.notice( function, "done waiting for readout" );
@@ -954,6 +1043,11 @@ namespace Sequencer {
       this->thread_error_manager.clear_all();     // clear the thread error state
       this->do_once.store(true);
     }
+
+    // Nothing sent ahead survives the run, and no watcher either.
+    //
+    this->early_slew = EarlySlew();
+    this->auto_ontarget_active.store(false);
 
     logwrite( function, "target list processing has stopped" );
     return;
@@ -2170,7 +2264,7 @@ namespace Sequencer {
    *             cancel_flag, and a concurrent cancel must always win
    *             against this automatic path.
    */
-  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg ) {
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen ) {
     const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
     std::stringstream message;
 
@@ -2181,7 +2275,10 @@ namespace Sequencer {
 
     int consecutive = 0;
 
-    while ( this->auto_ontarget_active.load() &&
+    // gen retires this watcher the moment a newer one is launched for other
+    // coordinates (a slew sent ahead that the loop then did not take).
+    //
+    while ( this->auto_ontarget_active.load() && this->auto_ontarget_gen.load() == gen &&
             !this->cancel_flag.load() && !this->is_ontarget.load() ) {
 
       std::this_thread::sleep_for( std::chrono::seconds(1) );
@@ -2217,7 +2314,8 @@ namespace Sequencer {
 
       // Re-check at the last instant; do NOT clear cancel_flag (see @details).
       //
-      if ( !this->auto_ontarget_active.load() || this->cancel_flag.load() ) return;
+      if ( !this->auto_ontarget_active.load() || this->auto_ontarget_gen.load() != gen ||
+           this->cancel_flag.load() ) return;
 
       message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
                                << std::fixed << std::setprecision(1) << sep_as
@@ -2267,6 +2365,49 @@ namespace Sequencer {
       this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
+
+    // The TCS was already sent to this very row during the previous target's
+    // final readout (early_slew_to_next): nothing to compute, stop or send,
+    // only the same ontarget wait. Any mismatch -- queue reordered, row
+    // edited, a retry at an offset star -- falls through to the normal slew.
+    //
+    if ( this->early_slew.sent && this->early_slew_matches_target() ) {
+      const double early_ra_out  = this->early_slew.ra_out;
+      const double early_dec_out = this->early_slew.dec_out;
+      this->early_slew = EarlySlew();
+      this->broadcast.notice( function, "telescope already sent to "+std::string(this->target.name)
+                                        +" during the previous readout" );
+      {
+      ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
+      this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
+
+      // The watcher has been running since the COORDS went out and may have
+      // acknowledged already; launch one only if none is alive.
+      if ( this->tcs_auto_ontarget && !this->is_ontarget.load() && !this->auto_ontarget_active.load() ) {
+        const unsigned gen = ++this->auto_ontarget_gen;
+        this->auto_ontarget_active.store( true );
+        std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
+                     early_ra_out, early_dec_out, gen ).detach();
+      }
+
+      while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
+        std::unique_lock<std::mutex> lock(cv_mutex);
+        this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
+      }
+      this->auto_ontarget_active.store( false );
+
+      this->broadcast.notice( function, "received "
+                                        +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
+                                        +" signal!" );
+      }
+      if ( this->cancel_flag.load() ) return NO_ERROR;
+      this->is_ontarget.store(false);
+      this->last_target  = this->target.name;
+      this->last_ra_hms  = this->target.ra_hms;
+      this->last_dec_dms = this->target.dec_dms;
+      return NO_ERROR;
+    }
+    this->early_slew = EarlySlew();   // whatever was sent ahead was for another row
 
     error = NO_ERROR;
 
@@ -2342,6 +2483,7 @@ namespace Sequencer {
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
+    this->is_ontarget.store(false);   // only an acknowledgment of THIS move may satisfy the wait below
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
 
     // if not success then wait 1s and try again
@@ -2388,8 +2530,10 @@ namespace Sequencer {
       // ra_out/dec_out are the SCOPE-frame coordinates this function actually
       // commanded, which is the position REQPOS telemetry will report -- the
       // database coordinates differ by the pointmode focal-plane offset.
+      // A new generation retires any watcher left from a slew sent ahead.
+      const unsigned gen = ++this->auto_ontarget_gen;
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out ).detach();
+                   ra_out, dec_out, gen ).detach();
     }
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -2418,6 +2562,174 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::move_to_target **********************************/
+
+
+  /***** Sequencer::Sequence::early_slew_to_next ******************************/
+  /**
+   * @brief      send the next pending target's slew while the final readout runs
+   * @return     NO_ERROR always -- nothing here may fail the current target
+   *
+   * Called by sequence_start when the last sub-exposure of the current target
+   * has begun reading out. By then nothing reads the telescope for the
+   * current target any more: camerad took the telemetry header (TCS,
+   * TARGETINFO, ...) when the exposure started and AIRMASS1/MJD1 at shutter
+   * close, and the sequencer's completion rows carry the catalogue
+   * coordinates. The current target (this->target) is not touched and no
+   * TARGETINFO is published: the next row is only looked at
+   * (TargetInfo::peek_next), its COORDS and ring angle go to the TCS exactly
+   * as move_to_target would send them, and the fact is remembered in
+   * early_slew. When the loop then takes that same row, move_to_target()
+   * sees the match and only runs the ontarget wait; any other row slews
+   * normally.
+   *
+   * Nothing is sent when single-step is selected, a single target was
+   * requested, the TCS is not connected, there is no pending row, or the
+   * next row is a calibration, has no coordinates, has nexp 0, uses ACAM
+   * pointing mode, or repeats the current pointing.
+   */
+  long Sequence::early_slew_to_next() {
+    const std::string function("Sequencer::Sequence::early_slew_to_next");
+    std::stringstream message;
+
+    this->early_slew = EarlySlew();
+
+    if ( this->cancel_flag.load() ) return NO_ERROR;
+    if ( this->do_once.load() ) {
+      logwrite( function, "single-step selected: not slewing ahead" );
+      return NO_ERROR;
+    }
+    if ( !this->single_obsid.empty() ) {
+      logwrite( function, "single target requested next: not slewing ahead" );
+      return NO_ERROR;
+    }
+    if ( !this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) ) {
+      logwrite( function, "TCS not connected: not slewing ahead" );
+      return NO_ERROR;
+    }
+
+    TargetInfo::Peek next;
+    std::string status;
+    if ( this->target.peek_next( next, status ) != TargetInfo::TARGET_FOUND ) {
+      logwrite( function, "not slewing ahead: "+status );
+      return NO_ERROR;
+    }
+    if ( next.iscal ) {
+      logwrite( function, "next target "+next.name+" is a calibration: no slew" );
+      return NO_ERROR;
+    }
+    if ( next.ra_hms.empty() && next.dec_dms.empty() ) {
+      logwrite( function, "next target "+next.name+" has no coordinates: no slew" );
+      return NO_ERROR;
+    }
+    if ( next.nexp == 0 ) {
+      logwrite( function, "next target "+next.name+" has nexp 0: not slewing ahead" );
+      return NO_ERROR;
+    }
+    if ( next.pointmode == Acam::POINTMODE_ACAM ) {
+      logwrite( function, "next target "+next.name+" uses ACAM pointing mode: not slewing ahead" );
+      return NO_ERROR;
+    }
+    // same test move_to_target will make (repeat_target) for the next row
+    if ( next.ra_hms == std::string(this->last_ra_hms) && next.dec_dms == std::string(this->last_dec_dms) ) {
+      logwrite( function, "next target "+next.name+" repeats the current pointing: no slew" );
+      return NO_ERROR;
+    }
+
+    double ra_in    = radec_to_decimal( next.ra_hms  ) * TO_DEGREES;
+    double dec_in   = radec_to_decimal( next.dec_dms );
+    double angle_in = next.slitangle;
+
+    if ( std::isnan(ra_in) || std::isnan(dec_in) ) {
+      message.str(""); message << "ERROR converting next target " << next.name << " RA=\"" << next.ra_hms
+                               << "\" DEC=\"" << next.dec_dms << "\" to decimal: not slewing ahead";
+      logwrite( function, message.str() );
+      return NO_ERROR;
+    }
+
+    double ra_out, dec_out, angle_out;
+    if ( this->target.fpoffsets.compute_offset( Acam::POINTMODE_SLIT, "SCOPE",
+                                                ra_in, dec_in, angle_in,
+                                                ra_out, dec_out, angle_out ) != NO_ERROR ) {
+      logwrite( function, "ERROR computing SCOPE coordinates for "+next.name+": not slewing ahead" );
+      return NO_ERROR;
+    }
+
+    // Guiding and fine acquisition must be off before the telescope moves,
+    // exactly as in move_to_target.
+    //
+    if ( this->do_slicecam_stop() != NO_ERROR ) {
+      this->broadcast.warning( function, "stopping fine acquisition" );
+    }
+    if ( this->do_acam_stop() != NO_ERROR ) {
+      this->broadcast.warning( function, "stopping guiding" );
+    }
+    if ( this->cancel_flag.load() ) return NO_ERROR;
+
+    // The ontarget wait move_to_target() will run for this row starts now,
+    // from a clean flag: only an acknowledgment of THIS move may satisfy it.
+    //
+    this->is_ontarget.store(false);
+
+    std::stringstream coords_cmd;
+    std::string       coords_reply;
+    coords_cmd << "COORDS " << ( ra_out * TO_HOURS )  << " "                       // RA in decimal hours
+                            <<   dec_out << " "                                    // DEC in decimal degrees
+                            <<   "2000" << " "                                     // equinox always = 2000
+                            <<   "0 0"  << " "                                     // RA,DEC proper motion not used
+                            << "\"" << next.name << "\"";                        // target name in quotes
+    {
+    std::string rastr, decstr;
+    double _ra = ra_out * TO_HOURS;
+    decimal_to_sexa( _ra, rastr );
+    decimal_to_sexa( dec_out, decstr );
+    message.str(""); message << "slewing ahead to next target " << next.name << " (id " << next.obsid
+                             << ") during readout: SCOPE COORDS= " << rastr << "  " << decstr << "  "
+                             << angle_out << " J2000";
+    this->broadcast.notice( function, message.str() );
+    }
+
+    long error = this->tcsd.send( coords_cmd.str(), coords_reply );               // send to the TCS
+    if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
+      error = this->tcsd.send( coords_cmd.str(), coords_reply );                  // one retry, as move_to_target
+      if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
+        message.str(""); message << "sending COORDS ahead of time. TCS reply: " << coords_reply
+                                 << " -- move_to_target will slew normally";
+        this->broadcast.warning( function, message.str() );
+        return NO_ERROR;
+      }
+    }
+
+    {
+    std::stringstream ringgo_cmd;
+    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
+    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
+    this->broadcast.notice( function, "sending "+ringgo_cmd.str()+" to TCS" );
+    this->tcsd.send( ringgo_cmd.str(), noreply );
+    }
+
+    this->early_slew.sent      = true;
+    this->early_slew.obsid     = next.obsid;
+    this->early_slew.name      = next.name;
+    this->early_slew.ra_hms    = next.ra_hms;
+    this->early_slew.dec_dms   = next.dec_dms;
+    this->early_slew.slitangle = next.slitangle;
+    this->early_slew.ra_out    = ra_out;
+    this->early_slew.dec_out   = dec_out;
+
+    // Start the TCS watcher now, so a move that lands during the readout is
+    // acknowledged by the time move_to_target() waits for it.
+    //
+    if ( this->tcs_auto_ontarget ) {
+      const unsigned gen = ++this->auto_ontarget_gen;
+      this->auto_ontarget_active.store( true );
+      std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
+                   ra_out, dec_out, gen ).detach();
+    }
+
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::early_slew_to_next ******************************/
 
 
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
@@ -2548,19 +2860,12 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    // build up list of activate chans
-    std::ostringstream activechans;
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
-    const auto &calinfo = this->caltarget.get_info(calname);
-    for (const auto &[chan,active] : calinfo.channel_active) {
-      if (active) activechans << " " << chan;
-    }
-
-    std::ostringstream comp;
-    comp << FLEXURED_COMPENSATE << activechans.str();
+    // the compensate command names this target's active channels
+    const std::string comp = this->flexure_compensate_command();
+    const std::string activechans = comp.substr( std::string(FLEXURED_COMPENSATE).size() );
 
     if ( !this->cancel_flag.load() &&
-          this->flexured.command( comp.str() ) != NO_ERROR ) {
+          this->flexured.command( comp ) != NO_ERROR ) {
       this->broadcast.error( function, "setting flexure compensator" );
       this->thread_error_manager.set( THR_FLEXURE_SET );
       throw std::runtime_error("setting flexure compensator");
@@ -2568,11 +2873,69 @@ namespace Sequencer {
 
     this->is_flexure_default.store(false);
 
-    this->broadcast.notice( function, "flexure compensator set for "+activechans.str());
+    this->broadcast.notice( function, "flexure compensator set for "+activechans);
 
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::flexure_set *************************************/
+
+
+  /***** Sequencer::Sequence::flexure_compensate_command **********************/
+  /**
+   * @brief      the FLEXURED_COMPENSATE command for the current target
+   * @return     "compensate <chan> [<chan> ...]" with the channels active for
+   *             the target's calibration entry ("SCIENCE" for science targets)
+   */
+  std::string Sequence::flexure_compensate_command() {
+    std::ostringstream activechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      if (active) activechans << " " << chan;
+    }
+    return std::string(FLEXURED_COMPENSATE) + activechans.str();
+  }
+  /***** Sequencer::Sequence::flexure_compensate_command **********************/
+
+
+  /***** Sequencer::Sequence::flexure_reapply *********************************/
+  /**
+   * @brief      re-issue the flexure compensation between two sub-exposures
+   * @param[in]  sub  the sub-exposure (1-based) whose readout is in progress
+   * @return     ERROR | NO_ERROR (informational only)
+   *
+   * Called by sequence_start during the readout of sub-exposure sub when
+   * sub-exposure sub+1 follows. flexured recomputes from the telescope
+   * position at this moment, so the next sub-exposure starts corrected. A
+   * failure is reported and otherwise ignored: nothing may disturb a running
+   * exposure command, and the series is no worse off than before this
+   * re-apply existed.
+   */
+  long Sequence::flexure_reapply( int sub ) {
+    const std::string function("Sequencer::Sequence::flexure_reapply");
+    std::stringstream message;
+
+    if ( !this->should_flexcomp.load() || this->cancel_flag.load() ) return NO_ERROR;
+
+    const std::string comp = this->flexure_compensate_command();
+
+    message.str(""); message << "re-applying flexure compensation during readout " << sub << " of "
+                             << this->target.nexp << " for " << this->target.name;
+    logwrite( function, message.str() );
+
+    if ( this->flexured.command( comp ) != NO_ERROR ) {
+      message.str(""); message << "flexure compensation NOT re-applied before exposure " << sub+1
+                               << " of " << this->target.nexp << "; continuing";
+      this->broadcast.warning( function, message.str() );
+      return ERROR;
+    }
+
+    message.str(""); message << "flexure compensator re-applied before exposure " << sub+1
+                             << " of " << this->target.nexp;
+    this->broadcast.notice( function, message.str() );
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::flexure_reapply *********************************/
 
 
   /***** Sequencer::Sequence::calib_set ***************************************/
@@ -2986,6 +3349,11 @@ namespace Sequencer {
     //
     if ( this->tcs_preauth_time > 0 ) this->notify_tcs_next_target = true; else this->notify_tcs_next_target = false;
 
+    {
+    std::lock_guard<std::mutex> lock(this->camerad_mtx);
+    this->shutter_opened_since_readout = false;     // readout bookkeeping starts fresh with this expose command
+    this->readouts_started = 0;
+    }
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
     this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );          // set EXPOSE bit
 

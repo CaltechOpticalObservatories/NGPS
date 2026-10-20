@@ -402,8 +402,9 @@ namespace Sequencer {
       /** @brief  satisfies the TCSOP wait when the TCS itself reports arrival
        *          (config TCS_AUTO_ONTARGET); coords are the commanded SCOPE
        *          frame position in degrees; see sequence.cpp */
-      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg );
-      std::atomic<bool> auto_ontarget_active{false};  ///< true only while move_to_target's TCSOP wait is open
+      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen );
+      std::atomic<bool> auto_ontarget_active{false};  ///< true while a TCSOP wait (or an early slew awaiting one) is open
+      std::atomic<unsigned> auto_ontarget_gen{0};     ///< launch generation; a watcher retires when a newer one is launched
 
       /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
@@ -439,6 +440,14 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      // Readout bookkeeping for the current expose command, guarded by camerad_mtx.
+      // A camerad status with SHUTTEROPEN=true marks a sub-exposure; the first
+      // async PIXELCOUNT after it marks that sub-exposure's readout. Only open
+      // reports are used (a paused/resumed exposure opens twice, reads out once)
+      // and PIXELCOUNT only ever arrives during a readout, so a count can never
+      // run ahead of the shutter. Both reset in trigger_exposure().
+      bool shutter_opened_since_readout = false;  ///< SHUTTEROPEN=true seen since the last counted readout
+      int  readouts_started = 0;                  ///< sub-exposure readouts begun since the expose command
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
@@ -477,6 +486,38 @@ namespace Sequencer {
 
       /// Sequence::move_to_target remembers the last target name and coordinates
       std::string last_target;
+
+      /**
+       * The slew sent ahead of time, during the previous target's final
+       * readout (early_slew_to_next). move_to_target() consumes it only when
+       * the row it is given is the very row the TCS was sent to -- same
+       * OBSERVATION_ID, name, RA, DEC and slit angle -- and otherwise slews
+       * normally. Reset on every sequence_start entry and exit so it never
+       * outlives one run of the loop.
+       */
+      struct EarlySlew {
+        bool        sent      = false;
+        int         obsid     = -1;
+        std::string name;
+        std::string ra_hms;
+        std::string dec_dms;
+        double      slitangle = 0.0;
+        double      ra_out    = 0.0;   ///< SCOPE-frame RA sent, degrees (for the auto-ontarget watcher)
+        double      dec_out   = 0.0;   ///< SCOPE-frame DEC sent, degrees
+      } early_slew;
+
+      /** @brief  is the recorded early slew for exactly the current target row? */
+      bool early_slew_matches_target() const {
+        const bool angle_same = ( this->early_slew.slitangle == this->target.slitangle ) ||
+                                ( std::isnan(this->early_slew.slitangle) && std::isnan(this->target.slitangle) );
+        return this->early_slew.sent
+            && this->early_slew.obsid   == this->target.obsid
+            && this->early_slew.name    == std::string(this->target.name)
+            && this->early_slew.ra_hms  == std::string(this->target.ra_hms)
+            && this->early_slew.dec_dms == std::string(this->target.dec_dms)
+            && angle_same;
+      }
+
       mysqlx::string last_ra_hms;
       mysqlx::string last_dec_dms;
 
@@ -627,6 +668,9 @@ namespace Sequencer {
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
+      long early_slew_to_next();     ///< sends the NEXT pending target's coords to the TCS during the final readout
+      long flexure_reapply( int sub );          ///< re-issues the flexure compensation between sub-exposures (never fatal)
+      std::string flexure_compensate_command(); ///< FLEXURED_COMPENSATE plus the active channels for the current target
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
