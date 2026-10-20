@@ -710,6 +710,44 @@ namespace Slicecam {
     this->fineacq_total_dra  += cmd_dra  * 3600.0;
     this->fineacq_total_ddec += cmd_ddec * 3600.0;
 
+    // ACCEPT ON THE FINAL CORRECTION (CF, 2026-10-20; config
+    // FINE_ACQUIRE_ACCEPT_FINAL_CORRECTION): when the correction just applied
+    // was the last one in the budget and the residual it corrected was within
+    // the relaxed goal, the run ends here. The move has executed and settled
+    // above; no verification frame is waited for. "One correction and call
+    // it a day" = MAX_ADJUSTMENTS=1 with this on; "two corrections, accept if
+    // the second was small enough" = MAX_ADJUSTMENTS=2 with this on.
+    //
+    if ( this->fineacquire_state.accept_final_correction
+         && this->fineacquire_state.max_adjustments > 0
+         && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
+         && offset_arcsec <= this->fineacquire_state.relaxed_factor
+                             * this->fineacquire_state.goal_arcsec ) {
+      std::ostringstream oss;
+      oss << "fine acquisition converged (FINAL CORRECTION): correction "
+          << this->fineacq_adjustments << " of " << this->fineacquire_state.max_adjustments
+          << " corrected r=" << offset_arcsec << " arcsec <= relaxed goal="
+          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+          << " arcsec; accepted without a verification frame";
+      logwrite( function, oss.str() );
+
+      std::ostringstream acqmodel;
+      acqmodel << "[ACQMODEL] acam2slit dRA=" << this->fineacq_total_dra
+               << " dDEC="     << this->fineacq_total_ddec << " arcsec"
+               << " GOALRA="   << this->fineacq_goal_ra
+               << " GOALDEC="  << this->fineacq_goal_dec
+               << " CASANGLE=" << this->telem.angle_scope
+               << " n="        << n
+               << " cam="      << which;
+      logwrite( function, acqmodel.str() );
+
+      this->is_fineacquire_locked.store( true,  std::memory_order_release );
+      this->is_fineacquire_running.store( false,  std::memory_order_release );
+      this->fineacquire_state.reset();
+      this->publish_status();
+      return;
+    }
+
     // reset samples and discard settle_count frames for telescope settling
     this->fineacquire_state.reset();
     this->fineacquire_state.settle_frames = this->fineacquire_state.settle_count;
@@ -1559,6 +1597,14 @@ namespace Slicecam {
           logwrite( function, message.str() );
           return ERROR;
         }
+        message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+      else
+      if ( config.param[entry] == "FINE_ACQUIRE_ACCEPT_FINAL_CORRECTION" ) {
+        const std::string v = config.arg[entry];
+        this->fineacquire_state.accept_final_correction = ( v == "yes" || v == "true" || v == "1" );
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;
