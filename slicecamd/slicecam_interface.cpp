@@ -432,11 +432,27 @@ namespace Slicecam {
     //
     if ( this->fineacq_total_dra != 0.0 || this->fineacq_total_ddec != 0.0 ) {
       const double r1 = std::hypot( offsets.first, offsets.second ) * 3600.0;
-      if ( r1 <= this->fineacquire_state.goal_arcsec ) {
+      // RELAXED ACCEPT applies here too (CF, 2026-10-20): once
+      // FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have been commanded, the
+      // first verification frame within FINE_ACQUIRE_RELAXED_FACTOR x goal
+      // ends the run -- no further median evaluation, no further correction.
+      const bool r1_goal    = ( r1 <= this->fineacquire_state.goal_arcsec );
+      const bool r1_relaxed = ( !r1_goal
+                                && this->fineacquire_state.max_adjustments > 0
+                                && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
+                                && r1 <= this->fineacquire_state.relaxed_factor
+                                         * this->fineacquire_state.goal_arcsec );
+      if ( r1_goal || r1_relaxed ) {
         std::ostringstream oss;
-        oss << "fine acquisition converged: single-frame offset r=" << r1
-            << " arcsec <= goal=" << this->fineacquire_state.goal_arcsec
+        oss << "fine acquisition converged" << ( r1_relaxed ? " (RELAXED)" : "" )
+            << ": single-frame offset r=" << r1
+            << " arcsec <= " << ( r1_relaxed ? "relaxed " : "" ) << "goal="
+            << ( r1_relaxed ? this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+                            : this->fineacquire_state.goal_arcsec )
             << " arcsec (n=" << n << ")";
+        if ( r1_relaxed ) {
+          oss << " -- accepted after " << this->fineacq_adjustments << " adjustment(s)";
+        }
         logwrite( function, oss.str() );
 
         std::ostringstream acqmodel;
