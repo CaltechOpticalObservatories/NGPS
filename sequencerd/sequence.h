@@ -440,14 +440,19 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
-      // Readout bookkeeping for the current expose command, guarded by camerad_mtx.
-      // A camerad status with SHUTTEROPEN=true marks a sub-exposure; the first
-      // async PIXELCOUNT after it marks that sub-exposure's readout. Only open
-      // reports are used (a paused/resumed exposure opens twice, reads out once)
-      // and PIXELCOUNT only ever arrives during a readout, so a count can never
-      // run ahead of the shutter. Both reset in trigger_exposure().
-      bool shutter_opened_since_readout = false;  ///< SHUTTEROPEN=true seen since the last counted readout
-      int  readouts_started = 0;                  ///< sub-exposure readouts begun since the expose command
+      // Readout bookkeeping for the current expose command, guarded by camerad_mtx
+      // and reset in trigger_exposure(). A sub-exposure's readout is counted in two
+      // steps. (1) camerad's shutter report goes from open to closed in a report
+      // that is not PAUSED: that integration has ended, so the count is armed
+      // (handletopic_camerad). (2) A PIXELCOUNT from the first half of a readout
+      // completes it (async listener). Any open or paused report disarms.
+      // camerad's reports arrive in the order it published them, so a late or
+      // repeated report cannot arm twice for one close, and a late PIXELCOUNT
+      // cannot count a sub-exposure that is integrating. The count never exceeds
+      // the integrations that have ended; a lost report only leaves one uncounted.
+      bool last_shutteropen = false;   ///< SHUTTEROPEN in the last camerad report since the expose command
+      bool readout_armed    = false;   ///< an integration ended (open -> closed, not paused), its readout not yet counted
+      int  readouts_started = 0;       ///< sub-exposure readouts counted since the expose command
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;

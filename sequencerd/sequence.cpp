@@ -52,11 +52,17 @@ namespace Sequencer {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
       this->can_expose.store(isready);
     }
-    // A shutter-open report marks a sub-exposure. The async listener turns the
-    // first PIXELCOUNT that follows into "readout started" (readouts_started),
-    // which the early slew and the between-exposure flexure re-apply key on.
-    if ( jmessage.contains(Key::Camerad::SHUTTEROPEN) && jmessage[Key::Camerad::SHUTTEROPEN].get<bool>() ) {
-      this->shutter_opened_since_readout = true;
+    // Readout counting, step 1 of 2 (see the bookkeeping notes in sequence.h):
+    // the shutter report going from open to closed, in a report that is not
+    // PAUSED (camerad closes the shutter to pause, and says so), means an
+    // integration has ended. Open or paused reports disarm.
+    if ( jmessage.contains(Key::Camerad::SHUTTEROPEN) && jmessage[Key::Camerad::SHUTTEROPEN].is_boolean() ) {
+      const bool open   = jmessage[Key::Camerad::SHUTTEROPEN].get<bool>();
+      const bool paused = jmessage.contains(Key::Camerad::PAUSED) && jmessage[Key::Camerad::PAUSED].is_boolean()
+                          && jmessage[Key::Camerad::PAUSED].get<bool>();
+      if ( open || paused )               this->readout_armed = false;
+      else if ( this->last_shutteropen )  this->readout_armed = true;
+      this->last_shutteropen = open;
     }
     this->camerad_cv.notify_all();
   }
@@ -524,12 +530,33 @@ namespace Sequencer {
             seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},    // set READOUT
                                                   {Sequencer::SEQ_WAIT_EXPOSE} );   // clear EXPOSE
           }
-          // Count this sub-exposure's readout exactly once: the first PIXELCOUNT
-          // after camerad reported the shutter open (see handletopic_camerad).
+          // Readout counting, step 2 of 2 (step 1 in handletopic_camerad): an
+          // armed count is completed by a PIXELCOUNT from the first half of a
+          // readout, "PIXELCOUNT_<dev>:<pixels> <imagesize> <percent>" (the first
+          // two numbers after the colon are used). A message from the tail of an
+          // earlier readout, or one that cannot be read, completes nothing; a
+          // count completed here leaves at least half a readout before camerad
+          // can open the shutter again.
           {
+          double readout_fraction = -1.0;
+          const auto colon = statstr.find( ':' );
+          if ( colon != std::string::npos ) {
+            std::istringstream fields( statstr.substr( colon+1 ) );
+            std::string token;
+            std::vector<double> numbers;
+            while ( numbers.size() < 2 && fields >> token ) {
+              try {
+                std::size_t used = 0;
+                const double value = std::stod( token, &used );
+                if ( used == token.size() ) numbers.push_back( value );
+              }
+              catch ( const std::exception & ) { }
+            }
+            if ( numbers.size() == 2 && numbers[1] > 0.0 ) readout_fraction = numbers[0] / numbers[1];
+          }
           std::lock_guard<std::mutex> lock(seq.camerad_mtx);
-          if ( seq.shutter_opened_since_readout ) {
-            seq.shutter_opened_since_readout = false;
+          if ( seq.readout_armed && readout_fraction >= 0.0 && readout_fraction < 0.5 ) {
+            seq.readout_armed = false;
             seq.readouts_started++;
             seq.camerad_cv.notify_all();
           }
@@ -741,6 +768,14 @@ namespace Sequencer {
       this->is_repeat_target.store( this->repeat_target() );
       if ( this->is_repeat_target.load() ) this->broadcast.notice( function, "repeat target" );
 
+      // Flexure compensation is computed from the telescope position at the
+      // moment flexured applies it. When the telescope stays where it is (a
+      // calibration, or a repeat of the same pointing) it is set with the other
+      // workers, in parallel, as it always was. When the telescope slews, that
+      // would compensate for the PREVIOUS pointing, so it is set after
+      // acquisition instead, just before the exposure.
+      const bool flexure_after_acquisition = !this->target.iscal && !this->is_repeat_target.load();
+
       // threads to start, pair their ThreadStatusBit with the function to call
       std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
 
@@ -763,9 +798,6 @@ namespace Sequencer {
 
         // threads to start, pair their ThreadStatusBit with the function to call
         //
-        // flexure_set is deliberately NOT here: the compensation is computed
-        // from the telescope position at the moment it is applied, so it is
-        // applied at the start of the exposure (below), after the slew.
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
                            { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
@@ -774,6 +806,9 @@ namespace Sequencer {
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
                                                  this->target.iscal ? Sequencer::VSM_EXPOSE : Sequencer::VSM_ACQUIRE) }
                          };
+        if ( !flexure_after_acquisition ) {   // telescope does not move: set it now, in parallel
+          worker_threads.push_back( { THR_FLEXURE_SET, std::bind(&Sequence::flexure_set, this) } );
+        }
       }
 
       // pair their ThreadStatusBit with their future
@@ -856,13 +891,11 @@ namespace Sequencer {
         }
       }
 
-      // Flexure compensation is computed from the telescope position at the
-      // moment flexured applies it, so it is applied here -- telescope on
-      // target, acquisition and target offset done -- and not in the pre-slew
-      // worker set, where it used the PREVIOUS target's pointing. It runs
-      // alongside the slit move and the offset settle and is joined before the
-      // expose command. For NEXP>1 it is re-applied during each readout
-      // (flexure_reapply, in the readout wait below).
+      // For a target the telescope slewed to (flexure_after_acquisition), the
+      // flexure compensation is set here -- telescope on target, acquisition
+      // and target offset done -- in parallel with the slit move and the
+      // offset settle, and joined before the expose command. For NEXP>1 it is
+      // re-applied during each readout (flexure_reapply, in the readout wait).
       //
       std::future<long> flexure_future;
 
@@ -876,7 +909,9 @@ namespace Sequencer {
             return;
           }
         }
-        flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
+        if ( flexure_after_acquisition ) {
+          flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
+        }
         // ensure slit offset is in "expose" position when needed
         try {
           error |= this->slit_set(Sequencer::VSM_EXPOSE);
@@ -885,9 +920,6 @@ namespace Sequencer {
           logwrite( function, "ERROR slit offset exception: "+std::string(e.what()) );
           return;
         }
-      }
-      else {
-        flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
       }
 
       // The offset-star offset is applied asynchronously by the ACAM guide loop;
@@ -902,23 +934,20 @@ namespace Sequencer {
       }
 
       // The compensator must be set before the shutter opens. A failure keeps
-      // the semantics flexure_set had in the worker set: the sequence stops.
+      // the semantics flexure_set has in the worker set: the sequence stops.
       //
-      try {
-        long flexure_error = flexure_future.get();
-        error |= flexure_error;
-        if ( flexure_error != NO_ERROR ) {
-          this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+      if ( flexure_future.valid() ) {
+        try {
+          long flexure_error = flexure_future.get();
+          error |= flexure_error;
+          if ( flexure_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+          }
         }
-      }
-      catch (const std::exception& e) {
-        this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" : "+std::string(e.what()) );
-        return;
-      }
-
-      if ( this->cancel_flag.load() ) {
-        this->broadcast.notice( function, "sequence cancelled" );
-        return;
+        catch (const std::exception& e) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" : "+std::string(e.what()) );
+          return;
+        }
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -967,8 +996,8 @@ namespace Sequencer {
       // of the last exposure finishes — the correct completion signal for both
       // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
-      // While waiting, every sub-exposure readout start (readouts_started, see
-      // the async listener) is acted on once: a readout that more sub-exposures
+      // While waiting, every counted sub-exposure readout (readouts_started; see
+      // the bookkeeping notes in sequence.h) is acted on once: a readout that more sub-exposures
       // follow gets the flexure compensation re-applied during it; the final
       // readout releases the slew to the next target (early_slew_to_next).
       // The current target, its database rows and its FITS header are not
@@ -3351,7 +3380,8 @@ namespace Sequencer {
 
     {
     std::lock_guard<std::mutex> lock(this->camerad_mtx);
-    this->shutter_opened_since_readout = false;     // readout bookkeeping starts fresh with this expose command
+    this->last_shutteropen = false;                 // readout bookkeeping starts fresh with this expose command;
+    this->readout_armed    = false;                 // the shutter is closed until camerad opens it for this one
     this->readouts_started = 0;
     }
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
