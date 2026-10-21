@@ -69,8 +69,7 @@ int main() {
                        fs::perms::group_read  |
                        fs::perms::group_exec  |
                        fs::perms::others_read |
-                       fs::perms::others_exec |
-                       );
+                       fs::perms::others_exec );
       std::cout << "created directory " << newdir << std::endl;
     }
     else std::cout << "directory " << newdir << " already exists" << std::endl;
