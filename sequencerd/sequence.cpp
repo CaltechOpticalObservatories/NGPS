@@ -1079,20 +1079,21 @@ namespace Sequencer {
             continue;
           }
           const int sub = ++readouts_handled;   // readout of sub-exposure number sub (1-based) has begun
-          if ( sub == this->target.nexp && !this->do_once.load() && this->single_obsid.empty() &&
+          const int expected = this->readouts_expected;   // the N sent to camerad, not the live row
+          if ( sub == expected && !this->do_once.load() && this->single_obsid.empty() &&
                !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
             this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
             picked_during_readout = true;
             break;
           }
           lock.unlock();
-          if ( sub < this->target.nexp ) {
-            this->flexure_reapply( sub );
+          if ( sub < expected ) {
+            this->flexure_reapply( sub, expected );
           }
-          else if ( sub > this->target.nexp ) {
-            message.str(""); message << "NOTICE: readout " << sub << " seen for a " << this->target.nexp
-                                     << "-exposure command; ignored";
-            logwrite( function, message.str() );
+          else if ( sub > expected ) {
+            message.str(""); message << "readout " << sub << " seen for a " << expected
+                                     << "-exposure command: camerad is running more sub-exposures than were sent";
+            this->broadcast.warning( function, message.str() );
           }
           lock.lock();
         }
@@ -2838,35 +2839,61 @@ namespace Sequencer {
    * @return     ERROR | NO_ERROR (informational only)
    *
    * Called by sequence_start during the readout of sub-exposure sub when
-   * sub-exposure sub+1 follows. flexured recomputes from the telescope
-   * position at this moment, so the next sub-exposure starts corrected. A
-   * failure is reported and otherwise ignored: nothing may disturb a running
-   * exposure command, and the series is no worse off than before this
-   * re-apply existed.
+   * sub-exposure sub+1 of expected follows. flexured recomputes from the
+   * telescope position at this moment, so the next sub-exposure starts
+   * corrected. Skipped (the compensation set at the start of the series
+   * stays) unless that readout is still running and the next shutter has not
+   * opened, the TCS telemetry is fresh and finite (flexured itself does not
+   * check the values), and no thread error is set. A failure is reported and
+   * otherwise ignored: nothing may disturb a running exposure command.
    */
-  long Sequence::flexure_reapply( int sub ) {
+  long Sequence::flexure_reapply( int sub, int expected ) {
     const std::string function("Sequencer::Sequence::flexure_reapply");
     std::stringstream message;
 
     if ( !this->should_flexcomp.load() || this->cancel_flag.load() ) return NO_ERROR;
 
+    auto skipped = [&]( const std::string &why ) {
+      message.str(""); message << "flexure compensation NOT re-applied before exposure " << sub+1
+                               << " of " << expected << ": " << why;
+      this->broadcast.warning( function, message.str() );
+      return ERROR;
+    };
+    auto next_started = [this, sub]() {
+      std::lock_guard<std::mutex> lock( this->camerad_mtx );
+      return ( this->last_shutteropen || this->readouts_started != sub );
+    };
+
+    if ( this->thread_error_manager.are_any_set() ) return skipped( "a thread error is set" );
+    {
+    std::lock_guard<std::mutex> lock( this->tcsd_mtx );
+    if ( !this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) || !this->tcsinfo.is_fresh() ||
+         !std::isfinite( this->tcsinfo.zenithangle ) || !std::isfinite( this->tcsinfo.cassangle ) ||
+         !std::isfinite( this->tcsinfo.pa ) ) {
+      return skipped( "TCS telemetry not fresh or not valid" );
+    }
+    }
+    if ( next_started() ) return skipped( "the next exposure has already started" );
+
     const std::string comp = this->flexure_compensate_command();
 
     message.str(""); message << "re-applying flexure compensation during readout " << sub << " of "
-                             << this->target.nexp << " for " << this->target.name;
+                             << expected << " for " << this->target.name;
     logwrite( function, message.str() );
 
-    if ( this->flexured.command( comp ) != NO_ERROR ) {
-      message.str(""); message << "flexure compensation NOT re-applied before exposure " << sub+1
-                               << " of " << this->target.nexp << "; continuing";
+    if ( this->flexured.command( comp ) != NO_ERROR ) return skipped( "flexured returned an error" );
+
+    this->is_flexure_default.store(false);
+
+    if ( next_started() ) {
+      message.str(""); message << "flexure compensator re-applied, but exposure " << sub+1 << " of " << expected
+                               << " had already started: the actuators moved during its first seconds";
       this->broadcast.warning( function, message.str() );
       return ERROR;
     }
 
-    this->is_flexure_default.store(false);
-
     message.str(""); message << "flexure compensator re-applied before exposure " << sub+1
-                             << " of " << this->target.nexp;
+                             << " of " << expected;
     this->broadcast.notice( function, message.str() );
     return NO_ERROR;
   }
@@ -3082,7 +3109,9 @@ namespace Sequencer {
     // so this loop exits after at most a few iterations.
     //
     if ( abort_during_run ) {
-      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      // 20 s: the readout wait may be inside a flexured re-apply (client
+      // timeout 6 s + 2 s, flexured itself up to ~11 s) when the cancel lands
+      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(20);
       while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
               std::chrono::steady_clock::now() < drain_timeout ) {
         std::this_thread::sleep_for( std::chrono::milliseconds(20) );
@@ -3202,7 +3231,6 @@ namespace Sequencer {
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
 
     worker_threads = { { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)  },
-                       { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this) },  // compensate for the telescope position now
 //                     { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this) }
                      };
 
@@ -3232,6 +3260,24 @@ namespace Sequencer {
       }
     }
 
+    if ( this->cancel_flag.load() ) {
+      this->broadcast.notice(function, "cancelled repeat exposure");
+      return NO_ERROR;
+    }
+
+    // Flexure for the telescope position now. Only after camera_set has seen
+    // camerad ready: a REPEAT is accepted while the previous one is still
+    // integrating, and the actuators must not move under it.
+    //
+    try {
+      if ( this->flexure_set() != NO_ERROR ) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+      }
+    }
+    catch (const std::exception& e) {
+      this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" exception: "+std::string(e.what()) );
+      return ERROR;
+    }
     if ( this->cancel_flag.load() ) {
       this->broadcast.notice(function, "cancelled repeat exposure");
       return NO_ERROR;
@@ -3292,6 +3338,7 @@ namespace Sequencer {
     this->last_shutteropen = false;                 // readout bookkeeping starts fresh with this expose command;
     this->readout_armed    = false;                 // the shutter is closed until camerad opens it for this one
     this->readouts_started = 0;
+    this->readouts_expected = this->target.nexp;    // the N sent below, fixed for this command
     }
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
     this->wait_state_manager.set( Sequencer::SEQ_WAIT_EXPOSE );          // set EXPOSE bit

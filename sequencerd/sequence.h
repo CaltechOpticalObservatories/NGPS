@@ -454,6 +454,7 @@ namespace Sequencer {
       bool last_shutteropen = false;   ///< SHUTTEROPEN in the last camerad report since the expose command
       bool readout_armed    = false;   ///< an integration ended (open -> closed, not paused), its readout not yet counted
       int  readouts_started = 0;       ///< sub-exposure readouts counted since the expose command
+      int  readouts_expected = 0;      ///< N of that expose command (this->target can be rewritten by manual commands)
       // The readout gate, guarded by camerad_mtx. When the last readout of a
       // target starts, the loop completes that target and picks the next one
       // at once; nothing may then reach camerad (camera settings, an expose)
@@ -650,7 +651,7 @@ namespace Sequencer {
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
       bool wait_for_readout_gate( const std::string &before );  ///< wait for the previous target's readout to finish; false if cancelled
-      long flexure_reapply( int sub );          ///< re-issues the flexure compensation between sub-exposures (never fatal)
+      long flexure_reapply( int sub, int expected );  ///< re-issues the flexure compensation between sub-exposures (never fatal)
       std::string flexure_compensate_command(); ///< FLEXURED_COMPENSATE plus the active channels for the current target
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
