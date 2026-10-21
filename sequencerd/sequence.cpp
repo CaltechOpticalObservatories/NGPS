@@ -51,6 +51,13 @@ namespace Sequencer {
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
       this->can_expose.store(isready);
+      // The first READY after the next target was picked during a readout is
+      // the end of that readout (camerad reported READY=false when the
+      // exposure started and publishes in order): open the readout gate.
+      if ( isready && this->readout_gate_armed ) {
+        this->readout_gate_armed = false;
+        this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      }
     }
     // Readout counting, step 1 of 2 (see the bookkeeping notes in sequence.h):
     // the shutter report going from open to closed, in a report that is not
@@ -685,11 +692,15 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
-    // A fresh run always slews for its first target: nothing sent ahead by a
-    // previous run counts, and no auto-ontarget watcher survives into this one.
+    // On every way out of this function except a cancel, do not report the
+    // sequence finished while camerad is still reading out a target that was
+    // completed at the start of its last readout. Declared after the
+    // ScopedStates above, so it runs before they set READY.
     //
-    this->early_slew = EarlySlew();
-    this->auto_ontarget_active.store(false);
+    struct ReadoutGateOnExit {
+      Sequence &seq;
+      ~ReadoutGateOnExit() { try { seq.wait_for_readout_gate( "ending the sequence" ); } catch (...) { } }
+    } readout_gate_on_exit{ *this };
 
     // This is the main loop which runs as long as there are targets in the database,
     // or until cancelled. Or, this will run once in the case of single-target-mode,
@@ -740,7 +751,21 @@ namespace Sequencer {
           }
         }
 
-        this->adopt_early_slew_angle();    // a robot angle refresh during the early slew is not a different row
+        // A target picked while the previous one is still reading out starts
+        // at once only if the telescope has to slew to it: a science row with
+        // coordinates and SLIT pointing. Anything else -- a calibration, a row
+        // without coordinates, ACAM pointing -- starts when that readout has
+        // finished, exactly as before.
+        //
+        {
+        const bool slews = !this->target.iscal
+                        && !( this->target.ra_hms.empty() && this->target.dec_dms.empty() )
+                        && !( this->target.pointmode == Acam::POINTMODE_ACAM );
+        if ( !slews && !this->wait_for_readout_gate( "starting "+std::string(this->target.name) ) ) {
+          this->broadcast.notice( function, "sequence cancelled" );
+          return;
+        }
+        }
 
         error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
         if (error!=NO_ERROR) {
@@ -800,8 +825,9 @@ namespace Sequencer {
 
         // threads to start, pair their ThreadStatusBit with the function to call
         //
+        // camera_set is not here: it talks to camerad, so it runs just before
+        // the exposure, behind the readout gate (see "starting exposure").
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
-                           { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
@@ -952,6 +978,33 @@ namespace Sequencer {
         }
       }
 
+      // Nothing reaches camerad before the previous target's readout has
+      // finished: when this target was picked at the start of that readout,
+      // the camera settings and the expose wait here for camerad's READY.
+      //
+      if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
+      }
+      try {
+        long camera_error = this->camera_set();
+        error |= camera_error;
+        if ( camera_error != NO_ERROR ) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" failed" );
+        }
+        else {
+          this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
+        }
+      }
+      catch (const std::exception& e) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
+        return;
+      }
+      if ( this->cancel_flag.load() ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
+      }
+
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
       // Start the exposure in a thread...
@@ -1000,12 +1053,15 @@ namespace Sequencer {
       //
       // While waiting, every counted sub-exposure readout (readouts_started; see
       // the bookkeeping notes in sequence.h) is acted on once: a readout that more sub-exposures
-      // follow gets the flexure compensation re-applied during it; the final
-      // readout releases the slew to the next target (early_slew_to_next).
-      // The current target, its database rows and its FITS header are not
-      // touched by either -- camerad took the header telemetry at exposure
-      // start and AIRMASS1/MJD1 at shutter close, before any PIXELCOUNT.
+      // follow gets the flexure compensation re-applied during it. When the
+      // LAST one starts reading out, this target is complete -- its
+      // integration has ended, and camerad took its header telemetry at
+      // exposure start and AIRMASS1/MJD1 at shutter close -- so the loop
+      // completes it and picks the next target now instead of after READY,
+      // unless single-step, a single target, a cancel or a thread error says
+      // otherwise. The readout gate keeps camerad untouched until READY.
       //
+      bool picked_during_readout = false;
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
         int readouts_handled = 0;
@@ -1023,23 +1079,33 @@ namespace Sequencer {
             continue;
           }
           const int sub = ++readouts_handled;   // readout of sub-exposure number sub (1-based) has begun
+          if ( sub == this->target.nexp && !this->do_once.load() && this->single_obsid.empty() &&
+               !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
+            this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
+            picked_during_readout = true;
+            break;
+          }
           lock.unlock();
           if ( sub < this->target.nexp ) {
             this->flexure_reapply( sub );
           }
-          else if ( sub == this->target.nexp ) {
-            this->early_slew_to_next();
-          }
-          else {
+          else if ( sub > this->target.nexp ) {
             message.str(""); message << "NOTICE: readout " << sub << " seen for a " << this->target.nexp
                                      << "-exposure command; ignored";
             logwrite( function, message.str() );
           }
           lock.lock();
         }
-        this->broadcast.notice( function, "done waiting for readout" );
+        if ( picked_during_readout ) {
+          this->broadcast.notice( function, "last readout of "+std::string(this->target.name)
+                                            +" under way: completing it and picking the next target" );
+        }
+        else {
+          this->broadcast.notice( function, "done waiting for readout" );
+        }
       }
-      this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      // after a pick the READOUT bit stays set until camerad's READY opens the gate
+      if ( !picked_during_readout ) this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -1074,11 +1140,6 @@ namespace Sequencer {
       this->thread_error_manager.clear_all();     // clear the thread error state
       this->do_once.store(true);
     }
-
-    // Nothing sent ahead survives the run, and no watcher either.
-    //
-    this->early_slew = EarlySlew();
-    this->auto_ontarget_active.store(false);
 
     logwrite( function, "target list processing has stopped" );
     return;
@@ -2306,8 +2367,8 @@ namespace Sequencer {
 
     int consecutive = 0;
 
-    // gen retires this watcher the moment a newer one is launched for other
-    // coordinates (a slew sent ahead that the loop then did not take).
+    // gen retires this watcher the moment a newer one is launched, so one
+    // still sleeping from an earlier move can never acknowledge a new one.
     //
     while ( this->auto_ontarget_active.load() && this->auto_ontarget_gen.load() == gen &&
             !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -2405,59 +2466,6 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    // The TCS was already sent to this very row during the previous target's
-    // final readout (early_slew_to_next): nothing to compute, stop or send,
-    // only the same ontarget wait. Any mismatch -- queue reordered, row
-    // edited, a retry at an offset star -- falls through to the normal slew.
-    //
-    if ( this->early_slew.sent && this->early_slew_matches_target() ) {
-      const double early_ra_out  = this->early_slew.ra_out;
-      const double early_dec_out = this->early_slew.dec_out;
-      this->early_slew = EarlySlew();
-      this->broadcast.notice( function, "telescope already sent to "+std::string(this->target.name)
-                                        +" during the previous readout" );
-      {
-      ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
-      this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
-
-      // A fresh watcher for the coordinates sent ahead, unless the move is
-      // already acknowledged. Always fresh: the one started with the COORDS
-      // exits as soon as is_ontarget is set, and an operator press sets it
-      // only for a second (reset_ontarget), so it may be gone. Its new
-      // generation retires the old one if it is still alive; both watch the
-      // same coordinates, so an acknowledgment from either is valid.
-      if ( this->tcs_auto_ontarget ) {
-        bool launch = false;
-        unsigned gen = 0;
-        {
-        std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
-        if ( !this->is_ontarget.load() ) { gen = ++this->auto_ontarget_gen; launch = true; }
-        }
-        if ( launch ) {
-          this->auto_ontarget_active.store( true );
-          std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                       early_ra_out, early_dec_out, gen ).detach();
-        }
-      }
-
-      while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
-        std::unique_lock<std::mutex> lock(cv_mutex);
-        this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
-      }
-      this->auto_ontarget_active.store( false );
-
-      this->broadcast.notice( function, "received "
-                                        +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
-                                        +" signal!" );
-      }
-      if ( this->cancel_flag.load() ) return NO_ERROR;
-      this->is_ontarget.store(false);
-      this->last_target  = this->target.name;
-      this->last_ra_hms  = this->target.ra_hms;
-      this->last_dec_dms = this->target.dec_dms;
-      return NO_ERROR;
-    }
-    this->early_slew = EarlySlew();   // whatever was sent ahead was for another row
 
     error = NO_ERROR;
 
@@ -2533,8 +2541,8 @@ namespace Sequencer {
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
-    // Retire every auto-ontarget watcher still alive (one left by a slew sent
-    // ahead for another row) and clear the flag, in one step with respect to
+    // Retire every auto-ontarget watcher still alive (one from an earlier
+    // move) and clear the flag, in one step with respect to
     // a watcher's acknowledgment: only an ack of THIS move may satisfy the
     // wait below.
     unsigned ontarget_gen = 0;
@@ -2622,229 +2630,39 @@ namespace Sequencer {
   /***** Sequencer::Sequence::move_to_target **********************************/
 
 
-  /***** Sequencer::Sequence::early_slew_to_next ******************************/
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
   /**
-   * @brief      send the next pending target's slew while the final readout runs
-   * @return     NO_ERROR always -- nothing here may fail the current target
+   * @brief      wait until the previous target's readout has finished
+   * @param[in]  before  what is waiting, for the log
+   * @return     true to proceed, false if cancelled while waiting
    *
-   * Called by sequence_start when the last sub-exposure of the current target
-   * has begun reading out. By then nothing reads the telescope for the
-   * current target any more: camerad took the telemetry header (TCS,
-   * TARGETINFO, ...) when the exposure started and AIRMASS1/MJD1 at shutter
-   * close, and the sequencer's completion rows carry the catalogue
-   * coordinates. The current target (this->target) is not touched and no
-   * TARGETINFO is published: the next row is only looked at
-   * (TargetInfo::peek_next), its COORDS and ring angle go to the TCS exactly
-   * as move_to_target would send them, and the fact is remembered in
-   * early_slew. When the loop then takes that same row, move_to_target()
-   * sees the match and only runs the ontarget wait; any other row slews
-   * normally.
-   *
-   * Nothing is sent when single-step is selected, a single target was
-   * requested, the TCS is not connected, there is no pending row, or the
-   * next row is a calibration, has no coordinates, has nexp 0, uses ACAM
-   * pointing mode, or repeats the current pointing.
+   * The gate is armed when the next target is picked at the start of the
+   * previous target's last readout (sequence_start) and opened by the first
+   * camerad READY report after that (handletopic_camerad). Returns at once
+   * when it is not armed, which is every case but that one.
    */
-  long Sequence::early_slew_to_next() {
-    const std::string function("Sequencer::Sequence::early_slew_to_next");
-    std::stringstream message;
-
-    this->early_slew = EarlySlew();
-
-    if ( this->cancel_flag.load() ) return NO_ERROR;
-    if ( this->do_once.load() ) {
-      logwrite( function, "single-step selected: not slewing ahead" );
-      return NO_ERROR;
-    }
-    if ( !this->single_obsid.empty() ) {
-      logwrite( function, "single target requested next: not slewing ahead" );
-      return NO_ERROR;
-    }
-    if ( !this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) ) {
-      logwrite( function, "TCS not connected: not slewing ahead" );
-      return NO_ERROR;
-    }
-
-    TargetInfo::Peek next;
-    std::string status;
-    if ( this->target.peek_next( next, status ) != TargetInfo::TARGET_FOUND ) {
-      logwrite( function, "not slewing ahead: "+status );
-      return NO_ERROR;
-    }
-    if ( next.iscal ) {
-      logwrite( function, "next target "+next.name+" is a calibration: no slew" );
-      return NO_ERROR;
-    }
-    if ( next.ra_hms.empty() && next.dec_dms.empty() ) {
-      logwrite( function, "next target "+next.name+" has no coordinates: no slew" );
-      return NO_ERROR;
-    }
-    if ( next.nexp == 0 ) {
-      logwrite( function, "next target "+next.name+" has nexp 0: not slewing ahead" );
-      return NO_ERROR;
-    }
-    // Only rows the loop will point as SLIT: pointmode empty or exactly SLIT.
-    // ACAM rows, and any other spelling, are left to the normal slew.
-    if ( !next.pointmode.empty() && next.pointmode != Acam::POINTMODE_SLIT ) {
-      logwrite( function, "next target "+next.name+" pointmode \""+next.pointmode+"\": not slewing ahead" );
-      return NO_ERROR;
-    }
-    // same test move_to_target will make (repeat_target) for the next row
-    if ( next.ra_hms == std::string(this->last_ra_hms) && next.dec_dms == std::string(this->last_dec_dms) ) {
-      logwrite( function, "next target "+next.name+" repeats the current pointing: no slew" );
-      return NO_ERROR;
-    }
-
-    double ra_in    = radec_to_decimal( next.ra_hms  ) * TO_DEGREES;
-    double dec_in   = radec_to_decimal( next.dec_dms );
-    double angle_in = next.slitangle;
-
-    if ( std::isnan(ra_in) || std::isnan(dec_in) ) {
-      message.str(""); message << "ERROR converting next target " << next.name << " RA=\"" << next.ra_hms
-                               << "\" DEC=\"" << next.dec_dms << "\" to decimal: not slewing ahead";
-      logwrite( function, message.str() );
-      return NO_ERROR;
-    }
-
-    // The coordinate checks get_next() applies (target_qc_check): a row it
-    // would refuse is never slewed to ahead of time.
-    if ( ra_in < 0.0 || dec_in < -90.0 || dec_in > 90.0 ) {
-      message.str(""); message << "next target " << next.name << " RA=\"" << next.ra_hms
-                               << "\" DEC=\"" << next.dec_dms << "\" out of range: not slewing ahead";
-      logwrite( function, message.str() );
-      return NO_ERROR;
-    }
-
-    double ra_out, dec_out, angle_out;
-    if ( this->target.fpoffsets.compute_offset( Acam::POINTMODE_SLIT, "SCOPE",
-                                                ra_in, dec_in, angle_in,
-                                                ra_out, dec_out, angle_out ) != NO_ERROR ) {
-      logwrite( function, "ERROR computing SCOPE coordinates for "+next.name+": not slewing ahead" );
-      return NO_ERROR;
-    }
-
-    // From here guiding stops and the telescope is sent away, so the current
-    // pointing no longer says where the telescope is, or that it is guided.
-    // Forget it, so no row can take the repeat shortcut (no slew, no
-    // acquisition, no target offset) on a stale pointing: the row the TCS is
-    // sent to is taken by move_to_target()'s early-slew branch, and any other
-    // row, even one with the current coordinates, slews and acquires normally.
-    //
-    this->last_target.clear();
-    this->last_ra_hms.clear();
-    this->last_dec_dms.clear();
-
-    // Guiding and fine acquisition must be off before the telescope moves,
-    // exactly as in move_to_target.
-    //
-    if ( this->do_slicecam_stop() != NO_ERROR ) {
-      this->broadcast.warning( function, "stopping fine acquisition" );
-    }
-    if ( this->do_acam_stop() != NO_ERROR ) {
-      this->broadcast.warning( function, "stopping guiding" );
-    }
-    if ( this->cancel_flag.load() ) return NO_ERROR;
-
-    // The ontarget wait move_to_target() will run for this row starts now,
-    // from a clean flag and with every older watcher retired, in one step
-    // with respect to a watcher's acknowledgment: only an ack of THIS move
-    // may satisfy it.
-    //
-    unsigned ontarget_gen = 0;
-    {
-    std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
-    ontarget_gen = ++this->auto_ontarget_gen;
-    this->is_ontarget.store(false);
-    }
-
-    std::stringstream coords_cmd;
-    std::string       coords_reply;
-    coords_cmd << "COORDS " << ( ra_out * TO_HOURS )  << " "                       // RA in decimal hours
-                            <<   dec_out << " "                                    // DEC in decimal degrees
-                            <<   "2000" << " "                                     // equinox always = 2000
-                            <<   "0 0"  << " "                                     // RA,DEC proper motion not used
-                            << "\"" << next.name << "\"";                        // target name in quotes
-    {
-    std::string rastr, decstr;
-    double _ra = ra_out * TO_HOURS;
-    decimal_to_sexa( _ra, rastr );
-    decimal_to_sexa( dec_out, decstr );
-    message.str(""); message << "slewing ahead to next target " << next.name << " (id " << next.obsid
-                             << ") during readout: SCOPE COORDS= " << rastr << "  " << decstr << "  "
-                             << angle_out << " J2000";
-    this->broadcast.notice( function, message.str() );
-    }
-
-    long error = this->tcsd.send( coords_cmd.str(), coords_reply );               // send to the TCS
-    if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-      std::this_thread::sleep_for( std::chrono::seconds(1) );
-      error = this->tcsd.send( coords_cmd.str(), coords_reply );                  // one retry, as move_to_target
-      if ( error != NO_ERROR || coords_reply.compare( 0, strlen(TCS_SUCCESS_STR), TCS_SUCCESS_STR ) != 0 ) {
-        message.str(""); message << "sending COORDS ahead of time. TCS reply: " << coords_reply
-                                 << " -- move_to_target will slew normally";
-        this->broadcast.warning( function, message.str() );
-        return NO_ERROR;
+  bool Sequence::wait_for_readout_gate( const std::string &before ) {
+    const std::string function("Sequencer::Sequence::wait_for_readout_gate");
+    std::unique_lock<std::mutex> lock( this->camerad_mtx );
+    if ( !this->readout_gate_armed ) return true;
+    logwrite( function, "previous target still reading out: waiting before "+before );
+    while ( this->readout_gate_armed && !this->cancel_flag.load() ) {
+      if ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                       [this]() { return !this->readout_gate_armed || this->cancel_flag.load(); } ) ) {
+        logwrite( function, "still waiting for the previous readout -- requesting snapshot" );
+        lock.unlock();
+        this->request_snapshot();
+        lock.lock();
       }
     }
-
-    {
-    std::stringstream ringgo_cmd;
-    std::string noreply("DONTWAIT");                                               // indicates don't wait for reply
-    ringgo_cmd << TCSD_RINGGO << " " << angle_out;                                 // this is calculated cass angle
-    this->broadcast.notice( function, "sending "+ringgo_cmd.str()+" to TCS" );
-    this->tcsd.send( ringgo_cmd.str(), noreply );
+    if ( this->readout_gate_armed ) {
+      logwrite( function, "cancelled while waiting for the previous readout" );
+      return false;
     }
-
-    this->early_slew.sent      = true;
-    this->early_slew.obsid     = next.obsid;
-    this->early_slew.name      = next.name;
-    this->early_slew.ra_hms    = next.ra_hms;
-    this->early_slew.dec_dms   = next.dec_dms;
-    this->early_slew.slitangle = next.slitangle;
-    this->early_slew.ra_out    = ra_out;
-    this->early_slew.dec_out   = dec_out;
-
-    // Start the TCS watcher now, so a move that lands during the readout is
-    // acknowledged by the time move_to_target() waits for it.
-    //
-    if ( this->tcs_auto_ontarget ) {
-      this->auto_ontarget_active.store( true );
-      std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out, ontarget_gen ).detach();
-    }
-
-    return NO_ERROR;
+    logwrite( function, "previous readout finished" );
+    return true;
   }
-  /***** Sequencer::Sequence::early_slew_to_next ******************************/
-
-
-  /***** Sequencer::Sequence::adopt_early_slew_angle **************************/
-  /**
-   * @brief      observe the row with the slit angle its early slew used
-   *
-   * Called by sequence_start for the row get_next() just loaded, before it is
-   * published or acted on. If that row is the one the telescope was sent to
-   * during the previous readout and only its OTMslitangle differs, by no more
-   * than EARLY_SLEW_ANGLE_TOL_DEG, the difference is the robot's 60 s angle
-   * refresh: the row takes the angle the rotator was sent to, so acquisition
-   * computes with the angle the instrument is at, and move_to_target() sees
-   * an exact match. A larger difference, or a non-number, leaves the row as
-   * read and move_to_target() slews normally.
-   */
-  void Sequence::adopt_early_slew_angle() {
-    const std::string function("Sequencer::Sequence::adopt_early_slew_angle");
-    if ( !this->early_slew_same_row() ) return;
-    if ( this->early_slew.slitangle == this->target.slitangle ) return;
-    const double change = std::fabs( std::remainder( this->target.slitangle - this->early_slew.slitangle, 360.0 ) );
-    if ( !( change <= EARLY_SLEW_ANGLE_TOL_DEG ) ) return;
-    std::stringstream message;
-    message << "slit angle of " << this->target.name << " was rewritten by " << change
-            << " deg after its slew was sent ahead; observing at " << this->early_slew.slitangle
-            << " deg, the angle the rotator was sent to (row now says " << this->target.slitangle << ")";
-    logwrite( function, message.str() );
-    this->target.slitangle = this->early_slew.slitangle;
-  }
-  /***** Sequencer::Sequence::adopt_early_slew_angle **************************/
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
 
 
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
@@ -3372,6 +3190,8 @@ namespace Sequencer {
     this->cancel_flag.store(false);
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
+
+    if ( !this->wait_for_readout_gate( "repeating the exposure" ) ) return ERROR;
 
     std::string targetstatus;
     this->target.get_specified_target( this->prev_single_obsid, targetstatus );

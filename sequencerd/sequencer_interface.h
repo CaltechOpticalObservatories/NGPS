@@ -10,7 +10,6 @@
 #include <map>
 #include <string>
 #include <atomic>
-#include <limits>
 #include "skyinfo.h"
 
 #include "network.h"
@@ -801,25 +800,6 @@ namespace Sequencer {
       TargetInfo::TargetState get_next( );                     ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string &status ); ///< get the next target from the database with state=Sequencer::TARGET_PENDING
       TargetInfo::TargetState get_next( std::string state_in, std::string &status );    ///< get the next target from the database with state=state_in
-
-      /**
-       * A read-only look at the row get_next() would return next. Filled by
-       * peek_next() and never written into the TargetInfo fields, so the
-       * target on sky keeps its identity (completion rows, published
-       * TARGETINFO) until the sequence loop takes the next row itself.
-       */
-      struct Peek {
-        int         obsid     = -1;
-        std::string name;
-        std::string ra_hms;
-        std::string dec_dms;
-        std::string pointmode;
-        double      slitangle = std::numeric_limits<double>::quiet_NaN();
-        double      casangle  = std::numeric_limits<double>::quiet_NaN();
-        int         nexp      = 0;
-        bool        iscal     = false;
-      };
-      TargetInfo::TargetState peek_next( Peek &peek, std::string &status );  ///< look at the next pending target without loading it
       long parse_target_from_row( const mysqlx::Row &row );  ///< fills target class using cols from DB row
       long target_qc_check( std::string &status );                   ///< target info quality control check
       long add_row( int number_in, std::string name_in, std::string ra_hms_in, std::string dec_dms_in,

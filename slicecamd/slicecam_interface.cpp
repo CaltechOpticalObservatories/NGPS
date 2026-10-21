@@ -579,6 +579,30 @@ namespace Slicecam {
       }
     }
 
+    // THE BUDGET'S LAST CORRECTION (FINE_ACQUIRE_MAX_ADJUSTMENTS): the run can
+    // lock after it only if the offset it would remove is within
+    // FINE_ACQUIRE_RELAXED_FACTOR x goal, and that offset is known now. When it
+    // is larger the run fails here, without sending a correction that no lock
+    // can follow (the sequencer reports a failed acquisition; the robot retries).
+    //
+    if ( this->fineacquire_state.max_adjustments > 0
+         && this->fineacq_adjustments + 1 >= this->fineacquire_state.max_adjustments
+         && !( offset_arcsec <= this->fineacquire_state.relaxed_factor
+                               * this->fineacquire_state.goal_arcsec ) ) {
+      std::ostringstream oss;
+      oss << "fine acquisition FAILED: correction " << this->fineacq_adjustments + 1
+          << " of " << this->fineacquire_state.max_adjustments << " would be the last and r="
+          << offset_arcsec << " arcsec > relaxed goal="
+          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+          << " arcsec, so no lock can follow; not sent";
+      logwrite( function, oss.str() );
+      this->is_fineacquire_locked.store( false, std::memory_order_release );
+      this->is_fineacquire_running.store( false, std::memory_order_release );
+      this->fineacquire_state.reset();
+      this->publish_status();
+      return;
+    }
+
     // select gain: use gain_large when offset is well above the goal threshold
     //
     const double effective_gain = ( offset_arcsec > this->fineacquire_state.gain_threshold_arcsec )
@@ -635,6 +659,20 @@ namespace Slicecam {
       if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ) return;
       if ( !applied ) {
         std::ostringstream w;
+        if ( this->fineacquire_state.max_adjustments > 0 ) {
+          // A budgeted run decides on the corrections it has commanded, so it
+          // cannot go on from one that never executed: later frames would
+          // still show the old position, and the shift may land mid-exposure.
+          w << "fine acquisition FAILED: correction " << this->fineacq_adjustments << " of "
+            << this->fineacquire_state.max_adjustments << " was not confirmed applied by acamd within "
+            << this->fineacquire_state.move_timeout_sec << " s";
+          logwrite( function, w.str() );
+          this->is_fineacquire_locked.store( false, std::memory_order_release );
+          this->is_fineacquire_running.store( false, std::memory_order_release );
+          this->fineacquire_state.reset();
+          this->publish_status();
+          return;
+        }
         w << "WARNING goal change not applied within "
           << this->fineacquire_state.move_timeout_sec << " s; proceeding";
         logwrite( function, w.str() );
@@ -648,6 +686,10 @@ namespace Slicecam {
     if ( this->fineacquire_state.settle_sec > 0.0 ) {
       std::this_thread::sleep_for( std::chrono::duration<double>( this->fineacquire_state.settle_sec ) );
     }
+    // a stop that arrived during the settle ends this run here: nothing below
+    // (totals, the budget's decision, a published lock) may act for it
+    if ( !this->should_framegrab_run.load(std::memory_order_acquire) ||
+         !this->is_fineacquire_running.load(std::memory_order_acquire) ) return;
     // accumulate the applied correction (arcsec). Summed over the run this is the
     // total ACAM->slit residual that acam-acquire left behind (the [ACQMODEL] line).
     this->fineacq_total_dra  += cmd_dra  * 3600.0;
@@ -656,32 +698,13 @@ namespace Slicecam {
     // THE BUDGET'S LAST CORRECTION DECIDES (CF, 2026-10-20: "i never want to
     // sit and evaluate, if no correction is going to be applied"). Once
     // FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have been commanded, nothing
-    // further is sampled or evaluated: the move above has executed and
-    // settled, and the run ends NOW -- converged if the residual this last
-    // correction removed was within FINE_ACQUIRE_RELAXED_FACTOR x goal, else
-    // failed (running cleared without a lock: the sequencer reports a failed
-    // acquisition and the robot retries on another star). 0 disables the
-    // budget (old behaviour: correct until the goal or the sequencer timeout).
-    // "One correction and call it a day" = MAX_ADJUSTMENTS=1; "two corrections,
-    // accept if the second was small enough" = MAX_ADJUSTMENTS=2.
+    // further is sampled or evaluated. This last one was only sent because the
+    // offset it removes is within FINE_ACQUIRE_RELAXED_FACTOR x goal (checked
+    // before the send), and it has executed and settled: the run converges
+    // NOW. 0 disables the budget (correct until the goal or the sequencer
+    // timeout). "One correction and call it a day" = MAX_ADJUSTMENTS=1; "two
+    // corrections, accept if the second was small enough" = MAX_ADJUSTMENTS=2.
     //
-    if ( this->fineacquire_state.max_adjustments > 0
-         && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments
-         && offset_arcsec > this->fineacquire_state.relaxed_factor
-                            * this->fineacquire_state.goal_arcsec ) {
-      std::ostringstream oss;
-      oss << "fine acquisition FAILED: correction budget spent (" << this->fineacq_adjustments
-          << " of " << this->fineacquire_state.max_adjustments << ") and the last correction removed r="
-          << offset_arcsec << " arcsec > relaxed goal="
-          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
-          << " arcsec; not evaluating further";
-      logwrite( function, oss.str() );
-      this->is_fineacquire_locked.store( false, std::memory_order_release );
-      this->is_fineacquire_running.store( false, std::memory_order_release );
-      this->fineacquire_state.reset();
-      this->publish_status();
-      return;
-    }
     if ( this->fineacquire_state.max_adjustments > 0
          && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {
       std::ostringstream oss;
@@ -1558,6 +1581,10 @@ namespace Slicecam {
           logwrite( function, message.str() );
           return ERROR;
         }
+        if ( this->fineacquire_state.max_adjustments < 0 ) {
+          logwrite( function, "ERROR FINE_ACQUIRE_MAX_ADJUSTMENTS must be >= 0 (0 disables the budget)" );
+          return ERROR;
+        }
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
         logwrite( function, message.str() );
         applied++;
@@ -1571,8 +1598,8 @@ namespace Slicecam {
           logwrite( function, message.str() );
           return ERROR;
         }
-        if ( this->fineacquire_state.relaxed_factor < 1.0 ) {
-          logwrite( function, "ERROR FINE_ACQUIRE_RELAXED_FACTOR must be >= 1" );
+        if ( !( this->fineacquire_state.relaxed_factor >= 1.0 ) ) {   // also refuses NaN
+          logwrite( function, "ERROR FINE_ACQUIRE_RELAXED_FACTOR must be a number >= 1" );
           return ERROR;
         }
         message.str(""); message << "SLICECAMD:config:" << config.param[entry] << "=" << config.arg[entry];
@@ -1807,6 +1834,15 @@ namespace Slicecam {
           return ERROR;
         }
       }
+    }
+
+    // a correction budget decides on the moves it commands, so it needs the
+    // confirmation that each one executed (the acamd move wait)
+    //
+    if ( this->fineacquire_state.max_adjustments > 0 &&
+         !( this->fineacquire_state.move_timeout_sec > 0.0 ) ) {
+      logwrite( function, "ERROR FINE_ACQUIRE_MAX_ADJUSTMENTS > 0 needs FINE_ACQUIRE_MOVE_TIMEOUT > 0" );
+      return ERROR;
     }
 
     // min_snr, when set, must be at least 2
