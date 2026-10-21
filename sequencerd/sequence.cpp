@@ -197,12 +197,25 @@ namespace Sequencer {
     int64_t pubtime=0;
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
 
+    // acamd's goal change still to be made: raised by offsetgoal, cleared once
+    // the correction computed against the new goal has been sent and the TCS
+    // has answered it. wait_for_target_offset waits on it before exposing.
+    const bool has_goalshift = jmessage.contains( Key::Acamd::GOALSHIFT_PENDING );
+    bool goalshift = false;
+    if ( has_goalshift ) Common::extract_telemetry_value( jmessage, Key::Acamd::GOALSHIFT_PENDING, goalshift );
+
     // Store under the mutex so the writes are visible to any waiter's predicate
     // when it re-acquires acam_mtx inside acam_cv.wait().
     std::lock_guard<std::mutex> lock(this->acam_mtx);
     this->is_acam_guiding.store( acquired );
     if ( has_mode ) {
       this->is_acam_acquiring.store( acquiring );
+    }
+    // recorded per status, so a wait that starts after the change was already
+    // made still sees that it was raised and then cleared
+    if ( has_goalshift ) {
+      if ( goalshift ) this->acam_goalshift_raised_us.store( pubtime );
+      else             this->acam_goalshift_cleared_us.store( pubtime );
     }
     this->acam_pubtime.store( pubtime );
     this->acam_cv.notify_all();
@@ -944,12 +957,13 @@ namespace Sequencer {
       // re-applied during each readout (flexure_reapply, in the readout wait).
       //
       std::future<long> flexure_future;
+      int64_t offset_sent_us = 0;  // set when the target offset went to acamd as a goal change
 
       if ( !this->target.iscal ) {
         // send offsets only on fineacquire, otherwise user needs to fix things
         if ( !this->is_repeat_target.load()      &&
               this->is_fineacquire_locked.load() &&
-              this->target_offset() == ERROR ) {
+              this->target_offset( &offset_sent_us ) == ERROR ) {
           if (this->wait_for_user()==ABORT) {
             this->broadcast.notice( function, "cancelled" );
             return;
@@ -968,9 +982,25 @@ namespace Sequencer {
         }
       }
 
-      // The offset-star offset is applied asynchronously by the ACAM guide loop;
-      // ACAMD_OFFSETGOAL returns before the move lands. Wait so the target is on
-      // the slit before exposing. Skipped when the target has no offset.
+      // A target offset sent while ACAM guides only changes acamd's goal. The
+      // guide loop makes the move with its next correction, whose pt_offset
+      // returns when the TCS answers the move. Expose once acamd reports that
+      // move made; the wait overlaps the slit move above and is bounded. If the
+      // move is not reported in time, expose anyway with a warning -- what the
+      // fixed settle always did -- so this can never hold the sequence.
+      if ( offset_sent_us > 0 ) {
+        const long offset_made = this->wait_for_target_offset( offset_sent_us );
+        if ( offset_made == ABORT ) {
+          this->broadcast.notice( function, "cancelled" );
+          return;
+        }
+        if ( offset_made != NO_ERROR ) {
+          this->broadcast.warning( function, "target offset not confirmed by acamd in time: exposing anyway" );
+        }
+      }
+
+      // Optional extra settle once the offset has been made (OFFSET_SETTLE_SEC,
+      // 0 = none). Skipped when the target has no offset.
       if ( !this->target.iscal && this->is_fineacquire_locked.load() &&
            ( this->target.offset_ra != 0.0 || this->target.offset_dec != 0.0 ) &&
            this->offset_settle_sec > 0.0 ) {
@@ -1105,6 +1135,7 @@ namespace Sequencer {
           if ( sub == expected && !this->target.iscal && !this->do_once.load() && this->single_obsid.empty() &&
                !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
             this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
+            this->readout_gate_armed_at = std::chrono::steady_clock::now();
             picked_during_readout = true;
             break;
           }
@@ -2696,13 +2727,29 @@ namespace Sequencer {
    * previous target's last readout (sequence_start) and opened by the first
    * camerad READY report after that (handletopic_camerad). Returns at once
    * when it is not armed, which is every case but that one.
+   *
+   * Bounded: a readout and its FITS write take about 2 min at 1x1, so
+   * READOUT_GATE_TIMEOUT_SEC after the gate was armed, with no READY (camerad
+   * silent or wedged), the gate
+   * is disarmed with a warning and the caller proceeds; camerad itself refuses
+   * a bin, buffer or expose it cannot take.
    */
   bool Sequence::wait_for_readout_gate( const std::string &before ) {
     const std::string function("Sequencer::Sequence::wait_for_readout_gate");
+    constexpr int READOUT_GATE_TIMEOUT_SEC = 300;
     std::unique_lock<std::mutex> lock( this->camerad_mtx );
     if ( !this->readout_gate_armed ) return true;
     logwrite( function, "previous target still reading out: waiting before "+before );
+    const auto deadline = this->readout_gate_armed_at + std::chrono::seconds( READOUT_GATE_TIMEOUT_SEC );
     while ( this->readout_gate_armed && !this->cancel_flag.load() ) {
+      if ( std::chrono::steady_clock::now() >= deadline ) {
+        this->readout_gate_armed = false;
+        lock.unlock();
+        this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+        this->broadcast.warning( function, "no camerad READY "+std::to_string(READOUT_GATE_TIMEOUT_SEC)
+                                           +" s after the previous readout began: proceeding with "+before );
+        return true;
+      }
       if ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
                                        [this]() { return !this->readout_gate_armed || this->cancel_flag.load(); } ) ) {
         logwrite( function, "still waiting for the previous readout -- requesting snapshot" );
@@ -4354,8 +4401,10 @@ namespace Sequencer {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Sequence::target_offset() {
+  long Sequence::target_offset( int64_t *acam_sent_us ) {
     const std::string function("Sequencer::Sequence::target_offset");
+
+    if ( acam_sent_us ) *acam_sent_us = 0;
 
     // nothing to do if both ra and dec offsets are zero
     if (this->target.offset_ra  == 0.0 &&
@@ -4371,7 +4420,11 @@ namespace Sequencer {
       const double ddec_deg = this->target.offset_dec / 3600.0;
       std::stringstream cmd;
       cmd << ACAMD_OFFSETGOAL << " " << std::fixed << std::setprecision(6) << dra_deg << " " << ddec_deg;
+      // taken before the send, so acamd's publish of the raised goal change is
+      // always later (no guard band needed, unlike do_acam_acquire)
+      const int64_t sent_us = get_time_us();
       error = this->acamd.command( cmd.str() );
+      if ( error == NO_ERROR && acam_sent_us ) *acam_sent_us = sent_us;
     }
     else
     // if ACAM is not guiding then I send the offsets directly to the TCS
@@ -4388,6 +4441,61 @@ namespace Sequencer {
     return error;
   }
   /***** Sequencer::Sequence::target_offset ***********************************/
+
+
+  /***** Sequencer::Sequence::wait_for_target_offset **************************/
+  /**
+   * @brief      wait until acamd has made a target offset sent as a goal change
+   * @details    ACAMD_OFFSETGOAL only changes the guide goal. acamd's guide loop
+   *             makes the move with its next correction, and that correction's
+   *             pt_offset returns when the TCS answers the move (later for
+   *             bigger moves). acamd raises GOALSHIFT_PENDING with the goal
+   *             change and clears it once that correction has been sent and
+   *             answered. The move is made once a status published after the
+   *             send has shown it raised and a later one has shown it cleared.
+   *             handletopic_acamd records both publish times as statuses
+   *             arrive, so this holds even if the move was made before this
+   *             wait began (the wait follows the slit move). Abort wakes acam_cv.
+   * @param[in]  sent_us  get_time_us() taken just before the offset was sent
+   * @return     NO_ERROR | ERROR (not reported within TIMEOUT_SEC) | ABORT (cancelled)
+   *
+   */
+  long Sequence::wait_for_target_offset( const int64_t sent_us ) {
+    const std::string function("Sequencer::Sequence::wait_for_target_offset");
+
+    // The move is made at acamd's next ACAM frame and answered by the TCS
+    // within seconds (measured: <= 4.3 s up to 147"); this covers a second
+    // frame and a 300" move. Bounded: the caller exposes either way.
+    //
+    constexpr double TIMEOUT_SEC = 30.0;
+
+    logwrite( function, "NOTICE: waiting for acamd to make the target offset before exposing" );
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::duration<double>( TIMEOUT_SEC );
+    bool made = false;
+    {
+      std::unique_lock<std::mutex> lock( this->acam_mtx );
+      made = this->acam_cv.wait_until( lock, deadline, [&]() {
+          if ( this->cancel_flag.load() ) return true;
+          const int64_t raised = this->acam_goalshift_raised_us.load();
+          return ( raised > sent_us && this->acam_goalshift_cleared_us.load() > raised );
+        } );
+    }
+
+    if ( this->cancel_flag.load() ) return ABORT;
+
+    std::ostringstream oss;
+    if ( !made ) {
+      oss << "ERROR acamd did not make the target offset within " << TIMEOUT_SEC << " s";
+      logwrite( function, oss.str() );
+      return ERROR;
+    }
+    oss << "target offset made by acamd " << std::fixed << std::setprecision(1)
+        << ( get_time_us() - sent_us ) / 1.0e6 << " s after it was sent";
+    logwrite( function, oss.str() );
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::wait_for_target_offset **************************/
 
 
   /***** Sequencer::Sequence::publish_targetinfo *****************************/
