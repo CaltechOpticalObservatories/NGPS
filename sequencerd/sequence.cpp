@@ -532,19 +532,9 @@ namespace Sequencer {
         // ------------------------------------------------------------------
         //
         if ( statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {                          // async message tag PIXELCOUNT
-          if ( seq.arm_readout_flag ) {
-            seq.arm_readout_flag = false;
-            seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},    // set READOUT
-                                                  {Sequencer::SEQ_WAIT_EXPOSE} );   // clear EXPOSE
-          }
-          // Readout counting, step 2 of 2 (step 1 in handletopic_camerad): an
-          // armed count is completed by a PIXELCOUNT from the first half of a
-          // readout, "PIXELCOUNT_<dev>:<pixels> <imagesize> <percent>" (the first
-          // two numbers after the colon are used). A message from the tail of an
-          // earlier readout, or one that cannot be read, completes nothing; a
-          // count completed here leaves at least half a readout before camerad
-          // can open the shutter again.
-          {
+          // How far into its readout this device is: "PIXELCOUNT_<dev>:<pixels>
+          // <imagesize> <percent>" (the first two numbers after the colon are
+          // used; -1 if they cannot be read).
           double readout_fraction = -1.0;
           const auto colon = statstr.find( ':' );
           if ( colon != std::string::npos ) {
@@ -561,6 +551,20 @@ namespace Sequencer {
             }
             if ( numbers.size() == 2 && numbers[1] > 0.0 ) readout_fraction = numbers[0] / numbers[1];
           }
+          // The first PIXELCOUNT of a readout ends the EXPOSE wait -- but not one
+          // from the second half of a readout: that is the tail of the previous
+          // target's readout, arriving after the next expose command.
+          if ( seq.arm_readout_flag && !( readout_fraction >= 0.5 ) ) {
+            seq.arm_readout_flag = false;
+            seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},    // set READOUT
+                                                  {Sequencer::SEQ_WAIT_EXPOSE} );   // clear EXPOSE
+          }
+          // Readout counting, step 2 of 2 (step 1 in handletopic_camerad): an
+          // armed count is completed by a PIXELCOUNT from the first half of a
+          // readout. A message from the tail of an earlier readout, or one that
+          // cannot be read, completes nothing; a count completed here leaves at
+          // least half a readout before camerad can open the shutter again.
+          {
           std::lock_guard<std::mutex> lock(seq.camerad_mtx);
           if ( seq.readout_armed && readout_fraction >= 0.0 && readout_fraction < 0.5 ) {
             seq.readout_armed = false;
@@ -751,11 +755,20 @@ namespace Sequencer {
           }
         }
 
+        error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
+        if (error!=NO_ERROR) {
+          this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
+          break;
+        }
+
+        this->publish_targetinfo();   // publish the now-active target
+
         // A target picked while the previous one is still reading out starts
         // at once only if the telescope has to slew to it: a science row with
         // coordinates and SLIT pointing. Anything else -- a calibration, a row
         // without coordinates, ACAM pointing -- starts when that readout has
-        // finished, exactly as before.
+        // finished, exactly as before. It is already 'active' while it waits,
+        // like every picked row.
         //
         {
         const bool slews = !this->target.iscal
@@ -766,14 +779,6 @@ namespace Sequencer {
           return;
         }
         }
-
-        error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
-        if (error!=NO_ERROR) {
-          this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
-          break;
-        }
-
-        this->publish_targetinfo();   // publish the now-active target
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -846,6 +851,19 @@ namespace Sequencer {
       //
       for ( const auto &[thr, func] : worker_threads ) {
         worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
+      }
+
+      // camera_set talks to camerad, so it waits for the readout gate, then runs
+      // in parallel with everything else (a channel power-up takes seconds) and
+      // is joined just before the exposure. Not for ACAM pointing, which never
+      // exposes here.
+      //
+      std::future<long> camera_future;
+      if ( !( this->target.pointmode == Acam::POINTMODE_ACAM ) ) {
+        camera_future = std::async( std::launch::async, [this]() -> long {
+          if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) return NO_ERROR;
+          return this->camera_set();
+        } );
       }
 
       // wait for the threads to complete. these can be cancelled.
@@ -980,25 +998,27 @@ namespace Sequencer {
 
       // Nothing reaches camerad before the previous target's readout has
       // finished: when this target was picked at the start of that readout,
-      // the camera settings and the expose wait here for camerad's READY.
+      // the camera settings (camera_future) and the expose wait for READY.
       //
-      if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) {
+      if ( !this->wait_for_readout_gate( "exposing "+std::string(this->target.name) ) ) {
         this->broadcast.notice( function, "sequence cancelled" );
         return;
       }
-      try {
-        long camera_error = this->camera_set();
-        error |= camera_error;
-        if ( camera_error != NO_ERROR ) {
-          this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" failed" );
+      if ( camera_future.valid() ) {
+        try {
+          long camera_error = camera_future.get();
+          error |= camera_error;
+          if ( camera_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" failed" );
+          }
+          else {
+            this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
+          }
         }
-        else {
-          this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
+        catch (const std::exception& e) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
+          return;
         }
-      }
-      catch (const std::exception& e) {
-        this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
-        return;
       }
       if ( this->cancel_flag.load() ) {
         this->broadcast.notice( function, "sequence cancelled" );
@@ -1080,7 +1100,7 @@ namespace Sequencer {
           }
           const int sub = ++readouts_handled;   // readout of sub-exposure number sub (1-based) has begun
           const int expected = this->readouts_expected;   // the N sent to camerad, not the live row
-          if ( sub == expected && !this->do_once.load() && this->single_obsid.empty() &&
+          if ( sub == expected && !this->target.iscal && !this->do_once.load() && this->single_obsid.empty() &&
                !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
             this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
             picked_during_readout = true;
@@ -1107,6 +1127,28 @@ namespace Sequencer {
       }
       // after a pick the READOUT bit stays set until camerad's READY opens the gate
       if ( !picked_during_readout ) this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+
+      // An abort during the readout wait (abort_process has told camerad to end
+      // the series): the target is complete only if every sub-exposure's
+      // integration had ended. Otherwise it is cancelled exactly like an abort
+      // during the exposure wait above -- not marked complete.
+      //
+      if ( !picked_during_readout && this->cancel_flag.load() ) {
+        bool all_integrated = false;
+        {
+        std::lock_guard<std::mutex> lock( this->camerad_mtx );
+        all_integrated = ( this->readouts_expected > 0 && this->readouts_started >= this->readouts_expected );
+        }
+        if ( !all_integrated ) {
+          this->broadcast.notice( function, "exposure series cancelled" );
+          error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
+          message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
+                                   << " id " << this->target.obsid << " order " << this->target.obsorder
+                                   << " as " << Sequencer::TARGET_UNASSIGNED;
+          logwrite( function, message.str() );
+          return;
+        }
+      }
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -2343,11 +2385,15 @@ namespace Sequencer {
    *             lives only while that wait is open (auto_ontarget_active).
    *             Acknowledges when two consecutive 1 Hz reads show
    *             ?ONTARGET==1 AND motion tracking AND |telescope-commanded| <
-   *             tcs_auto_ontarget_sep. All three predicates are required:
-   *             the flag alone is position-agnostic, the separation alone
-   *             cannot see a sub-threshold hop in progress, and motion alone
-   *             says nothing about settling. The coords are the SCOPE-frame
-   *             position move_to_target actually commanded. A wrong
+   *             tcs_auto_ontarget_sep AND |TCS cass angle - commanded ring
+   *             angle| < tcs_auto_ontarget_cass. All four are required: the
+   *             flag alone is position-agnostic, the separation alone cannot
+   *             see a sub-threshold hop in progress, motion alone says
+   *             nothing about settling, and none of them covers the cass
+   *             ring, which turns on its own after RINGGO (ACAM's goal is
+   *             computed from the cass angle at the acquire, ~8.5" per
+   *             degree of ring still to go). The coords and ring angle are
+   *             what move_to_target actually commanded. A wrong
    *             acknowledgment is self-limiting -- ACAM cannot solve a field
    *             that is not there and the acquisition retry machinery
    *             handles the failure -- so the conditions make wrong acks
@@ -2357,12 +2403,12 @@ namespace Sequencer {
    *             cancel_flag, and a concurrent cancel must always win
    *             against this automatic path.
    */
-  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen ) {
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, double tgt_cass_deg, unsigned gen ) {
     const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
     std::stringstream message;
 
-    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) ) {
-      logwrite( function, "ERROR invalid commanded coords; auto-ontarget sits this wait out" );
+    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) || std::isnan(tgt_cass_deg) ) {
+      logwrite( function, "ERROR invalid commanded coords or ring angle; auto-ontarget sits this wait out" );
       return;
     }
 
@@ -2387,6 +2433,7 @@ namespace Sequencer {
       bool   fresh    = false;
       bool   tracking = false;
       double sep_as   = NAN;
+      double dcass_deg = NAN;
       {
       std::lock_guard<std::mutex> lock( tcsd_mtx );
       fresh = this->tcsinfo.is_fresh();
@@ -2397,11 +2444,14 @@ namespace Sequencer {
         double dra_as  = dra_deg * cos( tgt_dec_deg * M_PI / 180.0 ) * 3600.0;
         double ddec_as = ( this->tcsinfo.dec_d - tgt_dec_deg ) * 3600.0;
         sep_as = std::hypot( dra_as, ddec_as );
+        // the cass ring against the angle RINGGO was sent, either side of the wrap
+        dcass_deg = std::fabs( std::remainder( this->tcsinfo.cassangle - tgt_cass_deg, 360.0 ) );
       }
       }
 
       if ( !fresh || !flag_on || !tracking ||
-           !( sep_as < this->tcs_auto_ontarget_sep ) )                      { consecutive=0; continue; }
+           !( sep_as < this->tcs_auto_ontarget_sep ) ||
+           !( dcass_deg < this->tcs_auto_ontarget_cass ) )                  { consecutive=0; continue; }
 
       if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
 
@@ -2422,7 +2472,8 @@ namespace Sequencer {
 
       message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
                                << std::fixed << std::setprecision(1) << sep_as
-                               << " arcsec x2) -- sending ontarget";
+                               << " arcsec, ring within " << std::setprecision(3) << dcass_deg
+                               << " deg x2) -- sending ontarget";
       this->broadcast.notice( function, message.str() );
       return;
     }
@@ -2600,7 +2651,7 @@ namespace Sequencer {
       // database coordinates differ by the pointmode focal-plane offset.
       // ontarget_gen was taken, retiring older watchers, before the COORDS.
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out, ontarget_gen ).detach();
+                   ra_out, dec_out, angle_out, ontarget_gen ).detach();
     }
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -3155,9 +3206,13 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
 
-    // This function is only used while exposing
+    // Only while an exposure command is running. For NEXP>1 that is the whole
+    // series: the EXPOSE bit only covers the first sub-exposure, the READOUT
+    // bit the rest. camerad ends the series after the frame in progress, cut
+    // short if it is integrating with >= 5 s left.
     //
-    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) &&
+         ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
       this->broadcast.notice(function, "not currently exposing");
       return;
     }

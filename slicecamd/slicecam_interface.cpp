@@ -433,10 +433,14 @@ namespace Slicecam {
     if ( this->fineacq_total_dra != 0.0 || this->fineacq_total_ddec != 0.0 ) {
       const double r1 = std::hypot( offsets.first, offsets.second ) * 3600.0;
       if ( r1 <= this->fineacquire_state.goal_arcsec ) {
+        // the same converged line as every lock (log readers key on it)
         std::ostringstream oss;
-        oss << "fine acquisition converged: single-frame offset r=" << r1
-            << " arcsec <= goal=" << this->fineacquire_state.goal_arcsec
-            << " arcsec (n=" << n << ")";
+        oss << "fine acquisition converged: offset dRA=" << offsets.first * 3600.0
+            << " dDEC=" << offsets.second * 3600.0
+            << " arcsec (r=" << r1
+            << " arcsec, n=1 scatter=(0,0) arcsec)"
+            << " goal=" << this->fineacquire_state.goal_arcsec << " arcsec"
+            << "; accepted on a single frame after a correction";
         logwrite( function, oss.str() );
 
         std::ostringstream acqmodel;
@@ -708,11 +712,17 @@ namespace Slicecam {
     if ( this->fineacquire_state.max_adjustments > 0
          && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {
       std::ostringstream oss;
-      oss << "fine acquisition converged (FINAL CORRECTION): correction "
-          << this->fineacq_adjustments << " of " << this->fineacquire_state.max_adjustments
-          << " corrected r=" << offset_arcsec << " arcsec <= relaxed goal="
-          << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
-          << " arcsec; accepted without a verification frame";
+      // the same converged line as every lock (log readers key on it); the
+      // offset is the one this last correction was sent for, and the goal the
+      // relaxed one it was accepted against
+      oss << "fine acquisition converged: offset dRA=" << med_dra * 3600.0
+          << " dDEC=" << med_ddec * 3600.0
+          << " arcsec (r=" << offset_arcsec
+          << " arcsec, n=" << n
+          << " scatter=(" << sig_dra << "," << sig_ddec << ") arcsec)"
+          << " goal=" << this->fineacquire_state.relaxed_factor * this->fineacquire_state.goal_arcsec
+          << " arcsec; accepted on the final correction (" << this->fineacq_adjustments
+          << " of " << this->fineacquire_state.max_adjustments << ") without a verification frame";
       logwrite( function, oss.str() );
 
       std::ostringstream acqmodel;

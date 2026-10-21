@@ -402,7 +402,7 @@ namespace Sequencer {
       /** @brief  satisfies the TCSOP wait when the TCS itself reports arrival
        *          (config TCS_AUTO_ONTARGET); coords are the commanded SCOPE
        *          frame position in degrees; see sequence.cpp */
-      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen );
+      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, double tgt_cass_deg, unsigned gen );
       std::atomic<bool> auto_ontarget_active{false};  ///< true only while move_to_target's TCSOP wait is open
       std::atomic<unsigned> auto_ontarget_gen{0};     ///< launch generation; a watcher retires when a newer one is launched
       std::mutex ontarget_ack_mtx;                    ///< a watcher's acknowledgment vs a new move retiring watchers and clearing is_ontarget
@@ -431,6 +431,7 @@ namespace Sequencer {
       double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
       bool   tcs_auto_ontarget = true;     ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default yes)
       double tcs_auto_ontarget_sep = 5.0;  ///< max |telescope-target| arcsec for auto-ontarget (config TCS_AUTO_ONTARGET_SEP)
+      double tcs_auto_ontarget_cass = 0.05; ///< max |TCS cass angle - commanded ring angle| deg for auto-ontarget (config TCS_AUTO_ONTARGET_CASS)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
