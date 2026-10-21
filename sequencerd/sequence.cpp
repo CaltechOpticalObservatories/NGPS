@@ -2683,6 +2683,17 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
+    // From here guiding stops and the telescope is sent away, so the current
+    // pointing no longer says where the telescope is, or that it is guided.
+    // Forget it, so no row can take the repeat shortcut (no slew, no
+    // acquisition, no target offset) on a stale pointing: the row the TCS is
+    // sent to is taken by move_to_target()'s early-slew branch, and any other
+    // row, even one with the current coordinates, slews and acquires normally.
+    //
+    this->last_target.clear();
+    this->last_ra_hms.clear();
+    this->last_dec_dms.clear();
+
     // Guiding and fine acquisition must be off before the telescope moves,
     // exactly as in move_to_target.
     //
@@ -3294,6 +3305,7 @@ namespace Sequencer {
     std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
 
     worker_threads = { { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)  },
+                       { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this) },  // compensate for the telescope position now
 //                     { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this) }
                      };
 
