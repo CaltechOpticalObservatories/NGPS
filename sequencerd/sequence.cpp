@@ -861,7 +861,7 @@ namespace Sequencer {
       std::future<long> camera_future;
       if ( !( this->target.pointmode == Acam::POINTMODE_ACAM ) ) {
         camera_future = std::async( std::launch::async, [this]() -> long {
-          if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) return NO_ERROR;
+          if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) return ABORT;
           return this->camera_set();
         } );
       }
@@ -1008,12 +1008,13 @@ namespace Sequencer {
         try {
           long camera_error = camera_future.get();
           error |= camera_error;
+          // never expose unless this target's camera settings were applied
           if ( camera_error != NO_ERROR ) {
-            this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" failed" );
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)
+                                             +( camera_error==ABORT ? " cancelled" : " failed" )+": not exposing" );
+            return;
           }
-          else {
-            this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
-          }
+          this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
         }
         catch (const std::exception& e) {
           this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
@@ -1053,6 +1054,7 @@ namespace Sequencer {
       //
       if ( this->cancel_flag.load() ) {
         this->broadcast.notice( function, "exposure cancelled" );
+        this->arm_readout_flag = false;   // the stopped frame's PIXELCOUNTs must not set READOUT later
         error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
         message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
                                  << " id " << this->target.obsid << " order " << this->target.obsorder
@@ -1127,28 +1129,6 @@ namespace Sequencer {
       }
       // after a pick the READOUT bit stays set until camerad's READY opens the gate
       if ( !picked_during_readout ) this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
-
-      // An abort during the readout wait (abort_process has told camerad to end
-      // the series): the target is complete only if every sub-exposure's
-      // integration had ended. Otherwise it is cancelled exactly like an abort
-      // during the exposure wait above -- not marked complete.
-      //
-      if ( !picked_during_readout && this->cancel_flag.load() ) {
-        bool all_integrated = false;
-        {
-        std::lock_guard<std::mutex> lock( this->camerad_mtx );
-        all_integrated = ( this->readouts_expected > 0 && this->readouts_started >= this->readouts_expected );
-        }
-        if ( !all_integrated ) {
-          this->broadcast.notice( function, "exposure series cancelled" );
-          error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
-          message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
-                                   << " id " << this->target.obsid << " order " << this->target.obsorder
-                                   << " as " << Sequencer::TARGET_UNASSIGNED;
-          logwrite( function, message.str() );
-          return;
-        }
-      }
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -1225,9 +1205,13 @@ namespace Sequencer {
 
       if (this->cancel_flag.load()) {
         logwrite(function, "sequence cancelled");
-        return NO_ERROR;
+        return ABORT;                       // nothing was set: the caller must not expose
       }
     }
+    // camerad_mtx guards can_expose only; holding it across the camerad
+    // commands below would block the ZMQ subscriber thread (every topic) for
+    // their duration -- a channel power-up takes seconds
+    lock.unlock();
 
     logwrite( function, "setting camera parameters");
 
@@ -2413,6 +2397,8 @@ namespace Sequencer {
     }
 
     int consecutive = 0;
+    int64_t ring_wait_since_us = 0;    // when everything but the ring first held
+    bool    ring_warned = false;
 
     // gen retires this watcher the moment a newer one is launched, so one
     // still sleeping from an earlier move can never acknowledge a new one.
@@ -2434,6 +2420,7 @@ namespace Sequencer {
       bool   tracking = false;
       double sep_as   = NAN;
       double dcass_deg = NAN;
+      double cass_now  = NAN;
       {
       std::lock_guard<std::mutex> lock( tcsd_mtx );
       fresh = this->tcsinfo.is_fresh();
@@ -2445,13 +2432,30 @@ namespace Sequencer {
         double ddec_as = ( this->tcsinfo.dec_d - tgt_dec_deg ) * 3600.0;
         sep_as = std::hypot( dra_as, ddec_as );
         // the cass ring against the angle RINGGO was sent, either side of the wrap
-        dcass_deg = std::fabs( std::remainder( this->tcsinfo.cassangle - tgt_cass_deg, 360.0 ) );
+        cass_now  = this->tcsinfo.cassangle;
+        dcass_deg = std::fabs( std::remainder( cass_now - tgt_cass_deg, 360.0 ) );
       }
       }
 
-      if ( !fresh || !flag_on || !tracking ||
-           !( sep_as < this->tcs_auto_ontarget_sep ) ||
-           !( dcass_deg < this->tcs_auto_ontarget_cass ) )                  { consecutive=0; continue; }
+      const bool all_but_ring = fresh && flag_on && tracking && ( sep_as < this->tcs_auto_ontarget_sep );
+      const bool ring_ok      = ( dcass_deg < this->tcs_auto_ontarget_cass );
+
+      // On target with only the ring missing for 20 s (a refused RINGGO, a ring
+      // parked off the command, an unreadable angle): say so once, so the
+      // operator knows the wait needs a press.
+      if ( all_but_ring && !ring_ok ) {
+        if ( ring_wait_since_us == 0 ) ring_wait_since_us = get_time_us();
+        else if ( !ring_warned && get_time_us() - ring_wait_since_us > 20000000 ) {
+          ring_warned = true;
+          message.str(""); message << "telescope on target but the cass ring reads " << cass_now
+                                   << " deg, commanded " << tgt_cass_deg
+                                   << " deg: press ontarget once the ring is in place";
+          this->broadcast.warning( function, message.str() );
+        }
+      }
+      else if ( !all_but_ring ) ring_wait_since_us = 0;
+
+      if ( !all_but_ring || !ring_ok )                                      { consecutive=0; continue; }
 
       if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
 
@@ -3206,18 +3210,23 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
 
-    // Only while an exposure command is running. For NEXP>1 that is the whole
-    // series: the EXPOSE bit only covers the first sub-exposure, the READOUT
-    // bit the rest. camerad ends the series after the frame in progress, cut
-    // short if it is integrating with >= 5 s left.
+    // Only while an exposure command of the current target is running. For
+    // NEXP>1 that is the whole series: the EXPOSE bit covers only the first
+    // sub-exposure; after it, camerad not READY (and not the previous
+    // target's last readout after a pick, which has nothing left to stop)
+    // covers the rest. A stale READOUT bit is not evidence. camerad ends the
+    // series after the frame in progress, cut short if it is integrating
+    // with >= 5 s left. A stop never clears a cancel.
     //
-    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) &&
-         ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_READOUT ) ) {
+    bool series_running = false;
+    {
+    std::lock_guard<std::mutex> lock( this->camerad_mtx );
+    series_running = !this->can_expose.load() && !this->readout_gate_armed;
+    }
+    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) && !series_running ) {
       this->broadcast.notice(function, "not currently exposing");
       return;
     }
-
-    this->cancel_flag.store(false);
 
     // Send command to the camera to stop the exposure.
     //
