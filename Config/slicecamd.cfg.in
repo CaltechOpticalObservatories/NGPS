@@ -92,12 +92,13 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 FINE_ACQUIRE_SETTLE_FRAMES=0
 
 # FINE_ACQUIRE_SETTLE_SEC=<sec>
-# Extra pause <sec> after each correction, before the next exposure starts.
-# Not needed: the frame loop already waits for acamd to report the move made
-# (the TCS has answered it) before it starts the next exposure, so no frame can
-# overlap the move (#479). Set to 0 to disable.
+# Pause <sec> after each correction, before the next exposure starts. The frame
+# loop already waits for acamd to report the move made, which is only after the
+# TCS has answered it (#479), so no frame can overlap the move. acamd usually
+# reports 1 s after the answer, but sooner if anything requests its status in
+# that second; this pause guarantees the settle either way. Set to 0 to disable.
 #
-FINE_ACQUIRE_SETTLE_SEC=0
+FINE_ACQUIRE_SETTLE_SEC=1
 
 # FINE_ACQUIRE_MAX_ADJUSTMENTS=<n>
 # Correction budget. At most <n> corrections are commanded in one run, and the
