@@ -92,12 +92,12 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 FINE_ACQUIRE_SETTLE_FRAMES=0
 
 # FINE_ACQUIRE_SETTLE_SEC=<sec>
-# Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
-# to let the TCS physically finish the move before sampling resumes. This matters
-# when autoexpose shortens the exposure (e.g. bright targets): the frame-count
-# settle then elapses too quickly in wall-clock. Set to 0 to disable.
+# Extra pause <sec> after each correction, before the next exposure starts.
+# Not needed: the frame loop already waits for acamd to report the move made
+# (the TCS has answered it) before it starts the next exposure, so no frame can
+# overlap the move (#479). Set to 0 to disable.
 #
-FINE_ACQUIRE_SETTLE_SEC=3.0
+FINE_ACQUIRE_SETTLE_SEC=0
 
 # FINE_ACQUIRE_MAX_ADJUSTMENTS=<n>
 # Correction budget. At most <n> corrections are commanded in one run, and the
