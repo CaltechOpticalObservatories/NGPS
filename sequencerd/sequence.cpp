@@ -1135,7 +1135,6 @@ namespace Sequencer {
           if ( sub == expected && !this->target.iscal && !this->do_once.load() && this->single_obsid.empty() &&
                !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
             this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
-            this->readout_gate_armed_at = std::chrono::steady_clock::now();
             picked_during_readout = true;
             break;
           }
@@ -2727,29 +2726,13 @@ namespace Sequencer {
    * previous target's last readout (sequence_start) and opened by the first
    * camerad READY report after that (handletopic_camerad). Returns at once
    * when it is not armed, which is every case but that one.
-   *
-   * Bounded: a readout and its FITS write take about 2 min at 1x1, so
-   * READOUT_GATE_TIMEOUT_SEC after the gate was armed, with no READY (camerad
-   * silent or wedged), the gate
-   * is disarmed with a warning and the caller proceeds; camerad itself refuses
-   * a bin, buffer or expose it cannot take.
    */
   bool Sequence::wait_for_readout_gate( const std::string &before ) {
     const std::string function("Sequencer::Sequence::wait_for_readout_gate");
-    constexpr int READOUT_GATE_TIMEOUT_SEC = 300;
     std::unique_lock<std::mutex> lock( this->camerad_mtx );
     if ( !this->readout_gate_armed ) return true;
     logwrite( function, "previous target still reading out: waiting before "+before );
-    const auto deadline = this->readout_gate_armed_at + std::chrono::seconds( READOUT_GATE_TIMEOUT_SEC );
     while ( this->readout_gate_armed && !this->cancel_flag.load() ) {
-      if ( std::chrono::steady_clock::now() >= deadline ) {
-        this->readout_gate_armed = false;
-        lock.unlock();
-        this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
-        this->broadcast.warning( function, "no camerad READY "+std::to_string(READOUT_GATE_TIMEOUT_SEC)
-                                           +" s after the previous readout began: proceeding with "+before );
-        return true;
-      }
       if ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
                                        [this]() { return !this->readout_gate_armed || this->cancel_flag.load(); } ) ) {
         logwrite( function, "still waiting for the previous readout -- requesting snapshot" );

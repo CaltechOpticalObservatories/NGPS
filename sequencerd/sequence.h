@@ -465,7 +465,6 @@ namespace Sequencer {
       // first READY=true report after it (handletopic_camerad), and held
       // across a stop or restart until then.
       bool readout_gate_armed = false;
-      std::chrono::steady_clock::time_point readout_gate_armed_at{};  ///< when the gate was armed (under camerad_mtx); bounds wait_for_readout_gate
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
