@@ -740,6 +740,8 @@ namespace Sequencer {
           }
         }
 
+        this->adopt_early_slew_angle();    // a robot angle refresh during the early slew is not a different row
+
         error = this->target.update_state( Sequencer::TARGET_ACTIVE );      // set ACTIVE state in database (this says we are using this target)
         if (error!=NO_ERROR) {
           this->thread_error_manager.set( THR_SEQUENCE_START );             // report any error
@@ -2341,17 +2343,25 @@ namespace Sequencer {
 
       if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
 
-      // Re-check at the last instant; do NOT clear cancel_flag (see @details).
+      // Re-check at the last instant and acknowledge under ontarget_ack_mtx, so
+      // a new move (which retires watchers and clears is_ontarget under the
+      // same lock) cannot fall between the check and the store. Do NOT clear
+      // cancel_flag (see @details). cv_mutex is taken before the notify so a
+      // waiter between its predicate check and its wait cannot miss it.
       //
+      {
+      std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
       if ( !this->auto_ontarget_active.load() || this->auto_ontarget_gen.load() != gen ||
            this->cancel_flag.load() ) return;
+      this->is_ontarget.store( true );
+      }
+      { std::lock_guard<std::mutex> lock( this->cv_mutex ); }
+      this->cv.notify_all();
 
       message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
                                << std::fixed << std::setprecision(1) << sep_as
                                << " arcsec x2) -- sending ontarget";
       this->broadcast.notice( function, message.str() );
-      this->is_ontarget.store( true );
-      this->cv.notify_all();
       return;
     }
   }
@@ -2410,13 +2420,24 @@ namespace Sequencer {
       ScopedState wait_state( wait_state_manager, Sequencer::SEQ_WAIT_TCSOP );
       this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
-      // The watcher has been running since the COORDS went out and may have
-      // acknowledged already; launch one only if none is alive.
-      if ( this->tcs_auto_ontarget && !this->is_ontarget.load() && !this->auto_ontarget_active.load() ) {
-        const unsigned gen = ++this->auto_ontarget_gen;
-        this->auto_ontarget_active.store( true );
-        std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                     early_ra_out, early_dec_out, gen ).detach();
+      // A fresh watcher for the coordinates sent ahead, unless the move is
+      // already acknowledged. Always fresh: the one started with the COORDS
+      // exits as soon as is_ontarget is set, and an operator press sets it
+      // only for a second (reset_ontarget), so it may be gone. Its new
+      // generation retires the old one if it is still alive; both watch the
+      // same coordinates, so an acknowledgment from either is valid.
+      if ( this->tcs_auto_ontarget ) {
+        bool launch = false;
+        unsigned gen = 0;
+        {
+        std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+        if ( !this->is_ontarget.load() ) { gen = ++this->auto_ontarget_gen; launch = true; }
+        }
+        if ( launch ) {
+          this->auto_ontarget_active.store( true );
+          std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
+                       early_ra_out, early_dec_out, gen ).detach();
+        }
       }
 
       while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -2512,7 +2533,16 @@ namespace Sequencer {
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
-    this->is_ontarget.store(false);   // only an acknowledgment of THIS move may satisfy the wait below
+    // Retire every auto-ontarget watcher still alive (one left by a slew sent
+    // ahead for another row) and clear the flag, in one step with respect to
+    // a watcher's acknowledgment: only an ack of THIS move may satisfy the
+    // wait below.
+    unsigned ontarget_gen = 0;
+    {
+    std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+    ontarget_gen = ++this->auto_ontarget_gen;
+    this->is_ontarget.store(false);
+    }
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
 
     // if not success then wait 1s and try again
@@ -2559,10 +2589,9 @@ namespace Sequencer {
       // ra_out/dec_out are the SCOPE-frame coordinates this function actually
       // commanded, which is the position REQPOS telemetry will report -- the
       // database coordinates differ by the pointmode focal-plane offset.
-      // A new generation retires any watcher left from a slew sent ahead.
-      const unsigned gen = ++this->auto_ontarget_gen;
+      // ontarget_gen was taken, retiring older watchers, before the COORDS.
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out, gen ).detach();
+                   ra_out, dec_out, ontarget_gen ).detach();
     }
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -2654,8 +2683,10 @@ namespace Sequencer {
       logwrite( function, "next target "+next.name+" has nexp 0: not slewing ahead" );
       return NO_ERROR;
     }
-    if ( next.pointmode == Acam::POINTMODE_ACAM ) {
-      logwrite( function, "next target "+next.name+" uses ACAM pointing mode: not slewing ahead" );
+    // Only rows the loop will point as SLIT: pointmode empty or exactly SLIT.
+    // ACAM rows, and any other spelling, are left to the normal slew.
+    if ( !next.pointmode.empty() && next.pointmode != Acam::POINTMODE_SLIT ) {
+      logwrite( function, "next target "+next.name+" pointmode \""+next.pointmode+"\": not slewing ahead" );
       return NO_ERROR;
     }
     // same test move_to_target will make (repeat_target) for the next row
@@ -2671,6 +2702,15 @@ namespace Sequencer {
     if ( std::isnan(ra_in) || std::isnan(dec_in) ) {
       message.str(""); message << "ERROR converting next target " << next.name << " RA=\"" << next.ra_hms
                                << "\" DEC=\"" << next.dec_dms << "\" to decimal: not slewing ahead";
+      logwrite( function, message.str() );
+      return NO_ERROR;
+    }
+
+    // The coordinate checks get_next() applies (target_qc_check): a row it
+    // would refuse is never slewed to ahead of time.
+    if ( ra_in < 0.0 || dec_in < -90.0 || dec_in > 90.0 ) {
+      message.str(""); message << "next target " << next.name << " RA=\"" << next.ra_hms
+                               << "\" DEC=\"" << next.dec_dms << "\" out of range: not slewing ahead";
       logwrite( function, message.str() );
       return NO_ERROR;
     }
@@ -2706,9 +2746,16 @@ namespace Sequencer {
     if ( this->cancel_flag.load() ) return NO_ERROR;
 
     // The ontarget wait move_to_target() will run for this row starts now,
-    // from a clean flag: only an acknowledgment of THIS move may satisfy it.
+    // from a clean flag and with every older watcher retired, in one step
+    // with respect to a watcher's acknowledgment: only an ack of THIS move
+    // may satisfy it.
     //
+    unsigned ontarget_gen = 0;
+    {
+    std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+    ontarget_gen = ++this->auto_ontarget_gen;
     this->is_ontarget.store(false);
+    }
 
     std::stringstream coords_cmd;
     std::string       coords_reply;
@@ -2761,15 +2808,43 @@ namespace Sequencer {
     // acknowledged by the time move_to_target() waits for it.
     //
     if ( this->tcs_auto_ontarget ) {
-      const unsigned gen = ++this->auto_ontarget_gen;
       this->auto_ontarget_active.store( true );
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out, gen ).detach();
+                   ra_out, dec_out, ontarget_gen ).detach();
     }
 
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::early_slew_to_next ******************************/
+
+
+  /***** Sequencer::Sequence::adopt_early_slew_angle **************************/
+  /**
+   * @brief      observe the row with the slit angle its early slew used
+   *
+   * Called by sequence_start for the row get_next() just loaded, before it is
+   * published or acted on. If that row is the one the telescope was sent to
+   * during the previous readout and only its OTMslitangle differs, by no more
+   * than EARLY_SLEW_ANGLE_TOL_DEG, the difference is the robot's 60 s angle
+   * refresh: the row takes the angle the rotator was sent to, so acquisition
+   * computes with the angle the instrument is at, and move_to_target() sees
+   * an exact match. A larger difference, or a non-number, leaves the row as
+   * read and move_to_target() slews normally.
+   */
+  void Sequence::adopt_early_slew_angle() {
+    const std::string function("Sequencer::Sequence::adopt_early_slew_angle");
+    if ( !this->early_slew_same_row() ) return;
+    if ( this->early_slew.slitangle == this->target.slitangle ) return;
+    const double change = std::fabs( std::remainder( this->target.slitangle - this->early_slew.slitangle, 360.0 ) );
+    if ( !( change <= EARLY_SLEW_ANGLE_TOL_DEG ) ) return;
+    std::stringstream message;
+    message << "slit angle of " << this->target.name << " was rewritten by " << change
+            << " deg after its slew was sent ahead; observing at " << this->early_slew.slitangle
+            << " deg, the angle the rotator was sent to (row now says " << this->target.slitangle << ")";
+    logwrite( function, message.str() );
+    this->target.slitangle = this->early_slew.slitangle;
+  }
+  /***** Sequencer::Sequence::adopt_early_slew_angle **************************/
 
 
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
@@ -2969,6 +3044,8 @@ namespace Sequencer {
       this->broadcast.warning( function, message.str() );
       return ERROR;
     }
+
+    this->is_flexure_default.store(false);
 
     message.str(""); message << "flexure compensator re-applied before exposure " << sub+1
                              << " of " << this->target.nexp;

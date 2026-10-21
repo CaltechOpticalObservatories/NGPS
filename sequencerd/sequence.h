@@ -405,6 +405,7 @@ namespace Sequencer {
       void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen );
       std::atomic<bool> auto_ontarget_active{false};  ///< true while a TCSOP wait (or an early slew awaiting one) is open
       std::atomic<unsigned> auto_ontarget_gen{0};     ///< launch generation; a watcher retires when a newer one is launched
+      std::mutex ontarget_ack_mtx;                    ///< a watcher's acknowledgment vs a new move retiring watchers and clearing is_ontarget
 
       /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
@@ -511,17 +512,34 @@ namespace Sequencer {
         double      dec_out   = 0.0;   ///< SCOPE-frame DEC sent, degrees
       } early_slew;
 
-      /** @brief  is the recorded early slew for exactly the current target row? */
-      bool early_slew_matches_target() const {
-        const bool angle_same = ( this->early_slew.slitangle == this->target.slitangle ) ||
-                                ( std::isnan(this->early_slew.slitangle) && std::isnan(this->target.slitangle) );
+      /** @brief  is the recorded early slew for this very row, slit angle aside? */
+      bool early_slew_same_row() const {
+        const std::string pointmode( this->target.pointmode );
         return this->early_slew.sent
             && this->early_slew.obsid   == this->target.obsid
             && this->early_slew.name    == std::string(this->target.name)
             && this->early_slew.ra_hms  == std::string(this->target.ra_hms)
             && this->early_slew.dec_dms == std::string(this->target.dec_dms)
-            && angle_same;
+            && ( pointmode.empty() || pointmode == Acam::POINTMODE_SLIT );
       }
+
+      /** @brief  is the recorded early slew for exactly the current target row? */
+      bool early_slew_matches_target() const {
+        const bool angle_same = ( this->early_slew.slitangle == this->target.slitangle ) ||
+                                ( std::isnan(this->early_slew.slitangle) && std::isnan(this->target.slitangle) );
+        return this->early_slew_same_row() && angle_same;
+      }
+
+      /**
+       * While observing, the robot rewrites the next pending row's OTMslitangle
+       * every 60 s and accepts one interval of staleness, at most ~0.9 deg
+       * (ngps_robot predispatch.py). A rewrite can land between the early
+       * slew's look at the row and the loop taking it, ~22 s later; a change
+       * within this tolerance is that refresh, and the row is observed with
+       * the angle the rotator was sent to (adopt_early_slew_angle).
+       */
+      static constexpr double EARLY_SLEW_ANGLE_TOL_DEG = 1.0;
+      void adopt_early_slew_angle();  ///< observe the row with the slit angle its early slew used
 
       mysqlx::string last_ra_hms;
       mysqlx::string last_dec_dms;
