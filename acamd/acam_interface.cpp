@@ -1443,6 +1443,7 @@ namespace Acam {
     const int         attempts     = this->target.attempts;
     const std::string filter       = this->motion.get_current_filtername();
     const std::string cover        = this->motion.get_current_coverpos();
+    const bool        goalshift_pending = this->target.goalshift_pending.load();
 
     // unless forced, only publish if there was a change in any one of these
     //
@@ -1452,7 +1453,8 @@ namespace Acam {
          nacquired    == this->last_status.nacquired    &&
          attempts     == this->last_status.attempts     &&
          filter       == this->last_status.filter       &&
-         cover        == this->last_status.cover ) return;
+         cover        == this->last_status.cover        &&
+         goalshift_pending == this->last_status.goalshift_pending ) return;
 
     this->last_status.acquire_mode = acquire_mode;
     this->last_status.is_acquired  = is_acquired;
@@ -1460,6 +1462,7 @@ namespace Acam {
     this->last_status.attempts     = attempts;
     this->last_status.filter       = filter;
     this->last_status.cover        = cover;
+    this->last_status.goalshift_pending = goalshift_pending;
 
     // assemble the telemetry into a json message
     //
@@ -1473,6 +1476,7 @@ namespace Acam {
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
     jmessage_out[Key::Acamd::FILTER]       = filter;
     jmessage_out[Key::Acamd::COVER]        = cover;
+    jmessage_out[Key::Acamd::GOALSHIFT_PENDING] = goalshift_pending;
     jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
@@ -3609,10 +3613,13 @@ logwrite( function, message.str() );
         offset = angular_separation( acam_goal.ra, acam_goal.dec, acam_ra, acam_dec );
       }
 *****/
+      const bool goal_change_at_compute = this->goalshift_pending.load(std::memory_order_acquire);
+      const double goal_ra_used  = this->acam_goal.ra;
+      const double goal_dec_used = this->acam_goal.dec;
       if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
-                                          this->acam_goal.ra, this->acam_goal.dec,
+                                          goal_ra_used, goal_dec_used,
                                           ra_off, dec_off ) == ERROR ) break;
-      offset = angular_separation( this->acam_goal.ra, this->acam_goal.dec, acam_ra, acam_dec );
+      offset = angular_separation( goal_ra_used, goal_dec_used, acam_ra, acam_dec );
 
         message.str(""); message << "[DEBUG] acam_ra=" << acam_ra << " acam_dec=" << acam_dec << " acam_goal.ra=" 
                                  << acam_goal.ra << "  .dec=" << this->acam_goal.dec << " .ang=" << this->acam_goal.angle;
@@ -3692,6 +3699,11 @@ logwrite( function, message.str() );
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
           this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
+          if ( goal_change_at_compute &&
+               goal_ra_used  == this->acam_goal.ra &&
+               goal_dec_used == this->acam_goal.dec ) {
+            this->goalshift_pending.store( false, std::memory_order_release );
+          }
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 
@@ -5530,6 +5542,8 @@ logwrite( function, message.str() );
     //
     this->fpoffsets.apply_offset( this->target.acam_goal.ra,  this->target.dRA,
                                   this->target.acam_goal.dec, this->target.dDEC );
+    this->target.goalshift_pending.store( true, std::memory_order_release );
+    this->publish_status(true);
 
 
     message.str(""); message << this->target.dRA << " " << this->target.dDEC;

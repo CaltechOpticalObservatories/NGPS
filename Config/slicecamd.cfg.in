@@ -86,9 +86,10 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 
 # FINE_ACQUIRE_SETTLE_FRAMES=<n>
 # <n> frames discarded after each telescope move to allow settling before
-# centroid measurements resume.
+# centroid measurements resume. The wall-clock settle (FINE_ACQUIRE_SETTLE_SEC,
+# applied after acamd confirms the goal change) covers the move itself.
 #
-FINE_ACQUIRE_SETTLE_FRAMES=2
+FINE_ACQUIRE_SETTLE_FRAMES=0
 
 # FINE_ACQUIRE_SETTLE_SEC=<sec>
 # Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
@@ -97,6 +98,13 @@ FINE_ACQUIRE_SETTLE_FRAMES=2
 # settle then elapses too quickly in wall-clock. Set to 0 to disable.
 #
 FINE_ACQUIRE_SETTLE_SEC=3.0
+
+# FINE_ACQUIRE_MOVE_TIMEOUT=<sec>
+# Max time <sec> to wait for acamd to report a requested goal change applied
+# before the settle begins. On timeout the settle proceeds anyway. Set to 0
+# to disable the wait.
+#
+FINE_ACQUIRE_MOVE_TIMEOUT=60.0
 
 # FINE_ACQUIRE_GAIN=<g>
 # Proportional gain <g> = {0..1} applied to the commanded offset when the residual
