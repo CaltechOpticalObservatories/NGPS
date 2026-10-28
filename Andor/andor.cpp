@@ -11,8 +11,6 @@
 
 namespace Andor {
 
-  std::recursive_mutex Interface::sdk_mtx;
-
   /***** Andor::SDK::_IsInternalMechanicalShutter *****************************/
   /**
    * @brief      wrapper for Andor SDK GetCapabilities
@@ -1740,9 +1738,6 @@ namespace Andor {
     char info[128];
     long error;
 
-    // the scan selects and initializes the cameras one at a time
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
-
     // just FYI, really
     //
     error = ( andor ? andor->_GetVersionInfo( AT_SDKVersion, info, 128 ) : ERROR );
@@ -1828,11 +1823,8 @@ namespace Andor {
 
     this->_handle = handle_in;
 
-    // Set the handle and initialize the SDK for this camera. sdk_mtx keeps it
-    // the current camera through the calls below, except around set_image(),
-    // which takes image_data_mutex.
+    // Set the handle and initialize the SDK for this camera
     //
-    std::unique_lock<std::recursive_mutex> sdk_lock( sdk_mtx );
     if (error==NO_ERROR) error = ( andor ? andor->_SetCurrentCamera( this->_handle ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_Initialize() : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_GetCameraSerialNumber( this->camera_info.serial_number ) : ERROR );
@@ -1858,12 +1850,9 @@ namespace Andor {
     if (error==NO_ERROR) error = ( andor ? andor->_SetTriggerMode( 0 ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_SetPreAmpGain( 0 ) : ERROR );
     if (error==NO_ERROR) error = ( andor ? andor->_SetCoolerMode( 1 ) : ERROR );
-    sdk_lock.unlock();
     if (error==NO_ERROR) error = set_image( this->camera_info.hbin, this->camera_info.vbin,
                                             1, this->camera_info.hend,
                                             1, this->camera_info.vend );
-    sdk_lock.lock();
-    if (error==NO_ERROR) error = select_camera( this->_handle );  // may have changed while unlocked
     if (error==NO_ERROR) error = ( andor ? andor->_GetNumberADChannels( this->camera_info.adchans ) : ERROR );
     if (error==NO_ERROR) error = get_speeds();
     if (error==NO_ERROR) error = set_output_amplifier( AMPTYPE_CONV );
@@ -1907,20 +1896,13 @@ namespace Andor {
     int temp=999;
     long error = this->get_temperature( temp );
 
-    // sdk_mtx through the cooler commands and ShutDown(), which acts on the
-    // current camera, so make that this one (while it is still open).
-    // Released before image_data_mutex below.
-    //
-    {
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
-    if ( this->is_andor_open ) select_camera(this->_handle);
-
     // Turn off the cooler
     //
     if ( error==NO_ERROR &&
          temp >= this->camera_info.temp_min &&
          temp <= -20 ) {
       if ( andor ) {
+        select_camera(this->_handle);
         andor->_SetTemperature( 20 );
         andor->_CoolerOFF();
       }
@@ -1941,7 +1923,6 @@ namespace Andor {
     //
     this->is_andor_open=false;
     ShutDown();
-    }
 
     std::lock_guard<std::mutex> lock(image_data_mutex);
 
@@ -1974,9 +1955,6 @@ namespace Andor {
       logwrite( "Andor::Interface::selct_camera", "ERROR camera handle "+std::to_string(handle)+" not open" );
       return ERROR;
     }
-    // Callers hold sdk_mtx across this and their SDK calls; taking it here as
-    // well keeps any selection from landing inside another thread's.
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     return ( andor ? andor->_SetCurrentCamera( handle ) : ERROR );
   }
   /***** Andor::Interface::select_camera **************************************/
@@ -1999,7 +1977,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_StartAcquisition() : ERROR );
@@ -2028,7 +2005,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Are we acquiring?
@@ -2062,8 +2038,7 @@ namespace Andor {
    *
    */
   uint16_t* Interface::get_image_data() {
-    // no camera selection: this reads our own buffer, not the SDK, and
-    // selecting here could switch cameras under another thread's SDK calls
+    select_camera(this->_handle);
     return this->image_data;
   }
   /***** Andor::Interface::get_image_data *************************************/
@@ -2107,7 +2082,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // stop acquiring
@@ -2191,7 +2165,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // send the SetShutter command
@@ -2225,7 +2198,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     return ( andor ? andor->_GetDetector( x, y ) : ERROR );
@@ -2253,7 +2225,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     error |= ( andor ? andor->_GetStatus( status ) : ERROR );  // current status of Andor SDK
@@ -2289,7 +2260,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Get Number of AD Chans and HS Speeds if needed
@@ -2328,7 +2298,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Get Number of AD Chans and HS Speeds if needed
@@ -2468,7 +2437,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // find the index of the speed in the vector
@@ -2533,7 +2501,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     float speed = this->camera_info.vsspeeds[index];
@@ -2574,14 +2541,10 @@ namespace Andor {
     }
 
     // for multiple camera systems it is necessary to force the handle!
-    // sdk_mtx only around the SDK call: image_data_mutex is taken below.
     //
-    long error;
-    {
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
-    error = ( andor ? andor->_SetImage( hbin, vbin, hstart, hend, vstart, vend ) : ERROR );
-    }
+
+    long error = ( andor ? andor->_SetImage( hbin, vbin, hstart, hend, vstart, vend ) : ERROR );
 
     if ( error==NO_ERROR ) {
       message << hbin   << " " << vbin << " "
@@ -2650,7 +2613,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetFanMode( mode ) : ERROR );
@@ -2746,7 +2708,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     if (error==NO_ERROR) error = ( andor ? andor->_SetImageFlip( hflip, vflip ) : ERROR );
@@ -2811,7 +2772,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     if (error==NO_ERROR) error = ( andor ? andor->_SetImageRotate( rotdir ) : ERROR );
@@ -2840,7 +2800,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     return ( andor ? andor->_GetEMGainRange( low, high ) : ERROR );
@@ -2867,7 +2826,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_GetEMCCDGain( gain ) : ERROR );
@@ -2907,7 +2865,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetOutputAmplifier( type ) : ERROR );
@@ -2957,7 +2914,6 @@ namespace Andor {
     else {
       // for multiple camera systems it is necessary to force the handle!
       //
-      std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
       select_camera(this->_handle);
 
       error = ( andor ? andor->_SetEMCCDGain( gain ) : ERROR );
@@ -2995,7 +2951,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     if ( temp >= this->camera_info.temp_max ) {
@@ -3059,7 +3014,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     std::string status;
@@ -3101,7 +3055,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetKineticCycleTime( time ) : ERROR );
@@ -3139,7 +3092,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetNumberAccumulations( number ) : ERROR );
@@ -3172,7 +3124,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetAccumulationCycleTime( time ) : ERROR );
@@ -3205,7 +3156,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetNumberKinetics( number ) : ERROR );
@@ -3242,7 +3192,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Verify that FrameTransfer is supported
@@ -3299,7 +3248,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetReadMode( mode ) : ERROR );
@@ -3352,7 +3300,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_SetAcquisitionMode( mode ) : ERROR );
@@ -3397,9 +3344,10 @@ namespace Andor {
       return ERROR;
     }
 
-    // Waits on this camera by handle, so no camera selection, and sdk_mtx is
-    // not held: other threads may use the SDK while this one waits.
+    // for multiple camera systems it is necessary to force the handle!
     //
+    select_camera(this->_handle);
+
     long error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->_handle, timeout ) : ERROR );
 
     return error;
@@ -3447,7 +3395,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     long error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
@@ -3510,7 +3457,6 @@ namespace Andor {
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     if (error==NO_ERROR) error = ( andor ? andor->_GetMostRecentImage16( this->image_data, this->bufsz ) : ERROR );
@@ -3566,12 +3512,10 @@ namespace Andor {
     //
     error = this->start_acquisition();
 
-    // Wait for acquisition (timeout set to 5s over exptime) on THIS camera, by
-    // handle. WaitForAcquisitionTimeOut waits on whichever camera is current,
-    // and another thread (e.g. the temperature poll) may have changed that.
+    // Wait for acquisition (timeout set to 5s over exptime)
     //
     int timeout = static_cast<int>( (this->camera_info.exptime + 5.)*1000. );
-    if (error==NO_ERROR) error = ( andor ? andor->_WaitForAcquisitionByHandleTimeOut( this->_handle, timeout ) : ERROR );
+    if (error==NO_ERROR) error = ( andor ? andor->_WaitForAcquisitionTimeOut( timeout ) : ERROR );
     }
     // ^^ acquire_state cleared upon leaving this scope ^^
 
@@ -3586,17 +3530,9 @@ namespace Andor {
     }
     memset( this->image_data, '\0', this->bufsz*sizeof(uint16_t) );
 
-    // Get the data and the temperature from THIS camera. Select it and hold
-    // sdk_mtx through the reads: without that, a camera selected meanwhile by
-    // another thread got its last frame read in here (L showing R's image).
+    // get the data
     //
-    {
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
-    if (error==NO_ERROR) error = select_camera( this->_handle );
     if (error==NO_ERROR) error = ( andor ? andor->_GetAcquiredData16( this->image_data, this->bufsz ) : ERROR );
-    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperature( this->camera_info.ccdtemp,
-                                                                   this->camera_info.temp_status ) : ERROR );
-    }
 
     float alpha = ( this->weight > 0 ? 1.0f/this->weight : 1.0f );
 
@@ -3611,6 +3547,11 @@ namespace Andor {
         this->avg_data[i] = ( alpha * static_cast<float>(this->image_data[i]) + (1.0f-alpha)*this->avg_data[i] );
       }
     }
+
+    // get the temperature reading
+    //
+    if (error==NO_ERROR) error = ( andor ? andor->_GetTemperature( this->camera_info.ccdtemp,
+                                                                   this->camera_info.temp_status ) : ERROR );
 
     // Store the exposure start time
     //
@@ -3855,7 +3796,6 @@ return NO_ERROR;
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Can't change if acquisition in progress
@@ -3948,7 +3888,6 @@ return NO_ERROR;
 
     // for multiple camera systems it is necessary to force the handle!
     //
-    std::lock_guard<std::recursive_mutex> sdk_lock( sdk_mtx );
     select_camera(this->_handle);
 
     // Can't read if acquisition in progress
