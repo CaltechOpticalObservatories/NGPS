@@ -1,4 +1,6 @@
 #include "slicecam_fits.h"
+#include <algorithm>
+#include <cstdio>
 
 namespace Slicecam {
 
@@ -225,6 +227,17 @@ logwrite( function, file_in );
       catch (const std::exception &e) {
         logwrite( function, "ERROR copying buffer: "+std::string(e.what()) );
         return ERROR;
+      }
+
+      // subtract the median of DATASEC from this copy only, so that L and R display at the same level
+      //
+      int x1, x2, y1, y2;
+      const long nx = slicecam->camera_info.axes[0], ny = slicecam->camera_info.axes[1];
+      if ( std::sscanf( slicecam->fitskeys.keydb["DATASEC"].keyvalue.c_str(), "[%d:%d,%d:%d]", &x1, &x2, &y1, &y2 ) == 4 &&
+           x1 >= 1 && x1 <= x2 && x2 <= nx && y1 >= 1 && y1 <= y2 && y2 <= ny ) {
+        std::valarray<float> lit = array[ std::gslice( (y1-1)*nx + (x1-1), { size_t(y2-y1+1), size_t(x2-x1+1) }, { size_t(nx), 1 } ) ];
+        std::nth_element( std::begin(lit), std::begin(lit)+lit.size()/2, std::end(lit) );
+        array -= lit[ lit.size()/2 ];
       }
 
 
