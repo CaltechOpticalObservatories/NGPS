@@ -2368,11 +2368,15 @@ namespace Sequencer {
    *             lives only while that wait is open (auto_ontarget_active).
    *             Acknowledges when two consecutive 1 Hz reads show
    *             ?ONTARGET==1 AND motion tracking AND |telescope-commanded| <
-   *             tcs_auto_ontarget_sep. All three predicates are required:
-   *             the flag alone is position-agnostic, the separation alone
-   *             cannot see a sub-threshold hop in progress, and motion alone
-   *             says nothing about settling. The coords are the SCOPE-frame
-   *             position move_to_target actually commanded. A wrong
+   *             tcs_auto_ontarget_sep AND |TCS cass angle - commanded ring
+   *             angle| < tcs_auto_ontarget_cass. All four are required: the
+   *             flag alone is position-agnostic, the separation alone cannot
+   *             see a sub-threshold hop in progress, motion alone says
+   *             nothing about settling, and none of them covers the cass
+   *             ring, which turns on its own after RINGGO (ACAM's goal is
+   *             computed from the cass angle at the acquire, ~8.5" per
+   *             degree of ring still to go). The coords and ring angle are
+   *             what move_to_target actually commanded. A wrong
    *             acknowledgment is self-limiting -- ACAM cannot solve a field
    *             that is not there and the acquisition retry machinery
    *             handles the failure -- so the conditions make wrong acks
@@ -2382,16 +2386,18 @@ namespace Sequencer {
    *             cancel_flag, and a concurrent cancel must always win
    *             against this automatic path.
    */
-  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen ) {
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, double tgt_cass_deg, unsigned gen ) {
     const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
     std::stringstream message;
 
-    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) ) {
-      logwrite( function, "ERROR invalid commanded coords; auto-ontarget sits this wait out" );
+    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) || std::isnan(tgt_cass_deg) ) {
+      logwrite( function, "ERROR invalid commanded coords or ring angle; auto-ontarget sits this wait out" );
       return;
     }
 
     int consecutive = 0;
+    int64_t ring_wait_since_us = 0;    // when everything but the ring first held
+    bool    ring_warned = false;
 
     // gen retires this watcher the moment a newer one is launched, so one
     // still sleeping from an earlier move can never acknowledge a new one.
@@ -2412,6 +2418,8 @@ namespace Sequencer {
       bool   fresh    = false;
       bool   tracking = false;
       double sep_as   = NAN;
+      double dcass_deg = NAN;
+      double cass_now  = NAN;
       {
       std::lock_guard<std::mutex> lock( tcsd_mtx );
       fresh = this->tcsinfo.is_fresh();
@@ -2422,11 +2430,31 @@ namespace Sequencer {
         double dra_as  = dra_deg * cos( tgt_dec_deg * M_PI / 180.0 ) * 3600.0;
         double ddec_as = ( this->tcsinfo.dec_d - tgt_dec_deg ) * 3600.0;
         sep_as = std::hypot( dra_as, ddec_as );
+        // the cass ring against the angle RINGGO was sent, either side of the wrap
+        cass_now  = this->tcsinfo.cassangle;
+        dcass_deg = std::fabs( std::remainder( cass_now - tgt_cass_deg, 360.0 ) );
       }
       }
 
-      if ( !fresh || !flag_on || !tracking ||
-           !( sep_as < this->tcs_auto_ontarget_sep ) )                      { consecutive=0; continue; }
+      const bool all_but_ring = fresh && flag_on && tracking && ( sep_as < this->tcs_auto_ontarget_sep );
+      const bool ring_ok      = ( dcass_deg < this->tcs_auto_ontarget_cass );
+
+      // On target with only the ring missing for 20 s (a refused RINGGO, a ring
+      // parked off the command, an unreadable angle): say so once, so the
+      // operator knows the wait needs a press.
+      if ( all_but_ring && !ring_ok ) {
+        if ( ring_wait_since_us == 0 ) ring_wait_since_us = get_time_us();
+        else if ( !ring_warned && get_time_us() - ring_wait_since_us > 20000000 ) {
+          ring_warned = true;
+          message.str(""); message << "telescope on target but the cass ring reads " << cass_now
+                                   << " deg, commanded " << tgt_cass_deg
+                                   << " deg: press ontarget once the ring is in place";
+          this->broadcast.warning( function, message.str() );
+        }
+      }
+      else if ( !all_but_ring ) ring_wait_since_us = 0;
+
+      if ( !all_but_ring || !ring_ok )                                      { consecutive=0; continue; }
 
       if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
 
@@ -2447,7 +2475,8 @@ namespace Sequencer {
 
       message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
                                << std::fixed << std::setprecision(1) << sep_as
-                               << " arcsec x2) -- sending ontarget";
+                               << " arcsec, ring within " << std::setprecision(3) << dcass_deg
+                               << " deg x2) -- sending ontarget";
       this->broadcast.notice( function, message.str() );
       return;
     }
@@ -2614,7 +2643,7 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
-    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default no): the TCS itself can
+    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default yes): the TCS itself can
     // satisfy this wait through the same ontarget() the operator's press uses.
     // The watcher lives exactly as long as this wait (auto_ontarget_active).
     //
@@ -2625,7 +2654,7 @@ namespace Sequencer {
       // database coordinates differ by the pointmode focal-plane offset.
       // ontarget_gen was taken, retiring older watchers, before the COORDS.
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out, ontarget_gen ).detach();
+                   ra_out, dec_out, angle_out, ontarget_gen ).detach();
     }
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
