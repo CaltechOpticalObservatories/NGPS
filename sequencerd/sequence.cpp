@@ -51,6 +51,25 @@ namespace Sequencer {
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
       this->can_expose.store(isready);
+      // The first READY after the next target was picked during a readout is
+      // the end of that readout (camerad reported READY=false when the
+      // exposure started and publishes in order): open the readout gate.
+      if ( isready && this->readout_gate_armed ) {
+        this->readout_gate_armed = false;
+        this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      }
+    }
+    // Readout counting, step 1 of 2 (see the bookkeeping notes in sequence.h):
+    // the shutter report going from open to closed, in a report that is not
+    // PAUSED (camerad closes the shutter to pause, and says so), means an
+    // integration has ended. Open or paused reports disarm.
+    if ( jmessage.contains(Key::Camerad::SHUTTEROPEN) && jmessage[Key::Camerad::SHUTTEROPEN].is_boolean() ) {
+      const bool open   = jmessage[Key::Camerad::SHUTTEROPEN].get<bool>();
+      const bool paused = jmessage.contains(Key::Camerad::PAUSED) && jmessage[Key::Camerad::PAUSED].is_boolean()
+                          && jmessage[Key::Camerad::PAUSED].get<bool>();
+      if ( open || paused )               this->readout_armed = false;
+      else if ( this->last_shutteropen )  this->readout_armed = true;
+      this->last_shutteropen = open;
     }
     this->camerad_cv.notify_all();
   }
@@ -512,10 +531,47 @@ namespace Sequencer {
         // Set READOUT flag and clear EXPOSE flag when pixels start coming in
         // ------------------------------------------------------------------
         //
-        if ( seq.arm_readout_flag && statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {  // async message tag PIXELCOUNT
-          seq.arm_readout_flag = false;
-          seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},      // set READOUT
-                                                {Sequencer::SEQ_WAIT_EXPOSE} );     // clear EXPOSE
+        if ( statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {                          // async message tag PIXELCOUNT
+          // How far into its readout this device is: "PIXELCOUNT_<dev>:<pixels>
+          // <imagesize> <percent>" (the first two numbers after the colon are
+          // used; -1 if they cannot be read).
+          double readout_fraction = -1.0;
+          const auto colon = statstr.find( ':' );
+          if ( colon != std::string::npos ) {
+            std::istringstream fields( statstr.substr( colon+1 ) );
+            std::string token;
+            std::vector<double> numbers;
+            while ( numbers.size() < 2 && fields >> token ) {
+              try {
+                std::size_t used = 0;
+                const double value = std::stod( token, &used );
+                if ( used == token.size() ) numbers.push_back( value );
+              }
+              catch ( const std::exception & ) { }
+            }
+            if ( numbers.size() == 2 && numbers[1] > 0.0 ) readout_fraction = numbers[0] / numbers[1];
+          }
+          // The first PIXELCOUNT of a readout ends the EXPOSE wait -- but not one
+          // from the second half of a readout: that is the tail of the previous
+          // target's readout, arriving after the next expose command.
+          if ( seq.arm_readout_flag && !( readout_fraction >= 0.5 ) ) {
+            seq.arm_readout_flag = false;
+            seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},    // set READOUT
+                                                  {Sequencer::SEQ_WAIT_EXPOSE} );   // clear EXPOSE
+          }
+          // Readout counting, step 2 of 2 (step 1 in handletopic_camerad): an
+          // armed count is completed by a PIXELCOUNT from the first half of a
+          // readout. A message from the tail of an earlier readout, or one that
+          // cannot be read, completes nothing; a count completed here leaves at
+          // least half a readout before camerad can open the shutter again.
+          {
+          std::lock_guard<std::mutex> lock(seq.camerad_mtx);
+          if ( seq.readout_armed && readout_fraction >= 0.0 && readout_fraction < 0.5 ) {
+            seq.readout_armed = false;
+            seq.readouts_started++;
+            seq.camerad_cv.notify_all();
+          }
+          }
         }
 
         // ---------------------
@@ -640,6 +696,16 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
+    // On every way out of this function except a cancel, do not report the
+    // sequence finished while camerad is still reading out a target that was
+    // completed at the start of its last readout. Declared after the
+    // ScopedStates above, so it runs before they set READY.
+    //
+    struct ReadoutGateOnExit {
+      Sequence &seq;
+      ~ReadoutGateOnExit() { try { seq.wait_for_readout_gate( "ending the sequence" ); } catch (...) { } }
+    } readout_gate_on_exit{ *this };
+
     // This is the main loop which runs as long as there are targets in the database,
     // or until cancelled. Or, this will run once in the case of single-target-mode,
     // which is invoked by storing an OBSID in the class variable single_obsid.
@@ -696,6 +762,23 @@ namespace Sequencer {
         }
 
         this->publish_targetinfo();   // publish the now-active target
+
+        // A target picked while the previous one is still reading out starts
+        // at once only if the telescope has to slew to it: a science row with
+        // coordinates and SLIT pointing. Anything else -- a calibration, a row
+        // without coordinates, ACAM pointing -- starts when that readout has
+        // finished, exactly as before. It is already 'active' while it waits,
+        // like every picked row.
+        //
+        {
+        const bool slews = !this->target.iscal
+                        && !( this->target.ra_hms.empty() && this->target.dec_dms.empty() )
+                        && !( this->target.pointmode == Acam::POINTMODE_ACAM );
+        if ( !slews && !this->wait_for_readout_gate( "starting "+std::string(this->target.name) ) ) {
+          this->broadcast.notice( function, "sequence cancelled" );
+          return;
+        }
+        }
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -716,6 +799,14 @@ namespace Sequencer {
       // latch repeat state before any worker starts
       this->is_repeat_target.store( this->repeat_target() );
       if ( this->is_repeat_target.load() ) this->broadcast.notice( function, "repeat target" );
+
+      // Flexure compensation is computed from the telescope position at the
+      // moment flexured applies it. When the telescope stays where it is (a
+      // calibration, or a repeat of the same pointing) it is set with the other
+      // workers, in parallel, as it always was. When the telescope slews, that
+      // would compensate for the PREVIOUS pointing, so it is set after
+      // acquisition instead, just before the exposure.
+      const bool flexure_after_acquisition = !this->target.iscal && !this->is_repeat_target.load();
 
       // threads to start, pair their ThreadStatusBit with the function to call
       std::vector<std::pair<Sequencer::ThreadStatusBits, std::function<long()>>> worker_threads;
@@ -739,15 +830,18 @@ namespace Sequencer {
 
         // threads to start, pair their ThreadStatusBit with the function to call
         //
+        // camera_set is not here: it talks to camerad, so it runs just before
+        // the exposure, behind the readout gate (see "starting exposure").
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
-                           { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
-                           { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this)    },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
                                                  this->target.iscal ? Sequencer::VSM_EXPOSE : Sequencer::VSM_ACQUIRE) }
                          };
+        if ( !flexure_after_acquisition ) {   // telescope does not move: set it now, in parallel
+          worker_threads.push_back( { THR_FLEXURE_SET, std::bind(&Sequence::flexure_set, this) } );
+        }
       }
 
       // pair their ThreadStatusBit with their future
@@ -757,6 +851,19 @@ namespace Sequencer {
       //
       for ( const auto &[thr, func] : worker_threads ) {
         worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
+      }
+
+      // camera_set talks to camerad, so it waits for the readout gate, then runs
+      // in parallel with everything else (a channel power-up takes seconds) and
+      // is joined just before the exposure. Not for ACAM pointing, which never
+      // exposes here.
+      //
+      std::future<long> camera_future;
+      if ( !( this->target.pointmode == Acam::POINTMODE_ACAM ) ) {
+        camera_future = std::async( std::launch::async, [this]() -> long {
+          if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) return ABORT;
+          return this->camera_set();
+        } );
       }
 
       // wait for the threads to complete. these can be cancelled.
@@ -830,6 +937,14 @@ namespace Sequencer {
         }
       }
 
+      // For a target the telescope slewed to (flexure_after_acquisition), the
+      // flexure compensation is set here -- telescope on target, acquisition
+      // and target offset done -- in parallel with the slit move and the
+      // offset settle, and joined before the expose command. For NEXP>1 it is
+      // re-applied during each readout (flexure_reapply, in the readout wait).
+      //
+      std::future<long> flexure_future;
+
       if ( !this->target.iscal ) {
         // send offsets only on fineacquire, otherwise user needs to fix things
         if ( !this->is_repeat_target.load()      &&
@@ -839,6 +954,9 @@ namespace Sequencer {
             this->broadcast.notice( function, "cancelled" );
             return;
           }
+        }
+        if ( flexure_after_acquisition ) {
+          flexure_future = std::async( std::launch::async, &Sequence::flexure_set, this );
         }
         // ensure slit offset is in "expose" position when needed
         try {
@@ -859,6 +977,53 @@ namespace Sequencer {
         logwrite( function, "NOTICE: waiting "+std::to_string(this->offset_settle_sec)+
                             " sec for target offset to settle onto slit before exposing" );
         std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
+      }
+
+      // The compensator must be set before the shutter opens. A failure keeps
+      // the semantics flexure_set has in the worker set: the sequence stops.
+      //
+      if ( flexure_future.valid() ) {
+        try {
+          long flexure_error = flexure_future.get();
+          error |= flexure_error;
+          if ( flexure_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+          }
+        }
+        catch (const std::exception& e) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" : "+std::string(e.what()) );
+          return;
+        }
+      }
+
+      // Nothing reaches camerad before the previous target's readout has
+      // finished: when this target was picked at the start of that readout,
+      // the camera settings (camera_future) and the expose wait for READY.
+      //
+      if ( !this->wait_for_readout_gate( "exposing "+std::string(this->target.name) ) ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
+      }
+      if ( camera_future.valid() ) {
+        try {
+          long camera_error = camera_future.get();
+          error |= camera_error;
+          // never expose unless this target's camera settings were applied
+          if ( camera_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)
+                                             +( camera_error==ABORT ? " cancelled" : " failed" )+": not exposing" );
+            return;
+          }
+          this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
+        }
+        catch (const std::exception& e) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
+          return;
+        }
+      }
+      if ( this->cancel_flag.load() ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
       }
 
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
@@ -907,19 +1072,62 @@ namespace Sequencer {
       // of the last exposure finishes — the correct completion signal for both
       // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
+      // While waiting, every counted sub-exposure readout (readouts_started; see
+      // the bookkeeping notes in sequence.h) is acted on once: a readout that more sub-exposures
+      // follow gets the flexure compensation re-applied during it. When the
+      // LAST one starts reading out, this target is complete -- its
+      // integration has ended, and camerad took its header telemetry at
+      // exposure start and AIRMASS1/MJD1 at shutter close -- so the loop
+      // completes it and picks the next target now instead of after READY,
+      // unless single-step, a single target, a cancel or a thread error says
+      // otherwise. The readout gate keeps camerad untouched until READY.
+      //
+      bool picked_during_readout = false;
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
+        int readouts_handled = 0;
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
-        while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
-                                            [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
-          logwrite( function, "waiting for readout — requesting snapshot" );
+        while ( true ) {
+          const bool signalled = this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                   [this,&readouts_handled]() { return this->can_expose.load() || this->cancel_flag.load() ||
+                                                                       this->readouts_started > readouts_handled; } );
+          if ( this->can_expose.load() || this->cancel_flag.load() ) break;
+          if ( !signalled ) {
+            logwrite( function, "waiting for readout — requesting snapshot" );
+            lock.unlock();
+            this->request_snapshot();
+            lock.lock();
+            continue;
+          }
+          const int sub = ++readouts_handled;   // readout of sub-exposure number sub (1-based) has begun
+          const int expected = this->readouts_expected;   // the N sent to camerad, not the live row
+          if ( sub == expected && !this->target.iscal && !this->do_once.load() && this->single_obsid.empty() &&
+               !this->cancel_flag.load() && !this->thread_error_manager.are_any_set() ) {
+            this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
+            picked_during_readout = true;
+            break;
+          }
           lock.unlock();
-          this->request_snapshot();
+          if ( sub < expected ) {
+            this->flexure_reapply( sub, expected );
+          }
+          else if ( sub > expected ) {
+            message.str(""); message << "readout " << sub << " seen for a " << expected
+                                     << "-exposure command: camerad is running more sub-exposures than were sent";
+            this->broadcast.warning( function, message.str() );
+          }
           lock.lock();
         }
-        this->broadcast.notice( function, "done waiting for readout" );
+        if ( picked_during_readout ) {
+          this->broadcast.notice( function, "last readout of "+std::string(this->target.name)
+                                            +" under way: completing it and picking the next target" );
+        }
+        else {
+          this->broadcast.notice( function, "done waiting for readout" );
+        }
       }
-      this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      // after a pick the READOUT bit stays set until camerad's READY opens the gate
+      if ( !picked_during_readout ) this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -996,9 +1204,13 @@ namespace Sequencer {
 
       if (this->cancel_flag.load()) {
         logwrite(function, "sequence cancelled");
-        return NO_ERROR;
+        return ABORT;                       // nothing was set: the caller must not expose
       }
     }
+    // camerad_mtx guards can_expose only; holding it across the camerad
+    // commands below would block the ZMQ subscriber thread (every topic) for
+    // their duration -- a channel power-up takes seconds
+    lock.unlock();
 
     logwrite( function, "setting camera parameters");
 
@@ -2170,7 +2382,7 @@ namespace Sequencer {
    *             cancel_flag, and a concurrent cancel must always win
    *             against this automatic path.
    */
-  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg ) {
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen ) {
     const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
     std::stringstream message;
 
@@ -2181,7 +2393,10 @@ namespace Sequencer {
 
     int consecutive = 0;
 
-    while ( this->auto_ontarget_active.load() &&
+    // gen retires this watcher the moment a newer one is launched, so one
+    // still sleeping from an earlier move can never acknowledge a new one.
+    //
+    while ( this->auto_ontarget_active.load() && this->auto_ontarget_gen.load() == gen &&
             !this->cancel_flag.load() && !this->is_ontarget.load() ) {
 
       std::this_thread::sleep_for( std::chrono::seconds(1) );
@@ -2215,16 +2430,25 @@ namespace Sequencer {
 
       if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
 
-      // Re-check at the last instant; do NOT clear cancel_flag (see @details).
+      // Re-check at the last instant and acknowledge under ontarget_ack_mtx, so
+      // a new move (which retires watchers and clears is_ontarget under the
+      // same lock) cannot fall between the check and the store. Do NOT clear
+      // cancel_flag (see @details). cv_mutex is taken before the notify so a
+      // waiter between its predicate check and its wait cannot miss it.
       //
-      if ( !this->auto_ontarget_active.load() || this->cancel_flag.load() ) return;
+      {
+      std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+      if ( !this->auto_ontarget_active.load() || this->auto_ontarget_gen.load() != gen ||
+           this->cancel_flag.load() ) return;
+      this->is_ontarget.store( true );
+      }
+      { std::lock_guard<std::mutex> lock( this->cv_mutex ); }
+      this->cv.notify_all();
 
       message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
                                << std::fixed << std::setprecision(1) << sep_as
                                << " arcsec x2) -- sending ontarget";
       this->broadcast.notice( function, message.str() );
-      this->is_ontarget.store( true );
-      this->cv.notify_all();
       return;
     }
   }
@@ -2267,6 +2491,7 @@ namespace Sequencer {
       this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
+
 
     error = NO_ERROR;
 
@@ -2342,6 +2567,16 @@ namespace Sequencer {
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
+    // Retire every auto-ontarget watcher still alive (one from an earlier
+    // move) and clear the flag, in one step with respect to
+    // a watcher's acknowledgment: only an ack of THIS move may satisfy the
+    // wait below.
+    unsigned ontarget_gen = 0;
+    {
+    std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+    ontarget_gen = ++this->auto_ontarget_gen;
+    this->is_ontarget.store(false);
+    }
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
 
     // if not success then wait 1s and try again
@@ -2388,8 +2623,9 @@ namespace Sequencer {
       // ra_out/dec_out are the SCOPE-frame coordinates this function actually
       // commanded, which is the position REQPOS telemetry will report -- the
       // database coordinates differ by the pointmode focal-plane offset.
+      // ontarget_gen was taken, retiring older watchers, before the COORDS.
       std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
-                   ra_out, dec_out ).detach();
+                   ra_out, dec_out, ontarget_gen ).detach();
     }
 
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
@@ -2418,6 +2654,41 @@ namespace Sequencer {
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::move_to_target **********************************/
+
+
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
+  /**
+   * @brief      wait until the previous target's readout has finished
+   * @param[in]  before  what is waiting, for the log
+   * @return     true to proceed, false if cancelled while waiting
+   *
+   * The gate is armed when the next target is picked at the start of the
+   * previous target's last readout (sequence_start) and opened by the first
+   * camerad READY report after that (handletopic_camerad). Returns at once
+   * when it is not armed, which is every case but that one.
+   */
+  bool Sequence::wait_for_readout_gate( const std::string &before ) {
+    const std::string function("Sequencer::Sequence::wait_for_readout_gate");
+    std::unique_lock<std::mutex> lock( this->camerad_mtx );
+    if ( !this->readout_gate_armed ) return true;
+    logwrite( function, "previous target still reading out: waiting before "+before );
+    while ( this->readout_gate_armed && !this->cancel_flag.load() ) {
+      if ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                       [this]() { return !this->readout_gate_armed || this->cancel_flag.load(); } ) ) {
+        logwrite( function, "still waiting for the previous readout -- requesting snapshot" );
+        lock.unlock();
+        this->request_snapshot();
+        lock.lock();
+      }
+    }
+    if ( this->readout_gate_armed ) {
+      logwrite( function, "cancelled while waiting for the previous readout" );
+      return false;
+    }
+    logwrite( function, "previous readout finished" );
+    return true;
+  }
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
 
 
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
@@ -2548,19 +2819,12 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
-    // build up list of activate chans
-    std::ostringstream activechans;
-    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
-    const auto &calinfo = this->caltarget.get_info(calname);
-    for (const auto &[chan,active] : calinfo.channel_active) {
-      if (active) activechans << " " << chan;
-    }
-
-    std::ostringstream comp;
-    comp << FLEXURED_COMPENSATE << activechans.str();
+    // the compensate command names this target's active channels
+    const std::string comp = this->flexure_compensate_command();
+    const std::string activechans = comp.substr( std::string(FLEXURED_COMPENSATE).size() );
 
     if ( !this->cancel_flag.load() &&
-          this->flexured.command( comp.str() ) != NO_ERROR ) {
+          this->flexured.command( comp ) != NO_ERROR ) {
       this->broadcast.error( function, "setting flexure compensator" );
       this->thread_error_manager.set( THR_FLEXURE_SET );
       throw std::runtime_error("setting flexure compensator");
@@ -2568,11 +2832,97 @@ namespace Sequencer {
 
     this->is_flexure_default.store(false);
 
-    this->broadcast.notice( function, "flexure compensator set for "+activechans.str());
+    this->broadcast.notice( function, "flexure compensator set for "+activechans);
 
     return NO_ERROR;
   }
   /***** Sequencer::Sequence::flexure_set *************************************/
+
+
+  /***** Sequencer::Sequence::flexure_compensate_command **********************/
+  /**
+   * @brief      the FLEXURED_COMPENSATE command for the current target
+   * @return     "compensate <chan> [<chan> ...]" with the channels active for
+   *             the target's calibration entry ("SCIENCE" for science targets)
+   */
+  std::string Sequence::flexure_compensate_command() {
+    std::ostringstream activechans;
+    const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
+    const auto &calinfo = this->caltarget.get_info(calname);
+    for (const auto &[chan,active] : calinfo.channel_active) {
+      if (active) activechans << " " << chan;
+    }
+    return std::string(FLEXURED_COMPENSATE) + activechans.str();
+  }
+  /***** Sequencer::Sequence::flexure_compensate_command **********************/
+
+
+  /***** Sequencer::Sequence::flexure_reapply *********************************/
+  /**
+   * @brief      re-issue the flexure compensation between two sub-exposures
+   * @param[in]  sub  the sub-exposure (1-based) whose readout is in progress
+   * @return     ERROR | NO_ERROR (informational only)
+   *
+   * Called by sequence_start during the readout of sub-exposure sub when
+   * sub-exposure sub+1 of expected follows. flexured recomputes from the
+   * telescope position at this moment, so the next sub-exposure starts
+   * corrected. Skipped (the compensation set at the start of the series
+   * stays) unless that readout is still running and the next shutter has not
+   * opened, the TCS telemetry is fresh and finite (flexured itself does not
+   * check the values), and no thread error is set. A failure is reported and
+   * otherwise ignored: nothing may disturb a running exposure command.
+   */
+  long Sequence::flexure_reapply( int sub, int expected ) {
+    const std::string function("Sequencer::Sequence::flexure_reapply");
+    std::stringstream message;
+
+    if ( !this->should_flexcomp.load() || this->cancel_flag.load() ) return NO_ERROR;
+
+    auto skipped = [&]( const std::string &why ) {
+      message.str(""); message << "flexure compensation NOT re-applied before exposure " << sub+1
+                               << " of " << expected << ": " << why;
+      this->broadcast.warning( function, message.str() );
+      return ERROR;
+    };
+    auto next_started = [this, sub]() {
+      std::lock_guard<std::mutex> lock( this->camerad_mtx );
+      return ( this->last_shutteropen || this->readouts_started != sub );
+    };
+
+    if ( this->thread_error_manager.are_any_set() ) return skipped( "a thread error is set" );
+    {
+    std::lock_guard<std::mutex> lock( this->tcsd_mtx );
+    if ( !this->daemon_manager.is_set( Sequencer::DAEMON_TCS ) || !this->tcsinfo.is_fresh() ||
+         !std::isfinite( this->tcsinfo.zenithangle ) || !std::isfinite( this->tcsinfo.cassangle ) ||
+         !std::isfinite( this->tcsinfo.pa ) ) {
+      return skipped( "TCS telemetry not fresh or not valid" );
+    }
+    }
+    if ( next_started() ) return skipped( "the next exposure has already started" );
+
+    const std::string comp = this->flexure_compensate_command();
+
+    message.str(""); message << "re-applying flexure compensation during readout " << sub << " of "
+                             << expected << " for " << this->target.name;
+    logwrite( function, message.str() );
+
+    if ( this->flexured.command( comp ) != NO_ERROR ) return skipped( "flexured returned an error" );
+
+    this->is_flexure_default.store(false);
+
+    if ( next_started() ) {
+      message.str(""); message << "flexure compensator re-applied, but exposure " << sub+1 << " of " << expected
+                               << " had already started: the actuators moved during its first seconds";
+      this->broadcast.warning( function, message.str() );
+      return ERROR;
+    }
+
+    message.str(""); message << "flexure compensator re-applied before exposure " << sub+1
+                             << " of " << expected;
+    this->broadcast.notice( function, message.str() );
+    return NO_ERROR;
+  }
+  /***** Sequencer::Sequence::flexure_reapply *********************************/
 
 
   /***** Sequencer::Sequence::calib_set ***************************************/
@@ -2784,7 +3134,9 @@ namespace Sequencer {
     // so this loop exits after at most a few iterations.
     //
     if ( abort_during_run ) {
-      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+      // 20 s: the readout wait may be inside a flexured re-apply (client
+      // timeout 6 s + 2 s, flexured itself up to ~11 s) when the cancel lands
+      const auto drain_timeout = std::chrono::steady_clock::now() + std::chrono::seconds(20);
       while ( this->thread_state_manager.is_set( Sequencer::THR_SEQUENCE_START ) &&
               std::chrono::steady_clock::now() < drain_timeout ) {
         std::this_thread::sleep_for( std::chrono::milliseconds(20) );
@@ -2893,6 +3245,8 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
+    if ( !this->wait_for_readout_gate( "repeating the exposure" ) ) return ERROR;
+
     std::string targetstatus;
     this->target.get_specified_target( this->prev_single_obsid, targetstatus );
 
@@ -2931,6 +3285,24 @@ namespace Sequencer {
       }
     }
 
+    if ( this->cancel_flag.load() ) {
+      this->broadcast.notice(function, "cancelled repeat exposure");
+      return NO_ERROR;
+    }
+
+    // Flexure for the telescope position now. Only after camera_set has seen
+    // camerad ready: a REPEAT is accepted while the previous one is still
+    // integrating, and the actuators must not move under it.
+    //
+    try {
+      if ( this->flexure_set() != NO_ERROR ) {
+        this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" failed" );
+      }
+    }
+    catch (const std::exception& e) {
+      this->broadcast.error( function, Sequencer::thread_names.at(THR_FLEXURE_SET)+" exception: "+std::string(e.what()) );
+      return ERROR;
+    }
     if ( this->cancel_flag.load() ) {
       this->broadcast.notice(function, "cancelled repeat exposure");
       return NO_ERROR;
@@ -2986,6 +3358,13 @@ namespace Sequencer {
     //
     if ( this->tcs_preauth_time > 0 ) this->notify_tcs_next_target = true; else this->notify_tcs_next_target = false;
 
+    {
+    std::lock_guard<std::mutex> lock(this->camerad_mtx);
+    this->last_shutteropen = false;                 // readout bookkeeping starts fresh with this expose command;
+    this->readout_armed    = false;                 // the shutter is closed until camerad opens it for this one
+    this->readouts_started = 0;
+    this->readouts_expected = this->target.nexp;    // the N sent below, fixed for this command
+    }
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
     this->set_imgtype();
