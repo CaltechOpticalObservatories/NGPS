@@ -4414,7 +4414,7 @@ logwrite(function, message.str());
     //
     this->camera.shutter_timer.modify( requested_exptime );
 
-    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", requested_exptime, "exposure time in sec" );
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", requested_exptime, "exposure time in msec" );
 
     message.str(""); message << "modified exptime to " << requested_exptime << " msec";
     logwrite( function, message.str() );
@@ -4481,11 +4481,11 @@ logwrite(function, message.str());
     //
     this->camera.shutter_timer.stop( remaining_time );
 
-    double actual_exptime = (this->camera.exposure_time - remaining_time)/1000.;
+    long actual_exptime = this->camera.exposure_time - remaining_time;
 
     logwrite( function, "exposure stopped early" );
 
-    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", actual_exptime, "exposure time in sec" );
+    this->fitsinfo[this->get_expbuf()]->systemkeys.primary().addkey( "EXPTIME", actual_exptime, "exposure time in msec" );
 
     return NO_ERROR;
   }
