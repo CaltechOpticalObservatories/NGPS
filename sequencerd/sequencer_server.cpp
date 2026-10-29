@@ -372,6 +372,21 @@ namespace Sequencer {
         applied++;
       }
 
+      // TCS_AUTO_ONTARGET_CASS
+      if (config.param[entry] == "TCS_AUTO_ONTARGET_CASS") {
+        try {
+          this->sequence.tcs_auto_ontarget_cass = std::stod( config.arg[entry] );
+        }
+        catch (const std::exception &e) {
+          message.str(""); message << "ERROR parsing TCS_AUTO_ONTARGET_CASS: " << e.what();
+          logwrite( function, message.str() );
+          return ERROR;
+        }
+        message.str(""); message << "SEQUENCERD:config:" << config.param[entry] << "=" << config.arg[entry];
+        logwrite( function, message.str() );
+        applied++;
+      }
+
       // TCS_AUTO_ONTARGET_SEP
       if (config.param[entry] == "TCS_AUTO_ONTARGET_SEP") {
         try {
