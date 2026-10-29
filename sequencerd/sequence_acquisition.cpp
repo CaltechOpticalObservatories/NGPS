@@ -198,6 +198,15 @@ namespace Sequencer {
     if (!this->is_fineacquire_locked.load()) {
       if (use_timeout && std::chrono::steady_clock::now() >= timeout_time) {
         logwrite( function, "ERROR slicecam fine acquisition timed out!" );
+        // Giving up the wait does not end slicecamd's run, and nothing else
+        // would before the next slew: after "continue" it would keep moving
+        // the telescope through the exposure (a repeat target never slews).
+        // Stop it here. do_slicecam_stop takes fineacquire_mtx itself, and
+        // with no lock its wait is satisfied at once.
+        lock.unlock();
+        if ( this->do_slicecam_stop() != NO_ERROR ) {
+          this->broadcast.warning( function, "could not stop fine acquisition after the timeout" );
+        }
         return TIMEOUT;
       }
       logwrite( function, "ERROR slicecam fine acquisition stopped without locking" );
