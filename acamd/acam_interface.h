@@ -352,7 +352,7 @@ namespace Acam {
       std::atomic<bool> goalshift_pending{false};  ///< a requested goal change awaits execution by the guide loop
 
       double tcs_max_offset;
-      double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for a deliberate goal offset (put-on-slit etc.) applied while guiding; defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
+      double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for the correction that makes a deliberate goal offset (put-on-slit etc.); defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
 
       double offset_cal_offset, offset_cal_raoff, offset_cal_decoff;
 
@@ -387,7 +387,14 @@ namespace Acam {
         this->time_offs.clear();
         this->tcs_offset_period = val;
       }
-      inline void reset_offset_params() { this->reset_offset_params(this->tcs_offset_period); }
+      /// clear the filter only: never rewrite tcs_offset_period, which a concurrent
+      /// offsetperiod command may be setting
+      inline void reset_offset_params() {
+        std::lock_guard<std::mutex> lock(this->offset_params_mtx);
+        this->ra_offs.clear();
+        this->dec_offs.clear();
+        this->time_offs.clear();
+      }
 
       inline double get_timeout() { return this->timeout; }
 
@@ -484,9 +491,72 @@ namespace Acam {
         double ra;
         double dec;
         double angle;
-      } acam_goal;
+      } acam_goal;       ///< guarded by goal_mtx (snapshot_goal, set_goal, offset_goal)
 
-      std::atomic<bool> allow_large_offset{false};  ///< one-shot: allow the next guiding correction up to tcs_max_putonslit_offset
+      // Goal changes and the corrections that make them (PAL-171).
+      //
+      // offset_goal changes the goal; the guide loop moves the telescope. Every
+      // correction is classified by the goal it was computed against:
+      //   guide correction       -- a goal the loop has already moved to;
+      //   goal-change correction -- a goal changed since: a fine-acquire
+      //                             correction ('fineguiding') or a deliberate
+      //                             offset (untagged: target offset, offset star,
+      //                             put-on-slit, pyGUI 'Offset').
+      // goal_gen counts goal changes (offset_goal) and replacements (set_goal,
+      // which counts as made). goal_gen_applied is the newest change that a SENT
+      // correction was computed against. deliberate_gen is the newest
+      // deliberate change (0 = none); it is still to be made while
+      // deliberate_gen > goal_gen_applied, and only a correction computed against
+      // it (or a later goal) can make it -- so a correction already in flight can
+      // neither use nor spend its cap. All guarded by goal_mtx.
+      //
+      std::mutex goal_mtx;
+      unsigned long long goal_gen{0};
+      unsigned long long goal_gen_applied{0};
+      unsigned long long deliberate_gen{0};
+
+      struct goal_snapshot_t {
+        double ra, dec, angle;
+        unsigned long long gen;  ///< goal generation the correction is computed against
+        bool goal_change;        ///< includes a goal change not yet made
+        bool deliberate;         ///< includes a deliberate goal change not yet made
+      };
+
+      /// the goal, its generation and its classification, read together
+      inline goal_snapshot_t snapshot_goal() {
+        std::lock_guard<std::mutex> lock(this->goal_mtx);
+        return { this->acam_goal.ra, this->acam_goal.dec, this->acam_goal.angle, this->goal_gen,
+                 this->goal_gen > this->goal_gen_applied,
+                 this->deliberate_gen > this->goal_gen_applied };
+      }
+
+      /// true if no goal change has arrived since the snapshot of generation gen
+      inline bool goal_unchanged_since( unsigned long long gen ) {
+        std::lock_guard<std::mutex> lock(this->goal_mtx);
+        return this->goal_gen == gen;
+      }
+
+      /// a correction computed against generation gen has been sent: the goal
+      /// changes up to gen are made. goalshift_pending stays set if a newer one arrived.
+      inline void goal_change_made( unsigned long long gen ) {
+        std::lock_guard<std::mutex> lock(this->goal_mtx);
+        if ( gen > this->goal_gen_applied ) this->goal_gen_applied = gen;
+        this->goalshift_pending.store( this->goal_gen > this->goal_gen_applied, std::memory_order_release );
+      }
+
+      /// a new acquisition replaces the goal (from the target coordinates or a
+      /// solve): every earlier change is void and nothing is pending. The
+      /// generation moves on, so a correction computed against the replaced goal
+      /// is dropped; the new goal counts as made (the acquisition moves to it).
+      inline void set_goal( const double ra, const double dec, const double angle ) {
+        std::lock_guard<std::mutex> lock(this->goal_mtx);
+        this->acam_goal.ra     = ra;
+        this->acam_goal.dec    = dec;
+        this->acam_goal.angle  = angle;
+        this->goal_gen_applied = ++this->goal_gen;
+        this->deliberate_gen   = 0;
+        this->goalshift_pending.store( false, std::memory_order_release );
+      }
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  is_acquired(false),
