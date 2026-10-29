@@ -349,6 +349,7 @@ namespace Acam {
 
       std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
+      std::atomic<double> acquire_start_mjd;  ///< when the current acquisition was started
       std::atomic<bool> goalshift_pending{false};  ///< a requested goal change awaits execution by the guide loop
 
       double tcs_max_offset;
@@ -560,7 +561,7 @@ namespace Acam {
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
                  is_acquired(false),
-                 stop_acquisition(false),
+                 stop_acquisition(false), acquire_start_mjd(0),
                  offset_cal_offset(0),
                  timeout_time(std::chrono::steady_clock::now()),
                  tcs_offset_period(1),
