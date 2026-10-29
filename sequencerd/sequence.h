@@ -402,8 +402,10 @@ namespace Sequencer {
       /** @brief  satisfies the TCSOP wait when the TCS itself reports arrival
        *          (config TCS_AUTO_ONTARGET); coords are the commanded SCOPE
        *          frame position in degrees; see sequence.cpp */
-      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg );
+      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, unsigned gen );
       std::atomic<bool> auto_ontarget_active{false};  ///< true only while move_to_target's TCSOP wait is open
+      std::atomic<unsigned> auto_ontarget_gen{0};     ///< launch generation; a watcher retires when a newer one is launched
+      std::mutex ontarget_ack_mtx;                    ///< a watcher's acknowledgment vs a new move retiring watchers and clearing is_ontarget
 
       /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
@@ -439,6 +441,27 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      // Readout bookkeeping for the current expose command, guarded by camerad_mtx
+      // and reset in trigger_exposure(). A sub-exposure's readout is counted in two
+      // steps. (1) camerad's shutter report goes from open to closed in a report
+      // that is not PAUSED: that integration has ended, so the count is armed
+      // (handletopic_camerad). (2) A PIXELCOUNT from the first half of a readout
+      // completes it (async listener). Any open or paused report disarms.
+      // camerad's reports arrive in the order it published them, so a late or
+      // repeated report cannot arm twice for one close, and a late PIXELCOUNT
+      // cannot count a sub-exposure that is integrating. The count never exceeds
+      // the integrations that have ended; a lost report only leaves one uncounted.
+      bool last_shutteropen = false;   ///< SHUTTEROPEN in the last camerad report since the expose command
+      bool readout_armed    = false;   ///< an integration ended (open -> closed, not paused), its readout not yet counted
+      int  readouts_started = 0;       ///< sub-exposure readouts counted since the expose command
+      int  readouts_expected = 0;      ///< N of that expose command (this->target can be rewritten by manual commands)
+      // The readout gate, guarded by camerad_mtx. When the last readout of a
+      // target starts, the loop completes that target and picks the next one
+      // at once; nothing may then reach camerad (camera settings, an expose)
+      // until camerad reports READY again. Armed at that pick, opened by the
+      // first READY=true report after it (handletopic_camerad), and held
+      // across a stop or restart until then.
+      bool readout_gate_armed = false;
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
@@ -627,6 +650,9 @@ namespace Sequencer {
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
+      bool wait_for_readout_gate( const std::string &before );  ///< wait for the previous target's readout to finish; false if cancelled
+      long flexure_reapply( int sub, int expected );  ///< re-issues the flexure compensation between sub-exposures (never fatal)
+      std::string flexure_compensate_command(); ///< FLEXURED_COMPENSATE plus the active channels for the current target
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
