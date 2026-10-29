@@ -10,7 +10,8 @@
 #include <ctime>
 #include <sys/stat.h>
 
-/// git commit this binary was built from, with a "-dirty" marker when the tree
+/// git commit this binary was built from, described relative to the latest
+/// release tag (e.g. v1.10.0-12-gc719a4ac), with a "-dirty" marker when the tree
 /// carried uncommitted changes. Defined in provenance.cpp, which is the only
 /// translation unit that includes the generated version.h, so that a change of
 /// hash recompiles one file instead of everything including this header.
