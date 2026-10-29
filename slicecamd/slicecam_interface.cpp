@@ -643,21 +643,16 @@ namespace Slicecam {
     // acamd reports the goal change applied before settling
     if ( was_guiding && this->fineacquire_state.move_timeout_sec > 0.0 ) {
       std::unique_lock<std::mutex> lock(this->acam_mtx);
-      // completion requires seeing THIS request registered (pending true on a
-      // status after the send) and then cleared; statuses arrive in publish
-      // order, so the false cannot predate the request
-      bool seen_pending = false;
+      // completion requires a status after the send showing the request
+      // pending, followed by one showing it cleared
       const bool applied = this->acam_cv.wait_for( lock,
           std::chrono::duration<double>( this->fineacquire_state.move_timeout_sec ),
-          [this, send_time, &seen_pending]() {
+          [this, send_time]() {
             if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ||
                  !this->should_framegrab_run.load(std::memory_order_acquire) ) return true;
-            if ( this->last_acam_pubtime.load(std::memory_order_acquire) <= send_time ) return false;
-            if ( this->acam_goalshift_pending.load(std::memory_order_acquire) ) {
-              seen_pending = true;
-              return false;
-            }
-            return seen_pending;
+            const int64_t raised = this->acam_goalshift_raised_us.load(std::memory_order_acquire);
+            return ( raised > send_time &&
+                     this->acam_goalshift_cleared_us.load(std::memory_order_acquire) > raised );
           });
       if ( !this->should_framegrab_run.load(std::memory_order_acquire) ) return;
       if ( !this->is_fineacquire_running.load(std::memory_order_acquire) ) return;
@@ -1082,9 +1077,13 @@ namespace Slicecam {
     Common::extract_telemetry_value( jmessage, Key::PUBTIME, pubtime );
     this->last_acam_pubtime.store( pubtime, std::memory_order_relaxed );
 
-    bool goalshift_pending=false;
-    Common::extract_telemetry_value( jmessage, Key::Acamd::GOALSHIFT_PENDING, goalshift_pending );
-    this->acam_goalshift_pending.store( goalshift_pending, std::memory_order_relaxed );
+    // when acamd last reported a goal change pending, and when it last reported none
+    if ( jmessage.contains( Key::Acamd::GOALSHIFT_PENDING ) ) {
+      bool goalshift_pending=false;
+      Common::extract_telemetry_value( jmessage, Key::Acamd::GOALSHIFT_PENDING, goalshift_pending );
+      if ( goalshift_pending ) this->acam_goalshift_raised_us.store( pubtime, std::memory_order_relaxed );
+      else                     this->acam_goalshift_cleared_us.store( pubtime, std::memory_order_relaxed );
+    }
 
     // wake any thread waiting on ACAM state (e.g. fineacquire)
     std::lock_guard<std::mutex> lock(this->acam_mtx);

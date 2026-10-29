@@ -197,7 +197,8 @@ namespace Slicecam {
       std::atomic<bool> is_acam_guiding;         ///< is acam guiding?
 
       std::atomic<int64_t> last_acam_pubtime{0};   ///< pubtime (us) of latest received acamd status
-      std::atomic<bool> acam_goalshift_pending{false};  ///< acamd has an unexecuted goal change
+      std::atomic<int64_t> acam_goalshift_raised_us{0};   ///< pubtime (us) of the latest acamd status showing GOALSHIFT_PENDING set
+      std::atomic<int64_t> acam_goalshift_cleared_us{0};  ///< pubtime (us) of the latest acamd status showing GOALSHIFT_PENDING clear
 
       // Latest target (goal) coords published on Topic::TARGETINFO
       // NAN until a TARGETINFO arrives, so manual runs with no sequencer target log nan.
