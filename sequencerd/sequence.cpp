@@ -1054,6 +1054,7 @@ namespace Sequencer {
       //
       if ( this->cancel_flag.load() ) {
         this->broadcast.notice( function, "exposure cancelled" );
+        this->arm_readout_flag = false;   // the stopped frame's PIXELCOUNTs must not set READOUT later
         error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
         message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
                                  << " id " << this->target.obsid << " order " << this->target.obsorder
@@ -3209,14 +3210,23 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
 
-    // This function is only used while exposing
+    // Only while an exposure command of the current target is running. For
+    // NEXP>1 that is the whole series: the EXPOSE bit covers only the first
+    // sub-exposure; after it, camerad not READY (and not the previous
+    // target's last readout after a pick, which has nothing left to stop)
+    // covers the rest. A stale READOUT bit is not evidence. camerad ends the
+    // series after the frame in progress, cut short if it is integrating
+    // with >= 5 s left. A stop never clears a cancel.
     //
-    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+    bool series_running = false;
+    {
+    std::lock_guard<std::mutex> lock( this->camerad_mtx );
+    series_running = !this->can_expose.load() && !this->readout_gate_armed;
+    }
+    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) && !series_running ) {
       this->broadcast.notice(function, "not currently exposing");
       return;
     }
-
-    this->cancel_flag.store(false);
 
     // Send command to the camera to stop the exposure.
     //
