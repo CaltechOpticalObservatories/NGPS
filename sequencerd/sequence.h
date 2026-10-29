@@ -305,6 +305,8 @@ namespace Sequencer {
       std::atomic<bool> is_acam_guiding{false};    ///< is acam guiding (IS_ACQUIRED)?
       std::atomic<bool> is_acam_acquiring{false};  ///< is acam in an acquire mode?
       std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
+      std::atomic<int64_t> acam_goalshift_raised_us{0};   ///< publish time (us) of the latest acamd status showing GOALSHIFT_PENDING set
+      std::atomic<int64_t> acam_goalshift_cleared_us{0};  ///< publish time (us) of the latest acamd status showing GOALSHIFT_PENDING clear
 
       /** @brief guard-band (us) subtracted from the acquire-command send time
        *         when computing the freshness boundary in do_acam_acquire. Tolerates
@@ -350,7 +352,7 @@ namespace Sequencer {
           tcs_settle_stable(1),
           tcs_domeazi_ready(1),
           tcs_preauth_time(0),
-          offset_settle_sec(3),
+          offset_settle_sec(0),
           do_once(false),
           tcs_which("real"),
           tcs_name("offline"),
@@ -428,7 +430,7 @@ namespace Sequencer {
       double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
-      double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
+      double offset_settle_sec;   ///< extra sec to wait after the target offset has been made, before exposing (config OFFSET_SETTLE_SEC; 0 = none)
       bool   tcs_auto_ontarget = true;     ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default yes)
       double tcs_auto_ontarget_sep = 5.0;  ///< max |telescope-target| arcsec for auto-ontarget (config TCS_AUTO_ONTARGET_SEP)
       double tcs_auto_ontarget_cass = 0.05; ///< max |TCS cass angle - commanded ring angle| deg for auto-ontarget (config TCS_AUTO_ONTARGET_CASS)
@@ -621,7 +623,8 @@ namespace Sequencer {
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
-      long target_offset();
+      long target_offset( int64_t *acam_sent_us = nullptr );  ///< acam_sent_us: send time if the offset went to acamd as a goal change, else 0
+      long wait_for_target_offset( const int64_t sent_us );   ///< wait until acamd has made that goal change
 
       void publish_targetinfo( bool force=false );                  ///< publish target info on change (or force)
 
