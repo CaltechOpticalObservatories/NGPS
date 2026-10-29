@@ -3653,10 +3653,7 @@ logwrite( function, message.str() );
       //    clears goalshift_pending, unless a newer change arrived meanwhile.
       //
       // So a guide correction in flight when a deliberate offset arrives can
-      // neither use nor spend the deliberate cap. With the one-shot boolean this
-      // replaces, such a correction cleared the allowance as it completed and
-      // the science offset was refused at the guiding cap: 72" on 2026-08-26
-      // and 136" on 2026-10-06, both exposures taken on the offset star.
+      // neither use nor spend the deliberate cap.
       //
       const goal_snapshot_t goal = this->snapshot_goal();
       if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,

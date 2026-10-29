@@ -969,9 +969,8 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
        * @brief   wait up to timeout_ms for every frame write to finish
        * @return  true if no writes are pending, false on timeout
        * @details READY is published when the last frame has arrived, a few ms
-       *          before its FITS write ends (3-29 ms measured over 136 exposures
-       *          on 2026-08-25), so a command sent right after READY can find a
-       *          write still in progress.
+       *          before its FITS write ends, so a command sent right after READY
+       *          can find a write still in progress.
        */
       inline bool wait_writes_done( int timeout_ms ) {
         std::unique_lock<std::mutex> lock( this->write_lock );

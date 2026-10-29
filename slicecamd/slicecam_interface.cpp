@@ -699,15 +699,12 @@ namespace Slicecam {
     this->fineacq_total_dra  += cmd_dra  * 3600.0;
     this->fineacq_total_ddec += cmd_ddec * 3600.0;
 
-    // THE BUDGET'S LAST CORRECTION DECIDES (CF, 2026-10-20: "i never want to
-    // sit and evaluate, if no correction is going to be applied"). Once
-    // FINE_ACQUIRE_MAX_ADJUSTMENTS corrections have been commanded, nothing
-    // further is sampled or evaluated. This last one was only sent because the
-    // offset it removes is within FINE_ACQUIRE_RELAXED_FACTOR x goal (checked
-    // before the send), and it has executed and settled: the run converges
-    // NOW. 0 disables the budget (correct until the goal or the sequencer
-    // timeout). "One correction and call it a day" = MAX_ADJUSTMENTS=1; "two
-    // corrections, accept if the second was small enough" = MAX_ADJUSTMENTS=2.
+    // The budget's last correction decides. Once FINE_ACQUIRE_MAX_ADJUSTMENTS
+    // corrections have been commanded, nothing further is sampled or evaluated.
+    // This last one was only sent because the offset it removes is within
+    // FINE_ACQUIRE_RELAXED_FACTOR x goal (checked before the send), and it has
+    // executed and settled, so the run converges now. 0 disables the budget
+    // (correct until the goal or the sequencer timeout).
     //
     if ( this->fineacquire_state.max_adjustments > 0
          && this->fineacq_adjustments >= this->fineacquire_state.max_adjustments ) {

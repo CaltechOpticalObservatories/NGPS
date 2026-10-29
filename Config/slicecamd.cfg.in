@@ -111,9 +111,6 @@ FINE_ACQUIRE_SETTLE_SEC=1
 # sequencer reports a failure as a failed acquisition. Nothing is sampled or
 # evaluated once no correction can follow. Needs FINE_ACQUIRE_MOVE_TIMEOUT > 0.
 # 0 disables (correct until the goal or the sequencer timeout).
-# Experiments 2026-10-21:
-#   one correction, call it a day:                   MAX_ADJUSTMENTS=1  FACTOR=3.0
-#   two corrections, accept if the second was small: MAX_ADJUSTMENTS=2  FACTOR=2.0
 FINE_ACQUIRE_MAX_ADJUSTMENTS=3
 
 # FINE_ACQUIRE_RELAXED_FACTOR=<f>
