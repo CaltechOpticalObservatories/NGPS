@@ -158,7 +158,7 @@ TCS_PREAUTH_TIME=10                  # seconds before end of exposure to notify 
 
 # ACAM Target acquisition
 #
-ACQUIRE_TIMEOUT=90                   # seconds before ACAM/fine acquisition aborts on failure to acquire (REQUIRED!) (90 since 2026-10-29, CF: successful acquisitions now take ~30 s)
+ACQUIRE_TIMEOUT=90                   # seconds before ACAM acquisition sequence aborts on failure to acquire (REQUIRED!)
 ACQUIRE_RETRYS=5                     # max number of retrys before acquisition fails (optional, can be left blank to disable)
 ACQUIRE_OFFSET_THRESHOLD=0.5         # computed offset below this threshold (in arcsec) defines successful acquisition
 ACQUIRE_MIN_REPEAT=2                 # minimum number of sequential successful acquires
