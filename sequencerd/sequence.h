@@ -305,6 +305,8 @@ namespace Sequencer {
       std::atomic<bool> is_acam_guiding{false};    ///< is acam guiding (IS_ACQUIRED)?
       std::atomic<bool> is_acam_acquiring{false};  ///< is acam in an acquire mode?
       std::atomic<int64_t> acam_pubtime{0};      ///< publish time (us) of latest received acamd status
+      std::atomic<int64_t> acam_goalshift_raised_us{0};   ///< publish time (us) of the latest acamd status showing GOALSHIFT_PENDING set
+      std::atomic<int64_t> acam_goalshift_cleared_us{0};  ///< publish time (us) of the latest acamd status showing GOALSHIFT_PENDING clear
 
       /** @brief guard-band (us) subtracted from the acquire-command send time
        *         when computing the freshness boundary in do_acam_acquire. Tolerates
@@ -350,7 +352,7 @@ namespace Sequencer {
           tcs_settle_stable(1),
           tcs_domeazi_ready(1),
           tcs_preauth_time(0),
-          offset_settle_sec(3),
+          offset_settle_sec(0),
           do_once(false),
           tcs_which("real"),
           tcs_name("offline"),
@@ -399,6 +401,14 @@ namespace Sequencer {
         this->is_ontarget.store(false);
       }
 
+      /** @brief  satisfies the TCSOP wait when the TCS itself reports arrival
+       *          (config TCS_AUTO_ONTARGET); coords are the commanded SCOPE
+       *          frame position in degrees; see sequence.cpp */
+      void dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, double tgt_cass_deg, unsigned gen );
+      std::atomic<bool> auto_ontarget_active{false};  ///< true only while move_to_target's TCSOP wait is open
+      std::atomic<unsigned> auto_ontarget_gen{0};     ///< launch generation; a watcher retires when a newer one is launched
+      std::mutex ontarget_ack_mtx;                    ///< a watcher's acknowledgment vs a new move retiring watchers and clearing is_ontarget
+
       /** @brief  sends usercontinue signal, clears after 3 seconds */
       inline void usercontinue() {
         this->cancel_flag.store(false);
@@ -420,7 +430,10 @@ namespace Sequencer {
       double tcs_settle_stable;   ///< time that TCS must report TRACKING before it is really tracking
       double tcs_domeazi_ready;   ///< max degrees azimuth that dome and telescope can differ before ready to observe
       double tcs_preauth_time;    ///< seconds before end of exposure to notify TCS of next target's coords (0 to disable)
-      double offset_settle_sec;   ///< sec to wait after a target offset before exposing (config OFFSET_SETTLE_SEC; 0 disables)
+      double offset_settle_sec;   ///< extra sec to wait after the target offset has been made, before exposing (config OFFSET_SETTLE_SEC; 0 = none)
+      bool   tcs_auto_ontarget = true;     ///< TCS ?ONTARGET may satisfy the TCSOP wait (config TCS_AUTO_ONTARGET; default yes)
+      double tcs_auto_ontarget_sep = 5.0;  ///< max |telescope-target| arcsec for auto-ontarget (config TCS_AUTO_ONTARGET_SEP)
+      double tcs_auto_ontarget_cass = 0.05; ///< max |TCS cass angle - commanded ring angle| deg for auto-ontarget (config TCS_AUTO_ONTARGET_CASS)
 
 ///   std::mutex              tcs_ontarget_mtx;
 ///   std::condition_variable tcs_ontarget_cv;
@@ -431,6 +444,27 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      // Readout bookkeeping for the current expose command, guarded by camerad_mtx
+      // and reset in trigger_exposure(). A sub-exposure's readout is counted in two
+      // steps. (1) camerad's shutter report goes from open to closed in a report
+      // that is not PAUSED: that integration has ended, so the count is armed
+      // (handletopic_camerad). (2) A PIXELCOUNT from the first half of a readout
+      // completes it (async listener). Any open or paused report disarms.
+      // camerad's reports arrive in the order it published them, so a late or
+      // repeated report cannot arm twice for one close, and a late PIXELCOUNT
+      // cannot count a sub-exposure that is integrating. The count never exceeds
+      // the integrations that have ended; a lost report only leaves one uncounted.
+      bool last_shutteropen = false;   ///< SHUTTEROPEN in the last camerad report since the expose command
+      bool readout_armed    = false;   ///< an integration ended (open -> closed, not paused), its readout not yet counted
+      int  readouts_started = 0;       ///< sub-exposure readouts counted since the expose command
+      int  readouts_expected = 0;      ///< N of that expose command (this->target can be rewritten by manual commands)
+      // The readout gate, guarded by camerad_mtx. When the last readout of a
+      // target starts, the loop completes that target and picks the next one
+      // at once; nothing may then reach camerad (camera settings, an expose)
+      // until camerad reports READY again. Armed at that pick, opened by the
+      // first READY=true report after it (handletopic_camerad), and held
+      // across a stop or restart until then.
+      bool readout_gate_armed = false;
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
@@ -589,7 +623,8 @@ namespace Sequencer {
       long get_tcs_weather_coords( double &ra_h, double &dec_d );              ///< read the current TCS ra,dec in decimal hr,deg
       long get_tcs_coords( double &ra_h, double &dec_d );        ///< read the current TCS ra,dec,cass in decimal hr,deg
       long get_tcs_cass( double &cass );
-      long target_offset();
+      long target_offset( int64_t *acam_sent_us = nullptr );  ///< acam_sent_us: send time if the offset went to acamd as a goal change, else 0
+      long wait_for_target_offset( const int64_t sent_us );   ///< wait until acamd has made that goal change
 
       void publish_targetinfo( bool force=false );                  ///< publish target info on change (or force)
 
@@ -619,6 +654,9 @@ namespace Sequencer {
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
+      bool wait_for_readout_gate( const std::string &before );  ///< wait for the previous target's readout to finish; false if cancelled
+      long flexure_reapply( int sub, int expected );  ///< re-issues the flexure compensation between sub-exposures (never fatal)
+      std::string flexure_compensate_command(); ///< FLEXURED_COMPENSATE plus the active channels for the current target
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
