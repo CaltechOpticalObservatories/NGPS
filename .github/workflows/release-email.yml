@@ -1,0 +1,61 @@
+name: Release Announcement Email
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to announce, e.g. v1.10.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    name: Email release notes
+    runs-on: ubuntu-latest
+
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # actions/checkout can leave the tag as a lightweight ref with no
+      # message, so fetch the annotated tag object explicitly.
+      - name: Fetch annotated tag
+        run: |
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          if [ "$(git cat-file -t "refs/tags/${TAG}")" != "tag" ]; then
+            echo "::error::${TAG} is not an annotated tag; nothing to announce"
+            exit 1
+          fi
+
+      # The release notes are the tag message itself.
+      - name: Compose email body
+        run: |
+          {
+            git for-each-ref "refs/tags/${TAG}" --format='%(contents)'
+            echo "Tag: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}"
+          } > release-email.txt
+          cat release-email.txt
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v23
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ vars.MAIL_PORT || '465' }}
+          secure: ${{ (vars.MAIL_PORT || '465') == '465' }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: NGPS Releases <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ vars.RELEASE_MAIL_TO }}
+          subject: "NGPS ${{ env.TAG }} released"
+          body: file://release-email.txt
