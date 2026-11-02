@@ -1,0 +1,63 @@
+name: Release Announcement
+
+on:
+  push:
+    tags:
+      - "v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to announce, e.g. v1.10.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    name: Post release notes to Slack
+    runs-on: ubuntu-latest
+
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # actions/checkout can leave the tag as a lightweight ref with no
+      # message, so fetch the annotated tag object explicitly.
+      - name: Fetch annotated tag
+        run: |
+          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
+          if [ "$(git cat-file -t "refs/tags/${TAG}")" != "tag" ]; then
+            echo "::error::${TAG} is not an annotated tag; nothing to announce"
+            exit 1
+          fi
+
+      # The release notes are the tag message itself. Slack treats &, < and >
+      # as markup, so escape them in the notes.
+      - name: Compose Slack message
+        run: |
+          git for-each-ref "refs/tags/${TAG}" --format='%(contents)' > release-notes.txt
+          jq -n --rawfile notes release-notes.txt \
+                --arg tag "${TAG}" \
+                --arg url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${TAG}" \
+            '{ text: ( "*NGPS \($tag) released*\n\n"
+                     + ($notes | sub("\n+$"; "") | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;"))
+                     + "\n\n<\($url)|View \($tag) on GitHub>" ) }' > slack-payload.json
+          cat slack-payload.json
+
+      - name: Post to Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "${SLACK_WEBHOOK_URL}" ]; then
+            echo "::error::SLACK_WEBHOOK_URL secret is not set"
+            exit 1
+          fi
+          curl -fsS -X POST -H 'Content-type: application/json' \
+               --data @slack-payload.json "${SLACK_WEBHOOK_URL}"
