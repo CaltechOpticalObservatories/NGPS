@@ -3394,6 +3394,7 @@ logwrite( function, message.str() );
       this->sequential_failures = 0;
       this->allow_large_offset.store(false);  // no stale deliberate-offset allowance
       this->is_acquired.store( false, std::memory_order_release );
+      this->acquire_start_mjd.store( mjd_now() );
 
       // Start the timeout clock, initialized as the time now plus the
       // configured timeout in seconds (duration defaults to seconds).
@@ -3449,6 +3450,18 @@ logwrite( function, message.str() );
     //
     if ( this->acquire_mode == Acam::TARGET_NOP || this->stop_acquisition.load(std::memory_order_acquire) ) {
       return NO_ERROR;
+    }
+
+    // Skip a frame that began exposing before the acquisition started
+    // (mjd0 is the readout time, so allow one frame cycle).
+    //
+    if ( this->acquire_mode == Acam::TARGET_ACQUIRE || this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ) {
+      const double cycle = ( iface->camera.andor.camera_info.kintime > 0 ? iface->camera.andor.camera_info.kintime
+                                                                         : iface->camera.andor.camera_info.exptime );
+      if ( iface->camera.andor.camera_info.mjd0 < this->acquire_start_mjd.load() + cycle / 86400.0 ) {
+        logwrite( function, "frame exposed before the acquisition started: not used" );
+        return NO_ERROR;
+      }
     }
 
     // Here is the acquisition sequence, called after every frame grab.
