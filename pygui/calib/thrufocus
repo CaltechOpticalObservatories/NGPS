@@ -63,7 +63,11 @@ for fp in $focpos; do
     echo
     sleep 4
     imnum1=(`camera imnum`[1])
-    exposen 1
+    if ! exposen 1; then
+        echo "ERROR: exposure failed at focus position $fp, skipping remaining positions"
+        failed=1
+        break
+    fi
 done
 #
 # Turn off lamp
@@ -93,6 +97,11 @@ camera boi U full
 focus set G 3.35
 focus set R 2.45
 focus set I 4.75
+
+if [[ -n $failed ]]; then
+    echo "Thrufocus aborted."
+    exit 1
+fi
 
 
 # now run the analysis script.
