@@ -17,10 +17,12 @@ class AsyncCommandThread(QThread):
     async def run_command_in_background(self, command):
         """Run the command and stream output line-by-line."""
         try:
+            # Merge stderr into stdout. Reading two pipes one after the other
+            # deadlocks once the child fills the unread stderr pipe.
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
             )
 
             # Stream stdout
@@ -28,18 +30,8 @@ class AsyncCommandThread(QThread):
                 line = await process.stdout.readline()
                 if not line:
                     break
-                decoded = line.decode().rstrip()
+                decoded = line.decode(errors="replace").rstrip()
                 self.output_signal.emit(decoded)
-                self.log_message(decoded)
-
-            # Stream stderr
-            while True:
-                err_line = await process.stderr.readline()
-                if not err_line:
-                    break
-                decoded_err = err_line.decode().rstrip()
-                self.output_signal.emit(f"[stderr] {decoded_err}")
-                self.log_message(f"[stderr] {decoded_err}")
 
             await process.wait()
             if process.returncode == 0:
