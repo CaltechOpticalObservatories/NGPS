@@ -1443,6 +1443,7 @@ namespace Acam {
     const int         attempts     = this->target.attempts;
     const std::string filter       = this->motion.get_current_filtername();
     const std::string cover        = this->motion.get_current_coverpos();
+    const bool        goalshift_pending = this->target.goalshift_pending.load();
 
     // unless forced, only publish if there was a change in any one of these
     //
@@ -1452,7 +1453,8 @@ namespace Acam {
          nacquired    == this->last_status.nacquired    &&
          attempts     == this->last_status.attempts     &&
          filter       == this->last_status.filter       &&
-         cover        == this->last_status.cover ) return;
+         cover        == this->last_status.cover        &&
+         goalshift_pending == this->last_status.goalshift_pending ) return;
 
     this->last_status.acquire_mode = acquire_mode;
     this->last_status.is_acquired  = is_acquired;
@@ -1460,6 +1462,7 @@ namespace Acam {
     this->last_status.attempts     = attempts;
     this->last_status.filter       = filter;
     this->last_status.cover        = cover;
+    this->last_status.goalshift_pending = goalshift_pending;
 
     // assemble the telemetry into a json message
     //
@@ -1473,6 +1476,7 @@ namespace Acam {
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
     jmessage_out[Key::Acamd::FILTER]       = filter;
     jmessage_out[Key::Acamd::COVER]        = cover;
+    jmessage_out[Key::Acamd::GOALSHIFT_PENDING] = goalshift_pending;
     jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
@@ -3632,7 +3636,8 @@ logwrite( function, message.str() );
       //    ('fineguiding') keeps the ACQUIRE_TCS_MAX_OFFSET cap; a deliberate
       //    change among those still to be made allows
       //    ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. Sent at once and alone, never
-      //    through the median filter. Once sent it has made the change(s).
+      //    through the median filter. Once sent it has made the change(s) and
+      //    clears goalshift_pending, unless a newer change arrived meanwhile.
       //
       // So a guide correction in flight when a deliberate offset arrives can
       // neither use nor spend the deliberate cap.
@@ -5601,7 +5606,9 @@ logwrite( function, message.str() );
       if ( !is_fineguiding && ( dRA != 0.0 || dDEC != 0.0 ) ) {
         this->target.deliberate_gen = gen;  // a zero offset changes nothing, so it raises no cap
       }
+      this->target.goalshift_pending.store( true, std::memory_order_release );
     }
+    this->publish_status(true);
 
     message.str(""); message << "goal change " << gen << " (" << ( is_fineguiding ? "fine-acquire" : "deliberate offset" )
                              << "): dRA=" << dRA*3600. << " dDEC=" << dDEC*3600. << " arcsec";

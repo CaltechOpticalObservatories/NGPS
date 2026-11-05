@@ -349,6 +349,7 @@ namespace Acam {
 
       std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
+      std::atomic<bool> goalshift_pending{false};  ///< a requested goal change awaits execution by the guide loop
 
       double tcs_max_offset;
       double tcs_max_putonslit_offset{300.};  ///< max offset (arcsec) for the correction that makes a deliberate goal offset (put-on-slit etc.); defaults 300 if ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET absent
@@ -536,10 +537,11 @@ namespace Acam {
       }
 
       /// a correction computed against generation gen has been sent: the goal
-      /// changes up to gen are made.
+      /// changes up to gen are made. goalshift_pending stays set if a newer one arrived.
       inline void goal_change_made( unsigned long long gen ) {
         std::lock_guard<std::mutex> lock(this->goal_mtx);
         if ( gen > this->goal_gen_applied ) this->goal_gen_applied = gen;
+        this->goalshift_pending.store( this->goal_gen > this->goal_gen_applied, std::memory_order_release );
       }
 
       /// a new acquisition replaces the goal (from the target coordinates or a
@@ -553,6 +555,7 @@ namespace Acam {
         this->acam_goal.angle  = angle;
         this->goal_gen_applied = ++this->goal_gen;
         this->deliberate_gen   = 0;
+        this->goalshift_pending.store( false, std::memory_order_release );
       }
 
       Target() : iface(nullptr), timeout(10), max_attempts(-1), min_repeat(1),
@@ -598,6 +601,7 @@ namespace Acam {
         int         attempts     = 0;
         std::string filter       = "";
         std::string cover        = "";
+        bool        goalshift_pending = false;
       } last_status;
 
     public:
