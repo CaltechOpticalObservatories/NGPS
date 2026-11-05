@@ -957,6 +957,10 @@ namespace AstroCam {
   long Interface::do_abort() {
     std::string function = "AstroCam::Interface::do_abort";
     std::stringstream message;
+    // No sub-exposure follows an abort: clearing exposure_pending below wakes
+    // dothread_monitor_exposure_pending, which starts the next sub-exposure
+    // whenever nexp is still > 0 after its decrement.
+    this->nexp.store(0);
 //  int this_expbuf = this->get_expbuf();
     for ( const auto &dev : this->active_devnums ) {
       this->exposure_pending( dev, false );
@@ -2714,7 +2718,7 @@ namespace AstroCam {
     if ( interface.nexp.load() > 0 ) {
       message.str(""); message << "starting next exposure. " << interface.nexp << " remaining";
       interface.broadcast.notice( function, message.str() );
-      interface.do_expose(interface.nexp);
+      interface.do_expose(interface.nexp, true);   // continuation: nexp already holds what is left
     }
     else {
       interface.status.can_expose.store(true);
@@ -2769,7 +2773,7 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::do_expose(int nexp_in) {
+  long Interface::do_expose(int nexp_in, bool continuation) {
     const std::string function("AstroCam::Interface::do_expose");
     std::stringstream message;
     std::string devstr;
@@ -2793,8 +2797,6 @@ namespace AstroCam {
       }
     }
 
-    this->nexp.store(nexp_in);
-
     // Different controllers may have different rules about when to set and clear their
     // exposure_pending flag (depending on whether or not they support frame transfer), but
     // if an exposure is pending for any controller then do not start a new exposure.
@@ -2807,6 +2809,11 @@ namespace AstroCam {
       logwrite( function, message.str() );
       return(ERROR);
     }
+
+    // Only now, and only for a new expose command: a refused expose must not
+    // change how many sub-exposures the running series has left, and a
+    // continuation must not undo a stop that lowered nexp since it was read.
+    if ( !continuation ) this->nexp.store(nexp_in);
 
     // When using the internal ARC shutter control you cannot overlap exposures
     // with readout because it would require sending a command which cannot
@@ -4429,9 +4436,18 @@ logwrite(function, message.str());
     const std::string function("AstroCam::Interface::stop_exposure");
     std::stringstream message;
 
-    // nothing to do if not exposing
-    //
+    // An NEXP>1 series ends after the frame in progress, whatever that frame
+    // is doing -- integrating, reading out, or about to start -- so no further
+    // sub-exposure begins. That frame is also cut short below when it is
+    // integrating with >= 5 s left.
+    const bool ends_series = ( this->nexp.load() > 1 );
+    if ( ends_series ) this->nexp.store(1);
     if ( ! this->exposure_pending() ) {
+      if ( ends_series ) {
+        logwrite( function, "between sub-exposures: the series ends after the next frame" );
+        retstring="series_ends";
+        return NO_ERROR;
+      }
       logwrite( function, "not exposing" );
       return NOTHING;
     }
@@ -4441,6 +4457,12 @@ logwrite(function, message.str());
     // in units of milliseconds.
     //
     long remaining_time = this->camera.shutter_timer.get_remaining();
+
+    if ( remaining_time < 5000 && ends_series ) {
+      logwrite( function, "too late to cut this frame short: the series ends after it" );
+      retstring="series_ends";
+      return NO_ERROR;
+    }
 
     if ( remaining_time < 5000 ) {
       message << "ERROR cannot stop exposure time with less than 5 s exptime remaining"

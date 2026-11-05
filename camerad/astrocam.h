@@ -1260,7 +1260,7 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       void set_imagesize(int rowsin, int colsin, int* status);
 
       long expose(std::string nexp_in);
-      long do_expose(int nexp_in);
+      long do_expose(int nexp_in, bool continuation=false);  ///< continuation: the next sub-exposure of a running series
       double get_live_airmass();                             ///< latest airmass from cached tcsd telemetry, or NAN
       void get_live_provenance( std::string &githash, std::string &buildtime );  ///< build provenance of all running daemons
       long native(std::string cmdstr);
