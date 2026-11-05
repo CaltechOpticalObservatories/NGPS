@@ -2149,6 +2149,129 @@ namespace Sequencer {
   /***** Sequencer::Sequence::camera_shutdown *********************************/
 
 
+  /***** Sequencer::Sequence::dothread_auto_ontarget **************************/
+  /**
+   * @brief      satisfies the TCSOP wait when the TCS itself reports arrival
+   * @details    Spawned by move_to_target when TCS_AUTO_ONTARGET is enabled and
+   *             lives only while that wait is open (auto_ontarget_active).
+   *             Acknowledges when two consecutive 1 Hz reads show
+   *             ?ONTARGET==1 AND motion tracking AND |telescope-commanded| <
+   *             tcs_auto_ontarget_sep AND |TCS cass angle - commanded ring
+   *             angle| < tcs_auto_ontarget_cass. All four are required: the
+   *             flag alone is position-agnostic, the separation alone cannot
+   *             see a sub-threshold hop in progress, motion alone says
+   *             nothing about settling, and none of them covers the cass
+   *             ring, which turns on its own after RINGGO (ACAM's goal is
+   *             computed from the cass angle at the acquire, ~8.5" per
+   *             degree of ring still to go). The coords and ring angle are
+   *             what move_to_target actually commanded. A wrong
+   *             acknowledgment is self-limiting -- ACAM cannot solve a field
+   *             that is not there and the acquisition retry machinery
+   *             handles the failure -- so the conditions make wrong acks
+   *             rare, not impossible. The operator's press works unchanged;
+   *             whichever arrives first wins. The acknowledgment
+   *             deliberately does not go through ontarget(): that clears
+   *             cancel_flag, and a concurrent cancel must always win
+   *             against this automatic path.
+   */
+  void Sequence::dothread_auto_ontarget( double tgt_ra_deg, double tgt_dec_deg, double tgt_cass_deg, unsigned gen ) {
+    const std::string function("Sequencer::Sequence::dothread_auto_ontarget");
+    std::stringstream message;
+
+    if ( std::isnan(tgt_ra_deg) || std::isnan(tgt_dec_deg) || std::isnan(tgt_cass_deg) ) {
+      logwrite( function, "ERROR invalid commanded coords or ring angle; auto-ontarget sits this wait out" );
+      return;
+    }
+
+    int consecutive = 0;
+    int64_t ring_wait_since_us = 0;    // when everything but the ring first held
+    bool    ring_warned = false;
+
+    // gen retires this watcher the moment a newer one is launched, so one
+    // still sleeping from an earlier move can never acknowledge a new one.
+    //
+    while ( this->auto_ontarget_active.load() && this->auto_ontarget_gen.load() == gen &&
+            !this->cancel_flag.load() && !this->is_ontarget.load() ) {
+
+      std::this_thread::sleep_for( std::chrono::seconds(1) );
+
+      // the TCS's own settled flag (0|1), returned verbatim
+      //
+      std::string reply;
+      if ( this->tcsd.send( TCSD_NATIVE+" ?ONTARGET", reply ) != NO_ERROR ) { consecutive=0; continue; }
+      bool flag_on = ( reply.rfind( "1", 0 ) == 0 );
+
+      // motion state and separation from the cached 1 Hz tcsd telemetry
+      //
+      bool   fresh    = false;
+      bool   tracking = false;
+      double sep_as   = NAN;
+      double dcass_deg = NAN;
+      double cass_now  = NAN;
+      {
+      std::lock_guard<std::mutex> lock( tcsd_mtx );
+      fresh = this->tcsinfo.is_fresh();
+      if ( fresh ) {
+        tracking = ( this->tcsinfo.motion == TCS_MOTION_TRACKING_STR );
+        double dra_deg = this->tcsinfo.ra_h * 15.0 - tgt_ra_deg;
+        dra_deg = std::fmod( dra_deg + 540.0, 360.0 ) - 180.0;    // shortest arc across RA wrap
+        double dra_as  = dra_deg * cos( tgt_dec_deg * M_PI / 180.0 ) * 3600.0;
+        double ddec_as = ( this->tcsinfo.dec_d - tgt_dec_deg ) * 3600.0;
+        sep_as = std::hypot( dra_as, ddec_as );
+        // the cass ring against the angle RINGGO was sent, either side of the wrap
+        cass_now  = this->tcsinfo.cassangle;
+        dcass_deg = std::fabs( std::remainder( cass_now - tgt_cass_deg, 360.0 ) );
+      }
+      }
+
+      const bool all_but_ring = fresh && flag_on && tracking && ( sep_as < this->tcs_auto_ontarget_sep );
+      const bool ring_ok      = ( dcass_deg < this->tcs_auto_ontarget_cass );
+
+      // On target with only the ring missing for 20 s (a refused RINGGO, a ring
+      // parked off the command, an unreadable angle): say so once, so the
+      // operator knows the wait needs a press.
+      if ( all_but_ring && !ring_ok ) {
+        if ( ring_wait_since_us == 0 ) ring_wait_since_us = get_time_us();
+        else if ( !ring_warned && get_time_us() - ring_wait_since_us > 20000000 ) {
+          ring_warned = true;
+          message.str(""); message << "telescope on target but the cass ring reads " << cass_now
+                                   << " deg, commanded " << tgt_cass_deg
+                                   << " deg: press ontarget once the ring is in place";
+          this->broadcast.warning( function, message.str() );
+        }
+      }
+      else if ( !all_but_ring ) ring_wait_since_us = 0;
+
+      if ( !all_but_ring || !ring_ok )                                      { consecutive=0; continue; }
+
+      if ( ++consecutive < 2 ) continue;                                    // debounce: two reads in a row
+
+      // Re-check at the last instant and acknowledge under ontarget_ack_mtx, so
+      // a new move (which retires watchers and clears is_ontarget under the
+      // same lock) cannot fall between the check and the store. Do NOT clear
+      // cancel_flag (see @details). cv_mutex is taken before the notify so a
+      // waiter between its predicate check and its wait cannot miss it.
+      //
+      {
+      std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+      if ( !this->auto_ontarget_active.load() || this->auto_ontarget_gen.load() != gen ||
+           this->cancel_flag.load() ) return;
+      this->is_ontarget.store( true );
+      }
+      { std::lock_guard<std::mutex> lock( this->cv_mutex ); }
+      this->cv.notify_all();
+
+      message.str(""); message << "TCS reports on-target (?ONTARGET=1, tracking, sep="
+                               << std::fixed << std::setprecision(1) << sep_as
+                               << " arcsec, ring within " << std::setprecision(3) << dcass_deg
+                               << " deg x2) -- sending ontarget";
+      this->broadcast.notice( function, message.str() );
+      return;
+    }
+  }
+  /***** Sequencer::Sequence::dothread_auto_ontarget **************************/
+
+
   /***** Sequencer::Sequence::move_to_target **********************************/
   /**
    * @brief      send request to TCS to move to target coordinates
@@ -2185,6 +2308,7 @@ namespace Sequencer {
       this->broadcast.notice( function, "no move required for repeat target" );
       return NO_ERROR;
     }
+
 
     error = NO_ERROR;
 
@@ -2260,6 +2384,16 @@ namespace Sequencer {
     decimal_to_sexa( dec_out, decstr );
     message.str(""); message << "[DEBUG] moving to SCOPE COORDS= " << rastr << "  " << decstr << "  " << angle_out << " J2000";
     logwrite( function, message.str() );
+    // Retire every auto-ontarget watcher still alive (one from an earlier
+    // move) and clear the flag, in one step with respect to
+    // a watcher's acknowledgment: only an ack of THIS move may satisfy the
+    // wait below.
+    unsigned ontarget_gen = 0;
+    {
+    std::lock_guard<std::mutex> lock( this->ontarget_ack_mtx );
+    ontarget_gen = ++this->auto_ontarget_gen;
+    this->is_ontarget.store(false);
+    }
     error  = this->tcsd.send( coords_cmd.str(), coords_reply );                    // send to the TCS
 
     // if not success then wait 1s and try again
@@ -2297,10 +2431,25 @@ namespace Sequencer {
 
     this->broadcast.notice( function, "waiting for TCS operator to send \"ontarget\" signal" );
 
+    // AUTO-ONTARGET (config TCS_AUTO_ONTARGET, default yes): the TCS itself can
+    // satisfy this wait through the same ontarget() the operator's press uses.
+    // The watcher lives exactly as long as this wait (auto_ontarget_active).
+    //
+    this->auto_ontarget_active.store( this->tcs_auto_ontarget );
+    if ( this->tcs_auto_ontarget ) {
+      // ra_out/dec_out are the SCOPE-frame coordinates this function actually
+      // commanded, which is the position REQPOS telemetry will report -- the
+      // database coordinates differ by the pointmode focal-plane offset.
+      // ontarget_gen was taken, retiring older watchers, before the COORDS.
+      std::thread( &Sequencer::Sequence::dothread_auto_ontarget, this,
+                   ra_out, dec_out, angle_out, ontarget_gen ).detach();
+    }
+
     while ( !this->cancel_flag.load() && !this->is_ontarget.load() ) {
       std::unique_lock<std::mutex> lock(cv_mutex);
       this->cv.wait( lock, [this]() { return( this->is_ontarget.load() || this->cancel_flag.load() ); } );
     }
+    this->auto_ontarget_active.store( false );
 
     this->broadcast.notice( function, "received "
                                                  +(this->cancel_flag.load() ? std::string("cancel") : std::string("ontarget"))
