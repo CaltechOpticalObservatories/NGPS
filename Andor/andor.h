@@ -13,6 +13,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include "common.h"
 #include "network.h"
 #include "utilities.h"
@@ -438,6 +439,13 @@ namespace Andor {
       Andor::AndorBase* andor;    ///< pointer to the Andor object to use
 //    std::unique_ptr<uint16_t[]> image_data;
       std::mutex image_data_mutex;
+
+      /// The Andor SDK has ONE current camera per process. Hold this from
+      /// select_camera() through the SDK calls that follow it, so no other
+      /// thread can change the current camera in between. It is shared by
+      /// every camera in the process and is always the innermost lock: never
+      /// take image_data_mutex while holding it.
+      static std::recursive_mutex sdk_mtx;
       unsigned short* image_data;
       float* avg_data;
       int num_avg_frames;
