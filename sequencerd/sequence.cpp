@@ -50,7 +50,22 @@ namespace Sequencer {
     std::lock_guard<std::mutex> lock(camerad_mtx);
     if (jmessage.contains(Key::Camerad::READY)) {
       int isready = jmessage[Key::Camerad::READY].get<bool>();
+      // ready again: the expose command's series has ended, re-apply no more
+      if ( isready && !this->can_expose.load() ) this->expose_nexp = 0;
       this->can_expose.store(isready);
+    }
+
+    // The shutter closing, other than to pause, ends an integration. The
+    // telescope keeps tracking, so while another sub-exposure of the expose
+    // command follows, re-apply the flexure compensation.
+    //
+    if (jmessage.contains(Key::Camerad::SHUTTEROPEN)) {
+      bool open   = jmessage[Key::Camerad::SHUTTEROPEN].get<bool>();
+      bool paused = jmessage.contains(Key::Camerad::PAUSED) && jmessage[Key::Camerad::PAUSED].get<bool>();
+      if ( !open && !paused && this->last_shutteropen && ++this->shutter_closes < this->expose_nexp ) {
+        std::thread( &Sequencer::Sequence::flexure_set, this ).detach();
+      }
+      this->last_shutteropen = open;
     }
     this->camerad_cv.notify_all();
   }
@@ -742,7 +757,6 @@ namespace Sequencer {
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
                            { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
-                           { THR_FLEXURE_SET,    std::bind(&Sequence::flexure_set, this)    },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
@@ -840,6 +854,15 @@ namespace Sequencer {
             return;
           }
         }
+      }
+
+      // Set the flexure compensation for the pointing to be exposed, every time,
+      // however the target was acquired (automatically, by hand, or not at
+      // all) and after any target offset. Nothing waits for it.
+      //
+      std::thread( &Sequencer::Sequence::flexure_set, this ).detach();
+
+      if ( !this->target.iscal ) {
         // ensure slit offset is in "expose" position when needed
         try {
           error |= this->slit_set(Sequencer::VSM_EXPOSE);
@@ -2426,7 +2449,9 @@ namespace Sequencer {
    *             compensation origin (flexured adds the computed delta to defpos),
    *             so this is the neutral state; it prevents a previous target's
    *             compensation from being left applied to every subsequent target.
-   * @return     NO_ERROR
+   *             Runs in a detached thread and nothing waits for it, so it does
+   *             not throw: a failure is reported and the sequence goes on.
+   * @return     ERROR | NO_ERROR
    *
    */
   long Sequence::flexure_set() {
@@ -2452,22 +2477,28 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
+    if ( this->cancel_flag.load() ) return NO_ERROR;
+
     // build up list of activate chans
     std::ostringstream activechans;
     const std::string calname = std::string(this->target.iscal ? this->target.name : "SCIENCE");
-    const auto &calinfo = this->caltarget.get_info(calname);
-    for (const auto &[chan,active] : calinfo.channel_active) {
-      if (active) activechans << " " << chan;
+    try {
+      const auto &calinfo = this->caltarget.get_info(calname);
+      for (const auto &[chan,active] : calinfo.channel_active) {
+        if (active) activechans << " " << chan;
+      }
+    }
+    catch ( const std::exception &e ) {
+      this->broadcast.error( function, "setting flexure compensator: "+std::string(e.what()) );
+      return ERROR;
     }
 
     std::ostringstream comp;
     comp << FLEXURED_COMPENSATE << activechans.str();
 
-    if ( !this->cancel_flag.load() &&
-          this->flexured.command( comp.str() ) != NO_ERROR ) {
+    if ( this->flexured.command( comp.str() ) != NO_ERROR ) {
       this->broadcast.error( function, "setting flexure compensator" );
-      this->thread_error_manager.set( THR_FLEXURE_SET );
-      throw std::runtime_error("setting flexure compensator");
+      return ERROR;
     }
 
     this->is_flexure_default.store(false);
@@ -2840,6 +2871,12 @@ namespace Sequencer {
       return NO_ERROR;
     }
 
+    // Set the flexure compensation for the pointing now, once camera_set has
+    // seen the camera ready (the previous exposure may still have been
+    // integrating). Nothing waits for it.
+    //
+    std::thread( &Sequencer::Sequence::flexure_set, this ).detach();
+
     // Start the exposure in a thread...
     //
     auto start_exposure = std::async(std::launch::async, &Sequence::trigger_exposure, this);
@@ -2889,6 +2926,9 @@ namespace Sequencer {
     // for the next target.
     //
     if ( this->tcs_preauth_time > 0 ) this->notify_tcs_next_target = true; else this->notify_tcs_next_target = false;
+
+    this->shutter_closes = 0;                       // counted per expose command
+    this->expose_nexp = this->target.nexp;
 
     this->arm_readout_flag = true;                  // enables the async_listener to look for the readout and clear the EXPOSE bit
 
