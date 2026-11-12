@@ -957,6 +957,10 @@ namespace AstroCam {
   long Interface::do_abort() {
     std::string function = "AstroCam::Interface::do_abort";
     std::stringstream message;
+    // No sub-exposure follows an abort: clearing exposure_pending below wakes
+    // dothread_monitor_exposure_pending, which starts the next sub-exposure
+    // whenever nexp is still > 0 after its decrement.
+    this->nexp.store(0);
 //  int this_expbuf = this->get_expbuf();
     for ( const auto &dev : this->active_devnums ) {
       this->exposure_pending( dev, false );
@@ -1019,9 +1023,10 @@ namespace AstroCam {
       return ERROR;
     }
 
-    // Don't make any changes while frames are still being written.
+    // Don't make any changes while frames are still being written: give a
+    // write that is finishing (ms after READY) up to 2 s, then refuse.
     //
-    if ( this->any_writes_pending() ) {
+    if ( !this->wait_writes_done( 2000 ) ) {
       logwrite( function, "ERROR: cannot change binning while frame write is in progress" );
       retstring="write_in_progress";
       return ERROR;
@@ -2185,6 +2190,20 @@ namespace AstroCam {
     logwrite(function, message.str());
 #endif
 
+    // The flexure compensation can change after the exposure starts, so this
+    // channel's flexure positions are taken at its end, with SHUTTIME, before
+    // its readout.
+    //
+    {
+    std::lock_guard<std::mutex> lock( server.live_telemetry_mtx );
+    auto flex = server.live_telemetry.find( Topic::FLEXURED );
+    if ( flex != server.live_telemetry.end() ) {
+      for ( const auto &k : FitsHeaderKeys::FlexureInfoKeys ) {
+        if ( con.channel == k.chan ) con.expinfo[expbuf].telemkeys.add_json_key( flex->second, k.jkey, k.keyword, k.comment, k.type, EXT, k.chan );
+      }
+    }
+    }
+
     // Wait for any shutter delay before reading out.
     //
     if ( cam.get_shutter_delay() > 0 ) cam.wait_shutter_delay();
@@ -2713,7 +2732,7 @@ namespace AstroCam {
     if ( interface.nexp.load() > 0 ) {
       message.str(""); message << "starting next exposure. " << interface.nexp << " remaining";
       interface.broadcast.notice( function, message.str() );
-      interface.do_expose(interface.nexp);
+      interface.do_expose(interface.nexp, true);   // continuation: nexp already holds what is left
     }
     else {
       interface.status.can_expose.store(true);
@@ -2768,7 +2787,7 @@ namespace AstroCam {
    * @return     ERROR or NO_ERROR
    *
    */
-  long Interface::do_expose(int nexp_in) {
+  long Interface::do_expose(int nexp_in, bool continuation) {
     const std::string function("AstroCam::Interface::do_expose");
     std::stringstream message;
     std::string devstr;
@@ -2792,8 +2811,6 @@ namespace AstroCam {
       }
     }
 
-    this->nexp.store(nexp_in);
-
     // Different controllers may have different rules about when to set and clear their
     // exposure_pending flag (depending on whether or not they support frame transfer), but
     // if an exposure is pending for any controller then do not start a new exposure.
@@ -2806,6 +2823,11 @@ namespace AstroCam {
       logwrite( function, message.str() );
       return(ERROR);
     }
+
+    // Only now, and only for a new expose command: a refused expose must not
+    // change how many sub-exposures the running series has left, and a
+    // continuation must not undo a stop that lowered nexp since it was read.
+    if ( !continuation ) this->nexp.store(nexp_in);
 
     // When using the internal ARC shutter control you cannot overlap exposures
     // with readout because it would require sending a command which cannot
@@ -2858,7 +2880,6 @@ namespace AstroCam {
     add( Topic::SLITD,      FitsHeaderKeys::SlitInfoKeys    );  // primary
     add( Topic::TARGETINFO, FitsHeaderKeys::TargetInfoKeys  );  // primary
     add( Topic::TCSD,       FitsHeaderKeys::TcsInfoKeys     );  // primary
-    add( Topic::FLEXURED,   FitsHeaderKeys::FlexureInfoKeys );  // extension
     add( Topic::FOCUSD,     FitsHeaderKeys::FocusInfoKeys   );  // extension
     add( Topic::THERMALD,   FitsHeaderKeys::ThermalInfoKeys );  // extension
 
@@ -3602,9 +3623,10 @@ for ( const auto &dev : selectdev ) {
       return( ERROR );
     }
 
-    // Don't remap the DMA buffer while frames are still being written from it.
+    // Don't remap the DMA buffer while frames are still being written from it:
+    // give a write that is finishing (ms after READY) up to 2 s, then refuse.
     //
-    if ( this->any_writes_pending() ) {
+    if ( !this->wait_writes_done( 2000 ) ) {
       logwrite( function, "ERROR: cannot remap DMA buffer while frame write is in progress" );
       retstring="write_in_progress";
       return ERROR;
@@ -4427,9 +4449,18 @@ logwrite(function, message.str());
     const std::string function("AstroCam::Interface::stop_exposure");
     std::stringstream message;
 
-    // nothing to do if not exposing
-    //
+    // An NEXP>1 series ends after the frame in progress, whatever that frame
+    // is doing -- integrating, reading out, or about to start -- so no further
+    // sub-exposure begins. That frame is also cut short below when it is
+    // integrating with >= 5 s left.
+    const bool ends_series = ( this->nexp.load() > 1 );
+    if ( ends_series ) this->nexp.store(1);
     if ( ! this->exposure_pending() ) {
+      if ( ends_series ) {
+        logwrite( function, "between sub-exposures: the series ends after the next frame" );
+        retstring="series_ends";
+        return NO_ERROR;
+      }
       logwrite( function, "not exposing" );
       return NOTHING;
     }
@@ -4439,6 +4470,12 @@ logwrite(function, message.str());
     // in units of milliseconds.
     //
     long remaining_time = this->camera.shutter_timer.get_remaining();
+
+    if ( remaining_time < 5000 && ends_series ) {
+      logwrite( function, "too late to cut this frame short: the series ends after it" );
+      retstring="series_ends";
+      return NO_ERROR;
+    }
 
     if ( remaining_time < 5000 ) {
       message << "ERROR cannot stop exposure time with less than 5 s exptime remaining"
