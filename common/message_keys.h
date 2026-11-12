@@ -106,6 +106,7 @@ namespace Key {
     inline const std::string ATTEMPTS     = "attempts";
     inline const std::string SEEING       = "seeing";
     inline const std::string BACKGROUND   = "background";
+    inline const std::string GOALSHIFT_PENDING = "goalshift_pending";  ///< a requested goal change awaits execution by the guide loop
   }
 
   namespace Slicecamd {

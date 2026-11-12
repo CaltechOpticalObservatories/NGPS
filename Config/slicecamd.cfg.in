@@ -86,17 +86,46 @@ FINE_ACQUIRE_MIN_SAMPLES=3
 
 # FINE_ACQUIRE_SETTLE_FRAMES=<n>
 # <n> frames discarded after each telescope move to allow settling before
-# centroid measurements resume.
+# centroid measurements resume. The wall-clock settle (FINE_ACQUIRE_SETTLE_SEC,
+# applied after acamd confirms the goal change) covers the move itself.
 #
-FINE_ACQUIRE_SETTLE_FRAMES=2
+FINE_ACQUIRE_SETTLE_FRAMES=0
 
 # FINE_ACQUIRE_SETTLE_SEC=<sec>
-# Time-based settle <sec> applied after each move, in addition to SETTLE_FRAMES,
-# to let the TCS physically finish the move before sampling resumes. This matters
-# when autoexpose shortens the exposure (e.g. bright targets): the frame-count
-# settle then elapses too quickly in wall-clock. Set to 0 to disable.
+# Pause <sec> after each correction, before the next exposure starts. The frame
+# loop already waits for acamd to report the move made, which is only after the
+# TCS has answered it (#479), so no frame can overlap the move. acamd usually
+# reports 1 s after the answer, but sooner if anything requests its status in
+# that second; this pause guarantees the settle either way. Set to 0 to disable.
 #
-FINE_ACQUIRE_SETTLE_SEC=3.0
+FINE_ACQUIRE_SETTLE_SEC=1
+
+# FINE_ACQUIRE_MAX_ADJUSTMENTS=<n>
+# Correction budget. At most <n> corrections are commanded in one run, and the
+# <n>-th decides. It is sent only if the offset it removes is within
+# FINE_ACQUIRE_RELAXED_FACTOR x goal; the run then converges once that move has
+# executed and settled ("converged (FINAL CORRECTION)"). If the offset is
+# larger, the run fails at once without sending it ("fine acquisition FAILED:
+# correction <n> of <n> would be the last ..."). A correction acamd does not
+# confirm within FINE_ACQUIRE_MOVE_TIMEOUT also fails a budgeted run. The
+# sequencer reports a failure as a failed acquisition. Nothing is sampled or
+# evaluated once no correction can follow. Needs FINE_ACQUIRE_MOVE_TIMEOUT > 0.
+# 0 disables (correct until the goal or the sequencer timeout).
+FINE_ACQUIRE_MAX_ADJUSTMENTS=3
+
+# FINE_ACQUIRE_RELAXED_FACTOR=<f>
+# Largest offset, as a multiple of the 0.4" fine-acquire goal, that the budget's
+# last correction may remove: factor 2.0 sends it, and then converges, only if
+# that offset is <= 0.8". Must be >= 1 (1 means the last correction is never sent).
+FINE_ACQUIRE_RELAXED_FACTOR=2.0
+
+# FINE_ACQUIRE_MOVE_TIMEOUT=<sec>
+# Max time <sec> to wait for acamd to report a requested goal change applied
+# before the settle begins. On timeout the settle proceeds anyway, except under
+# a correction budget, where the run fails. Set to 0 to disable the wait (not
+# allowed with FINE_ACQUIRE_MAX_ADJUSTMENTS > 0).
+#
+FINE_ACQUIRE_MOVE_TIMEOUT=60.0
 
 # FINE_ACQUIRE_GAIN=<g>
 # Proportional gain <g> = {0..1} applied to the commanded offset when the residual

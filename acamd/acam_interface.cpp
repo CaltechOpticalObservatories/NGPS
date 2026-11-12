@@ -1443,6 +1443,7 @@ namespace Acam {
     const int         attempts     = this->target.attempts;
     const std::string filter       = this->motion.get_current_filtername();
     const std::string cover        = this->motion.get_current_coverpos();
+    const bool        goalshift_pending = this->target.goalshift_pending.load();
 
     // unless forced, only publish if there was a change in any one of these
     //
@@ -1452,7 +1453,8 @@ namespace Acam {
          nacquired    == this->last_status.nacquired    &&
          attempts     == this->last_status.attempts     &&
          filter       == this->last_status.filter       &&
-         cover        == this->last_status.cover ) return;
+         cover        == this->last_status.cover        &&
+         goalshift_pending == this->last_status.goalshift_pending ) return;
 
     this->last_status.acquire_mode = acquire_mode;
     this->last_status.is_acquired  = is_acquired;
@@ -1460,6 +1462,7 @@ namespace Acam {
     this->last_status.attempts     = attempts;
     this->last_status.filter       = filter;
     this->last_status.cover        = cover;
+    this->last_status.goalshift_pending = goalshift_pending;
 
     // assemble the telemetry into a json message
     //
@@ -1473,6 +1476,7 @@ namespace Acam {
     jmessage_out[Key::Acamd::BACKGROUND]   = this->astrometry.get_background();
     jmessage_out[Key::Acamd::FILTER]       = filter;
     jmessage_out[Key::Acamd::COVER]        = cover;
+    jmessage_out[Key::Acamd::GOALSHIFT_PENDING] = goalshift_pending;
     jmessage_out[Key::PUBTIME] = get_time_us();
 
     try {
@@ -3221,13 +3225,15 @@ logwrite( function, "[DEBUG] acquire here" );
       }
 
       this->astrometry.solve( last_imagename, this->target.ext_solver_args );
-      this->astrometry.get_solution( result, this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle, matches, rmsarcsec );
+      double solved_ra=NAN, solved_dec=NAN, solved_angle=NAN;
+      this->astrometry.get_solution( result, solved_ra, solved_dec, solved_angle, matches, rmsarcsec );
+      this->target.set_goal( solved_ra, solved_dec, solved_angle );  // under goal_mtx: the guide loop may be reading it
 
       if ( result=="NOISY" || result=="GOOD" ) {
         goodsolution=true;
-        message.str(""); message << "setting goals from solver: " << this->target.acam_goal.ra  << " "
-                                                                  << this->target.acam_goal.dec << " " 
-                                                                  << this->target.acam_goal.angle;
+        message.str(""); message << "setting goals from solver: " << solved_ra  << " "
+                                                                  << solved_dec << " " 
+                                                                  << solved_angle;
         logwrite( function, message.str() );
         break;
       }
@@ -3307,11 +3313,13 @@ logwrite( function, message.str() );
 message.str(""); message << "[DEBUG] input coords_slit.ra="<< this->target.coords_slit.ra << " .dec=" << this->target.coords_slit.dec;
 logwrite( function, message.str() );
 
+      double goal_ra=NAN, goal_dec=NAN, goal_angle=NAN;
       this->fpoffsets.compute_offset_last_angle( this->target.get_pointmode(), "ACAM",
                                                  this->target.coords_slit.ra, this->target.coords_slit.dec,
-                                                 this->target.acam_goal.ra, this->target.acam_goal.dec, this->target.acam_goal.angle );
+                                                 goal_ra, goal_dec, goal_angle );
+      this->target.set_goal( goal_ra, goal_dec, goal_angle );  // under goal_mtx: the guide loop may be reading it
 
-message.str(""); message << "[DEBUG] goals: " << this->target.acam_goal.ra << " " << this->target.acam_goal.dec << " " << this->target.acam_goal.angle;
+message.str(""); message << "[DEBUG] goals: " << goal_ra << " " << goal_dec << " " << goal_angle;
 logwrite( function, message.str() );
 
       if ( error == NO_ERROR ) {
@@ -3392,7 +3400,10 @@ logwrite( function, message.str() );
       this->nacquired = 0;
       this->attempts = 0;
       this->sequential_failures = 0;
-      this->allow_large_offset.store(false);  // no stale deliberate-offset allowance
+      {
+        std::lock_guard<std::mutex> lock(this->goal_mtx);
+        this->deliberate_gen = 0;  // no stale deliberate-offset allowance
+      }
       this->is_acquired.store( false, std::memory_order_release );
       this->acquire_start_mjd.store( mjd_now() );
 
@@ -3479,6 +3490,7 @@ logwrite( function, message.str() );
     // an attempt and will keep trying until max attempts.
     //
     long error = NO_ERROR;
+    bool frame_superseded = false;  // the goal changed while this frame's correction was computed
 
     if ( this->acquire_mode == Acam::TARGET_ACQUIRE ||
          this->acquire_mode == Acam::TARGET_ACQUIRE_HERE ||
@@ -3534,8 +3546,11 @@ message.str(""); message << "[DEBUG] ACQUIRE_HERE using goals: " << this->acam_g
 logwrite( function, message.str() );
       }
 ******/
-message.str(""); message << "[DEBUG] using goals: " << this->acam_goal.ra << " " << this->acam_goal.dec << " " << this->acam_goal.angle;
+{
+const goal_snapshot_t logged = this->snapshot_goal();
+message.str(""); message << "[DEBUG] using goals: " << logged.ra << " " << logged.dec << " " << logged.angle;
 logwrite( function, message.str() );
+}
 
 message.str(""); message << "[DEBUG] dRA=" << iface->target.dRA << " dDEC=" << iface->target.dDEC;
 logwrite( function, message.str() );
@@ -3599,7 +3614,8 @@ logwrite( function, message.str() );
       //
       // Offsets calculated as difference between acam goals and the solution from
       // solve. ACAM goals are the SLIT->ACAM translated coords from the DB and
-      // are where the ACAM needs to be pointed. Goals never change.
+      // are where the ACAM needs to be pointed. Goals change only through
+      // offset_goal and a new acquisition (set_goal); see goal_mtx.
       //
       double ra_off, dec_off;  // calculated offsets will be in degrees
 
@@ -3622,13 +3638,31 @@ logwrite( function, message.str() );
         offset = angular_separation( acam_goal.ra, acam_goal.dec, acam_ra, acam_dec );
       }
 *****/
+      // Every correction is classified by the goal it is computed against, read
+      // together with that goal's generation (PAL-171; see goal_mtx):
+      //
+      //  - guide correction: the loop has already moved to this goal. Capped at
+      //    ACQUIRE_TCS_MAX_OFFSET and, while guiding, median-filtered. It makes
+      //    no goal change and spends nothing that belongs to one.
+      //  - goal-change correction: offset_goal changed the goal and no correction
+      //    computed against it has been sent. A fine-acquire change
+      //    ('fineguiding') keeps the ACQUIRE_TCS_MAX_OFFSET cap; a deliberate
+      //    change among those still to be made allows
+      //    ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. Sent at once and alone, never
+      //    through the median filter. Once sent it has made the change(s) and
+      //    clears goalshift_pending, unless a newer change arrived meanwhile.
+      //
+      // So a guide correction in flight when a deliberate offset arrives can
+      // neither use nor spend the deliberate cap.
+      //
+      const goal_snapshot_t goal = this->snapshot_goal();
       if ( iface->fpoffsets.solve_offset( acam_ra, acam_dec,
-                                          this->acam_goal.ra, this->acam_goal.dec,
+                                          goal.ra, goal.dec,
                                           ra_off, dec_off ) == ERROR ) break;
-      offset = angular_separation( this->acam_goal.ra, this->acam_goal.dec, acam_ra, acam_dec );
+      offset = angular_separation( goal.ra, goal.dec, acam_ra, acam_dec );
 
         message.str(""); message << "[DEBUG] acam_ra=" << acam_ra << " acam_dec=" << acam_dec << " acam_goal.ra=" 
-                                 << acam_goal.ra << "  .dec=" << this->acam_goal.dec << " .ang=" << this->acam_goal.angle;
+                                 << goal.ra << "  .dec=" << goal.dec << " .ang=" << goal.angle;
         logwrite( function, message.str() );
         message.str(""); message << "[DEBUG] calculated RAoffset=" << ra_off << " DECLoffset=" << dec_off;
         logwrite( function, message.str() );
@@ -3647,18 +3681,18 @@ logwrite( function, message.str() );
 
       // There is a maximum offset we send to the TCS. This is not a TCS limit
       // (theirs is very large); it is our safety limit so that a bad solution
-      // can't move us far off the slit. Ordinary guiding corrections use the
-      // normal tcs_max_offset (ACQUIRE_TCS_MAX_OFFSET). A deliberate goal offset
-      // applied while guiding -- via offset_goal, which covers put-on-slit,
-      // offset-star acquisition, the end-of-fineacquire target offset, and the
-      // pyGUI 'Offset' button -- is intentionally larger, so for the one
-      // correction that consumes it we allow up to tcs_max_putonslit_offset
-      // (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET). The ACQUIRE path uses tcs_max_offset
-      // and is unaffected.
+      // can't move us far off the slit. Guide and fine-acquire corrections use
+      // tcs_max_offset (ACQUIRE_TCS_MAX_OFFSET). Only the correction that makes
+      // a deliberate goal offset -- put-on-slit, offset-star acquisition, the
+      // end-of-fineacquire target offset, the pyGUI 'Offset' button -- may move
+      // up to tcs_max_putonslit_offset (ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET).
       //
-      double maxoffset = this->tcs_max_offset;
-      if ( this->acquire_mode == Acam::TARGET_GUIDE && this->allow_large_offset.load() ) {
-        maxoffset = this->tcs_max_putonslit_offset;
+      const double maxoffset = goal.deliberate ? this->tcs_max_putonslit_offset : this->tcs_max_offset;
+
+      if ( goal.goal_change ) {
+        message.str(""); message << "NOTICE correction for goal change " << goal.gen << ": offset=" << offset
+                                 << " arcsec, cap " << maxoffset << " arcsec";
+        logwrite( function, message.str() );
       }
 
       // Check the requested offset against the applicable max allowed offset
@@ -3667,13 +3701,14 @@ logwrite( function, message.str() );
         message.str(""); message << "[WARNING] calculated offset " << offset << " not below max "
                                  << maxoffset << " and will not be sent to the TCS";
         logwrite( function, message.str() );
-        this->allow_large_offset.store(false);  // deliberate-offset allowance consumed even when rejected
+        // A refused correction has made no goal change: a deliberate change
+        // keeps its cap for the next frame.
 
         // Match found but failure to send an offset is considered an attempt
         // so attempts is incremented.
         //
         if ( attempts >= this->max_attempts ) {
-          message.str(""); message << "ERROR: failed to find offset below " << this->tcs_max_offset << " within max number of attempts";
+          message.str(""); message << "ERROR: failed to find offset below " << maxoffset << " within max number of attempts";
           iface->async.enqueue_and_log( function, message.str() );
           error = ERROR;
           break;
@@ -3691,7 +3726,29 @@ logwrite( function, message.str() );
 
         bool should_offset=false;
 
-        // While guiding, run the offsets through a median filter over a
+        // A correction computed against a goal that has changed since is
+        // neither sent nor filtered: the next frame is computed against the new
+        // goal.
+        //
+        if ( !this->goal_unchanged_since( goal.gen ) ) {
+          // Measured against a goal that no longer exists: not sent, and the
+          // frame counts as neither an acquisition nor a failure.
+          logwrite( function, "NOTICE goal changed while this correction was computed: not sent" );
+          attempts = 0;
+          frame_superseded = true;
+          break;
+        }
+        else
+        // A goal-change correction is sent at once and alone. It never enters
+        // the median filter, and the samples there, computed against the old
+        // goal, are discarded.
+        //
+        if ( goal.goal_change ) {
+          this->reset_offset_params();
+          should_offset = true;
+        }
+        else
+        // While guiding, run guide corrections through a median filter over a
         // specified time period, and send the offsets only at the rate
         // determined by that period. This returns true and modifies the
         // values ra_off,dec_off when it's time to offset.
@@ -3704,7 +3761,10 @@ logwrite( function, message.str() );
         if ( should_offset ) {
           // send offset to TCS here (returns when offset is complete)
           if ( iface->tcsd.pt_offset( ra_off*3600., dec_off*3600., OFFSETRATE )==ERROR) break;
-          this->allow_large_offset.store(false);  // deliberate-offset allowance consumed
+          // A goal-change correction has now made its change(s). A guide
+          // correction makes none: a goal change that arrived while it was in
+          // flight keeps its own cap and stays pending.
+          if ( goal.goal_change ) this->goal_change_made( goal.gen );
           std::this_thread::sleep_for( std::chrono::seconds(1) );
         }
 
@@ -3740,7 +3800,7 @@ logwrite( function, message.str() );
     } while ( false );  // the do-loop is executed only once. used to allow breaks.
     }                   // end of acquisition sequence
 
-    if ( this->nacquired == 0 && this->max_attempts > 0 ) {
+    if ( !frame_superseded && this->nacquired == 0 && this->max_attempts > 0 ) {
       logwrite(function,"[DEBUG] nacquired="+std::to_string(nacquired));
       if ( ++this->sequential_failures >= this->max_attempts ) {
         logwrite( function, "ERROR sequential failures "+std::to_string(this->sequential_failures)
@@ -5487,8 +5547,9 @@ logwrite( function, message.str() );
   /***** Acam::Interface::offset_goal *****************************************/
   /**
    * @brief      sets the dRA,dDEC offsets to apply to goal
-   * @details    The offset is not applied here, this only stores the offsets
-   *             in the class. Offsets are applied only while guiding.
+   * @details    This changes the goal only. The acquisition or guide loop
+   *             moves the telescope with its next correction computed against
+   *             the new goal (see goal_mtx in Target).
    * @param[in]  args       input string expected "<dRA> <dDEC>"
    * @param[out] retstring  return string
    * @return     ERROR | NO_ERROR
@@ -5510,7 +5571,7 @@ logwrite( function, message.str() );
       retstring = ACAMD_OFFSETGOAL;
       retstring.append( " [ <dRA> <dDEC> [ fineguiding ] ]\n" );
       retstring.append( "  Apply offsets <dRA> <dDEC> to the ACAM goal coordinates.\n" );
-      retstring.append( "  These offsets are applied only while guiding. If omitted,\n" );
+      retstring.append( "  The acquisition or guide loop then moves to the new goal. If omitted,\n" );
       retstring.append( "  the current offsets are returned. Units are in degrees.\n" );
       retstring.append( "  'fineguiding' marks a slicecam fine-guiding correction (keeps the 60\" cap).\n" );
       return HELP;
@@ -5525,27 +5586,48 @@ logwrite( function, message.str() );
       retstring="invalid_argument";
       return ERROR;
     }
-    this->target.dRA  = dRA;
-    this->target.dDEC = dDEC;
-
-    // optional fineguiding flag: marks a slicecam fine-guiding correction, which
+    // optional fineguiding flag: marks a slicecam fine-acquire correction, which
     // must stay within the ordinary 60" guiding cap. Its absence means a
     // deliberate goal offset (put-on-slit, offset-star, end-of-fineacquire,
     // pyGUI 'Offset') that may legitimately be larger.
     std::string flag;
     const bool is_fineguiding = (iss >> flag && flag == "fineguiding");
 
-    // Apply any dRA, dDEC goal offsets from the "put on slit" action to
-    // acam_ra_goal, acam_dec_goal. These dRA,dDEC offsets can come from
-    // either the ACAM or slicecam GUIs and are stored in the Target class.
+    // Apply the dRA,dDEC offsets to the goal and record the change with its
+    // kind, in one step under goal_mtx: the guide loop never reads half a
+    // change, and two offsets arriving on different connections are both kept.
+    // Only a correction the guide loop computes against this goal (or a later
+    // one) can make the change; for a deliberate offset that correction alone
+    // may move up to ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET, whatever mode the loop is
+    // in. A correction already in flight can neither use nor spend it (PAL-171).
     //
-    // The supplied acam_ra_goal,acam_dec_goal are modified by dRA,dDEC
-    //
-    this->fpoffsets.apply_offset( this->target.acam_goal.ra,  this->target.dRA,
-                                  this->target.acam_goal.dec, this->target.dDEC );
+    unsigned long long gen=0;
+    {
+      std::lock_guard<std::mutex> lock( this->target.goal_mtx );
+      double goal_ra  = this->target.acam_goal.ra;
+      double goal_dec = this->target.acam_goal.dec;
+      if ( this->fpoffsets.apply_offset( goal_ra, dRA, goal_dec, dDEC ) == ERROR ) {
+        logwrite( function, "ERROR applying the offset to the goal: goal unchanged" );
+        retstring="goal_unchanged";
+        return ERROR;
+      }
+      this->target.acam_goal.ra  = goal_ra;
+      this->target.acam_goal.dec = goal_dec;
+      this->target.dRA  = dRA;
+      this->target.dDEC = dDEC;
+      gen = ++this->target.goal_gen;
+      if ( !is_fineguiding && ( dRA != 0.0 || dDEC != 0.0 ) ) {
+        this->target.deliberate_gen = gen;  // a zero offset changes nothing, so it raises no cap
+      }
+      this->target.goalshift_pending.store( true, std::memory_order_release );
+    }
+    this->publish_status(true);
 
+    message.str(""); message << "goal change " << gen << " (" << ( is_fineguiding ? "fine-acquire" : "deliberate offset" )
+                             << "): dRA=" << dRA*3600. << " dDEC=" << dDEC*3600. << " arcsec";
+    logwrite( function, message.str() );
 
-    message.str(""); message << this->target.dRA << " " << this->target.dDEC;
+    message.str(""); message << dRA << " " << dDEC;
     retstring = message.str();
 
     // Applying an offset to the goal while guiding must never drop out of
@@ -5553,14 +5635,8 @@ logwrite( function, message.str() );
     // TARGET_GUIDE and reset the offset filter so the new goal takes effect
     // quickly. This covers GUI "put on slit" and sequencer target offsets.
     //
-    // This is a deliberate offset (put-on-slit, offset-star, end-of-fineacquire,
-    // or the pyGUI 'Offset' button) and may exceed the normal guiding cap, so
-    // allow the next correction up to ACQUIRE_TCS_MAX_PUTONSLIT_OFFSET. The
-    // allowance is one-shot: do_acquire consumes it when the offset is sent.
-    //
     if ( this->target.acquire_mode == Acam::TARGET_GUIDE ) {
       this->target.reset_offset_params();
-      if ( !is_fineguiding ) this->target.allow_large_offset.store(true);
     }
 
     this->publish_status();
