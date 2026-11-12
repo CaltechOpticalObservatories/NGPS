@@ -964,6 +964,26 @@ std::vector<std::shared_ptr<Camera::Information>> fitsinfo;
       /***** Interface::any_writes_pending ************************************/
 
 
+      /***** Interface::wait_writes_done **************************************/
+      /**
+       * @brief   wait up to timeout_ms for every frame write to finish
+       * @return  true if no writes are pending, false on timeout
+       * @details READY is published when the last frame has arrived, a few ms
+       *          before its FITS write ends, so a command sent right after READY
+       *          can find a write still in progress.
+       */
+      inline bool wait_writes_done( int timeout_ms ) {
+        std::unique_lock<std::mutex> lock( this->write_lock );
+        return this->write_condition.wait_for( lock, std::chrono::milliseconds( timeout_ms ), [this]() {
+          for ( const auto &pending : this->writes_pending ) {
+            if ( !pending.empty() ) return false;
+          }
+          return true;
+        } );
+      }
+      /***** Interface::wait_writes_done **************************************/
+
+
       /***** Interface::write_pending *****************************************/
       /**
        * @brief      Set or clear the write pending state for a given exposure

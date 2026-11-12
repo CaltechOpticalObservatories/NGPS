@@ -1019,9 +1019,10 @@ namespace AstroCam {
       return ERROR;
     }
 
-    // Don't make any changes while frames are still being written.
+    // Don't make any changes while frames are still being written: give a
+    // write that is finishing (ms after READY) up to 2 s, then refuse.
     //
-    if ( this->any_writes_pending() ) {
+    if ( !this->wait_writes_done( 2000 ) ) {
       logwrite( function, "ERROR: cannot change binning while frame write is in progress" );
       retstring="write_in_progress";
       return ERROR;
@@ -3615,9 +3616,10 @@ for ( const auto &dev : selectdev ) {
       return( ERROR );
     }
 
-    // Don't remap the DMA buffer while frames are still being written from it.
+    // Don't remap the DMA buffer while frames are still being written from it:
+    // give a write that is finishing (ms after READY) up to 2 s, then refuse.
     //
-    if ( this->any_writes_pending() ) {
+    if ( !this->wait_writes_done( 2000 ) ) {
       logwrite( function, "ERROR: cannot remap DMA buffer while frame write is in progress" );
       retstring="write_in_progress";
       return ERROR;
