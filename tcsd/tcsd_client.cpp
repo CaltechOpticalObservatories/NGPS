@@ -312,10 +312,10 @@
            << ra_d << " " << dec_d << " " << rate;
 
     // estimate the timeout by adding the ra and dec in quadrature,
-    // divide by offset rate, and multiply by 1.5 for safety, x1000 for msec
+    // divide by offset rate, multiply by 2 for safety, x1000 for msec, plus 12 s
     //
     double quad = std::sqrt( std::pow(ra_d,2) + std::pow(dec_d,2) );
-    int to = static_cast<int>( std::max( 5000.0, ( 5000.0 + (quad / rate) * 1000.0 * 1.5 ) ) );
+    int to = static_cast<int>( 12000.0 + (quad / rate) * 1000.0 * 2.0 );
     if ( this->client.send( tcscmd.str(), tcsreply, to ) != NO_ERROR ) {
       logwrite( function, "ERROR sending guider offsets" );
       return ERROR;

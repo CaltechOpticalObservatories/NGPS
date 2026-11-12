@@ -1710,8 +1710,7 @@ namespace TCS {
     //
     int ra_t  = static_cast<int>( 1000 * std::abs(raoff)  / this->offsetrate  );  // time (ms) to offset RA
     int dec_t = static_cast<int>( 1000 * std::abs(decoff) / this->offsetrate );   // time (ms) to offset DEC
-    int max_t = static_cast<int>( 1.5  * std::max( ra_t, dec_t ) );     // greater of the two, plus 50%
-    max_t = std::max( max_t, PTOFFSET_MIN_TIMEOUT );                    // minimum timeout
+    int max_t = PTOFFSET_MIN_TIMEOUT + 2 * std::max( ra_t, dec_t );      // minimum, plus twice the greater of the two
 
     std::stringstream cmd;
     cmd << "PT " << std::fixed << std::setprecision(3) << raoff << " " << decoff << " " << rate;
