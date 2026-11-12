@@ -295,6 +295,8 @@ namespace Sequencer {
       std::atomic<bool> is_science_frame_transfer;  ///< is frame transfer enabled for science cameras
       std::atomic<bool> notify_tcs_next_target;  ///< notify TCS of next target when remaining time within TCS_PREAUTH_TIME
       std::atomic<bool> arm_readout_flag;        ///< 
+      std::atomic<int> shutter_closes{0};        ///< shutter closes since the last expose command
+      std::atomic<int> expose_nexp{0};           ///< sub-exposures of the last expose command
       std::atomic<bool> cancel_flag{false};
       std::atomic<bool> is_ontarget{false};      ///< remotely set by the TCS operator to indicate that the target is ready
       std::atomic<bool> is_usercontinue{false};  ///< remotely set by the user to continue
@@ -431,6 +433,7 @@ namespace Sequencer {
       std::condition_variable acam_cv;
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
+      bool last_shutteropen = false;   ///< SHUTTEROPEN in camerad's latest report (camerad_mtx)
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
