@@ -762,6 +762,9 @@ namespace Sequencer {
                            { THR_SLIT_SET,       std::bind(&Sequence::slit_set, this,
                                                  this->target.iscal ? Sequencer::VSM_EXPOSE : Sequencer::VSM_ACQUIRE) }
                          };
+
+        // for CAL targets, flexure is also set here, so it completes before the exposure
+        if ( this->target.iscal ) worker_threads.push_back( { THR_FLEXURE_SET, std::bind(&Sequence::flexure_set, this) } );
       }
 
       // pair their ThreadStatusBit with their future
@@ -2449,8 +2452,8 @@ namespace Sequencer {
    *             compensation origin (flexured adds the computed delta to defpos),
    *             so this is the neutral state; it prevents a previous target's
    *             compensation from being left applied to every subsequent target.
-   *             Runs in a detached thread and nothing waits for it, so it does
-   *             not throw: a failure is reported and the sequence goes on.
+   *             Also runs in detached threads that nothing waits for, so it
+   *             does not throw: a failure is reported and the sequence goes on.
    * @return     ERROR | NO_ERROR
    *
    */
