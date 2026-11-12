@@ -53,6 +53,13 @@ namespace Sequencer {
       // ready again: the expose command's series has ended, re-apply no more
       if ( isready && !this->can_expose.load() ) this->expose_nexp = 0;
       this->can_expose.store(isready);
+      // The first READY after the next target was picked during a readout is
+      // the end of that readout (camerad reported READY=false when the
+      // exposure started and publishes in order): open the readout gate.
+      if ( isready && this->readout_gate_armed ) {
+        this->readout_gate_armed = false;
+        this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      }
     }
 
     // The shutter closing, other than to pause, ends an integration. The
@@ -527,7 +534,11 @@ namespace Sequencer {
         // Set READOUT flag and clear EXPOSE flag when pixels start coming in
         // ------------------------------------------------------------------
         //
-        if ( seq.arm_readout_flag && statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {  // async message tag PIXELCOUNT
+        // Only while camerad reports an exposure in progress (not READY): after an
+        // early pick, a PIXELCOUNT from the tail of the previous readout must not
+        // end the next target's EXPOSE wait.
+        //
+        if ( seq.arm_readout_flag && !seq.can_expose.load() && statstr.compare( 0, 10, "PIXELCOUNT" )==0 ) {  // async message tag PIXELCOUNT
           seq.arm_readout_flag = false;
           seq.wait_state_manager.set_and_clear( {Sequencer::SEQ_WAIT_READOUT},      // set READOUT
                                                 {Sequencer::SEQ_WAIT_EXPOSE} );     // clear EXPOSE
@@ -655,6 +666,16 @@ namespace Sequencer {
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
 
+    // On every way out of this function except a cancel, do not report the
+    // sequence finished while camerad is still reading out a target that was
+    // completed at its last shutter close. Declared after the
+    // ScopedStates above, so it runs before they set READY.
+    //
+    struct ReadoutGateOnExit {
+      Sequence &seq;
+      ~ReadoutGateOnExit() { try { seq.wait_for_readout_gate( "ending the sequence" ); } catch (...) { } }
+    } readout_gate_on_exit{ *this };
+
     // This is the main loop which runs as long as there are targets in the database,
     // or until cancelled. Or, this will run once in the case of single-target-mode,
     // which is invoked by storing an OBSID in the class variable single_obsid.
@@ -711,6 +732,23 @@ namespace Sequencer {
         }
 
         this->publish_targetinfo();   // publish the now-active target
+
+        // A target picked while the previous one is still reading out starts
+        // at once only if the telescope has to slew to it: a science row with
+        // coordinates and SLIT pointing. Anything else -- a calibration, a row
+        // without coordinates, ACAM pointing -- starts when that readout has
+        // finished, exactly as before. It is already 'active' while it waits,
+        // like every picked row.
+        //
+        {
+        const bool slews = !this->target.iscal
+                        && !( this->target.ra_hms.empty() && this->target.dec_dms.empty() )
+                        && !( this->target.pointmode == Acam::POINTMODE_ACAM );
+        if ( !slews && !this->wait_for_readout_gate( "starting "+std::string(this->target.name) ) ) {
+          this->broadcast.notice( function, "sequence cancelled" );
+          return;
+        }
+        }
       }
       else  // targetstate not TARGET_FOUND
       if ( targetstate == TargetInfo::TARGET_NOT_FOUND ) {                // no target found is an automatic stop
@@ -754,8 +792,9 @@ namespace Sequencer {
 
         // threads to start, pair their ThreadStatusBit with the function to call
         //
+        // camera_set is not here: it talks to camerad, so it runs just before
+        // the exposure, behind the readout gate (see "starting exposure").
         worker_threads = { { THR_MOVE_TO_TARGET, std::bind(&Sequence::move_to_target, this) },
-                           { THR_CAMERA_SET,     std::bind(&Sequence::camera_set, this)     },
                            { THR_FOCUS_SET,      std::bind(&Sequence::focus_set, this)      },
                            { THR_CALIB_SET,      std::bind(&Sequence::calib_set, this)      },
                            // for CAL targets, slit comes from database, otherwise use VSM acquire position
@@ -774,6 +813,19 @@ namespace Sequencer {
       //
       for ( const auto &[thr, func] : worker_threads ) {
         worker_futures.emplace_back( thr, std::async(std::launch::async, func) );
+      }
+
+      // camera_set talks to camerad, so it waits for the readout gate, then runs
+      // in parallel with everything else (a channel power-up takes seconds) and
+      // is joined just before the exposure. Not for ACAM pointing, which never
+      // exposes here.
+      //
+      std::future<long> camera_future;
+      if ( !( this->target.pointmode == Acam::POINTMODE_ACAM ) ) {
+        camera_future = std::async( std::launch::async, [this]() -> long {
+          if ( !this->wait_for_readout_gate( "setting the camera for "+std::string(this->target.name) ) ) return ABORT;
+          return this->camera_set();
+        } );
       }
 
       // wait for the threads to complete. these can be cancelled.
@@ -887,6 +939,36 @@ namespace Sequencer {
         std::this_thread::sleep_for( std::chrono::duration<double>( this->offset_settle_sec ) );
       }
 
+      // Nothing reaches camerad before the previous target's readout has
+      // finished: when this target was picked at the previous one's last shutter close,
+      // the camera settings (camera_future) and the expose wait for READY.
+      //
+      if ( !this->wait_for_readout_gate( "exposing "+std::string(this->target.name) ) ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
+      }
+      if ( camera_future.valid() ) {
+        try {
+          long camera_error = camera_future.get();
+          error |= camera_error;
+          // never expose unless this target's camera settings were applied
+          if ( camera_error != NO_ERROR ) {
+            this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)
+                                             +( camera_error==ABORT ? " cancelled" : " failed" )+": not exposing" );
+            return;
+          }
+          this->broadcast.notice( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" ready" );
+        }
+        catch (const std::exception& e) {
+          this->broadcast.error( function, Sequencer::thread_names.at(THR_CAMERA_SET)+" : "+std::string(e.what()) );
+          return;
+        }
+      }
+      if ( this->cancel_flag.load() ) {
+        this->broadcast.notice( function, "sequence cancelled" );
+        return;
+      }
+
       logwrite( function, "starting exposure" );       ///< TODO @todo log to telemetry!
 
       // Start the exposure in a thread...
@@ -915,6 +997,7 @@ namespace Sequencer {
       //
       if ( this->cancel_flag.load() ) {
         this->broadcast.notice( function, "exposure cancelled" );
+        this->arm_readout_flag = false;   // the stopped frame's PIXELCOUNTs must not set READOUT later
         error = this->target.update_state( Sequencer::TARGET_UNASSIGNED );
         message.str(""); message << ( error==NO_ERROR ? "" : "ERROR " ) << "marking target " << this->target.name
                                  << " id " << this->target.obsid << " order " << this->target.obsorder
@@ -933,19 +1016,45 @@ namespace Sequencer {
       // of the last exposure finishes — the correct completion signal for both
       // single and multi-exposure sequences. Skip the wait for frame transfer.
       //
+      // When the shutter closes on the LAST sub-exposure of the expose command
+      // (camerad's shutter reports, counted since the expose command), this
+      // target is complete -- its integration has ended, and camerad took its
+      // header telemetry at exposure start and AIRMASS1/MJD1 at shutter close --
+      // so the loop completes it and picks the next target now instead of after
+      // READY, unless single-step, a single target, a calibration, a cancel or a
+      // thread error says otherwise. The readout gate keeps camerad untouched
+      // until READY.
+      //
+      bool picked_during_readout = false;
       if (!this->is_science_frame_transfer) {
         logwrite( function, "waiting for readout" );
         std::unique_lock<std::mutex> lock(this->camerad_mtx);
+        auto pick_now = [this]() {
+          return !this->target.iscal && !this->do_once.load() && this->single_obsid.empty() &&
+                 !this->thread_error_manager.are_any_set() &&
+                 this->expose_nexp > 0 && this->shutter_closes >= this->expose_nexp;
+        };
         while ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
-                                            [this]() { return this->can_expose.load() || this->cancel_flag.load(); } ) ) {
+                                            [this,&pick_now]() { return this->can_expose.load() || this->cancel_flag.load() || pick_now(); } ) ) {
           logwrite( function, "waiting for readout — requesting snapshot" );
           lock.unlock();
           this->request_snapshot();
           lock.lock();
         }
-        this->broadcast.notice( function, "done waiting for readout" );
+        if ( !this->can_expose.load() && !this->cancel_flag.load() && pick_now() ) {
+          this->readout_gate_armed = true;      // under camerad_mtx: no READY can slip in between
+          picked_during_readout = true;
+        }
+        if ( picked_during_readout ) {
+          this->broadcast.notice( function, "last readout of "+std::string(this->target.name)
+                                            +" under way: completing it and picking the next target" );
+        }
+        else {
+          this->broadcast.notice( function, "done waiting for readout" );
+        }
       }
-      this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
+      // after a pick the READOUT bit stays set until camerad's READY opens the gate
+      if ( !picked_during_readout ) this->wait_state_manager.clear( Sequencer::SEQ_WAIT_READOUT );
 
       // Now that we're done waiting, check for errors or abort
       //
@@ -1022,9 +1131,13 @@ namespace Sequencer {
 
       if (this->cancel_flag.load()) {
         logwrite(function, "sequence cancelled");
-        return NO_ERROR;
+        return ABORT;                       // nothing was set: the caller must not expose
       }
     }
+    // camerad_mtx guards can_expose only; holding it across the camerad
+    // commands below would block the ZMQ subscriber thread (every topic) for
+    // their duration -- a channel power-up takes seconds
+    lock.unlock();
 
     logwrite( function, "setting camera parameters");
 
@@ -2350,6 +2463,41 @@ namespace Sequencer {
   /***** Sequencer::Sequence::move_to_target **********************************/
 
 
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
+  /**
+   * @brief      wait until the previous target's readout has finished
+   * @param[in]  before  what is waiting, for the log
+   * @return     true to proceed, false if cancelled while waiting
+   *
+   * The gate is armed when the next target is picked at the previous
+   * target's last shutter close (sequence_start) and opened by the first
+   * camerad READY report after that (handletopic_camerad). Returns at once
+   * when it is not armed, which is every case but that one.
+   */
+  bool Sequence::wait_for_readout_gate( const std::string &before ) {
+    const std::string function("Sequencer::Sequence::wait_for_readout_gate");
+    std::unique_lock<std::mutex> lock( this->camerad_mtx );
+    if ( !this->readout_gate_armed ) return true;
+    logwrite( function, "previous target still reading out: waiting before "+before );
+    while ( this->readout_gate_armed && !this->cancel_flag.load() ) {
+      if ( !this->camerad_cv.wait_for( lock, std::chrono::seconds(30),
+                                       [this]() { return !this->readout_gate_armed || this->cancel_flag.load(); } ) ) {
+        logwrite( function, "still waiting for the previous readout -- requesting snapshot" );
+        lock.unlock();
+        this->request_snapshot();
+        lock.lock();
+      }
+    }
+    if ( this->readout_gate_armed ) {
+      logwrite( function, "cancelled while waiting for the previous readout" );
+      return false;
+    }
+    logwrite( function, "previous readout finished" );
+    return true;
+  }
+  /***** Sequencer::Sequence::wait_for_readout_gate ***************************/
+
+
   /***** Sequencer::Sequence::dothread_notify_tcs *****************************/
   /**
    * @brief      notify TCS operator of next target coords for preauthorization, no move
@@ -2766,14 +2914,23 @@ namespace Sequencer {
 
     ScopedState thr_state( this->thread_state_manager, Sequencer::THR_STOP_EXPOSURE );
 
-    // This function is only used while exposing
+    // Only while an exposure command of the current target is running. For
+    // NEXP>1 that is the whole series: the EXPOSE bit covers only the first
+    // sub-exposure; after it, camerad not READY (and not the previous
+    // target's last readout after a pick, which has nothing left to stop)
+    // covers the rest. A stale READOUT bit is not evidence. camerad ends the
+    // series after the frame in progress, cut short if it is integrating
+    // with >= 5 s left. A stop never clears a cancel.
     //
-    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) ) {
+    bool series_running = false;
+    {
+    std::lock_guard<std::mutex> lock( this->camerad_mtx );
+    series_running = !this->can_expose.load() && !this->readout_gate_armed;
+    }
+    if ( ! this->wait_state_manager.is_set( Sequencer::SEQ_WAIT_EXPOSE ) && !series_running ) {
       this->broadcast.notice(function, "not currently exposing");
       return;
     }
-
-    this->cancel_flag.store(false);
 
     // Send command to the camera to stop the exposure.
     //
@@ -2830,6 +2987,8 @@ namespace Sequencer {
     this->cancel_flag.store(false);
     this->is_ontarget.store(false);
     this->is_usercontinue.store(false);
+
+    if ( !this->wait_for_readout_gate( "repeating the exposure" ) ) return ERROR;
 
     std::string targetstatus;
     this->target.get_specified_target( this->prev_single_obsid, targetstatus );

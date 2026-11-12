@@ -434,6 +434,13 @@ namespace Sequencer {
       std::mutex camerad_mtx;
       std::condition_variable camerad_cv;
       bool last_shutteropen = false;   ///< SHUTTEROPEN in camerad's latest report (camerad_mtx)
+      // The readout gate, guarded by camerad_mtx. When the shutter closes on a
+      // target's last sub-exposure, the loop completes it and picks the next one
+      // at once; nothing may then reach camerad (camera settings, an expose)
+      // until camerad reports READY again. Armed at that pick, opened by the
+      // first READY=true report after it (handletopic_camerad), and held
+      // across a stop or restart until then.
+      bool readout_gate_armed = false;
       std::mutex slitd_mtx;
       std::condition_variable slitd_cv;
       std::mutex tcsd_mtx;
@@ -622,6 +629,7 @@ namespace Sequencer {
       long camera_set();             ///< sets camera according to target entry params
       long slit_set(VirtualSlitMode mode=VSM_DATABASE);        ///< sets slit according to target entry params and mode
       long move_to_target();         ///< sends request to TCS to move to target coords
+      bool wait_for_readout_gate( const std::string &before );  ///< wait for the previous target's readout to finish; false if cancelled
       static void dothread_notify_tcs( Sequencer::Sequence &seq );             ///< like move_to_target but for preauth only
       long focus_set();
       long flexure_set();
