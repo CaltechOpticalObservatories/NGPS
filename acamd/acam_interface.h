@@ -346,6 +346,7 @@ namespace Acam {
       int nacquired;
       int attempts;
       int sequential_failures;
+      std::atomic<double> acquire_start_mjd{0};  ///< when the current acquisition was started
 
       std::atomic<bool> is_acquired;       ///< set if target acquired successfully
       std::atomic<bool> stop_acquisition;  ///< set if the acquisition sequence should stop
