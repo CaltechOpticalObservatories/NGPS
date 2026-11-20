@@ -2596,6 +2596,10 @@ namespace Slicecam {
     //
     bool is_guiding = this->is_acam_guiding.load();
 
+    // arcsec for the log; the guiding path sends degrees
+    const double ra_off_arcsec  = ra_off  * 3600.;
+    const double dec_off_arcsec = dec_off * 3600.;
+
     // send the offsets now
     //
     if ( is_guiding ) {
@@ -2632,7 +2636,7 @@ namespace Slicecam {
     }
 
     std::ostringstream message;
-    message << "requested offsets dRA=" << ra_off << " dDEC=" << dec_off << " arcsec";
+    message << "requested offsets dRA=" << ra_off_arcsec << " dDEC=" << dec_off_arcsec << " arcsec";
     logwrite(function, message.str());
 
     return NO_ERROR;
