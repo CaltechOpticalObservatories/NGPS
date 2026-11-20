@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QVBoxLayout, QAbstractItemView, QStyle, QFrame, QDialog, QListView, QFileDialog, QDialogButtonBox, QMessageBox,  QInputDialog, QHBoxLayout, QGridLayout, QTableWidget, QHeaderView, QFormLayout, QListWidget, QListWidgetItem, QScrollArea, QVBoxLayout, QGroupBox, QGroupBox, QHeaderView, QLabel, QRadioButton, QProgressBar, QLineEdit, QTextEdit, QTableWidget, QComboBox, QDateTimeEdit, QTabWidget, QWidget, QPushButton, QCheckBox,QSpacerItem, QSizePolicy
 from PyQt5.QtCore import QDateTime, QTimer
 from PyQt5.QtGui import QColor, QFont, QDoubleValidator, QTextCursor
-from logic_service import LogicService
+from logic_service import LogicService, busy_cursor
 from PyQt5.QtCore import Qt, QSignalBlocker
 from control_tab import ControlTab
 from instrument_status_tab import InstrumentStatusTab
@@ -1783,6 +1783,10 @@ class LayoutService:
     
     def load_target_lists(self, target_lists=None):
         """Populate the ComboBox with target lists, switching between Science and Calibration modes."""
+        with busy_cursor("Loading target lists..."):
+            self._load_target_lists(target_lists)
+
+    def _load_target_lists(self, target_lists=None):
         try:
             if self.target_list_mode_toggle.isChecked():
                 # Calibration mode
@@ -1823,8 +1827,7 @@ class LayoutService:
             self.target_list_name.blockSignals(True)
             self.target_list_name.clear()
 
-            for set_name in display_items:
-                self.target_list_name.addItem(set_name)
+            self.target_list_name.addItems([str(n) for n in display_items])
 
             # Sentinels at the end
             self.target_list_name.addItem("Upload new target list")
@@ -1972,8 +1975,9 @@ class LayoutService:
 
         # Real target list selection
         self.parent.current_target_list_name = text
-        self.logic_service.filter_target_list()
-        self.hide_default_columns()
+        with busy_cursor(f"Loading target list '{text}'..."):
+            self.logic_service.filter_target_list()
+            self.hide_default_columns()
 
     def create_right_planning_column(self):
         right_planning_column = QVBoxLayout()

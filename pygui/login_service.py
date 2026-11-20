@@ -3,6 +3,7 @@ import mysql.connector
 from PyQt5.QtWidgets import QDialog, QLineEdit, QVBoxLayout, QPushButton, QLabel, QFormLayout, QMessageBox
 from PyQt5.QtCore import Qt
 import re
+from logic_service import fetch_owner_target_sets
 
 
 def hash_password(password):
@@ -415,7 +416,6 @@ class LoginDialog(QDialog):
         self.forgot_button.clicked.connect(self.on_forgot_password)
 
         self.owner = None
-        self.all_targets = []
         self.set_data = {}
         self.set_name = []
 
@@ -534,50 +534,31 @@ class LoginDialog(QDialog):
         QMessageBox.critical(self, "Error", message)
 
     def fetch_and_update_target_list(self, username):
-        """Fetch target data and update the table in the parent window."""
-        if self.connection:
-            try:
-                cursor = self.connection.cursor(dictionary=True)
+        """
+        Fetch the user's target-set index (SET_ID -> SET_NAME), newest first.
 
-                cursor.execute(
-                    "SELECT SET_ID FROM target_sets WHERE OWNER = %s",
-                    (username,),
-                )
-                set_ids = cursor.fetchall()
+        Only the set list is loaded here. Targets for the selected set are
+        fetched afterwards by LayoutService.on_target_set_changed, so we
+        deliberately do NOT preload every target the user owns: for accounts
+        with many target lists (e.g. ztf) that meant one query per set and
+        made login hang.
+        """
+        self.set_data = {}
+        self.set_name = []
 
-                cursor.execute(
-                    "SELECT SET_ID, SET_NAME FROM target_sets WHERE OWNER = %s",
-                    (username,),
-                )
-                set_data = cursor.fetchall()
+        if not self.connection:
+            return
 
-                self.set_data = {
-                    set_item["SET_ID"]: set_item["SET_NAME"]
-                    for set_item in set_data
-                }
+        try:
+            set_data = fetch_owner_target_sets(self.connection, username)
+            self.set_data = {row["SET_ID"]: row["SET_NAME"] for row in set_data}
+            self.set_name = [row["SET_NAME"] for row in set_data]
 
-                self.set_name = [
-                    set_item["SET_NAME"]
-                    for set_item in set_data
-                ]
+        except mysql.connector.Error as err:
+            print(f"Database error: {err}")
 
-                self.all_targets = []
-
-                for set_id in set_ids:
-                    cursor.execute(
-                        "SELECT * FROM targets WHERE SET_ID = %s",
-                        (set_id["SET_ID"],),
-                    )
-                    targets = cursor.fetchall()
-                    self.all_targets.extend(targets)
-
-                cursor.close()
-
-            except mysql.connector.Error as err:
-                print(f"Database error: {err}")
-
-            finally:
-                self.connection.close()
+        finally:
+            self.connection.close()
 
 
 class CreateAccountDialog(QDialog):

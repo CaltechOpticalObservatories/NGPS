@@ -13,41 +13,59 @@ import astropy.units as u
 import datetime
 from contextlib import contextmanager  
 
+
+@contextmanager
+def busy_cursor(message=None):
+    """
+    Show a wait cursor (and optional console/status message) while a
+    blocking UI operation such as loading target lists runs, so the user
+    can see why the interface is momentarily unresponsive.
+    """
+    from PyQt5.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        yield
+        return
+
+    if message:
+        print(message)
+    QApplication.setOverrideCursor(Qt.WaitCursor)
+    app.processEvents()  # let the cursor change paint before we block
+    try:
+        yield
+    finally:
+        QApplication.restoreOverrideCursor()
+
+
+def fetch_owner_target_sets(connection, owner):
+    """
+    Return the owner's target sets as [{"SET_ID": ..., "SET_NAME": ...}],
+    newest first. Only the set index is fetched, never the targets.
+    """
+    cursor = connection.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT SET_ID, SET_NAME
+            FROM target_sets
+            WHERE OWNER = %s
+            ORDER BY COALESCE(SET_CREATION_TIMESTAMP, '1970-01-01 00:00:00') DESC,
+                     SET_ID DESC
+            """,
+            (owner,),
+        )
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+
+
 class LogicService:
     def __init__(self, parent):
         self.parent = parent  # reference to the parent window or main UI
         self.connection = None
-        self.all_targets = []
         self.target_list_set = {}
         self.target_list_display = None
-
-    def _connect_unique(self, signal, slot):
-        """Disconnect slot if already connected, then connect once."""
-        try:
-            signal.disconnect(slot)
-        except TypeError:
-            pass
-        signal.connect(slot)
-
-    def _get_target_combo(self):
-        """
-        Return the QComboBox used for target list selection, whether it lives on
-        the main window or inside layout_service. Returns None if not found.
-        """
-        return getattr(self.parent, "current_target_list_name", None)
-
-    @contextmanager
-    def _maybe_block(self, widget):
-        """Context manager to block signals if widget is not None."""
-        blocker = None
-        if widget is not None:
-            blocker = QSignalBlocker(widget)
-        try:
-            yield
-        finally:
-            if blocker is not None:
-                del blocker
-
 
     @staticmethod
     def convert_pst_to_utc(datetime):
@@ -570,57 +588,6 @@ class LogicService:
         self.connection = None
 
 
-    def load_data_from_mysql(self, connection, target_table):
-        """
-        Loads target data from MySQL using the provided connection.
-        Returns the fetched rows from the target table.
-        """
-        try:
-            cursor = connection.cursor(dictionary=True)  # Use dictionary for column name access
-            
-            # Query the target data from the database (modify as needed)
-            cursor.execute(f"SELECT * FROM {target_table}")
-            rows = cursor.fetchall()  # Fetch all rows
-            
-            cursor.close()
-            return rows
-        except mysql.connector.Error as err:
-            print(f"Error executing query: {err}")
-            return []
-
-    def load_mysql_and_update_target_list(self, config_file):
-        """
-        Loads target data from MySQL and updates the target list table.
-        Prevents duplicate signal connections and cascading refreshes.
-        """
-        connection = self.connect_to_mysql(config_file)
-        if connection is None:
-            print("Failed to connect to MySQL. Cannot load target data.")
-            return
-
-        db_config = self.read_config(config_file)
-        target_table = db_config.get("TARGET_TABLE")
-        rows = self.load_data_from_mysql(connection, target_table)
-        if not rows:
-            print(f"No data found in the {target_table} table.")
-            return
-
-        # Update table (idempotent + signal-safe)
-        self.update_target_list_table(rows)
-
-        # Build / refresh the combo quietly, then wire the filter once
-        combo = self._get_target_combo()
-        with self._maybe_block(combo):
-            if combo is not None:
-                target_list_names = sorted({str(row.get('SET_ID')) for row in rows if 'SET_ID' in row})
-                combo.clear()
-                combo.addItem("All")
-                combo.addItems(target_list_names)
-
-        if combo is not None:
-            self._connect_unique(combo.currentIndexChanged, self.filter_target_list)
-
-
     def load_mysql_and_fetch_target_sets(self, config_file):
         """
         Load ALL target sets for current user (newest first), but auto-select the most recent.
@@ -637,16 +604,7 @@ class LogicService:
             return []
 
         try:
-            cur = conn.cursor(dictionary=True)
-            cur.execute("""
-                SELECT SET_ID, SET_NAME,
-                    COALESCE(SET_CREATION_TIMESTAMP,'1970-01-01 00:00:00') AS ts
-                FROM target_sets
-                WHERE OWNER = %s
-                ORDER BY ts DESC, SET_ID DESC
-            """, (username,))
-            sets = cur.fetchall()
-            cur.close()
+            sets = fetch_owner_target_sets(conn, username)
 
             if not sets:
                 print(f"No target sets found for user '{username}'.")
@@ -703,11 +661,8 @@ class LogicService:
             self.set_name = [row["SET_NAME"] for row in set_data]
             self.parent.user_set_data = self.set_data
 
-            self.all_targets = []
-            for row in set_data:
-                cursor.execute("SELECT * FROM targets WHERE SET_ID = %s", (row["SET_ID"],))
-                targets = cursor.fetchall()
-                self.all_targets.extend(targets)
+            # Targets for the selected set are fetched on selection
+            # (filter_target_list); don't preload every set's targets here.
 
             print(f"Fetched {len(self.set_name)} calibration target sets.")
             return self.set_name
@@ -735,7 +690,7 @@ class LogicService:
         s = str(name_or_id).strip()
 
         # Ignore non-real selections/sentinels
-        if s in ("All", "Create a new target list", "No Target Lists Available", ""):
+        if s in ("", "No Target Lists Available", "Upload new target list", "Create empty target list"):
             return None
 
         # If it's already an ID (string of digits or int), return it
@@ -746,13 +701,18 @@ class LogicService:
                 return int(s)
 
         # Try in-memory mapping first: {SET_ID: SET_NAME}
+        # Prefer an exact name match, then fall back to case-insensitive.
         mapping = getattr(self.parent, "user_set_data", {}) or {}
-        for sid, name in mapping.items():
-            if str(name).strip().lower() == s.lower():
-                try:
-                    return int(sid)
-                except Exception:
-                    return sid  # sid may already be int
+        for matches in (
+            lambda name: str(name).strip() == s,
+            lambda name: str(name).strip().lower() == s.lower(),
+        ):
+            for sid, name in mapping.items():
+                if matches(name):
+                    try:
+                        return int(sid)
+                    except Exception:
+                        return sid  # sid may already be int
 
         # Last resort: DB lookup by (OWNER, SET_NAME)
         owner = getattr(self.parent, "current_owner", None)
@@ -775,6 +735,8 @@ class LogicService:
                 return int(row[0])
         except Exception as e:
             print("fetch_set_id DB lookup failed:", e)
+        finally:
+            conn.close()
 
         return None
 
@@ -792,15 +754,7 @@ class LogicService:
             return
 
         try:
-            cur = conn.cursor(dictionary=True)
-            cur.execute("""
-                SELECT SET_ID, SET_NAME,
-                    COALESCE(SET_CREATION_TIMESTAMP,'1970-01-01 00:00:00') AS ts
-                FROM target_sets
-                WHERE OWNER = %s
-                ORDER BY ts DESC, SET_ID DESC
-            """, (username,))
-            sets = cur.fetchall()
+            sets = fetch_owner_target_sets(conn, username)
 
             if not sets:
                 self.set_data = {}
@@ -910,15 +864,20 @@ class LogicService:
 
     def filter_target_list(self):
         """
-        On set selection, fetch targets for that set (or all sets) for the current user.
-        Works whether the combo shows SET_IDs or SET_NAMEs.
+        On set selection, fetch and display the targets for the selected set
+        (parent.current_target_list_name, a SET_NAME or SET_ID string).
         """
-        combo = self.parent.current_target_list_name
-        selected = combo if combo is not None else "All"
+        selected = getattr(self.parent, "current_target_list_name", None)
         owner = getattr(self.parent, "current_owner", None)
 
         if not owner:
             print("No current_owner set; cannot fetch targets.")
+            return
+
+        # Resolves via the in-memory {SET_ID: SET_NAME} map, falling back to a DB lookup.
+        set_id = self.fetch_set_id(selected)
+        if set_id is None:
+            print(f"Could not resolve selection '{selected}' to a SET_ID; leaving table unchanged.")
             return
 
         conn = self.connect_to_mysql("config/db_config.ini")
@@ -927,68 +886,9 @@ class LogicService:
             return
 
         try:
-            if selected == "All":
-                print("WHAT!?")
-                sql = """
-                    SELECT t.*
-                    FROM targets t
-                    INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
-                    WHERE s.OWNER = %s
-                    ORDER BY t.SET_ID,
-                         COALESCE(t.OBS_ORDER, 0),
-                         COALESCE(t.TARGET_NUMBER, 0),
-                         COALESCE(t.SEQUENCE_NUMBER, 0),
-                         t.OBSERVATION_ID
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
                 """
-                params = (owner,)
-                cur = conn.cursor(dictionary=True)
-                print("Executing filter query:", sql, params)
-                cur.execute(sql, params)
-                rows = cur.fetchall()
-                cur.close()
-                self.update_target_list_table(rows)
-                return
-
-            set_id = None
-
-            # 1) prefer itemData if you stored it
-            try:
-                idx = combo.currentIndex()
-                data = combo.itemData(idx)
-                if isinstance(data, (int, str)) and str(data).isdigit():
-                    set_id = int(data)
-            except Exception:
-                pass
-
-            # 2) if the visible text is an ID
-            if set_id is None and selected.isdigit():
-                set_id = int(selected)
-
-            # 3) try the in-memory mapping {SET_ID: SET_NAME}
-            if set_id is None:
-                mapping = getattr(self.parent, "user_set_data", {}) or {}
-                for k, v in mapping.items():
-                    if str(v).strip() == selected:
-                        set_id = k
-                        break
-
-            # 4) last-resort: DB lookup by name for this owner
-            if set_id is None:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT SET_ID FROM target_sets WHERE OWNER = %s AND SET_NAME = %s",
-                    (owner, selected)
-                )
-                r = cur.fetchone()
-                cur.close()
-                if r:
-                    set_id = r[0]
-
-            if set_id is None:
-                print(f"Could not resolve selection '{selected}' to a SET_ID; leaving table unchanged.")
-                return
-
-            sql = """
                 SELECT t.*
                 FROM targets t
                 INNER JOIN target_sets s ON s.SET_ID = t.SET_ID
@@ -997,11 +897,9 @@ class LogicService:
                          COALESCE(t.TARGET_NUMBER, 0),
                          COALESCE(t.SEQUENCE_NUMBER, 0),
                          t.OBSERVATION_ID
-            """
-            params = (set_id, owner)
-            cur = conn.cursor(dictionary=True)
-            print("Executing filter query:", sql, params)
-            cur.execute(sql, params)
+                """,
+                (set_id, owner),
+            )
             rows = cur.fetchall()
             cur.close()
 
@@ -1009,6 +907,8 @@ class LogicService:
 
         except mysql.connector.Error as err:
             print(f"Database error during filter: {err}")
+        finally:
+            conn.close()
 
     def update_target_list_table(self, data):
         """
@@ -1081,9 +981,9 @@ class LogicService:
             header_view = table.horizontalHeader()
             header_view.setFont(QFont("Arial", 10, QFont.Normal))
 
-            for row in filtered_rows:
-                row_idx = table.rowCount()
-                table.insertRow(row_idx)
+            table.setUpdatesEnabled(False)
+            table.setRowCount(len(filtered_rows))
+            for row_idx, row in enumerate(filtered_rows):
                 for col_idx, key in enumerate(headers):
                     item = QTableWidgetItem(str(row.get(key, "")))
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
@@ -1091,6 +991,7 @@ class LogicService:
 
         finally:
             table.setSortingEnabled(True)
+            table.setUpdatesEnabled(True)
             del table_blocker
 
         ls.load_target_button.setVisible(False)
@@ -1100,27 +1001,6 @@ class LogicService:
 
         self.refresh_target_table_status_styles()
         self.refresh_target_status_summary(rows)
-
-    def update_target_table_with_list(self, target_list=None):
-        """Rebuild table for the selected target list using the same safe path."""
-        ls = getattr(self.parent, "layout_service", None)
-        if ls is None:
-            print("layout_service not available.")
-            return
-
-        # Find set_id for target_list
-        set_id = None
-        for key, val in getattr(self.parent, "user_set_data", {}).items():
-            if val == target_list:
-                set_id = key
-                break
-        if set_id is None:
-            print("set_id not found for the given target_list")
-            return
-
-        src = getattr(self.parent, "all_targets", [])
-        filtered = [row for row in src if row.get('SET_ID') == set_id]
-        self.update_target_list_table(filtered)
 
     def update_target_information(self, target_data):
         # Pass the dictionary of target data to LayoutService to update the list
