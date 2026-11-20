@@ -230,8 +230,8 @@ class AfternoonTab(QWidget):
         command = "bash calib/thrufocus"
 
         # start the async command and re-enable only when done
-        self.thread = AsyncCommandThread(command, self.log_message_callback)
-        self.thread.output_signal.connect(self.log_message_callback)
+        self.thread_thrufocus = AsyncCommandThread(command, self.log_message_callback)
+        self.thread_thrufocus.output_signal.connect(self.log_message_callback)
 
         # restore UI when the background task ends (success or error)
         def _restore_button():
@@ -248,14 +248,14 @@ class AfternoonTab(QWidget):
                 QPushButton:pressed { background-color: #3e8e41; }
             """)
 
-        self.thread.finished.connect(_restore_button)
+        self.thread_thrufocus.finished.connect(_restore_button)
         # if the thread class emits terminated, hook it too (safe to try)
         try:
-            self.thread.terminated.connect(_restore_button)
+            self.thread_thrufocus.terminated.connect(_restore_button)
         except Exception:
             pass
 
-        self.thread.start()
+        self.thread_thrufocus.start()
 
     def set_focus_r(self):
         if self.value_r_input.placeholderText():
