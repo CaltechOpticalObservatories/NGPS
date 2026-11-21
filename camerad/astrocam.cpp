@@ -2185,6 +2185,20 @@ namespace AstroCam {
     logwrite(function, message.str());
 #endif
 
+    // The flexure compensation can change after the exposure starts, so this
+    // channel's flexure positions are taken at its end, with SHUTTIME, before
+    // its readout.
+    //
+    {
+    std::lock_guard<std::mutex> lock( server.live_telemetry_mtx );
+    auto flex = server.live_telemetry.find( Topic::FLEXURED );
+    if ( flex != server.live_telemetry.end() ) {
+      for ( const auto &k : FitsHeaderKeys::FlexureInfoKeys ) {
+        if ( con.channel == k.chan ) con.expinfo[expbuf].telemkeys.add_json_key( flex->second, k.jkey, k.keyword, k.comment, k.type, EXT, k.chan );
+      }
+    }
+    }
+
     // Wait for any shutter delay before reading out.
     //
     if ( cam.get_shutter_delay() > 0 ) cam.wait_shutter_delay();
@@ -2858,7 +2872,6 @@ namespace AstroCam {
     add( Topic::SLITD,      FitsHeaderKeys::SlitInfoKeys    );  // primary
     add( Topic::TARGETINFO, FitsHeaderKeys::TargetInfoKeys  );  // primary
     add( Topic::TCSD,       FitsHeaderKeys::TcsInfoKeys     );  // primary
-    add( Topic::FLEXURED,   FitsHeaderKeys::FlexureInfoKeys );  // extension
     add( Topic::FOCUSD,     FitsHeaderKeys::FocusInfoKeys   );  // extension
     add( Topic::THERMALD,   FitsHeaderKeys::ThermalInfoKeys );  // extension
 
