@@ -1857,6 +1857,9 @@ namespace TCS {
     if ( cmd == "?NAME"        ||
          cmd == "LAMPS?"       ||
          cmd == "NPS"          ||
+         cmd == "?ONTARGET"    ||  // reply IS the flag (0|1), not a status code:
+                                   // 0 collides with TCS_SUCCESS ("success") and
+                                   // 1 falls through to "tcs_undefined" ERROR
          cmd == "?PARALLACTIC" ||
          cmd == "?WEATHER"     ||
          cmd == "RAWDEC"       ||
