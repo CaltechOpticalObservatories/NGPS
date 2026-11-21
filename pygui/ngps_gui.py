@@ -242,23 +242,22 @@ class NgpsGUI(QMainWindow):
             self.logged_in = True
             self.current_owner = self.login_dialog.owner
             self.user_set_data = self.login_dialog.set_data
-            self.all_targets = self.login_dialog.all_targets or []
-
-            self.load_mysql_data(self.all_targets)
+            self.all_targets = []
 
             has_target_lists = bool(self.login_dialog.set_name)
+
+            # Select the newest set (set_name is ordered newest first).
+            # load_target_lists -> on_target_set_changed then fetches and
+            # renders only that set's targets.
+            self.current_target_list_name = (
+                self.login_dialog.set_name[0] if has_target_lists else None
+            )
 
             # Refresh dropdown and target-list UI.
             self.layout_service.load_target_lists(self.login_dialog.set_name)
             self.layout_service.update_target_list_login_ui(has_target_lists)
 
             print(f"Logged in as {self.current_owner}. Target lists found: {has_target_lists}")
-
-    def load_mysql_data(self, all_targets):
-        """Load data from MySQL after successful login."""
-        # Pass the data (all_targets) and the selected set_name (target_list_name) to the update function
-        self.all_targets = all_targets
-        self.logic_service.update_target_list_table(all_targets)
 
     def on_create_account(self):
         """ Handle the create account action from the User menu """
