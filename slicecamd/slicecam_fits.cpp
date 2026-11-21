@@ -1,4 +1,7 @@
 #include "slicecam_fits.h"
+#include <algorithm>
+#include <cmath>
+#include <vector>
 
 namespace Slicecam {
 
@@ -227,6 +230,28 @@ logwrite( function, file_in );
         return ERROR;
       }
 
+      // subtract the sky level of the illuminated area from this copy only, so that L and R
+      // display at the same level. Illuminated pixels are those above halfway between the 5th
+      // and 90th percentiles of the image; their level is the 3-sigma clipped median (sigma from
+      // the median absolute deviation), which stars, even very bright ones, do not move.
+      //
+      std::vector<float> lit( std::begin(array), std::end(array) ), dev;
+      auto nth = []( std::vector<float> &v, double f ) { auto it = v.begin() + long( f*(v.size()-1) );
+                                                          std::nth_element( v.begin(), it, v.end() ); return *it; };
+      const float threshold = 0.5f * ( nth( lit, 0.05 ) + nth( lit, 0.90 ) );
+      lit.erase( std::remove_if( lit.begin(), lit.end(), [threshold]( float x ) { return x <= threshold; } ), lit.end() );
+      float bg = 0;
+      for ( int iter=0; iter < 10 && !lit.empty(); ++iter ) {
+        bg = nth( lit, 0.5 );
+        dev.resize( lit.size() );
+        std::transform( lit.begin(), lit.end(), dev.begin(), [bg]( float x ) { return std::abs( x - bg ); } );
+        const float clip = 3 * 1.4826f * nth( dev, 0.5 );
+        const auto n = lit.size();
+        lit.erase( std::remove_if( lit.begin(), lit.end(), [bg,clip]( float x ) { return std::abs( x - bg ) >= clip; } ), lit.end() );
+        if ( lit.size() == n ) break;
+      }
+      array -= bg;
+
 
       long fpixel(1);              // start with the first pixel always
 
@@ -248,6 +273,7 @@ logwrite( function, file_in );
       for ( const auto &keydb : slicecam->fitskeys.keydb ) {
         this->add_key( keydb.second.keyword, keydb.second.keytype, keydb.second.keyvalue, keydb.second.keycomment );
       }
+      this->imageExt->addKey( "BGSUB", bg, "sky level subtracted (raw = data + BGSUB)" );
 
       // Write and flush to make sure imeage is written to disk
       //
