@@ -5,6 +5,16 @@ HOW TO COPY LATEST DEV VERSION OF NGPS SOFTWARE TO DEPLOYMENT COMPUTER
 Push/pull /home/developer/Software
 Push/pull /home/developer/Software/Python/***   (acam_skyinfo, OTM, ETC)
 
+To deploy a release tag instead (checkout + ngps stop + cmake/make + ngps start),
+or to roll back to the previous release, use run/ngps-deploy:
+
+ngps-deploy latest       # newest vX.Y.Z tag
+ngps-deploy rollback     # tag before the one currently checked out
+ngps-deploy -n latest    # dry run
+
+Keep a copy outside the repo (cp run/ngps-deploy ~/bin/) so it survives a rollback.
+See docs: Users Manual > Software Build And Configuration > Deployment.
+
 
 2) Deploy latest GUI to both NGPS computers.  From ngps-devel:
 
