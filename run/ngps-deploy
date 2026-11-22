@@ -1,0 +1,220 @@
+#!/usr/bin/env bash
+#
+# ngps-deploy -- check out an NGPS release tag, rebuild, and restart NGPS.
+#
+# Usage:
+#   ngps-deploy                  interactive menu
+#   ngps-deploy latest           deploy the newest vX.Y.Z tag
+#   ngps-deploy rollback         deploy the tag before the one currently checked out
+#   ngps-deploy tag v1.10.0      deploy a specific tag
+#   ngps-deploy list             show recent tags and what is checked out
+#
+# Options:
+#   -y, --yes        do not ask for confirmation
+#   -n, --dry-run    print what would be done, change nothing
+#   -h, --help       show this help
+#
+# After checking out the tag it runs:
+#   ngps stop
+#   cd $BUILD_DIR && cmake -DINSTR=$INSTR .. && make
+#   ngps start
+#
+# Environment overrides:
+#   NGPS_REPO   git checkout to deploy      (default /home/developer/Software)
+#   BUILD_DIR   cmake build directory       (default $NGPS_REPO/build)
+#   INSTR       cmake INSTR value           (default generic-arc)
+#   LOG_FILE    deploy history              (default ~/.ngps-deploy.log)
+#
+# NOTE: install a copy OUTSIDE the repo (e.g. cp run/ngps-deploy ~/bin/) so it
+# still exists after rolling back to a tag that predates this script.
+
+# Everything lives in main(), which bash parses completely before running it,
+# so it is safe for `git checkout` to change or delete this file mid-run.
+main() {
+    set -euo pipefail
+
+    local NGPS_REPO="${NGPS_REPO:-/home/developer/Software}"
+    local BUILD_DIR="${BUILD_DIR:-$NGPS_REPO/build}"
+    local INSTR="${INSTR:-generic-arc}"
+    local LOG_FILE="${LOG_FILE:-$HOME/.ngps-deploy.log}"
+    local TAG_PATTERN='v[0-9]*'
+
+    local ASSUME_YES=0 DRY_RUN=0 ACTION="" TARGET=""
+
+    # ---------------------------------------------------------------- helpers
+    die()  { echo "ERROR: $*" >&2; exit 1; }
+    info() { echo "==> $*"; }
+    usage() { sed -n '3,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+    run() {
+        if (( DRY_RUN )); then echo "[dry-run] ${*/#git_/git -C $NGPS_REPO}"; else "$@"; fi
+    }
+    git_() { git -C "$NGPS_REPO" "$@"; }
+
+    tags_newest_first() { git_ tag -l "$TAG_PATTERN" --sort=-v:refname; }
+    current_tag()  { git_ describe --tags --exact-match HEAD 2>/dev/null || true; }
+    current_desc() { git_ describe --tags --always 2>/dev/null || git_ rev-parse --short HEAD; }
+    latest_tag()   { tags_newest_first | head -n1; }
+
+    # Tag before the one checked out. If HEAD is not exactly on a tag (e.g. a
+    # branch ahead of the last release), roll back to the newest tag below HEAD.
+    rollback_tag() {
+        local cur
+        cur=$(current_tag)
+        if [[ -z $cur ]]; then
+            git_ describe --tags --abbrev=0 --match "$TAG_PATTERN" HEAD 2>/dev/null || true
+            return
+        fi
+        tags_newest_first | awk -v cur="$cur" 'found { print; exit } $0 == cur { found = 1 }'
+    }
+
+    list_tags() {
+        echo "Checked out: $(current_desc)"
+        echo "Recent tags (newest first):"
+        tags_newest_first | head -n "${1:-10}" | sed 's/^/  /'
+    }
+
+    confirm() {
+        (( ASSUME_YES )) && return 0
+        local reply
+        read -r -p "$1 [y/N] " reply
+        [[ $reply =~ ^[Yy]([Ee][Ss])?$ ]]
+    }
+
+    log_result() {
+        (( DRY_RUN )) && return 0
+        printf '%s %s %s -> %s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S')" "${USER:-?}" \
+            "$1" "$2" "$3" >> "$LOG_FILE" || true
+    }
+
+    # ------------------------------------------------------------ arg parsing
+    while (( $# )); do
+        case $1 in
+            -y|--yes)     ASSUME_YES=1 ;;
+            -n|--dry-run) DRY_RUN=1 ;;
+            -h|--help)    usage; exit 0 ;;
+            latest|rollback|list) ACTION=$1 ;;
+            tag)          ACTION=tag; shift; TARGET=${1:-} ;;
+            v[0-9]*)      ACTION=tag; TARGET=$1 ;;
+            *)            usage >&2; die "unknown argument: $1" ;;
+        esac
+        shift
+    done
+
+    # ------------------------------------------------------------ pre-checks
+    git_ rev-parse --git-dir >/dev/null 2>&1 || die "$NGPS_REPO is not a git checkout"
+
+    info "Fetching tags from origin"
+    if ! (( DRY_RUN )) && ! git_ fetch --quiet --tags origin; then
+        echo "warning: could not fetch from origin; using local tags only" >&2
+    fi
+
+    [[ $ACTION == list ]] && { list_tags 20; exit 0; }
+
+    # Interactive menu when no action was given
+    if [[ -z $ACTION ]]; then
+        local latest rb choice
+        latest=$(latest_tag)
+        rb=$(rollback_tag)
+        echo
+        echo "Checked out: $(current_desc)"
+        echo "  1) Build latest tag        (${latest:-none})"
+        echo "  2) Roll back to last tag   (${rb:-none})"
+        echo "  3) Pick a tag"
+        echo "  q) Quit"
+        read -r -p "Choice: " choice
+        case $choice in
+            1) ACTION=latest ;;
+            2) ACTION=rollback ;;
+            3)
+                local tags=() t
+                while IFS= read -r t; do tags+=("$t"); done < <(tags_newest_first | head -n 15)
+                (( ${#tags[@]} )) || die "no tags found"
+                PS3="Tag number: "
+                select TARGET in "${tags[@]}"; do
+                    [[ -n $TARGET ]] && break
+                done
+                [[ -n $TARGET ]] || exit 0
+                ACTION=tag
+                ;;
+            *) exit 0 ;;
+        esac
+    fi
+
+    case $ACTION in
+        latest)   TARGET=$(latest_tag);   [[ -n $TARGET ]] || die "no tags matching $TAG_PATTERN" ;;
+        rollback) TARGET=$(rollback_tag); [[ -n $TARGET ]] || die "no earlier tag to roll back to from $(current_desc)" ;;
+        tag)      [[ -n $TARGET ]] || die "usage: ngps-deploy tag <vX.Y.Z>" ;;
+    esac
+
+    git_ rev-parse -q --verify "refs/tags/$TARGET" >/dev/null || die "tag '$TARGET' does not exist"
+
+    # A checkout would fail on (or carry over) local edits to tracked files.
+    if ! git_ diff --quiet || ! git_ diff --cached --quiet; then
+        git_ status --short --untracked-files=no >&2
+        die "uncommitted changes in $NGPS_REPO; commit or stash them first"
+    fi
+
+    local cmd
+    for cmd in ngps cmake make; do
+        command -v "$cmd" >/dev/null 2>&1 || {
+            (( DRY_RUN )) && echo "warning: '$cmd' not found on PATH" >&2 || die "'$cmd' not found on PATH"
+        }
+    done
+
+    local from
+    from=$(current_desc)
+    echo
+    echo "  From:   $from"
+    echo "  To:     $TARGET"
+    echo "  Build:  $BUILD_DIR  (INSTR=$INSTR)"
+    [[ $(current_tag) == "$TARGET" ]] && echo "  (already on $TARGET; this will rebuild and restart)"
+    echo "  NGPS will be stopped during the build."
+    confirm "Proceed?" || { echo "Aborted."; exit 0; }
+
+    # ---------------------------------------------------------------- deploy
+    local step="checkout"
+    trap 'rc=$?; if (( rc != 0 )); then
+            echo >&2
+            echo "ERROR: deploy of $TARGET failed during: $step (exit $rc)" >&2
+            [[ $step != checkout ]] && echo "NGPS may still be STOPPED." >&2
+            echo "Previously deployed: $from" >&2
+            if git_ rev-parse -q --verify "refs/tags/$from" >/dev/null; then
+                echo "To go back:  ngps-deploy tag $from" >&2
+            else
+                echo "To go back:  git -C $NGPS_REPO checkout $from, then rebuild" >&2
+            fi
+            log_result "$from" "$TARGET" "FAILED($step)"
+          fi' EXIT
+
+    info "Checking out $TARGET"
+    run git_ -c advice.detachedHead=false checkout --quiet "$TARGET"
+
+    step="ngps stop"
+    info "Stopping NGPS"
+    run ngps stop || echo "warning: 'ngps stop' returned non-zero; continuing" >&2
+
+    step="cmake"
+    run mkdir -p "$BUILD_DIR"
+    (( DRY_RUN )) && echo "[dry-run] cd $BUILD_DIR" || cd "$BUILD_DIR"
+    info "Configuring (cmake -DINSTR=$INSTR ..)"
+    run cmake -DINSTR="$INSTR" ..
+
+    step="make"
+    info "Building (make)"
+    run make
+
+    step="ngps start"
+    info "Starting NGPS"
+    run ngps start
+
+    step="done"
+    if (( DRY_RUN )); then
+        info "Dry run complete; nothing was changed"
+    else
+        log_result "$from" "$TARGET" "OK"
+        info "Deployed $TARGET (was $from)"
+    fi
+}
+
+main "$@"
+exit
